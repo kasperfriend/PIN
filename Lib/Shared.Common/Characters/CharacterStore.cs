@@ -33,6 +33,48 @@ public static class CharacterStore
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    private static readonly (string Name, int ZoneId)[] SeedZones =
+    [
+        ("M22 Homecoming", 1181),
+        ("M20 Razor Edge", 833),
+        ("M19 Gatecrasher", 1171),
+        ("M18 Vagrant Dawn", 1007),
+        ("M17 SOS", 1151),
+        ("M16 Unearthed", 864),
+        ("M15 Agrievan", 803),
+        ("M14 Icebreaker", 1008),
+        ("M13 Accelerate", 1154),
+        ("M12 Prison Break", 1155),
+        ("M11 Consequence", 1114),
+        ("M10 Off the Grid", 1106),
+        ("M09 Taken", 1099),
+        ("M08 Catch", 1134),
+        ("M07 Trespass", 1101),
+        ("M06 Safehouse", 1113),
+        ("M05 No Exit", 1117),
+        ("M04 Razorwind", 1102),
+        ("M03 Crash Down", 1003),
+        ("M02 Bathsheba", 1104),
+        ("M01 Shadow", 1100),
+        ("OP3 ARES Team", 1089),
+        ("OP2 High Tide", 1093),
+        ("OP1 Miru", 1069),
+        ("TDM Refinery", 1147),
+        ("Omnidyne-M Stadium", 844),
+        ("Holdout Jericho", 1163),
+        ("R1 Defense of Dredge", 1173),
+        ("Epicenter Melding Tornado", 805),
+        ("Abyss Melding Tornado", 865),
+        ("Cinerarium", 868),
+        ("Danger Room", 1162),
+        ("Baneclaw Lair", 1051),
+        ("Battlelab", 1125),
+        ("Nothing", 12),
+        ("Diamond Head", 162),
+        ("Sertao", 1030),
+        ("New Eden", 448)
+    ];
+
     private static string _storePath;
 
     private static bool _initialised;
@@ -222,46 +264,4 @@ public static class CharacterStore
             };
         }
     }
-
-    private static readonly (string Name, int ZoneId)[] SeedZones =
-    [
-        ("M22 Homecoming", 1181),
-        ("M20 Razor Edge", 833),
-        ("M19 Gatecrasher", 1171),
-        ("M18 Vagrant Dawn", 1007),
-        ("M17 SOS", 1151),
-        ("M16 Unearthed", 864),
-        ("M15 Agrievan", 803),
-        ("M14 Icebreaker", 1008),
-        ("M13 Accelerate", 1154),
-        ("M12 Prison Break", 1155),
-        ("M11 Consequence", 1114),
-        ("M10 Off the Grid", 1106),
-        ("M09 Taken", 1099),
-        ("M08 Catch", 1134),
-        ("M07 Trespass", 1101),
-        ("M06 Safehouse", 1113),
-        ("M05 No Exit", 1117),
-        ("M04 Razorwind", 1102),
-        ("M03 Crash Down", 1003),
-        ("M02 Bathsheba", 1104),
-        ("M01 Shadow", 1100),
-        ("OP3 ARES Team", 1089),
-        ("OP2 High Tide", 1093),
-        ("OP1 Miru", 1069),
-        ("TDM Refinery", 1147),
-        ("Omnidyne-M Stadium", 844),
-        ("Holdout Jericho", 1163),
-        ("R1 Defense of Dredge", 1173),
-        ("Epicenter Melding Tornado", 805),
-        ("Abyss Melding Tornado", 865),
-        ("Cinerarium", 868),
-        ("Danger Room", 1162),
-        ("Baneclaw Lair", 1051),
-        ("Battlelab", 1125),
-        ("Nothing", 12),
-        ("Diamond Head", 162),
-        ("Sertao", 1030),
-        ("New Eden", 448)
-    ];
 }
