@@ -66,13 +66,14 @@ public class EntityManager
         return _scopedPlayersByEntity.TryGetValue(entityId, out var players) && players.Contains(player);
     }
 
-    public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null, bool canBleedout = false)
+    public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null, bool canBleedout = false, Quaternion orientation = Quaternion.Identity)
     {
         var characterEntity = new CharacterEntity(_shard, _shard.GetNextGuid(), owner);
         characterEntity.LoadMonster(typeId);
         characterEntity.CanBleedout = canBleedout;
         characterEntity.SetCharacterState(CharacterStateData.CharacterStatus.Living, _shard.CurrentTime);
         characterEntity.SetPosition(position);
+        characterEntity.SetOrientation(orientation);
         characterEntity.SetSpawnPose();
         _shard.Physics.CreateKineticEntity(characterEntity);
         _shard.Physics.UpdateEntity(characterEntity);
@@ -376,7 +377,9 @@ public class EntityManager
         foreach (var entry in CustomDBInterface.GetZoneCharacterSpawns(zoneId))
         {
             var spawn = entry.Value;
-            var character = SpawnCharacter(spawn.Type, spawn.Position);
+            // A missing orientation in the JSON deserializes to a zero Quaternion; fall back to identity.
+            var orientation = spawn.Orientation == default ? Quaternion.Identity : spawn.Orientation;
+            var character = SpawnCharacter(spawn.Type, spawn.Position, orientation: orientation);
 
             if (spawn.MaxHealth > 0)
             {

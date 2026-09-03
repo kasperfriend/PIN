@@ -10,15 +10,13 @@ public class CombatSim
 
     private readonly Shard _shard; // Time in HitFeedback, EntityManager doesnt have Entities
     private readonly IEventBus _eventBus;
-    private readonly EntityManager.EntityManager _entityMan;
     private readonly DamageSystem _damage;
     private readonly HitFeedback _feedback;
     private readonly HostilityResolver _hostility;
 
-    public CombatSim(IEventBus eventBus, EntityManager.EntityManager entityMan, DamageSystem damage, Shard shard, HostilityResolver hostility = null)
+    public CombatSim(IEventBus eventBus, DamageSystem damage, Shard shard, HostilityResolver hostility = null)
     {
         _eventBus = eventBus;
-        _entityMan = entityMan;
         _damage = damage;
         _shard = shard;
         _hostility = hostility ?? new HostilityResolver();
