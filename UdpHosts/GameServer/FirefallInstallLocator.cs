@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Serilog;
@@ -79,12 +80,7 @@ internal static class FirefallInstallLocator
         }
 
         // Steam is not always installed under Program Files; the registry knows the real location.
-        if (OperatingSystem.IsWindows())
-        {
-            AddRegistryValue(candidates, Registry.CurrentUser, @"Software\Valve\Steam", "SteamPath");
-            AddRegistryValue(candidates, Registry.LocalMachine, @"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath");
-            AddRegistryValue(candidates, Registry.LocalMachine, @"SOFTWARE\Valve\Steam", "InstallPath");
-        }
+        AddSteamRegistryCandidates(candidates);
 
         AddSpecialFolder(candidates, Environment.SpecialFolder.ProgramFilesX86, "Steam");
         AddSpecialFolder(candidates, Environment.SpecialFolder.ProgramFiles, "Steam");
@@ -118,6 +114,22 @@ internal static class FirefallInstallLocator
         }
     }
 
+    /// <summary>
+    ///     Add the Steam install location from the Windows registry, when it is available.
+    /// </summary>
+    private static void AddSteamRegistryCandidates(ICollection<string> list)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        AddRegistryValue(list, Registry.CurrentUser, @"Software\Valve\Steam", "SteamPath");
+        AddRegistryValue(list, Registry.LocalMachine, @"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath");
+        AddRegistryValue(list, Registry.LocalMachine, @"SOFTWARE\Valve\Steam", "InstallPath");
+    }
+
+    [SupportedOSPlatform("windows")]
     private static void AddRegistryValue(ICollection<string> list, RegistryKey rootKey, string subKey, string valueName)
     {
         try
