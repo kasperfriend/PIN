@@ -26,6 +26,9 @@ public class CombatSim
         _eventBus.Subscribe<ProjectileHitEvent>(OnProjectileHit);
     }
 
+    /// <summary>Exposes the hit/dealt feedback sender for aptitude damage commands.</summary>
+    public HitFeedback HitFeedback => _feedback;
+
     private void OnProjectileHit(ProjectileHitEvent evt)
     {
         // TODO: Damage defense calcs and stuff

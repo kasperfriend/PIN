@@ -12,6 +12,13 @@ namespace GameServer.Systems.ProjectileSim;
 
 public class ProjectileSim
 {
+    /// <summary>
+    /// Fallback impact damage used by the legacy weapon-fire entry point until
+    /// weapon damage is resolved from item attributes (previously hardcoded in
+    /// <c>PhysicsEngine.HandleProjectileImpact</c>).
+    /// </summary>
+    public const int LegacyPlaceholderDamage = 1337;
+
     private readonly Shard _shard;
     private readonly Serilog.ILogger _logger;
     private readonly DebugProjectileHitCallbacks? _debugCallbacks;
@@ -26,6 +33,15 @@ public class ProjectileSim
     }
 
     public void FireProjectile(CharacterEntity entity, uint trace, Vector3 origin, Vector3 direction, Ammo ammo, float range, float projectileSpeed, float impactRadius, float maxRadius)
+    {
+        FireProjectile(entity, trace, origin, direction, ammo, range, projectileSpeed, impactRadius, maxRadius, LegacyPlaceholderDamage);
+    }
+
+    /// <summary>
+    /// Fires a server-simulated projectile that deals <paramref name="damage"/>
+    /// when it impacts a kinematic (entity) pose shape.
+    /// </summary>
+    public void FireProjectile(CharacterEntity entity, uint trace, Vector3 origin, Vector3 direction, Ammo ammo, float range, float projectileSpeed, float impactRadius, float maxRadius, int damage)
     {
         var ammoFlags = new AmmoFlags(ammo.Flags);
         bool isDrunk = DrunkMissile.IsActive(ammo);
@@ -51,6 +67,7 @@ public class ProjectileSim
             EndPosition = endPosition,
             CurrentPosition = origin,
             PreviousPosition = origin,
+            DamageAmount = damage,
             StartTime = _shard.CurrentTime,
             LifetimeMs = lifetimeMs,
             Range = range,
@@ -153,7 +170,7 @@ public class ProjectileSim
                     var source = GetSourceEntity(projectile);
                     if (source != null)
                     {
-                        _shard.Physics.HandleProjectileImpact(source, projectile.TraceId, hit);
+                        _shard.Physics.HandleProjectileImpact(source, projectile.TraceId, hit, projectile.DamageAmount);
                     }
                 }
             }

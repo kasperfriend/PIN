@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using AeroMessages.GSS.Character.Command;
+using GameServer.Entities.Character;
 using GameServer.Enums;
 using GameServer.StaticDB;
 using Serilog;
@@ -16,6 +17,7 @@ public class AbilitySystem
     private readonly Dictionary<ulong, VehicleCalldownRequest> _playerVehicleCalldownRequests;
     private readonly Dictionary<ulong, DeployableCalldownRequest> _playerDeployableCalldownRequests;
     private readonly Dictionary<ulong, ResourceNodeBeaconCalldownRequest> _playerThumperCalldownRequests;
+    private readonly Dictionary<ulong, AbilityState> _entityAbilityStates = [];
     private ulong _lastUpdate;
 
     public AbilitySystem(Shard shard)
@@ -63,11 +65,72 @@ public class AbilitySystem
         }
     }
 
+    /// <summary>Returns the (created on first use) cooldown/energy state of an aptitude entity.</summary>
+    public AbilityState GetOrAddState(IAptitudeTarget entity)
+    {
+        if (!_entityAbilityStates.TryGetValue(entity.EntityId, out var state))
+        {
+            state = new AbilityState
+            {
+                LastEnergyUpdateTime = _shard.CurrentTime,
+            };
+
+            // Mirror the energy pool configuration that was sent to the client
+            // (CharacterEntity.EnergyParams) so server-side energy requirements
+            // and costs use the same scale as the client simulated pool.
+            if (entity is CharacterEntity character && character.EnergyParams.Max > 0f)
+            {
+                state.MaxEnergy = character.EnergyParams.Max;
+                state.Energy = character.EnergyParams.Max;
+                state.EnergyRegenPerSecond = character.EnergyParams.Recharge;
+            }
+
+            _entityAbilityStates[entity.EntityId] = state;
+        }
+
+        return state;
+    }
+
+    public bool TryGetState(IAptitudeTarget entity, out AbilityState state)
+    {
+        return _entityAbilityStates.TryGetValue(entity.EntityId, out state);
+    }
+
+    public bool TryGetState(ulong entityId, out AbilityState state)
+    {
+        return _entityAbilityStates.TryGetValue(entityId, out state);
+    }
+
     public void Tick(double deltaTime, ulong currentTime, CancellationToken ct)
     {
         if (currentTime > _lastUpdate + _updateIntervalMs)
         {
             _lastUpdate = currentTime;
+            uint time = unchecked((uint)currentTime);
+
+            // Drop states whose entity left the shard, prune expired cooldowns and
+            // advance passive energy regen for the rest.
+            List<ulong> stale = null;
+            foreach (var pair in _entityAbilityStates)
+            {
+                if (!_shard.Entities.ContainsKey(pair.Key))
+                {
+                    (stale ??= []).Add(pair.Key);
+                    continue;
+                }
+
+                pair.Value.Prune(time);
+                pair.Value.UpdateEnergy(time);
+            }
+
+            if (stale != null)
+            {
+                foreach (var entityId in stale)
+                {
+                    _entityAbilityStates.Remove(entityId);
+                }
+            }
+
             foreach (var entity in _shard.Entities.Values)
             {
                 if (entity is IAptitudeTarget target)
@@ -248,20 +311,25 @@ public class AbilitySystem
         }
     }
 
-    public void HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId, uint activationTime, AptitudeTargets targets, Guid? executionId = null)
+    /// <summary>
+    /// Executes the chain of an activated ability and returns whether the whole
+    /// chain succeeded (requirements like cooldowns or energy can fail it).
+    /// </summary>
+    public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId, uint activationTime, AptitudeTargets targets, Guid? executionId = null)
     {
         var execId = executionId ?? Guid.NewGuid();
         using var logContext = Serilog.Context.LogContext.PushProperty("ExecutionId", execId);
         var chainId = SDBInterface.GetAbilityData(abilityId).Chain;
         if (chainId == 0)
         {
-            return;
+            _logger.Warning("HandleActivateAbility: Ability {AbilityId} has no chain, treating activation as a no-op", abilityId);
+            return true;
         }
 
         _logger.Information("HandleActivateAbility: Ability {AbilityId} starting Chain {ChainId}", abilityId, chainId);
 
         var chain = Factory.LoadChain(chainId);
-        chain.Execute(new Context(shard, initiator)
+        return chain.Execute(new Context(shard, initiator)
         {
             ExecutionId = execId,
             ChainId = chainId,
@@ -272,9 +340,31 @@ public class AbilitySystem
         });
     }
 
-    public void HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId)
+    public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId)
     {
-        HandleActivateAbility(shard, initiator, abilityId, _shard.CurrentTime, new AptitudeTargets());
+        return HandleActivateAbility(shard, initiator, abilityId, _shard.CurrentTime, new AptitudeTargets());
+    }
+
+    /// <summary>
+    /// True when no still-running cooldown applies to the ability. Returns the
+    /// time the ability will be usable again when it is cooling down.
+    /// </summary>
+    public bool IsAbilityReady(IAptitudeTarget entity, uint abilityId, uint category, uint time, out uint readyAgainTime)
+    {
+        readyAgainTime = time;
+        if (!TryGetState(entity, out var state))
+        {
+            return true;
+        }
+
+        var blocking = state.GetActiveCooldown(abilityId, category, time);
+        if (blocking == null)
+        {
+            return true;
+        }
+
+        readyAgainTime = blocking.ReadyAgainTime;
+        return false;
     }
 
     public void HandleTargetAbility()
