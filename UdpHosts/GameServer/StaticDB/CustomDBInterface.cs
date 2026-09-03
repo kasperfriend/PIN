@@ -154,6 +154,7 @@ public class CustomDBInterface
 
     // custom
     private static Dictionary<uint, Dictionary<uint, Deployable>> _deployable;
+    private static Dictionary<uint, Dictionary<uint, CharacterSpawn>> _characterSpawn;
     private static Dictionary<uint, Dictionary<uint, Melding>> _melding;
     private static Dictionary<uint, Dictionary<uint, Outpost>> _outpost;
     private static Dictionary<uint, Dictionary<uint, MeldingRepulsorDef>> _meldingRepulsor;
@@ -310,6 +311,7 @@ public class CustomDBInterface
 
         // custom
         _deployable = loader.LoadDeployable();
+        _characterSpawn = loader.LoadCharacterSpawn();
         _melding = loader.LoadMelding();
         _outpost = loader.LoadOutpost();
         _meldingRepulsor = loader.LoadMeldingRepulsor();
@@ -463,6 +465,7 @@ public class CustomDBInterface
 
     // custom
     public static Dictionary<uint, Deployable> GetZoneDeployables(uint zoneId) => _deployable.GetValueOrDefault(zoneId) ?? [];
+    public static Dictionary<uint, CharacterSpawn> GetZoneCharacterSpawns(uint zoneId) => _characterSpawn.GetValueOrDefault(zoneId) ?? [];
     public static Dictionary<uint, Melding> GetZoneMeldings(uint zoneId) => _melding.GetValueOrDefault(zoneId) ?? [];
     public static Dictionary<uint, Outpost> GetZoneOutposts(uint zoneId) => _outpost.GetValueOrDefault(zoneId) ?? [];
     public static Dictionary<uint, MeldingRepulsorDef> GetZoneMeldingRepulsors(uint zoneId) => _meldingRepulsor.GetValueOrDefault(zoneId) ?? [];

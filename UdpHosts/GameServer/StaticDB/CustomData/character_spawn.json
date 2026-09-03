@@ -1,0 +1,206 @@
+[
+	{
+		"id": 1,
+		"zone_id": 12,
+		"type": 290,
+		"position": {
+			"X": 1.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	},
+	{
+		"id": 2,
+		"zone_id": 12,
+		"type": 1196,
+		"position": {
+			"X": 3.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	},
+	{
+		"id": 3,
+		"zone_id": 12,
+		"type": 528,
+		"position": {
+			"X": 5.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	},
+	{
+		"id": 4,
+		"zone_id": 12,
+		"type": 2342,
+		"position": {
+			"X": 7.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	},
+	{
+		"id": 5,
+		"zone_id": 12,
+		"type": 2407,
+		"position": {
+			"X": 9.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	},
+	{
+		"id": 6,
+		"zone_id": 12,
+		"type": 1304,
+		"position": {
+			"X": 11.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	},
+	{
+		"id": 7,
+		"zone_id": 1003,
+		"type": 290,
+		"position": {
+			"X": 1.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	},
+	{
+		"id": 8,
+		"zone_id": 1003,
+		"type": 1196,
+		"position": {
+			"X": 3.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	},
+	{
+		"id": 9,
+		"zone_id": 1003,
+		"type": 528,
+		"position": {
+			"X": 5.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	},
+	{
+		"id": 10,
+		"zone_id": 1003,
+		"type": 2342,
+		"position": {
+			"X": 7.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	},
+	{
+		"id": 11,
+		"zone_id": 1003,
+		"type": 2407,
+		"position": {
+			"X": 9.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	},
+	{
+		"id": 12,
+		"zone_id": 1003,
+		"type": 1304,
+		"position": {
+			"X": 11.5,
+			"Y": 15,
+			"Z": 0
+		},
+		"orientation": {
+			"IsIdentity": true,
+			"W": 1,
+			"X": 0,
+			"Y": 0,
+			"Z": 0
+		}
+	}
+]

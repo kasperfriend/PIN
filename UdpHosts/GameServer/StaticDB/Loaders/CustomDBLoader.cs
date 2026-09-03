@@ -881,6 +881,13 @@ public class CustomDBLoader
         .ToDictionary(group => group.Key, group => group.ToDictionary(row => row.Id, row => row));
     }
 
+    public Dictionary<uint, Dictionary<uint, CharacterSpawn>> LoadCharacterSpawn()
+    {
+        return LoadJSON<CharacterSpawn>("./StaticDB/CustomData/character_spawn.json")
+            .GroupBy(row => row.ZoneId)
+            .ToDictionary(group => group.Key, group => group.ToDictionary(row => row.Id, row => row));
+    }
+
     public Dictionary<uint, Dictionary<uint, Melding>> LoadMelding()
     {
         return LoadJSON<Melding>("./StaticDB/CustomData/melding.json")
