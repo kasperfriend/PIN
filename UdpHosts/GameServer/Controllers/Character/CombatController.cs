@@ -167,13 +167,14 @@ public class CombatController : Base
         var abilitySlot = activateAbility.AbilitySlotIndex;
         var character = player.CharacterEntity;
         uint abilityId = 0;
+        uint moduleId = 0;
 
         byte abilityCategory = 0;
 
         // Using the local data until we can get the loadout remotely
         if (character.CurrentLoadout != null)
         {
-            var moduleId = character.CurrentLoadout.GetAbilityModuleIdBySlotIndex(abilitySlot);
+            moduleId = character.CurrentLoadout.GetAbilityModuleIdBySlotIndex(abilitySlot);
             if (moduleId != 0)
             {
                 var abilityModule = SDBInterface.GetAbilityModule(moduleId);
@@ -181,6 +182,10 @@ public class CombatController : Base
                 {
                     abilityId = abilityModule.AbilityChainId;
                     abilityCategory = abilityModule.UiCategory;
+                }
+                else
+                {
+                    _logger.Warning("ActivateAbility slot {AbilitySlotIndex}: module {ModuleId} has no AbilityModule SDB record", abilitySlot, moduleId);
                 }
             }
         }
@@ -241,6 +246,13 @@ public class CombatController : Base
             }
         }
 
+        if (abilityId == 0 && moduleId != 0)
+        {
+            _logger.Warning("ActivateAbility slot {AbilitySlotIndex}: module {ModuleId} did not resolve to an ability id (AbilityChainId is 0 or missing)", abilitySlot, moduleId);
+        }
+
+        _logger.Information("ActivateAbility slot {AbilitySlotIndex}: module {ModuleId} resolved to ability {AbilityId} (category {AbilityCategory})", abilitySlot, moduleId, abilityId, abilityCategory);
+
         if (abilityId != 0)
         {
             var activationTime = activateAbility.Time;
@@ -249,8 +261,9 @@ public class CombatController : Base
 
             // Server-side cooldown gate: while the ability is cooling down,
             // reject the activation instead of running the chain again.
-            if (!shard.Abilities.IsAbilityReady(initiator, abilityId, abilityCategory, activationTime, out _))
+            if (!shard.Abilities.IsAbilityReady(initiator, abilityId, abilityCategory, activationTime, out uint readyAgainTime))
             {
+                _logger.Information("ActivateAbility slot {AbilitySlotIndex} (ability {AbilityId}) rejected: cooling down until {ReadyAgainTime}", abilitySlot, abilityId, readyAgainTime);
                 if (character.IsPlayerControlled)
                 {
                     SendAbilityActivationResponse(character, abilityId, activationTime, activated: false);
