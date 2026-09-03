@@ -64,7 +64,7 @@ PlayIntroMovie = false
 
 1. Install Visual Studio or JetBrains Rider
    - Include the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) component or install it separately
-2. Recursive clone the repository `git clone --recurse-submodules https://github.com/themeldingwars/PIN.git`
+2. Recursive clone the repository `git clone --recurse-submodules https://github.com/kasperfriend/PIN.git`
 3. Build the solution
 4. Edit the `GameServer.dll.config` produced by the build in `UdpHosts\GameServer\bin\Release\net10.0` to ensure that `StaticDBPath` is correct.
 5. Trust self-signed development certificates by running `dotnet dev-certs https --trust`
