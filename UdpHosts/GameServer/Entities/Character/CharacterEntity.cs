@@ -249,7 +249,6 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         { StatModifierIdentifier.Friction,             1.0f },
         { StatModifierIdentifier.SinBonus,             1.0f },
         { StatModifierIdentifier.SinVulnerability,     1.0f },
-        { StatModifierIdentifier.TurnRate,             1.0f },
         { StatModifierIdentifier.FireRateModifier,     1.0f },
         { StatModifierIdentifier.AmmoConsumption,      1.0f },
         { StatModifierIdentifier.AccuracyModifier,     1.0f },

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using GameServer.Data;
 using GameServer.Entities.Character;
+using GameServer.Enums;
 using GameServer.StaticDB;
 using GameServer.Systems.Aptitude;
 using AptCommandType = GameServer.Systems.Aptitude.CommandType;
@@ -157,7 +158,7 @@ public class AbilityInfoChatCommand : ChatCommand
             case AptCommandType.LoadRegisterFromStat:
                 if (SDBInterface.GetLoadRegisterFromStatCommandDef(cmdId) is { } lrs)
                 {
-                    sb.AppendLine($"{prefix}stat {lrs.Stat} ({(GameServer.Enums.StatModifierIdentifier)lrs.Stat}) regop {lrs.Regop}");
+                    sb.AppendLine($"{prefix}stat {lrs.Stat} ({(StatModifierIdentifier)lrs.Stat}) regop {lrs.Regop}");
                 }
 
                 break;
