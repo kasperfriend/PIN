@@ -57,6 +57,7 @@ public class FallDamageSystemTests
         character.CanBleedout = true;
         character.SetCharacterState(AeroMessages.GSS.Character.CharacterStateData.CharacterStatus.Living, 0);
         character.SetMaxHealth(maxHealth, resetCurrent: true);
+        shard.Entities[character.EntityId] = character;
         shard.CharacterLifecycle.OnCharacterCreated(character);
 
         var system = new FallDamageSystem(shard, shard.Damage, Rules);

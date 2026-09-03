@@ -20,6 +20,7 @@ public class CharacterLifecycleServiceTests
         character.CanBleedout = canBleedout;
         character.SetMaxHealth(1000, resetCurrent: true);
 
+        shard.Entities[character.EntityId] = character;
         shard.CharacterLifecycle.OnCharacterCreated(character);
 
         return (shard, character, shard.CharacterLifecycle);
