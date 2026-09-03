@@ -44,6 +44,20 @@ public static class GRPCService
         await SendCommandAsync(new Command() { SaveGameSessionData = data });
     }
 
+    /// <summary>
+    /// Persist the battleframe the player just switched to, so the selection
+    /// screen and the next login both reflect it.
+    /// </summary>
+    public static async Task SaveCurrentBattleframeAsync(ulong characterId, uint zoneId, uint battleframeSdbId)
+    {
+        var data = new SaveCurrentBattleframe()
+           {
+               CharacterId = characterId, ZoneId = zoneId, BattleframeSDBId = battleframeSdbId
+           };
+
+        await SendCommandAsync(new Command() { SaveCurrentBattleframe = data });
+    }
+
     public static async Task SendCommandAsync(Command command)
     {
         // The stream is only established once ListenAsync connects. Dropping the

@@ -87,6 +87,18 @@ public class GameServerApiService : GameServerAPI.GameServerAPIBase
                             data.OutpostId);
                         break;
 
+                    case Command.SubtypeOneofCase.SaveCurrentBattleframe:
+                        var frame = command.SaveCurrentBattleframe;
+                        CharacterStore.UpdateCurrentBattleframe(
+                            frame.CharacterId,
+                            frame.ZoneId,
+                            frame.BattleframeSDBId);
+                        _logger.LogInformation(
+                            "Saved battleframe {Battleframe} for {CharacterId}",
+                            frame.BattleframeSDBId,
+                            frame.CharacterId);
+                        break;
+
                     case Command.SubtypeOneofCase.SaveLgvRaceFinish:
                         _logger.LogInformation(
                             "LGV race finish for {CharacterGuid}: {TimeMs}ms",

@@ -19,6 +19,7 @@
 - Auto-detect the Firefall installation and populate `GameServer.config.json` paths on startup (via Steam libraries, `libraryfolders.vdf`, or `PIN_FIREFALL_PATH` / `PIN_STEAM_PATH`)
 - Implement the server side of the gRPC `GameServerAPI` (`WebHost.GameServerApi`, hosted by `WebHostManager` on port 5201), so the GameServer can actually load character data instead of always falling back
 - Persist characters to `characters.json`, shared by the character selection screen and the GameServer
+- Persist the battleframe picked in-game, so switching frames survives a relogin and shows up in the character selection screen
 
 ### Changed
 

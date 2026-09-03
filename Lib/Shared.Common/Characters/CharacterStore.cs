@@ -168,10 +168,24 @@ public static class CharacterStore
     /// Record the battleframe the player is currently using, so the next login
     /// and the selection screen both reflect it.
     /// </summary>
-    public static void UpdateCurrentBattleframe(ulong characterGuid, uint battleframeSdbId)
+    /// <remarks>
+    /// As with session data, the guid the GameServer sends has its low byte
+    /// overwritten, so resolve via the zone id where we can.
+    /// </remarks>
+    public static void UpdateCurrentBattleframe(ulong characterGuid, uint zoneId, uint battleframeSdbId)
     {
-        var character = Get(characterGuid);
-        if (character == null || battleframeSdbId == 0)
+        if (battleframeSdbId == 0)
+        {
+            return;
+        }
+
+        Init();
+
+        var character = Characters.TryGetValue(GuidPrefix + zoneId, out var byZone)
+                            ? byZone
+                            : Get(characterGuid);
+
+        if (character == null || character.CurrentBattleframeSDBId == battleframeSdbId)
         {
             return;
         }
