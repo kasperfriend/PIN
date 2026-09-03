@@ -231,7 +231,7 @@ public class AbilityInfoChatCommand : ChatCommand
             return;
         }
 
-        sb.AppendLine($"Server AbilityState: energy {state.Energy:F1}/{state.MaxEnergy:F1}, regen {state.EnergyRegenPerSecond:F1}/s");
+        sb.AppendLine($"Server AbilityState: energy {state.Energy:F1}/{state.MaxEnergy:F1}, regen {state.EnergyRegenPerSecond:F1}/s after {state.EnergyRegenDelayMs}ms, last spend {state.LastEnergySpendTime}");
         if (state.Cooldowns.Length == 0)
         {
             sb.AppendLine("  no active cooldowns");

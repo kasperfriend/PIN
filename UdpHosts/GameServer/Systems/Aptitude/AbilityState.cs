@@ -53,10 +53,35 @@ public class AbilityCooldownEntry
 }
 
 /// <summary>
+/// A cooldown queued by an activation command. The cooldown is started by
+/// <see cref="AbilitySystem"/> only after the whole ability chain has
+/// succeeded, so a chain that fails a later requirement (for example not
+/// enough energy) does not consume the ability's cooldown.
+/// </summary>
+public class AbilityCooldownRequest
+{
+    public AbilityCooldownKind Kind { get; set; }
+
+    /// <summary>Ability the cooldown applies to (<c>0</c> for category/global cooldowns).</summary>
+    public uint AbilityId { get; set; }
+
+    /// <summary>Cooldown category (<c>0</c> when the ability has no category).</summary>
+    public uint Category { get; set; }
+
+    public uint DurationMs { get; set; }
+}
+
+/// <summary>
 /// Server-side tracker of cooldowns and energy for one aptitude entity.
 /// <c>TimeCooldown</c>/<c>InflictCooldown</c> aptitude commands report into
 /// this structure, while <see cref="AbilitySystem"/> serializes it into the
 /// client <c>AbilityActivated</c>/<c>AbilityFailed</c> cooldown payloads.
+/// <para>
+/// The energy pool mirrors the client-simulated pool described by
+/// <c>EnergyParamsData</c>: regen waits <see cref="EnergyRegenDelayMs"/> after
+/// the last spend and an overcharged (negative) pool keeps recharging back
+/// through zero.
+/// </para>
 /// </summary>
 public class AbilityState
 {
@@ -69,6 +94,12 @@ public class AbilityState
 
     /// <summary>Energy restored per second while the entity has a state.</summary>
     public float EnergyRegenPerSecond { get; set; } = 15f;
+
+    /// <summary>Time (ms) after the last spend before the pool starts recharging.</summary>
+    public uint EnergyRegenDelayMs { get; set; } = 300;
+
+    /// <summary>Game time (ms) at which the pool was last spent (ability cost/drain).</summary>
+    public uint LastEnergySpendTime { get; set; }
 
     /// <summary>
     /// Game time (ms) at which the last passive energy update was applied, so
@@ -195,11 +226,31 @@ public class AbilityState
         }
 
         float elapsedSec = (time - LastEnergyUpdateTime) / 1000.0f;
-        if (elapsedSec > 0f)
+        if (elapsedSec > 0f && time - LastEnergySpendTime >= EnergyRegenDelayMs)
         {
+            // An overcharged pool may be negative; the client keeps recharging
+            // through zero, so the debt is not blocking regen.
             Energy = Math.Min(MaxEnergy, Energy + (EnergyRegenPerSecond * elapsedSec));
         }
 
         LastEnergyUpdateTime = time;
+    }
+
+    /// <summary>
+    /// Deducts <paramref name="amount"/> from the energy pool and returns the
+    /// remaining energy. When <paramref name="allowOvercharge"/> is set the
+    /// pool may go negative (overcharge debt); otherwise it is clamped at zero.
+    /// </summary>
+    public float SpendEnergy(float amount, uint time, bool allowOvercharge)
+    {
+        if (amount <= 0f)
+        {
+            return Energy;
+        }
+
+        UpdateEnergy(time);
+        Energy = allowOvercharge ? Energy - amount : Math.Max(0f, Energy - amount);
+        LastEnergySpendTime = time;
+        return Energy;
     }
 }

@@ -360,8 +360,8 @@ public class Factory
                 return new TargetTrimCommand(SDBInterface.GetTargetTrimCommandDef(commandId));
             // case CommandType.SetWeaponDamage:
             //     return new SetWeaponDamageCommand(SDBInterface.GetSetWeaponDamageCommandDef(commandId));
-            // case CommandType.ConsumeEnergyOverTime:
-            //     return new ConsumeEnergyOverTimeCommand(SDBInterface.GetConsumeEnergyOverTimeCommandDef(commandId));
+            case CommandType.ConsumeEnergyOverTime:
+                return new ConsumeEnergyOverTimeCommand(SDBInterface.GetConsumeEnergyOverTimeCommandDef(commandId));
             // case CommandType.RequestAbilitySelection:
             //     return new RequestAbilitySelectionCommand(SDBInterface.GetRequestAbilitySelectionCommandDef(commandId));
             // case CommandType.NPCDespawn:

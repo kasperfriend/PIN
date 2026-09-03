@@ -38,6 +38,14 @@ public class Context
 
     public Dictionary<ICommand, ICommandActiveContext> Actives { get; set; } = [];
 
+    /// <summary>
+    /// Cooldowns queued by activation commands while the chain runs. The
+    /// AbilitySystem starts them once the whole chain has succeeded, so a
+    /// chain that fails a later requirement (e.g. not enough energy) does not
+    /// consume the cooldown.
+    /// </summary>
+    public List<AbilityCooldownRequest> PendingCooldowns { get; set; } = [];
+
     public static Context CopyContext(Context original)
     {
         return new Context(original.Shard, original.Initiator)
@@ -57,6 +65,7 @@ public class Context
             InitPosition = original.InitPosition,
             ExecutionHint = original.ExecutionHint,
             ExecutionId = original.ExecutionId,
+            PendingCooldowns = original.PendingCooldowns,
         };
     }
 
