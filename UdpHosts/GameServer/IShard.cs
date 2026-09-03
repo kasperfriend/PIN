@@ -52,7 +52,7 @@ public interface IShard : IPacketSender
     uint CurrentTime => unchecked((uint)CurrentTimeLong);
     ushort CurrentShortTime => unchecked((ushort)CurrentTime);
 
-    ulong GetNextGuid(byte type);
+    ulong GetNextGuid(byte type = 0);
     void Run(CancellationToken ct);
     bool Tick(double deltaTime, ulong currentTime, CancellationToken ct);
     void NetworkTick(double deltaTime, ulong currentTime, CancellationToken ct);
