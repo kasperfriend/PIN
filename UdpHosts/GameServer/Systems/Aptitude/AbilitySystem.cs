@@ -100,6 +100,20 @@ public class AbilitySystem
             _entityAbilityStates[entity.EntityId] = state;
         }
 
+        else if (entity is CharacterEntity existingCharacter && existingCharacter.EnergyParams.Max > 0f)
+        {
+            // A state can be created by cooldown handling before the character's
+            // spawn data has finished populating EnergyParams. Do not leave that
+            // state permanently on the 100-energy fallback configuration.
+            state.MaxEnergy = existingCharacter.EnergyParams.Max;
+            state.EnergyRegenPerSecond = existingCharacter.EnergyParams.Recharge;
+            state.EnergyRegenDelayMs = existingCharacter.EnergyParams.Delay;
+            if (state.Energy > state.MaxEnergy)
+            {
+                state.Energy = state.MaxEnergy;
+            }
+        }
+
         return state;
     }
 
