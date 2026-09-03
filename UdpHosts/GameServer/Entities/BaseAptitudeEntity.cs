@@ -77,6 +77,7 @@ public abstract class BaseAptitudeEntity : BaseEntity, IAptitudeTarget
         var data = new StatusEffectData
         {
             Id = state.Effect.Id,
+            Stack = state.Stacks,
             Initiator = state.Context.Initiator.AeroEntityId,
             Time = state.Time,
             MoreDataFlag = 0

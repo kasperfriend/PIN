@@ -1030,6 +1030,19 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         // CombatView
         Character_CombatView.GetType().GetProperty($"StatusEffectsChangeTime_{index}Prop").SetValue(Character_CombatView, time, null);
         Character_CombatView.GetType().GetProperty($"StatusEffects_{index}Prop").SetValue(Character_CombatView, data, null);
+
+        // LocalEffectsController: owner-private effect slots used by the client to reconcile its
+        // locally predicted ability effects (e.g. Charge). The client predicts the effect at key
+        // press and keeps a copy here; if the server never writes the replicated effect into this
+        // controller, the predicted copy stays bound and effects like the camera aim lock are never
+        // torn down when the server removes the effect.
+        if (Character_LocalEffectsController != null)
+        {
+            Character_LocalEffectsController.GetType().GetProperty($"LocalStatusEffects_{index}Prop").SetValue(
+                Character_LocalEffectsController,
+                new LocalEffectsData { Entity = data.Initiator, Effect = data.Id, Time = data.Time },
+                null);
+        }
     }
 
     public override void ClearStatusEffect(byte index, ushort time, uint debugEffectId)
@@ -1050,6 +1063,13 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         // CombatView
         Character_CombatView.GetType().GetProperty($"StatusEffectsChangeTime_{index}Prop").SetValue(Character_CombatView, time, null);
         Character_CombatView.GetType().GetProperty($"StatusEffects_{index}Prop").SetValue(Character_CombatView, null, null);
+
+        // LocalEffectsController: mirror the clear so the client's locally predicted copy is torn
+        // down too, matching SetStatusEffect.
+        if (Character_LocalEffectsController != null)
+        {
+            Character_LocalEffectsController.GetType().GetProperty($"LocalStatusEffects_{index}Prop").SetValue(Character_LocalEffectsController, null, null);
+        }
     }
 
     public void SetAttachedTo(AttachedToData newValue, IEntity entity, uint pose, Vector3 poseOffset)
@@ -1098,6 +1118,12 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             // CombatView
             Character_CombatView.GetType().GetProperty($"StatusEffectsChangeTime_{index}Prop").SetValue(Character_CombatView, time, null);
             Character_CombatView.GetType().GetProperty($"StatusEffects_{index}Prop").SetValue(Character_CombatView, null, null);
+
+            // LocalEffectsController (owner-private slots)
+            if (Character_LocalEffectsController != null)
+            {
+                Character_LocalEffectsController.GetType().GetProperty($"LocalStatusEffects_{index}Prop").SetValue(Character_LocalEffectsController, null, null);
+            }
         }
 
         Shard.EntityMan.FlushChanges(this);
