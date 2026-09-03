@@ -8,20 +8,44 @@ namespace GameServer;
 
 internal static class Program
 {
-    public static void Main(string[] arguments)
+    public static int Main(string[] arguments)
     {
-        using var container = CreateContainer();
-
-        var settings = container.Resolve<GameServerSettings>();
-
-        var options = ParseCliOptions(arguments);
-        if (options is not null)
+        try
         {
-            ApplyCliOptions(options, settings);
-        }
+            using var container = CreateContainer();
 
-        var server = container.Resolve<GameServer>();
-        server.Run();
+            var settings = container.Resolve<GameServerSettings>();
+
+            var options = ParseCliOptions(arguments);
+            if (options is not null)
+            {
+                ApplyCliOptions(options, settings);
+            }
+
+            var server = container.Resolve<GameServer>();
+            server.Run();
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            ReportFatalError(ex);
+            return 1;
+        }
+    }
+
+    /// <summary>
+    ///     Print a readable error for a failed startup (e.g. a missing StaticDBPath configuration)
+    ///     instead of an unhandled exception with a dependency injection stack trace.
+    /// </summary>
+    /// <param name="ex">The exception that terminated the server</param>
+    private static void ReportFatalError(Exception ex)
+    {
+        var reason = ex.GetBaseException();
+
+        Console.Error.WriteLine($"GameServer terminated: {reason.Message}");
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("Check GameServer.config.json next to GameServer.dll; the README section \"GameServer config\" describes the required values.");
     }
 
     /// <summary>

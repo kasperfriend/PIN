@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Microsoft.Win32;
 using Serilog;
 
 namespace GameServer;
@@ -44,7 +45,17 @@ internal static class FirefallInstallLocator
             }
         }
 
-        // 3. Search around the executable and the working directory.
+        // 3. Common standalone install locations.
+        foreach (var candidate in EnumerateStandaloneInstallRoots())
+        {
+            if (TryCreate(candidate, out var standalone))
+            {
+                Log.Information("Detected Firefall installation at {Path}", standalone!.Root);
+                return standalone;
+            }
+        }
+
+        // 4. Search around the executable and the working directory.
         foreach (var candidate in EnumerateNearbyCandidateRoots())
         {
             if (TryCreate(candidate, out var nearby))
@@ -67,8 +78,26 @@ internal static class FirefallInstallLocator
             candidates.Add(envSteam);
         }
 
+        // Steam is not always installed under Program Files; the registry knows the real location.
+        if (OperatingSystem.IsWindows())
+        {
+            AddRegistryValue(candidates, Registry.CurrentUser, @"Software\Valve\Steam", "SteamPath");
+            AddRegistryValue(candidates, Registry.LocalMachine, @"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath");
+            AddRegistryValue(candidates, Registry.LocalMachine, @"SOFTWARE\Valve\Steam", "InstallPath");
+        }
+
         AddSpecialFolder(candidates, Environment.SpecialFolder.ProgramFilesX86, "Steam");
         AddSpecialFolder(candidates, Environment.SpecialFolder.ProgramFiles, "Steam");
+
+        return candidates.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> EnumerateStandaloneInstallRoots()
+    {
+        var candidates = new List<string>();
+
+        AddSpecialFolder(candidates, Environment.SpecialFolder.ProgramFiles, FirefallFolderName);
+        AddSpecialFolder(candidates, Environment.SpecialFolder.ProgramFilesX86, FirefallFolderName);
 
         return candidates.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase);
     }
@@ -89,6 +118,22 @@ internal static class FirefallInstallLocator
         }
     }
 
+    private static void AddRegistryValue(ICollection<string> list, RegistryKey rootKey, string subKey, string valueName)
+    {
+        try
+        {
+            using var key = rootKey.OpenSubKey(subKey);
+            if (key?.GetValue(valueName) is string value && !string.IsNullOrWhiteSpace(value))
+            {
+                list.Add(value);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // The registry key may be missing or not readable; ignore it.
+        }
+    }
+
     private static bool TryFindInSteamLibrary(string steamRoot, out InstalledFirefall? result)
     {
         result = null;
@@ -99,21 +144,31 @@ internal static class FirefallInstallLocator
             return true;
         }
 
-        var libraryFoldersFile = Path.Combine(steamRoot, SteamAppsFolderName, "libraryfolders.vdf");
-        if (!File.Exists(libraryFoldersFile))
+        // Steam keeps the library list under "steamapps" and, in older versions, under "config".
+        var libraryFoldersFiles = new[]
         {
-            return false;
-        }
+            Path.Combine(steamRoot, SteamAppsFolderName, "libraryfolders.vdf"),
+            Path.Combine(steamRoot, "config", "libraryfolders.vdf"),
+        };
 
-        foreach (var libraryPath in ReadLibraryFolderPaths(libraryFoldersFile))
+        foreach (var libraryFoldersFile in libraryFoldersFiles.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            // libraryPath normally points at the "steamapps" folder; allow for consumers that
-            // store the library root instead.
-            foreach (var common in new[] { Path.Combine(libraryPath, "common", FirefallFolderName), Path.Combine(libraryPath, SteamAppsFolderName, "common", FirefallFolderName) })
+            foreach (var libraryPath in ReadLibraryFolderPaths(libraryFoldersFile))
             {
-                if (TryCreate(common, out result))
+                // libraryfolders.vdf stores the library root (e.g. "D:\SteamLibrary");
+                // older files and third-party tools sometimes store the "steamapps" folder itself.
+                var commonFolders = new[]
                 {
-                    return true;
+                    Path.Combine(libraryPath, SteamAppsFolderName, "common", FirefallFolderName),
+                    Path.Combine(libraryPath, "common", FirefallFolderName),
+                };
+
+                foreach (var common in commonFolders.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (TryCreate(common, out result))
+                    {
+                        return true;
+                    }
                 }
             }
         }
@@ -134,15 +189,17 @@ internal static class FirefallInstallLocator
             return [];
         }
 
-        // Matches the modern  "path"  "C:\...\steamapps"  form and the legacy
-        //  "1"  "C:\...\steamapps"  form used by older libraryfolders.vdf files.
+        // Matches the modern  "path"  "D:\SteamLibrary"  form and the legacy
+        //  "1"  "D:\SteamLibrary"  form used by older libraryfolders.vdf files.
+        // Values that do not look like absolute paths (labels, app ids, sizes, ...)
+        // are skipped; library paths point at the library root, not at "steamapps".
         var valuePattern = new Regex(@"""(?<key>[^""]*)""\s*""(?<value>[^""]+)""", RegexOptions.Compiled);
         var paths = new List<string>();
 
         foreach (Match match in valuePattern.Matches(content))
         {
             var value = UnescapeVdfPath(match.Groups["value"].Value);
-            if (IsSteamAppsPath(value))
+            if (LooksLikeAbsolutePath(value))
             {
                 paths.Add(value);
             }
@@ -157,20 +214,18 @@ internal static class FirefallInstallLocator
         return value.Replace(@"\\", @"\");
     }
 
-    private static bool IsSteamAppsPath(string value)
+    private static bool LooksLikeAbsolutePath(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
             return false;
         }
 
-        var trimmed = value.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        if (!trimmed.EndsWith(SteamAppsFolderName, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return trimmed.Contains(':') || trimmed.StartsWith(Path.DirectorySeparatorChar) || trimmed.StartsWith('/');
+        // Windows drive paths ("C:\SteamLibrary"), UNC paths ("\\server\share")
+        // and Unix absolute paths ("/home/user/.steam/steam").
+        return value.Contains(':') ||
+               value.StartsWith(Path.DirectorySeparatorChar) ||
+               value.StartsWith(Path.AltDirectorySeparatorChar);
     }
 
     private static IEnumerable<string> EnumerateNearbyCandidateRoots()

@@ -292,7 +292,7 @@ public class GameServerModule : Module
 
     /// <summary>
     ///     Applies installation paths from GameServer.config.json.
-    ///     The file is optional; when present its path values override the legacy App.config values.
+    ///     The file is optional; when present its non-empty path values override the legacy App.config values.
     /// </summary>
     private static void ApplyPathSettingsFromFile(GameServerSettings settings)
     {
@@ -323,24 +323,26 @@ public class GameServerModule : Module
                 $"Configuration file '{configPath}' does not contain valid JSON.");
         }
 
-        AutoFillMissingPaths(configPath, config);
+        AutoFillMissingPaths(configPath, config, settings);
 
-        if (config.StaticDBPath != null)
+        // Only non-empty values from the config file override settings; an empty string must
+        // never replace a value that was already picked up from the legacy App.config.
+        if (!string.IsNullOrWhiteSpace(config.StaticDBPath))
         {
             settings.StaticDBPath = config.StaticDBPath;
         }
 
-        if (config.MapsPath != null)
+        if (!string.IsNullOrWhiteSpace(config.MapsPath))
         {
             settings.MapsPath = config.MapsPath;
         }
 
-        if (config.AssetDBPath != null)
+        if (!string.IsNullOrWhiteSpace(config.AssetDBPath))
         {
             settings.AssetDBPath = config.AssetDBPath;
         }
 
-        if (config.CachePath != null)
+        if (!string.IsNullOrWhiteSpace(config.CachePath))
         {
             settings.CachePath = config.CachePath;
         }
@@ -348,14 +350,19 @@ public class GameServerModule : Module
 
     /// <summary>
     ///     Detect a Firefall installation and write the resolved paths back into the
-    ///     configuration file when any of them are still empty. The user's existing
-    ///     values are never overwritten.
+    ///     configuration file when any of them are still empty. Values already provided by
+    ///     the config file or the legacy App.config are never overwritten.
     /// </summary>
-    private static void AutoFillMissingPaths(string configPath, GameServerConfigFile config)
+    private static void AutoFillMissingPaths(string configPath, GameServerConfigFile config, GameServerSettings settings)
     {
-        if (!string.IsNullOrWhiteSpace(config.StaticDBPath) &&
-            !string.IsNullOrWhiteSpace(config.MapsPath) &&
-            !string.IsNullOrWhiteSpace(config.AssetDBPath))
+        var needStaticDbPath = string.IsNullOrWhiteSpace(config.StaticDBPath) &&
+                               string.IsNullOrWhiteSpace(settings.StaticDBPath);
+        var needMapsPath = string.IsNullOrWhiteSpace(config.MapsPath) &&
+                           string.IsNullOrWhiteSpace(settings.MapsPath);
+        var needAssetDbPath = string.IsNullOrWhiteSpace(config.AssetDBPath) &&
+                              string.IsNullOrWhiteSpace(settings.AssetDBPath);
+
+        if (!needStaticDbPath && !needMapsPath && !needAssetDbPath)
         {
             return;
         }
@@ -363,7 +370,7 @@ public class GameServerModule : Module
         var detected = FirefallInstallLocator.Locate();
         if (detected == null)
         {
-            if (string.IsNullOrWhiteSpace(config.StaticDBPath))
+            if (needStaticDbPath)
             {
                 Log.Warning("Could not auto-detect a Firefall installation. Set StaticDBPath in {ConfigPath}.", configPath);
             }
@@ -371,35 +378,23 @@ public class GameServerModule : Module
             return;
         }
 
-        var changed = false;
-
-        if (string.IsNullOrWhiteSpace(config.StaticDBPath))
+        if (needStaticDbPath)
         {
             config.StaticDBPath = detected.StaticDBPath;
-            changed = true;
         }
 
-        if (string.IsNullOrWhiteSpace(config.MapsPath))
+        if (needMapsPath)
         {
             config.MapsPath = detected.MapsPath;
-            changed = true;
         }
 
-        if (string.IsNullOrWhiteSpace(config.AssetDBPath))
+        if (needAssetDbPath)
         {
             config.AssetDBPath = detected.AssetDBPath;
-            changed = true;
         }
 
-        if (changed)
-        {
-            Log.Information("Auto-detected Firefall at {Root}. Writing paths to {ConfigPath}.", detected.Root, configPath);
-            WriteConfigFile(configPath, config);
-        }
-        else
-        {
-            Log.Information("Firefall detected at {Root}; GameServer.config.json already has paths configured.", detected.Root);
-        }
+        Log.Information("Auto-detected Firefall at {Root}. Writing paths to {ConfigPath}.", detected.Root, configPath);
+        WriteConfigFile(configPath, config);
     }
 
     /// <summary>
