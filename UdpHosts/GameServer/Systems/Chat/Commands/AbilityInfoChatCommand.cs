@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using GameServer.Data;
 using GameServer.Entities.Character;
+using GameServer.Enums;
 using GameServer.StaticDB;
 using GameServer.Systems.Aptitude;
 using AptCommandType = GameServer.Systems.Aptitude.CommandType;
@@ -140,10 +141,31 @@ public class AbilityInfoChatCommand : ChatCommand
                 }
 
                 break;
+            case AptCommandType.RequireEnergyByRange:
+                if (SDBInterface.GetRequireEnergyByRangeCommandDef(cmdId) is { } rer)
+                {
+                    sb.AppendLine($"{prefix}energy [{rer.MinEnergy}, {rer.MaxEnergy}] range [{rer.MinRange}, {rer.MaxRange}] regop {rer.AmountRegop} alsoConsume {rer.AlsoConsume} predict {rer.AllowPrediction}");
+                }
+
+                break;
             case AptCommandType.ConsumeEnergy:
                 if (SDBInterface.GetConsumeEnergyCommandDef(cmdId) is { } ced)
                 {
                     sb.AppendLine($"{prefix}amount {ced.Amount} regop {ced.AmountRegop} onTargets {ced.OnTargets} overcharge {ced.AllowOvercharge} predict {ced.AllowPrediction}");
+                }
+
+                break;
+            case AptCommandType.LoadRegisterFromStat:
+                if (SDBInterface.GetLoadRegisterFromStatCommandDef(cmdId) is { } lrs)
+                {
+                    sb.AppendLine($"{prefix}stat {lrs.Stat} ({(StatModifierIdentifier)lrs.Stat}) regop {lrs.Regop}");
+                }
+
+                break;
+            case AptCommandType.LoadRegisterFromModulePower:
+                if (SDBInterface.GetLoadRegisterFromModulePowerCommandDef(cmdId) is { } lrm)
+                {
+                    sb.AppendLine($"{prefix}modulePowerType {lrm.ModulePowerType} regop {lrm.Regop}");
                 }
 
                 break;
@@ -231,7 +253,7 @@ public class AbilityInfoChatCommand : ChatCommand
             return;
         }
 
-        sb.AppendLine($"Server AbilityState: energy {state.Energy:F1}/{state.MaxEnergy:F1}, regen {state.EnergyRegenPerSecond:F1}/s");
+        sb.AppendLine($"Server AbilityState: energy {state.Energy:F1}/{state.MaxEnergy:F1}, regen {state.EnergyRegenPerSecond:F1}/s after {state.EnergyRegenDelayMs}ms, last spend {state.LastEnergySpendTime}");
         if (state.Cooldowns.Length == 0)
         {
             sb.AppendLine("  no active cooldowns");

@@ -20,6 +20,15 @@ public class Context
 
     public uint ChainId { get; set; }
     public uint AbilityId { get; set; }
+
+    /// <summary>
+    /// The <c>dbitems::AbilityModule</c> that activated the chain (when
+    /// resolved from the loadout slot). Used by
+    /// <c>LoadRegisterFromModulePowerCommand</c> to load the ability's power
+    /// rating, which scales data amounts like energy cost and damage.
+    /// </summary>
+    public uint AbilityModuleId { get; set; }
+
     public bool Success { get; set; }
     public IShard Shard { get; set; }
     public AbilitySystem Abilities { get; set; }
@@ -38,12 +47,21 @@ public class Context
 
     public Dictionary<ICommand, ICommandActiveContext> Actives { get; set; } = [];
 
+    /// <summary>
+    /// Cooldowns queued by activation commands while the chain runs. The
+    /// AbilitySystem starts them once the whole chain has succeeded, so a
+    /// chain that fails a later requirement (e.g. not enough energy) does not
+    /// consume the cooldown.
+    /// </summary>
+    public List<AbilityCooldownRequest> PendingCooldowns { get; set; } = [];
+
     public static Context CopyContext(Context original)
     {
         return new Context(original.Shard, original.Initiator)
         {
             ChainId = original.ChainId,
             AbilityId = original.AbilityId,
+            AbilityModuleId = original.AbilityModuleId,
             Success = original.Success,
             Shard = original.Shard,
             Abilities = original.Abilities,
@@ -57,6 +75,7 @@ public class Context
             InitPosition = original.InitPosition,
             ExecutionHint = original.ExecutionHint,
             ExecutionId = original.ExecutionId,
+            PendingCooldowns = original.PendingCooldowns,
         };
     }
 

@@ -360,8 +360,8 @@ public class Factory
                 return new TargetTrimCommand(SDBInterface.GetTargetTrimCommandDef(commandId));
             // case CommandType.SetWeaponDamage:
             //     return new SetWeaponDamageCommand(SDBInterface.GetSetWeaponDamageCommandDef(commandId));
-            // case CommandType.ConsumeEnergyOverTime:
-            //     return new ConsumeEnergyOverTimeCommand(SDBInterface.GetConsumeEnergyOverTimeCommandDef(commandId));
+            case CommandType.ConsumeEnergyOverTime:
+                return new ConsumeEnergyOverTimeCommand(SDBInterface.GetConsumeEnergyOverTimeCommandDef(commandId));
             // case CommandType.RequestAbilitySelection:
             //     return new RequestAbilitySelectionCommand(SDBInterface.GetRequestAbilitySelectionCommandDef(commandId));
             // case CommandType.NPCDespawn:
@@ -431,20 +431,20 @@ public class Factory
             //     return new ActivateMissionCommand(CustomDBInterface.GetActivateMissionCommandDef(commandId));
             // case CommandType.UpdateWait:
             //     return new UpdateWaitCommand(SDBInterface.GetUpdateWaitCommandDef(commandId));
-            // case CommandType.LoadRegisterFromStat:
-            //     return new LoadRegisterFromStatCommand(SDBInterface.GetLoadRegisterFromStatCommandDef(commandId));
-            // case CommandType.PushRegister:
-            //     return new PushRegisterCommand(SDBInterface.GetPushRegisterCommandDef(commandId));
-            // case CommandType.PopRegister:
-            //     return new PopRegisterCommand(SDBInterface.GetPopRegisterCommandDef(commandId));
-            // case CommandType.PeekRegister:
-            //     return new PeekRegisterCommand(SDBInterface.GetPeekRegisterCommandDef(commandId));
+            case CommandType.LoadRegisterFromStat:
+                return new LoadRegisterFromStatCommand(SDBInterface.GetLoadRegisterFromStatCommandDef(commandId));
+            case CommandType.PushRegister:
+                return new PushRegisterCommand(SDBInterface.GetPushRegisterCommandDef(commandId));
+            case CommandType.PopRegister:
+                return new PopRegisterCommand(SDBInterface.GetPopRegisterCommandDef(commandId));
+            case CommandType.PeekRegister:
+                return new PeekRegisterCommand(SDBInterface.GetPeekRegisterCommandDef(commandId));
             case CommandType.WhileLoop:
                 return new WhileLoopCommand(SDBInterface.GetWhileLoopCommandDef(commandId));
             // case CommandType.MovementSlide:
             //     return new MovementSlideCommand(SDBInterface.GetMovementSlideCommandDef(commandId));
-            // case CommandType.RequireEnergyByRange:
-            //     return new RequireEnergyByRangeCommand(SDBInterface.GetRequireEnergyByRangeCommandDef(commandId));
+            case CommandType.RequireEnergyByRange:
+                return new RequireEnergyByRangeCommand(SDBInterface.GetRequireEnergyByRangeCommandDef(commandId));
             // case CommandType.NetworkStealth:
             //     return new NetworkStealthCommand(CustomDBInterface.GetNetworkStealthCommandDef(commandId));
             // case CommandType.ResetCooldowns:
@@ -471,8 +471,8 @@ public class Factory
             //     return new TargetByDamageResponseCommand(SDBInterface.GetTargetByDamageResponseCommandDef(commandId));
             case CommandType.OrientationLock:
                 return new OrientationLockCommand(SDBInterface.GetOrientationLockCommandDef(commandId));
-            // case CommandType.LoadRegisterFromModulePower:
-            //     return new LoadRegisterFromModulePowerCommand(SDBInterface.GetLoadRegisterFromModulePowerCommandDef(commandId));
+            case CommandType.LoadRegisterFromModulePower:
+                return new LoadRegisterFromModulePowerCommand(SDBInterface.GetLoadRegisterFromModulePowerCommandDef(commandId));
             // case CommandType.ForcedMovementDuration:
             //     return new ForcedMovementDurationCommand(SDBInterface.GetForcedMovementDurationCommandDef(commandId));
             // case CommandType.ActivateSpawnTable:

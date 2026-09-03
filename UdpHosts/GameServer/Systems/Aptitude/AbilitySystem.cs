@@ -86,12 +86,15 @@ public class AbilitySystem
 
             // Mirror the energy pool configuration that was sent to the client
             // (CharacterEntity.EnergyParams) so server-side energy requirements
-            // and costs use the same scale as the client simulated pool.
+            // and costs use the same scale and recharge rhythm as the client
+            // simulated pool.
             if (entity is CharacterEntity character && character.EnergyParams.Max > 0f)
             {
                 state.MaxEnergy = character.EnergyParams.Max;
                 state.Energy = character.EnergyParams.Max;
                 state.EnergyRegenPerSecond = character.EnergyParams.Recharge;
+                state.EnergyRegenDelayMs = character.EnergyParams.Delay;
+                state.LastEnergySpendTime = _shard.CurrentTime;
             }
 
             _entityAbilityStates[entity.EntityId] = state;
@@ -344,7 +347,7 @@ public class AbilitySystem
     /// Executes the chain of an activated ability and returns whether the whole
     /// chain succeeded (requirements like cooldowns or energy can fail it).
     /// </summary>
-    public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId, uint activationTime, AptitudeTargets targets, Guid? executionId = null)
+    public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId, uint activationTime, AptitudeTargets targets, Guid? executionId = null, uint abilityModuleId = 0)
     {
         var execId = executionId ?? Guid.NewGuid();
         using var logContext = Serilog.Context.LogContext.PushProperty("ExecutionId", execId);
@@ -355,18 +358,23 @@ public class AbilitySystem
             return true;
         }
 
-        _logger.Information("HandleActivateAbility: Ability {AbilityId} starting Chain {ChainId}", abilityId, chainId);
+        _logger.Information("HandleActivateAbility: Ability {AbilityId} starting Chain {ChainId} (module {AbilityModuleId})", abilityId, chainId, abilityModuleId);
 
         var chain = Factory.LoadChain(chainId);
-        return chain.Execute(new Context(shard, initiator)
+        var context = new Context(shard, initiator)
         {
             ExecutionId = execId,
             ChainId = chainId,
             AbilityId = abilityId,
+            AbilityModuleId = abilityModuleId,
             Targets = targets,
             InitTime = activationTime,
             ExecutionHint = ExecutionHint.Ability
-        });
+        };
+
+        bool success = chain.Execute(context);
+        CommitActivationCooldowns(context, success);
+        return success;
     }
 
     public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId)
@@ -417,5 +425,40 @@ public class AbilitySystem
     public void HandleActivateConsumable()
     {
         throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Starts the cooldowns queued by the activation node once the chain has
+    /// succeeded. Cooldowns are deliberately not started inside the activation
+    /// command: an ability that fails a later requirement (for example not
+    /// enough energy) must not go on cooldown.
+    /// <para>
+    /// The pending list is shared with copied contexts, so cooldowns queued by
+    /// nested chains (branches, applied effects) are committed with the
+    /// activation they belong to.
+    /// </para>
+    /// </summary>
+    private void CommitActivationCooldowns(Context context, bool success)
+    {
+        if (!success || context.PendingCooldowns.Count == 0)
+        {
+            return;
+        }
+
+        uint time = _shard.CurrentTime;
+        var state = context.Abilities.GetOrAddState(context.Self);
+        foreach (var request in context.PendingCooldowns)
+        {
+            var entry = state.StartCooldown(request.Kind, request.AbilityId, request.Category, request.DurationMs, time);
+            if (entry != null)
+            {
+                _logger.Debug(
+                    "Started {Kind} cooldown for ability {AbilityId} (category {Category}) for {Duration}ms",
+                    request.Kind,
+                    request.AbilityId,
+                    request.Category,
+                    entry.ReadyAgainTime - entry.ActivatedTime);
+            }
+        }
     }
 }

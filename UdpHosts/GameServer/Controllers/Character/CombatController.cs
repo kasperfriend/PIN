@@ -145,7 +145,7 @@ public class CombatController : Base
             var initiator = character as IAptitudeTarget;
             var targets = new AptitudeTargets();
 
-            bool success = shard.Abilities.HandleActivateAbility(shard, initiator, abilityId, activationTime, targets);
+            bool success = shard.Abilities.HandleActivateAbility(shard, initiator, abilityId, activationTime, targets, abilityModuleId: query.ItemSdbId);
             if (character.IsPlayerControlled)
             {
                 SendAbilityActivationResponse(character, abilityId, activationTime, success);
@@ -287,7 +287,7 @@ public class CombatController : Base
             .Select(entityId => (IAptitudeTarget)shard.Entities[entityId.Backing & 0xffffffffffffff00])
             .ToArray();
 
-            bool success = shard.Abilities.HandleActivateAbility(shard, initiator, abilityId, activationTime, new AptitudeTargets(targets));
+            bool success = shard.Abilities.HandleActivateAbility(shard, initiator, abilityId, activationTime, new AptitudeTargets(targets), abilityModuleId: moduleId);
             if (character.IsPlayerControlled)
             {
                 SendAbilityActivationResponse(character, abilityId, activationTime, success);

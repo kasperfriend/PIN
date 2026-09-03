@@ -11,8 +11,10 @@ namespace GameServer.Systems.Aptitude.Commands.Activation;
 /// <para>
 /// It is both a requirement and an effect: it fails the chain while the ability
 /// is still cooling down (which is what stops re-casting and makes the client
-/// show the ability as unavailable), and it starts the cooldowns when the
-/// activation is allowed to go through.
+/// show the ability as unavailable), and it queues the cooldowns that the
+/// AbilitySystem starts once the whole chain has succeeded. Deferring the start
+/// keeps an activation that fails a later requirement (for example not enough
+/// energy) from consuming the cooldown.
 /// </para>
 /// </summary>
 public class InstantActivationCommand : Command, ICommand
@@ -61,31 +63,57 @@ public class InstantActivationCommand : Command, ICommand
             return false;
         }
 
-        // Effect half: start the cooldowns defined for this activation.
+        // Effect half: queue the cooldowns defined for this activation. They
+        // are started by the AbilitySystem only once the whole chain has
+        // succeeded, so an activation that fails a later requirement (for
+        // example not enough energy) does not consume the cooldown.
         if (Params.LocalCooldown != 0 && context.AbilityId != 0)
         {
             uint duration = ApplyRegop(context, Params.LocalCooldown, Params.DurationRegop);
-            var entry = state.StartCooldown(AbilityCooldownKind.Local, context.AbilityId, Params.Category, duration, time);
-            if (entry != null)
+            context.PendingCooldowns.Add(new AbilityCooldownRequest
             {
-                Logger.Debug(
-                    "{Command} {CommandId} started {Duration}ms local cooldown for ability {AbilityId}",
-                    nameof(InstantActivationCommand),
-                    Params.Id,
-                    entry.ReadyAgainTime - entry.ActivatedTime,
-                    context.AbilityId);
-            }
+                Kind = AbilityCooldownKind.Local,
+                AbilityId = context.AbilityId,
+                Category = Params.Category,
+                DurationMs = duration,
+            });
+            Logger.Debug(
+                "{Command} {CommandId} queued {Duration}ms local cooldown for ability {AbilityId}",
+                nameof(InstantActivationCommand),
+                Params.Id,
+                duration,
+                context.AbilityId);
         }
 
         if (Params.CategoryCooldown != 0 && Params.Category != 0)
         {
             uint duration = ApplyRegop(context, Params.CategoryCooldown, Params.CategoryPrecoolRegop);
-            state.StartCooldown(AbilityCooldownKind.Category, 0, Params.Category, duration, time);
+            context.PendingCooldowns.Add(new AbilityCooldownRequest
+            {
+                Kind = AbilityCooldownKind.Category,
+                Category = Params.Category,
+                DurationMs = duration,
+            });
+            Logger.Debug(
+                "{Command} {CommandId} queued {Duration}ms category {Category} cooldown",
+                nameof(InstantActivationCommand),
+                Params.Id,
+                duration,
+                Params.Category);
         }
 
         if (Params.GlobalCooldown != 0)
         {
-            state.StartCooldown(AbilityCooldownKind.Global, 0, 0, Params.GlobalCooldown, time);
+            context.PendingCooldowns.Add(new AbilityCooldownRequest
+            {
+                Kind = AbilityCooldownKind.Global,
+                DurationMs = Params.GlobalCooldown,
+            });
+            Logger.Debug(
+                "{Command} {CommandId} queued {Duration}ms global cooldown",
+                nameof(InstantActivationCommand),
+                Params.Id,
+                Params.GlobalCooldown);
         }
 
         return true;
