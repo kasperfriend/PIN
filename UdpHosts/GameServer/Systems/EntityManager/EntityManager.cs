@@ -377,6 +377,7 @@ public class EntityManager
         foreach (var entry in CustomDBInterface.GetZoneCharacterSpawns(zoneId))
         {
             var spawn = entry.Value;
+
             // A missing orientation in the JSON deserializes to a zero Quaternion; fall back to identity.
             var orientation = spawn.Orientation == default ? Quaternion.Identity : spawn.Orientation;
             var character = SpawnCharacter(spawn.Type, spawn.Position, orientation: orientation);
