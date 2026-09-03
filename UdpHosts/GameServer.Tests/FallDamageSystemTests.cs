@@ -15,8 +15,8 @@ public class FallDamageSystemTests
     private const short MovementStateFalling = 0x3000;
     private const short MovementStateJetpack = 0x6000;
     private const short MovementStateGlider = 0x7000;
-    private const short MovementStateKnockdownFalling = 0xb000;
-    private const short MovementStateOccupant = 0xd000;
+    private const short MovementStateKnockdownFalling = unchecked((short)0xb000);
+    private const short MovementStateOccupant = unchecked((short)0xd000);
 
     private static readonly StandardFallDamageRules Rules = new()
     {

@@ -18,6 +18,7 @@ using GameServer.Systems.Chat;
 using GameServer.Systems.Combat;
 using GameServer.Systems.Encounters;
 using GameServer.Systems.EntityManager;
+using GameServer.Systems.MovementRelay;
 using GameServer.Systems.NpcDeath;
 using GameServer.Systems.PlayerRespawn;
 using GameServer.Systems.ProjectileSim;
