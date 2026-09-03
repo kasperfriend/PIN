@@ -26,10 +26,11 @@ public class LoadRegisterFromStatCommand : Command, ICommand
         if (context.Self is not CharacterEntity character)
         {
             Logger.Warning(
-                "{Command} {CommandId} fails because Self is not a Character",
+                "{Command} {CommandId} does nothing because Self is not a Character; Self is {SelfType}",
                 nameof(LoadRegisterFromStatCommand),
-                Params.Id);
-            return false;
+                Params.Id,
+                context.Self.GetType().Name);
+            return true;
         }
 
         var stat = (StatModifierIdentifier)Params.Stat;
