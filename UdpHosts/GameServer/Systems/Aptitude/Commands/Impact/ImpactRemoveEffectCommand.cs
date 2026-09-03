@@ -20,13 +20,14 @@ public class ImpactRemoveEffectCommand : Command, ICommand
             uint effectId = (uint)Params.EffectId;
             if (Params.RemoveFromSelf != null && Params.RemoveFromSelf == true)
             {
-                context.Abilities.DoRemoveEffect(context.Self, effectId);
+                return context.Abilities.DoRemoveEffect(context.Self, effectId);
             }
-            else
+
+            foreach (IAptitudeTarget target in context.Targets)
             {
-                foreach (IAptitudeTarget target in context.Targets)
+                if (!context.Abilities.DoRemoveEffect(target, effectId))
                 {
-                   context.Abilities.DoRemoveEffect(target, effectId);
+                    return false;
                 }
             }
         }

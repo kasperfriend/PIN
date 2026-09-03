@@ -15,7 +15,9 @@ public class TimeCooldownCommand : Command, ICommand
     public bool Execute(Context context)
     {
         uint time = context.Shard.CurrentTime;
-        var state = context.Abilities.GetOrAddState(context.Self);
+        // Cooldown state belongs to the caster even when a nested effect has
+        // temporarily changed Self to a target.
+        var state = context.Abilities.GetOrAddState(context.ActivationInitiator);
 
         bool checkLocal = Params.CheckLocal == 1 && context.AbilityId != 0;
         bool checkCategory = Params.CheckCategory == 1 && Params.Category != 0;
@@ -43,7 +45,9 @@ public class TimeCooldownCommand : Command, ICommand
 
         // Also act as the cooldown definition when the chain carries no
         // dedicated InflictCooldown command: opening the gate starts the timer
-        // so repeated activations inside the window are blocked.
+        // so repeated activations inside the window are blocked. Defer that
+        // mutation while an activation transaction is active, just like
+        // InstantActivation and InflictCooldown.
         if (Params.Duration != 0)
         {
             if (!checkLocal && !checkCategory && !checkGlobal)
@@ -51,19 +55,54 @@ public class TimeCooldownCommand : Command, ICommand
                 checkLocal = context.AbilityId != 0;
             }
 
-            if (checkLocal)
+            if (context.EnergyTransaction?.IsActive == true)
             {
-                state.StartCooldown(AbilityCooldownKind.Local, context.AbilityId, 0, Params.Duration, time);
-            }
+                if (checkLocal)
+                {
+                    context.PendingCooldowns.Add(new AbilityCooldownRequest
+                    {
+                        Kind = AbilityCooldownKind.Local,
+                        AbilityId = context.AbilityId,
+                        Category = Params.Category,
+                        DurationMs = Params.Duration,
+                    });
+                }
 
-            if (checkCategory)
-            {
-                state.StartCooldown(AbilityCooldownKind.Category, 0, Params.Category, Params.Duration, time);
-            }
+                if (checkCategory)
+                {
+                    context.PendingCooldowns.Add(new AbilityCooldownRequest
+                    {
+                        Kind = AbilityCooldownKind.Category,
+                        Category = Params.Category,
+                        DurationMs = Params.Duration,
+                    });
+                }
 
-            if (checkGlobal)
+                if (checkGlobal)
+                {
+                    context.PendingCooldowns.Add(new AbilityCooldownRequest
+                    {
+                        Kind = AbilityCooldownKind.Global,
+                        DurationMs = Params.Duration,
+                    });
+                }
+            }
+            else
             {
-                state.StartCooldown(AbilityCooldownKind.Global, 0, 0, Params.Duration, time);
+                if (checkLocal)
+                {
+                    state.StartCooldown(AbilityCooldownKind.Local, context.AbilityId, 0, Params.Duration, time);
+                }
+
+                if (checkCategory)
+                {
+                    state.StartCooldown(AbilityCooldownKind.Category, 0, Params.Category, Params.Duration, time);
+                }
+
+                if (checkGlobal)
+                {
+                    state.StartCooldown(AbilityCooldownKind.Global, 0, 0, Params.Duration, time);
+                }
             }
         }
 

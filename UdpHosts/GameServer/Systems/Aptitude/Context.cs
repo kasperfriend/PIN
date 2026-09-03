@@ -10,6 +10,7 @@ public class Context
     {
         Shard = shard;
         Initiator = initiator;
+        ActivationInitiator = initiator;
         Self = initiator;
         Abilities = shard.Abilities;
         Targets = new AptitudeTargets();
@@ -34,6 +35,14 @@ public class Context
     public AbilitySystem Abilities { get; set; }
     public IAptitudeTarget Self { get; set; }
     public IAptitudeTarget Initiator { get; set; }
+
+    /// <summary>
+    /// The immutable caster identity for the root activation. <see cref="Initiator"/>
+    /// can be overridden by effect commands for aptitude semantics, so energy
+    /// fallback costs and activation cooldowns must use this value instead.
+    /// </summary>
+    public IAptitudeTarget ActivationInitiator { get; set; }
+
     public AptitudeTargets Targets { get; set; }
     public AptitudeTargets FormerTargets { get; set; }
     public Stack<AptitudeTargets> TargetStack { get; set; } = new();
@@ -55,6 +64,13 @@ public class Context
     /// </summary>
     public List<AbilityCooldownRequest> PendingCooldowns { get; set; } = [];
 
+    /// <summary>
+    /// Energy transaction for the root activation. Copied contexts share this
+    /// object so energy spent by nested effects and calls is rolled back with
+    /// the root chain when any later command fails.
+    /// </summary>
+    public AbilityEnergyTransaction EnergyTransaction { get; set; }
+
     public static Context CopyContext(Context original)
     {
         return new Context(original.Shard, original.Initiator)
@@ -67,15 +83,19 @@ public class Context
             Abilities = original.Abilities,
             Self = original.Self,
             Initiator = original.Initiator,
+            ActivationInitiator = original.ActivationInitiator,
             Targets = original.Targets,
             FormerTargets = original.FormerTargets,
+            TargetStack = original.TargetStack,
             Register = original.Register,
+            FormerRegister = original.FormerRegister,
             Bonus = original.Bonus,
             InitTime = original.InitTime,
             InitPosition = original.InitPosition,
             ExecutionHint = original.ExecutionHint,
             ExecutionId = original.ExecutionId,
             PendingCooldowns = original.PendingCooldowns,
+            EnergyTransaction = original.EnergyTransaction,
         };
     }
 

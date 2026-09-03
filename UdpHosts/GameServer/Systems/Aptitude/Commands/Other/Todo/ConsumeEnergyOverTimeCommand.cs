@@ -15,7 +15,6 @@ public class ConsumeEnergyOverTimeCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
-        uint time = context.Shard.CurrentTime;
         float amount = AbilitySystem.RegistryOp(context.Register, Params.Amount, (Operand)Params.AmountRegop);
         if (Params.AmountRegop != 0 && context.Register == 0f)
         {
@@ -33,8 +32,24 @@ public class ConsumeEnergyOverTimeCommand : Command, ICommand
 
         // Channelled drain: the duration chain executes this command once per
         // update tick, so each execution burns one tick's worth of energy.
-        var state = context.Abilities.GetOrAddState(context.Self);
-        float remaining = state.SpendEnergy(amount, time, allowOvercharge: false);
+        if (!context.Abilities.CanSpendEnergy(context.Self, amount, allowOvercharge: false, time: context.Shard.CurrentTime))
+        {
+            var state = context.Abilities.GetOrAddState(context.Self);
+            Logger.Debug(
+                "{Command} {CommandId} stopped: {Self} has {Energy} energy, needs {Amount}",
+                nameof(ConsumeEnergyOverTimeCommand),
+                Params.Id,
+                context.Self,
+                state.Energy,
+                amount);
+            return false;
+        }
+
+        if (!context.Abilities.TrySpendEnergy(context, context.Self, amount, false, out var remaining))
+        {
+            return false;
+        }
+
         Logger.Debug(
             "{Command} {CommandId} drained {Amount} energy from {Self}, {Remaining} remaining",
             nameof(ConsumeEnergyOverTimeCommand),
@@ -51,8 +66,8 @@ public class ConsumeEnergyOverTimeCommand : Command, ICommand
                 Params.Id);
         }
 
-        // The pool is empty: there is nothing left to burn, so fail the
-        // duration chain and let the channel/effect end like the client does.
-        return remaining > 0f;
+        // Allow the final tick to consume the pool exactly. The next duration
+        // execution will fail before spending when there is not enough left.
+        return true;
     }
 }

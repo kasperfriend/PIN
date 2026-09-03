@@ -38,7 +38,7 @@ public class InstantActivationCommand : Command, ICommand
         // the other cooldown commands are all expressed in shard time, and the
         // client-supplied activation time must not be trusted for gating.
         uint time = context.Shard.CurrentTime;
-        var state = context.Abilities.GetOrAddState(context.Self);
+        var state = context.Abilities.GetOrAddState(context.ActivationInitiator);
 
         // Remember which cooldown category this ability belongs to so that the
         // activation gate in CombatController can check category cooldowns
@@ -67,6 +67,20 @@ public class InstantActivationCommand : Command, ICommand
         // are started by the AbilitySystem only once the whole chain has
         // succeeded, so an activation that fails a later requirement (for
         // example not enough energy) does not consume the cooldown.
+        if (context.EnergyTransaction?.IsActive == true)
+        {
+            QueueCooldowns(context);
+        }
+        else
+        {
+            StartCooldowns(context, state, time);
+        }
+
+        return true;
+    }
+
+    private void QueueCooldowns(Context context)
+    {
         if (Params.LocalCooldown != 0 && context.AbilityId != 0)
         {
             uint duration = ApplyRegop(context, Params.LocalCooldown, Params.DurationRegop);
@@ -115,8 +129,26 @@ public class InstantActivationCommand : Command, ICommand
                 Params.Id,
                 Params.GlobalCooldown);
         }
+    }
 
-        return true;
+    private void StartCooldowns(Context context, AbilityState state, uint time)
+    {
+        if (Params.LocalCooldown != 0 && context.AbilityId != 0)
+        {
+            uint duration = ApplyRegop(context, Params.LocalCooldown, Params.DurationRegop);
+            state.StartCooldown(AbilityCooldownKind.Local, context.AbilityId, Params.Category, duration, time);
+        }
+
+        if (Params.CategoryCooldown != 0 && Params.Category != 0)
+        {
+            uint duration = ApplyRegop(context, Params.CategoryCooldown, Params.CategoryPrecoolRegop);
+            state.StartCooldown(AbilityCooldownKind.Category, 0, Params.Category, duration, time);
+        }
+
+        if (Params.GlobalCooldown != 0)
+        {
+            state.StartCooldown(AbilityCooldownKind.Global, 0, 0, Params.GlobalCooldown, time);
+        }
     }
 
     private static uint ApplyRegop(Context context, uint value, byte regop)

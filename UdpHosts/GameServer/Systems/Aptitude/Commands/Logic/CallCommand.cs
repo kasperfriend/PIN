@@ -14,7 +14,9 @@ public class CallCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
-        context.Shard.Abilities.HandleActivateAbility(context.Shard, context.Initiator, Params.AbilityId, context.Shard.CurrentTime, new AptitudeTargets(), context.ExecutionId);
-        return true;
+        // Keep the called ability inside the root activation transaction. A
+        // failed called chain must fail the root chain so its energy and
+        // deferred cooldowns are rolled back together.
+        return context.Abilities.HandleCalledAbility(context, Params.AbilityId);
     }
 }

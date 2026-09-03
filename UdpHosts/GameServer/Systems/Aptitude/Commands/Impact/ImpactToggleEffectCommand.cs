@@ -1,4 +1,5 @@
-﻿using GameServer.StaticDB.Records.apt;
+using System.Collections.Generic;
+using GameServer.StaticDB.Records.apt;
 
 namespace GameServer.Systems.Aptitude.Commands.Impact;
 
@@ -14,11 +15,13 @@ public class ImpactToggleEffectCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
-        Context effectContext = new Context(context.Shard, context.Initiator)
-        {
-            ExecutionId = context.ExecutionId,
-            InitTime = context.InitTime,
-        };
+        // The effect's nested chains share the root activation transaction
+        // and retain ability/module identity. Toggling an effect does not pass
+        // the caller's target set into the effect chain.
+        Context effectContext = Context.CopyContext(context);
+        effectContext.Targets = new AptitudeTargets();
+        effectContext.FormerTargets = new AptitudeTargets();
+        effectContext.TargetStack = new Stack<AptitudeTargets>();
 
         if (Params.PassRegister == 1)
         {
@@ -44,7 +47,11 @@ public class ImpactToggleEffectCommand : Command, ICommand
                 {
                     targetHasEffect = true;
                     effectContext.ExecutionHint = ExecutionHint.RemoveEffect;
-                    effectContext.Abilities.DoRemoveEffect(active);
+                    if (!effectContext.Abilities.DoRemoveEffect(active) && Params.FailOnRemove == 1)
+                    {
+                        return false;
+                    }
+
                     break;
                 }
             }
@@ -57,11 +64,17 @@ public class ImpactToggleEffectCommand : Command, ICommand
             if (Params.PreApplyChain != 0)
             {
                 var chain = effectContext.Abilities.Factory.LoadChain(Params.PreApplyChain);
-                chain.Execute(effectContext);
+                if (!chain.Execute(effectContext))
+                {
+                    return false;
+                }
             }
 
             effectContext.ExecutionHint = ExecutionHint.ApplyEffect;
-            effectContext.Abilities.DoApplyEffect(Params.EffectId, target, effectContext);
+            if (!effectContext.Abilities.DoApplyEffect(Params.EffectId, target, effectContext))
+            {
+                return false;
+            }
         }
 
         return true;
