@@ -375,6 +375,19 @@ public class AbilitySystem
         _logger.Information("HandleActivateAbility: Ability {AbilityId} starting Chain {ChainId} (module {AbilityModuleId})", abilityId, chainId, abilityModuleId);
 
         var chain = Factory.LoadChain(chainId);
+        // Keep the resolved command list visible while validating data-driven
+        // costs. This distinguishes a missing ConsumeEnergy node from a
+        // factory/SDB mapping problem without requiring a debugger.
+        foreach (var command in chain.Commands)
+        {
+            _logger.Information(
+                "Ability {AbilityId} chain {ChainId} resolved command {CommandId} as {CommandType}",
+                abilityId,
+                chainId,
+                command.Id,
+                command.GetType().FullName);
+        }
+
         var context = new Context(shard, initiator)
         {
             ExecutionId = execId,

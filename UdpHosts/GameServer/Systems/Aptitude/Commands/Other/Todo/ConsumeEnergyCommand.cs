@@ -49,7 +49,7 @@ public class ConsumeEnergyCommand : Command, ICommand
                 var targetState = context.Abilities.GetOrAddState(target);
                 targetState.SpendEnergy(amount, time, allowOvercharge);
                 PublishEnergy(target, targetState, time);
-                Logger.Debug(
+                Logger.Information(
                     "{Command} {CommandId} consumed {Amount} energy from target {Target}, {Remaining} remaining",
                     nameof(ConsumeEnergyCommand),
                     Params.Id,
@@ -63,7 +63,7 @@ public class ConsumeEnergyCommand : Command, ICommand
             var state = context.Abilities.GetOrAddState(context.Self);
             state.SpendEnergy(amount, time, allowOvercharge);
             PublishEnergy(context.Self, state, time);
-            Logger.Debug(
+            Logger.Information(
                 "{Command} {CommandId} consumed {Amount} energy from {Self}, {Remaining} remaining",
                 nameof(ConsumeEnergyCommand),
                 Params.Id,
