@@ -41,7 +41,17 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release --no-restore
       - name: Test
-        run: dotnet test --configuration Release --no-build --logger "console;verbosity=normal"
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet test --configuration Release --no-build --logger "console;verbosity=detailed" 2>&1 | tee "$RUNNER_TEMP/test-output.log"
+      - name: Report test output
+        if: failure()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/test-output.log" ]; then
+            tail -n 40 "$RUNNER_TEMP/test-output.log" | while IFS= read -r line; do echo "::error::$line"; done
+          fi
       - name: Publish
         if: matrix.platform.name == 'Windows' && matrix.dotnet.name == '.NET 10'
         run: |
