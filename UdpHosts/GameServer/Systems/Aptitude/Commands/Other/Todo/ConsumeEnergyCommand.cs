@@ -28,6 +28,9 @@ public class ConsumeEnergyCommand : Command, ICommand
 
         if (amount <= 0f)
         {
+            Logger.Warning(
+                "{Command} {CommandId} resolved an energy cost of {Amount} (register {Register}); no energy was consumed",
+                nameof(ConsumeEnergyCommand), Params.Id, amount, context.Register);
             return true;
         }
 
@@ -43,7 +46,7 @@ public class ConsumeEnergyCommand : Command, ICommand
             {
                 var targetState = context.Abilities.GetOrAddState(target);
                 targetState.SpendEnergy(amount, time, allowOvercharge);
-                Logger.Debug(
+                Logger.Information(
                     "{Command} {CommandId} consumed {Amount} energy from target {Target}, {Remaining} remaining",
                     nameof(ConsumeEnergyCommand),
                     Params.Id,
@@ -56,7 +59,7 @@ public class ConsumeEnergyCommand : Command, ICommand
         {
             var state = context.Abilities.GetOrAddState(context.Self);
             state.SpendEnergy(amount, time, allowOvercharge);
-            Logger.Debug(
+            Logger.Information(
                 "{Command} {CommandId} consumed {Amount} energy from {Self}, {Remaining} remaining",
                 nameof(ConsumeEnergyCommand),
                 Params.Id,

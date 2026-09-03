@@ -100,6 +100,20 @@ public class AbilitySystem
             _entityAbilityStates[entity.EntityId] = state;
         }
 
+        else if (entity is CharacterEntity existingCharacter && existingCharacter.EnergyParams.Max > 0f)
+        {
+            // A state can be created by cooldown handling before the character's
+            // spawn data has finished populating EnergyParams. Do not leave that
+            // state permanently on the 100-energy fallback configuration.
+            state.MaxEnergy = existingCharacter.EnergyParams.Max;
+            state.EnergyRegenPerSecond = existingCharacter.EnergyParams.Recharge;
+            state.EnergyRegenDelayMs = existingCharacter.EnergyParams.Delay;
+            if (state.Energy > state.MaxEnergy)
+            {
+                state.Energy = state.MaxEnergy;
+            }
+        }
+
         return state;
     }
 
@@ -361,6 +375,19 @@ public class AbilitySystem
         _logger.Information("HandleActivateAbility: Ability {AbilityId} starting Chain {ChainId} (module {AbilityModuleId})", abilityId, chainId, abilityModuleId);
 
         var chain = Factory.LoadChain(chainId);
+        // Keep the resolved command list visible while validating data-driven
+        // costs. This distinguishes a missing ConsumeEnergy node from a
+        // factory/SDB mapping problem without requiring a debugger.
+        foreach (var command in chain.Commands)
+        {
+            _logger.Information(
+                "Ability {AbilityId} chain {ChainId} resolved command {CommandId} as {CommandType}",
+                abilityId,
+                chainId,
+                command.Id,
+                command.GetType().FullName);
+        }
+
         var context = new Context(shard, initiator)
         {
             ExecutionId = execId,
