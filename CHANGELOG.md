@@ -25,6 +25,10 @@
 
 ### Fixed
 
+- Fix Firefall auto-detection failing for every Steam library listed in `libraryfolders.vdf` (Steam stores the library root folder such as `D:\SteamLibrary`, not the `steamapps` folder, so all entries were rejected)
+- Find Steam installations outside `Program Files` through the Windows registry, and standalone Firefall installs under `Program Files`
+- Stop empty values in `GameServer.config.json` from overriding paths configured in the legacy `App.config`
+- Print a readable startup error instead of an unhandled Autofac exception when no Firefall installation is found and `StaticDBPath` is not configured
 - Make the server handling code more robust
 - Fix WebHostManager startup crash (missing `Serilog.Enrichers.Context` and other Serilog extension assemblies when the servers are published into a single folder) by referencing the shared Serilog packages
 - Many improvements in the entity definitions
