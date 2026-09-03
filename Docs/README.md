@@ -5,6 +5,7 @@ PIN is split into two areas:
 - [WebHosts](#webhosts)
 - [Characters & Battleframes](CHARACTERS_AND_BATTLEFRAMES.md) — `characters.json` configuration
 - [Spawning & Combat](SPAWNING_AND_COMBAT.md) — NPC spawning and combat flow
+- [Health System](HEALTH_SYSTEM.md) — health, damage, death, respawn and fall damage
 
 ## UdpHosts
 

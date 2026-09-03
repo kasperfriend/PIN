@@ -75,12 +75,18 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MinimalSDB", "Tools\Minimal
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CollisionGenerator", "Tools\CollisionGenerator\CollisionGenerator.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GameServer.Tests", "UdpHosts\GameServer.Tests\GameServer.Tests.csproj", "{006704D4-6B15-42B6-92C2-992DDDAFA4A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{006704D4-6B15-42B6-92C2-992DDDAFA4A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{006704D4-6B15-42B6-92C2-992DDDAFA4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{006704D4-6B15-42B6-92C2-992DDDAFA4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{006704D4-6B15-42B6-92C2-992DDDAFA4A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B0713AD9-4EF4-4740-93A5-6F756BA130E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B0713AD9-4EF4-4740-93A5-6F756BA130E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B0713AD9-4EF4-4740-93A5-6F756BA130E4}.Release|Any CPU.ActiveCfg = Release|Any CPU

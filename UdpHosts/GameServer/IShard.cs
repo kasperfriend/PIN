@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using GameServer.Entities;
@@ -39,6 +39,7 @@ public interface IShard : IPacketSender
     AdminService Admin { get; }
     DamageSystem Damage { get; }
     CombatSim Combat { get; }
+    FallDamageSystem FallDamage { get; }
     CharacterLifecycleService CharacterLifecycle { get; }
     PlayerRespawnService PlayerRespawn { get; }
     uint ZoneId { get; }

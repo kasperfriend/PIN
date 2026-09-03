@@ -114,14 +114,15 @@ PlayIntroMovie = false
 - Switch between battleframes with preconfigured loadouts
 - Customize character appearance in NewYou (RIN.WebAPI)
 - Call down vehicles and some deployables
+- Health, damage, shields, bleedout/death/respawn and fall damage (see `Docs/HEALTH_SYSTEM.md`)
+- Projectile combat against spawned NPCs (`Docs/SPAWNING_AND_COMBAT.md`)
 
 ### Limitations
 
-- There is no combat, projectile or damage simulation
+- No AI: enemies can be spawned but do not fight back
 - Most of the UI doesn't work properly
 - Most abilities are not fully working
 - Vehicles only have physics if a player is driving it (client-side)
-- No AI
 - No Encounters
 - No PvP
 

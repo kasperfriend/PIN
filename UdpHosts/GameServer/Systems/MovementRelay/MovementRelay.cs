@@ -40,6 +40,9 @@ public class MovementRelay
 
         character.IsAirborne = poseData.GroundTimePositiveAirTimeNegative < 0;
 
+        // Feed the pose into the fall damage tracker (applies damage on landings)
+        _shard.FallDamage.OnMovementInput(character, poseData);
+
         var movementStateValue = posRotState.MovementState;
         character.MovementStateContainer.MovementStateValue = (ushort)movementStateValue;
 

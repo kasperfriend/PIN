@@ -200,9 +200,14 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         baseController.GibVisualsIdProp = new GibVisuals { Id = 0, Time = AssignedShard.CurrentTime + 1 };
         baseController.RespawnTimesProp = new RespawnTimesData(); // Shake it up
         baseController.RespawnTimesProp = null; // It's dirt
-        baseController.CurrentHealthProp = HardcodedCharacterData.MaxHealth;
-        baseController.MaxHealthProp = new MaxVital { Value = HardcodedCharacterData.MaxHealth, Time = AssignedShard.CurrentTime };
-        baseController.CurrentShieldsProp = 0;
+
+        // Reset vitals through the entity setters so the server side state and
+        // the replicated props stay in sync. Writing only the controller props
+        // (as this used to do) leaves CurrentHealth at 0 on the entity, so the
+        // first hit after a respawn would instantly down the character again.
+        CharacterEntity.SetMaxHealth(HardcodedCharacterData.MaxHealth, resetCurrent: true);
+        CharacterEntity.SetCurrentShields(0);
+
         baseController.ZoneUnlocksProp = 0xFFFFFFFFFFFFFFFFUL;
         baseController.RegionUnlocksProp = 0xFFFFFFFFFFFFFFFFUL;
         baseController.PersonalFactionStanceProp = new PersonalFactionStanceData
@@ -235,6 +240,7 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         AssignedShard.Physics.UpdateEntity(CharacterEntity);
         CharacterEntity.Alive = true; // Accept MovementInputs only after Respawn
         AssignedShard.CharacterLifecycle.OnCharacterCreated(CharacterEntity);
+        AssignedShard.FallDamage?.ResetFor(CharacterEntity);
     }
 
     public void Ready()

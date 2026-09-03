@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -59,6 +59,7 @@ public class Shard : IShard
         var npcDeathRules = new StandardNpcDeathRules();
         Damage = new DamageSystem(EventBus, this, npcDeathRules);
         Combat = new CombatSim(EventBus, Damage, this);
+        FallDamage = new FallDamageSystem(this, Damage, new StandardFallDamageRules());
         CharacterLifecycle = new CharacterLifecycleService(this, EventBus, new StandardCharacterLifecycleRules());
         PlayerRespawn = new PlayerRespawnService(this, EventBus, new StandardPlayerRespawnRules(), CharacterLifecycle);
         NpcDeath = new NpcDeathService(this, EventBus, npcDeathRules);
@@ -82,6 +83,7 @@ public class Shard : IShard
     public AdminService Admin { get; }
     public DamageSystem Damage { get; }
     public CombatSim Combat { get; }
+    public FallDamageSystem FallDamage { get; }
     public CharacterLifecycleService CharacterLifecycle { get; }
     public PlayerRespawnService PlayerRespawn { get; }
     public NpcDeathService NpcDeath { get; }
@@ -120,6 +122,7 @@ public class Shard : IShard
         WeaponSim.Tick(deltaTime, currentTime, ct);
         ProjectileSim.Tick(deltaTime, currentTime, ct);
         Damage.Tick(deltaTime, currentTime, ct);
+        FallDamage.Tick(deltaTime, currentTime, ct);
         CharacterLifecycle.Tick(deltaTime, currentTime, ct);
         PlayerRespawn.Tick(deltaTime, currentTime, ct);
         EventBus.Flush();

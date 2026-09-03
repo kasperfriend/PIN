@@ -4,6 +4,9 @@
 
 ### Added
 
+- Implement fall damage: `FallDamageSystem` tracks each player's airborne samples from the client authoritative movement inputs and applies damage on landing based on the fastest downward speed of the fall (water landings, thruster/glider use, knockdown falls and the `immune_falldamage` combat flag negate it; lethal at very high impact speeds)
+- Add a `GameServer.Tests` xUnit project covering `FallDamageMath`, `FallDamageSystem`, `DamageSystem`, `CharacterLifecycleService` and the `CharacterEntity` vital clamping; CI now runs `dotnet test`
+- Add player facing health debug commands to the in-game chat: `\health`, `\hurt <amount>`, `\heal <amount>`, `\fall <speed>`, `\down`, `\revive`, `\kill`, `\respawn`, so the health system can be exercised without enemies
 - Add support for StyleCop & .NET Analyzers
 - Use RIN via gRPC for the player management
 - Add many items to the game
@@ -28,6 +31,10 @@
 
 ### Fixed
 
+- Fix the first hit after a respawn instantly downing the character again: `NetworkPlayer.Respawn` wrote the reset health only into the replicated controller props while the entity stayed at 0 HP; it now resets vitals through `CharacterEntity.SetMaxHealth`/`SetCurrentShields` so server state and client view agree
+- `DamageSystem` no longer damages or heals characters that are not in the `Living` state (corpses and bleeding out characters were fully damageable before), and `EntityDamagedEvent`/`EntityHealedEvent` are only published when the damage/heal actually applied
+- `CharacterLifecycleService` only transitions out of the `Living` state now, so stray damage events can no longer skip the bleedout phase or double-fire death transitions
+- Respawn and teleport reset the fall damage tracker, so stale fall speeds cannot deal damage at the destination
 - Implement ability energy costs server-side: `RequireEnergy` gates the chain on the current energy pool, `ConsumeEnergy` deducts the SDB cost (respecting `AllowOvercharge` debt and `OnTargets` target drain), and `ConsumeEnergyOverTime` drains channelled abilities per duration tick
 - Wire the aptitude register pipeline so data-driven amounts are computed correctly: `LoadRegisterFromStat` (aptitude stat modifiers, e.g. energy/cooldown), `LoadRegisterFromModulePower` (ability module power rating), and `PushRegister`/`PopRegister`/`PeekRegister` are now implemented and resolved in `Factory`; chains that multiply an SDB amount by a loaded value no longer collapse to 0
 - Implement `RequireEnergyByRange` (energy band plus optional target range gate, optional `AlsoConsume`) so abilities that gate on an energy range enforce it instead of passing for free
