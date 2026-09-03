@@ -1,6 +1,4 @@
-using AeroMessages.GSS.Character;
 using GameServer.Enums;
-using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.aptfs;
 
 namespace GameServer.Systems.Aptitude.Commands.Other;
@@ -48,7 +46,6 @@ public class ConsumeEnergyCommand : Command, ICommand
             {
                 var targetState = context.Abilities.GetOrAddState(target);
                 targetState.SpendEnergy(amount, time, allowOvercharge);
-                PublishEnergy(target, targetState, time);
                 Logger.Information(
                     "{Command} {CommandId} consumed {Amount} energy from target {Target}, {Remaining} remaining",
                     nameof(ConsumeEnergyCommand),
@@ -62,7 +59,6 @@ public class ConsumeEnergyCommand : Command, ICommand
         {
             var state = context.Abilities.GetOrAddState(context.Self);
             state.SpendEnergy(amount, time, allowOvercharge);
-            PublishEnergy(context.Self, state, time);
             Logger.Information(
                 "{Command} {CommandId} consumed {Amount} energy from {Self}, {Remaining} remaining",
                 nameof(ConsumeEnergyCommand),
@@ -81,23 +77,5 @@ public class ConsumeEnergyCommand : Command, ICommand
         }
 
         return true;
-    }
-
-    private static void PublishEnergy(IAptitudeTarget target, AbilityState state, uint time)
-    {
-        // EnergyParams is the replicated character property consumed by the
-        // client HUD and movement simulation. Keeping the deduction only in
-        // AbilityState made server requirements work while the client still
-        // appeared to have (and effectively restored) full energy.
-        if (target is CharacterEntity character)
-        {
-            character.EnergyParams = new EnergyParamsData
-            {
-                Max = state.MaxEnergy,
-                Delay = state.EnergyRegenDelayMs,
-                Recharge = state.EnergyRegenPerSecond,
-                Time = time,
-            };
-        }
     }
 }
