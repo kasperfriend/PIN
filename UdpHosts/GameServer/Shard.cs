@@ -58,7 +58,7 @@ public class Shard : IShard
         Admin = new AdminService(this);
         var npcDeathRules = new StandardNpcDeathRules();
         Damage = new DamageSystem(EventBus, this, npcDeathRules);
-        Combat = new CombatSim(EventBus, EntityMan, Damage, this);
+        Combat = new CombatSim(EventBus, Damage, this);
         CharacterLifecycle = new CharacterLifecycleService(this, EventBus, new StandardCharacterLifecycleRules());
         PlayerRespawn = new PlayerRespawnService(this, EventBus, new StandardPlayerRespawnRules(), CharacterLifecycle);
         NpcDeath = new NpcDeathService(this, EventBus, npcDeathRules);

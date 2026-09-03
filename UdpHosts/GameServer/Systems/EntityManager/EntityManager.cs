@@ -66,13 +66,14 @@ public class EntityManager
         return _scopedPlayersByEntity.TryGetValue(entityId, out var players) && players.Contains(player);
     }
 
-    public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null, bool canBleedout = false)
+    public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null, bool canBleedout = false, Quaternion orientation = Quaternion.Identity)
     {
         var characterEntity = new CharacterEntity(_shard, _shard.GetNextGuid(), owner);
         characterEntity.LoadMonster(typeId);
         characterEntity.CanBleedout = canBleedout;
         characterEntity.SetCharacterState(CharacterStateData.CharacterStatus.Living, _shard.CurrentTime);
         characterEntity.SetPosition(position);
+        characterEntity.SetOrientation(orientation);
         characterEntity.SetSpawnPose();
         _shard.Physics.CreateKineticEntity(characterEntity);
         _shard.Physics.UpdateEntity(characterEntity);
@@ -352,23 +353,13 @@ public class EntityManager
             // Battleframe Station
             SpawnDeployable(395, new Vector3(0, 0, 0f), Quaternion.Identity);
 
+            // NPC faction spawns for this zone now live in StaticDB/CustomData/character_spawn.json
             bool vehicleTest = true;
-            bool factionTest = false;
             if (vehicleTest)
             {
                 var owner = SpawnCharacter(2312, new Vector3(1.5f, 3f, 0f));
                 SpawnVehicle(116, new Vector3(-1.5f, 3f, 0f), Quaternion.Identity, owner, false);
                 SpawnVehicle(201, new Vector3(-5.5f, 9f, 0f), Quaternion.Identity, owner, false);
-            }
-
-            if (factionTest)
-            {
-                SpawnCharacter(290, new Vector3(1.5f, 15f, 0f)); // Accord Assault (1)
-                SpawnCharacter(1196, new Vector3(3.5f, 15f, 0f)); // Chosen Fiend (2)
-                SpawnCharacter(528, new Vector3(5.5f, 15f, 0f)); // Melded Aranha (6)
-                SpawnCharacter(2342, new Vector3(7.5f, 15f, 0f)); // Aranha (7)
-                SpawnCharacter(2407, new Vector3(9.5f, 15f, 0f)); // Tanken Saboteur (17)
-                SpawnCharacter(1304, new Vector3(11.5f, 15f, 0f)); // Black Hills Bandit (22)
             }
         }
     }
@@ -380,6 +371,25 @@ public class EntityManager
         {
             var deployable = entry.Value;
             SpawnDeployable(deployable.Type, deployable.Position, deployable.Orientation);
+        }
+
+        // Character (NPCs)
+        foreach (var entry in CustomDBInterface.GetZoneCharacterSpawns(zoneId))
+        {
+            var spawn = entry.Value;
+            // A missing orientation in the JSON deserializes to a zero Quaternion; fall back to identity.
+            var orientation = spawn.Orientation == default ? Quaternion.Identity : spawn.Orientation;
+            var character = SpawnCharacter(spawn.Type, spawn.Position, orientation: orientation);
+
+            if (spawn.MaxHealth > 0)
+            {
+                character.SetMaxHealth(spawn.MaxHealth, resetCurrent: true);
+            }
+
+            if (spawn.MaxShields > 0)
+            {
+                character.SetMaxShields(spawn.MaxShields, resetCurrent: true);
+            }
         }
 
         // Melding
