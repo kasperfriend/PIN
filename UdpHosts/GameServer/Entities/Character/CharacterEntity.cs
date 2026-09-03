@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -227,19 +227,37 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public Dictionary<StatModifierIdentifier, Dictionary<uint, ActiveStatModifier>> CurrentStatModifiers { get; set; }
     public Dictionary<StatModifierIdentifier, float> BaseStatModifiers { get; set; } = new()
     {
+        // Aptitude modifiers are multipliers: an unmodified stat is 1.0.
+        // `LoadRegisterFromStatCommand` reads these to scale chain amounts
+        // (energy cost, damage, cooldowns) exactly like the client does.
         { StatModifierIdentifier.RunSpeedMult,         1.0f },
-        { StatModifierIdentifier.FireRateModifier,     1.0f },
         { StatModifierIdentifier.FwdRunSpeedMult,      1.0f },
         { StatModifierIdentifier.JumpHeightMult,       1.0f },
+        { StatModifierIdentifier.DamageTaken,          1.0f },
+        { StatModifierIdentifier.DamageDealt,          1.0f },
+        { StatModifierIdentifier.Health,               1.0f },
+        { StatModifierIdentifier.MaxHealth,            1.0f },
+        { StatModifierIdentifier.Shields,              1.0f },
+        { StatModifierIdentifier.MaxShields,           1.0f },
         { StatModifierIdentifier.AirControlMult,       1.0f },
+        { StatModifierIdentifier.Energy,               1.0f },
+        { StatModifierIdentifier.MaxEnergy,            1.0f },
+        { StatModifierIdentifier.EnergyRechargeDelay,  1.0f },
+        { StatModifierIdentifier.EnergyRechargeRate,   1.0f },
         { StatModifierIdentifier.ThrustStrengthMult,   1.0f },
         { StatModifierIdentifier.ThrustAirControl,     1.0f },
         { StatModifierIdentifier.Friction,             1.0f },
+        { StatModifierIdentifier.SinBonus,             1.0f },
+        { StatModifierIdentifier.SinVulnerability,     1.0f },
+        { StatModifierIdentifier.TurnRate,             1.0f },
+        { StatModifierIdentifier.FireRateModifier,     1.0f },
         { StatModifierIdentifier.AmmoConsumption,      1.0f },
+        { StatModifierIdentifier.AccuracyModifier,     1.0f },
+        { StatModifierIdentifier.CooldownModifier,     1.0f },
+        { StatModifierIdentifier.Progress,             1.0f },
         { StatModifierIdentifier.MaxTurnRate,          0.0f },
         { StatModifierIdentifier.TurnSpeed,            1.0f },
         { StatModifierIdentifier.TimeDilation,         1.0f },
-        { StatModifierIdentifier.AccuracyModifier,     1.0f },
         { StatModifierIdentifier.GravityMult,          1.0f },
         { StatModifierIdentifier.AirResistanceMult,    1.0f },
         { StatModifierIdentifier.WeaponChargeupMod,    1.0f },

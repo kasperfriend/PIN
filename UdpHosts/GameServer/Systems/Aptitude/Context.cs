@@ -20,6 +20,15 @@ public class Context
 
     public uint ChainId { get; set; }
     public uint AbilityId { get; set; }
+
+    /// <summary>
+    /// The <c>dbitems::AbilityModule</c> that activated the chain (when
+    /// resolved from the loadout slot). Used by
+    /// <c>LoadRegisterFromModulePowerCommand</c> to load the ability's power
+    /// rating, which scales data amounts like energy cost and damage.
+    /// </summary>
+    public uint AbilityModuleId { get; set; }
+
     public bool Success { get; set; }
     public IShard Shard { get; set; }
     public AbilitySystem Abilities { get; set; }
@@ -52,6 +61,7 @@ public class Context
         {
             ChainId = original.ChainId,
             AbilityId = original.AbilityId,
+            AbilityModuleId = original.AbilityModuleId,
             Success = original.Success,
             Shard = original.Shard,
             Abilities = original.Abilities,

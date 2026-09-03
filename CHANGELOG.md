@@ -29,6 +29,8 @@
 ### Fixed
 
 - Implement ability energy costs server-side: `RequireEnergy` gates the chain on the current energy pool, `ConsumeEnergy` deducts the SDB cost (respecting `AllowOvercharge` debt and `OnTargets` target drain), and `ConsumeEnergyOverTime` drains channelled abilities per duration tick
+- Wire the aptitude register pipeline so data-driven amounts are computed correctly: `LoadRegisterFromStat` (aptitude stat modifiers, e.g. energy/cooldown), `LoadRegisterFromModulePower` (ability module power rating), and `PushRegister`/`PopRegister`/`PeekRegister` are now implemented and resolved in `Factory`; chains that multiply an SDB amount by a loaded value no longer collapse to 0
+- Implement `RequireEnergyByRange` (energy band plus optional target range gate, optional `AlsoConsume`) so abilities that gate on an energy range enforce it instead of passing for free
 - Mirror the client recharge model in the server `AbilityState`: regeneration waits `EnergyParams.Delay` after the last spend, an overcharged (negative) pool keeps recharging back through zero, and `EnergyToDamage` converts the actual tracked pool instead of assuming a full one
 - Start activation cooldowns only after the whole ability chain succeeded (queued by `InstantActivation`, committed by `AbilitySystem.HandleActivateAbility`), so an ability that fails its energy requirement does not go on cooldown
 - Fix activated abilities (Raptor and every other battleframe) staying purely cosmetic: `InstantActivation`, the chain node that carries each ability's cooldown configuration, was an empty stub, so no cooldown was ever started, the client got an empty cooldown payload and the ability could be re-pressed forever

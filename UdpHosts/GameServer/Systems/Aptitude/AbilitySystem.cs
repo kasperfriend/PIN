@@ -347,7 +347,7 @@ public class AbilitySystem
     /// Executes the chain of an activated ability and returns whether the whole
     /// chain succeeded (requirements like cooldowns or energy can fail it).
     /// </summary>
-    public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId, uint activationTime, AptitudeTargets targets, Guid? executionId = null)
+    public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId, uint activationTime, AptitudeTargets targets, Guid? executionId = null, uint abilityModuleId = 0)
     {
         var execId = executionId ?? Guid.NewGuid();
         using var logContext = Serilog.Context.LogContext.PushProperty("ExecutionId", execId);
@@ -358,7 +358,7 @@ public class AbilitySystem
             return true;
         }
 
-        _logger.Information("HandleActivateAbility: Ability {AbilityId} starting Chain {ChainId}", abilityId, chainId);
+        _logger.Information("HandleActivateAbility: Ability {AbilityId} starting Chain {ChainId} (module {AbilityModuleId})", abilityId, chainId, abilityModuleId);
 
         var chain = Factory.LoadChain(chainId);
         var context = new Context(shard, initiator)
@@ -366,6 +366,7 @@ public class AbilitySystem
             ExecutionId = execId,
             ChainId = chainId,
             AbilityId = abilityId,
+            AbilityModuleId = abilityModuleId,
             Targets = targets,
             InitTime = activationTime,
             ExecutionHint = ExecutionHint.Ability

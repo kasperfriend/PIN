@@ -17,6 +17,15 @@ public class ConsumeEnergyOverTimeCommand : Command, ICommand
     {
         uint time = context.Shard.CurrentTime;
         float amount = AbilitySystem.RegistryOp(context.Register, Params.Amount, (Operand)Params.AmountRegop);
+        if (Params.AmountRegop != 0 && context.Register == 0f)
+        {
+            Logger.Debug(
+                "{Command} {CommandId} amount regop {Regop} evaluated against register 0; the chain likely needs a LoadRegister command before this node",
+                nameof(ConsumeEnergyOverTimeCommand),
+                Params.Id,
+                (Operand)Params.AmountRegop);
+        }
+
         if (amount <= 0f)
         {
             return true;

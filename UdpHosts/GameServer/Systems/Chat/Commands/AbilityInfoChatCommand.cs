@@ -140,10 +140,31 @@ public class AbilityInfoChatCommand : ChatCommand
                 }
 
                 break;
+            case AptCommandType.RequireEnergyByRange:
+                if (SDBInterface.GetRequireEnergyByRangeCommandDef(cmdId) is { } rer)
+                {
+                    sb.AppendLine($"{prefix}energy [{rer.MinEnergy}, {rer.MaxEnergy}] range [{rer.MinRange}, {rer.MaxRange}] regop {rer.AmountRegop} alsoConsume {rer.AlsoConsume} predict {rer.AllowPrediction}");
+                }
+
+                break;
             case AptCommandType.ConsumeEnergy:
                 if (SDBInterface.GetConsumeEnergyCommandDef(cmdId) is { } ced)
                 {
                     sb.AppendLine($"{prefix}amount {ced.Amount} regop {ced.AmountRegop} onTargets {ced.OnTargets} overcharge {ced.AllowOvercharge} predict {ced.AllowPrediction}");
+                }
+
+                break;
+            case AptCommandType.LoadRegisterFromStat:
+                if (SDBInterface.GetLoadRegisterFromStatCommandDef(cmdId) is { } lrs)
+                {
+                    sb.AppendLine($"{prefix}stat {lrs.Stat} ({(GameServer.Enums.StatModifierIdentifier)lrs.Stat}) regop {lrs.Regop}");
+                }
+
+                break;
+            case AptCommandType.LoadRegisterFromModulePower:
+                if (SDBInterface.GetLoadRegisterFromModulePowerCommandDef(cmdId) is { } lrm)
+                {
+                    sb.AppendLine($"{prefix}modulePowerType {lrm.ModulePowerType} regop {lrm.Regop}");
                 }
 
                 break;

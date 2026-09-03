@@ -23,6 +23,15 @@ public class RequireEnergyCommand : Command, ICommand
         state.UpdateEnergy(time);
 
         float required = AbilitySystem.RegistryOp(context.Register, Params.Amount, (Operand)Params.AmountRegop);
+        if (Params.AmountRegop != 0 && context.Register == 0f)
+        {
+            Logger.Debug(
+                "{Command} {CommandId} amount regop {Regop} evaluated against register 0; the chain likely needs a LoadRegister command before this node",
+                nameof(RequireEnergyCommand),
+                Params.Id,
+                (Operand)Params.AmountRegop);
+        }
+
         bool hasEnergy = state.Energy >= required;
 
         bool result = Params.Negate == 1 ? !hasEnergy : hasEnergy;
