@@ -16,6 +16,14 @@ namespace GameServer;
 
 public class GameServerModule : Module
 {
+    private const string DefaultConfigJson =
+        "{\n" +
+        "  \"StaticDBPath\": \"\",\n" +
+        "  \"MapsPath\": \"\",\n" +
+        "  \"AssetDBPath\": \"\",\n" +
+        "  \"CachePath\": \"\"\n" +
+        "}\n";
+
     protected override void Load(ContainerBuilder builder)
     {
         RegisterTypes(builder);
@@ -263,7 +271,7 @@ public class GameServerModule : Module
             if (string.IsNullOrWhiteSpace(settings.StaticDBPath))
             {
                 throw new InvalidOperationException(
-                    "StaticDBPath is not configured. Edit GameServer.config.json next to GameServer.dll and set \"StaticDBPath\" to the full path of clientdb.sd2.");
+                    "StaticDBPath is not configured and no Firefall installation could be detected. Edit GameServer.config.json next to GameServer.dll and set \"StaticDBPath\" to the full path of clientdb.sd2, or set PIN_FIREFALL_PATH to your Firefall install directory.");
             }
 
             if (!File.Exists(settings.StaticDBPath))
@@ -288,7 +296,7 @@ public class GameServerModule : Module
     /// </summary>
     private static void ApplyPathSettingsFromFile(GameServerSettings settings)
     {
-        var configPath = FindConfigFile();
+        var configPath = GetOrCreateConfigFile();
         if (configPath == null)
         {
             return;
@@ -315,6 +323,8 @@ public class GameServerModule : Module
                 $"Configuration file '{configPath}' does not contain valid JSON.");
         }
 
+        AutoFillMissingPaths(configPath, config);
+
         if (config.StaticDBPath != null)
         {
             settings.StaticDBPath = config.StaticDBPath;
@@ -333,6 +343,112 @@ public class GameServerModule : Module
         if (config.CachePath != null)
         {
             settings.CachePath = config.CachePath;
+        }
+    }
+
+    /// <summary>
+    ///     Detect a Firefall installation and write the resolved paths back into the
+    ///     configuration file when any of them are still empty. The user's existing
+    ///     values are never overwritten.
+    /// </summary>
+    private static void AutoFillMissingPaths(string configPath, GameServerConfigFile config)
+    {
+        if (!string.IsNullOrWhiteSpace(config.StaticDBPath) &&
+            !string.IsNullOrWhiteSpace(config.MapsPath) &&
+            !string.IsNullOrWhiteSpace(config.AssetDBPath))
+        {
+            return;
+        }
+
+        var detected = FirefallInstallLocator.Locate();
+        if (detected == null)
+        {
+            if (string.IsNullOrWhiteSpace(config.StaticDBPath))
+            {
+                Log.Warning("Could not auto-detect a Firefall installation. Set StaticDBPath in {ConfigPath}.", configPath);
+            }
+
+            return;
+        }
+
+        var changed = false;
+
+        if (string.IsNullOrWhiteSpace(config.StaticDBPath))
+        {
+            config.StaticDBPath = detected.StaticDBPath;
+            changed = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(config.MapsPath))
+        {
+            config.MapsPath = detected.MapsPath;
+            changed = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(config.AssetDBPath))
+        {
+            config.AssetDBPath = detected.AssetDBPath;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            Log.Information("Auto-detected Firefall at {Root}. Writing paths to {ConfigPath}.", detected.Root, configPath);
+            WriteConfigFile(configPath, config);
+        }
+        else
+        {
+            Log.Information("Firefall detected at {Root}; GameServer.config.json already has paths configured.", detected.Root);
+        }
+    }
+
+    /// <summary>
+    ///     Locate GameServer.config.json in the working directory or next to the executable;
+    ///     create it from the template when it does not exist yet.
+    /// </summary>
+    private static string GetOrCreateConfigFile()
+    {
+        var existing = FindConfigFile();
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        foreach (var directory in new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory() }.Distinct())
+        {
+            try
+            {
+                var path = Path.Combine(directory, "GameServer.config.json");
+                if (!File.Exists(path))
+                {
+                    File.WriteAllText(path, DefaultConfigJson);
+                    Log.Information("Created GameServer.config.json at {Path}", path);
+                }
+
+                return path;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                // The directory is not usable; try the next candidate.
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Persist the configuration file, ignoring failures that should not prevent startup.
+    /// </summary>
+    private static void WriteConfigFile(string configPath, GameServerConfigFile config)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(configPath, json);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            Log.Warning(ex, "Could not write auto-detected paths to {ConfigPath}", configPath);
         }
     }
 

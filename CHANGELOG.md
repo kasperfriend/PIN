@@ -16,6 +16,7 @@
   - Turrets
   - Melding Repulsor
 - Add Bepu as physics engine
+- Auto-detect the Firefall installation and populate `GameServer.config.json` paths on startup (via Steam libraries, `libraryfolders.vdf`, or `PIN_FIREFALL_PATH` / `PIN_STEAM_PATH`)
 
 ### Changed
 
@@ -25,6 +26,7 @@
 ### Fixed
 
 - Make the server handling code more robust
+- Fix WebHostManager startup crash (missing `Serilog.Enrichers.Context` and other Serilog extension assemblies when the servers are published into a single folder) by referencing the shared Serilog packages
 - Many improvements in the entity definitions
 
 ## [1.2.0] - 2023-06-02
