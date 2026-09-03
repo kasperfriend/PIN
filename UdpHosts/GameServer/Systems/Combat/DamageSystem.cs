@@ -26,7 +26,7 @@ public class DamageSystem
 
     public void ApplyDamage(IEntity target, int amount, IEntity source = null)
     {
-        if (amount <= 0)
+        if (target == null || amount <= 0)
         {
             return;
         }
@@ -50,7 +50,7 @@ public class DamageSystem
 
     public void ApplyHeal(IEntity target, int amount, IEntity source = null)
     {
-        if (amount <= 0)
+        if (target == null || amount <= 0)
         {
             return;
         }
