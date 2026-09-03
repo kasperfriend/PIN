@@ -56,6 +56,8 @@ Leave `CharacterStorePath` empty to use the default location. If `WebHostManager
 is not running, the GameServer logs a warning and falls back to a hardcoded
 character.
 
+> **Full guide:** See [`Docs/CHARACTERS_AND_BATTLEFRAMES.md`](Docs/CHARACTERS_AND_BATTLEFRAMES.md) for how to edit `characters.json`, change battleframes, add custom characters, configure visuals, and understand the GUID/zone scheme.
+
 ### GameServer config
 
 `GameServer.config.json` sits next to `GameServer.dll` and holds the Firefall

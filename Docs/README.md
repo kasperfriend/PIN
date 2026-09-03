@@ -3,6 +3,8 @@
 PIN is split into two areas:
 - [UdpHosts](#udphosts)
 - [WebHosts](#webhosts)
+- [Characters & Battleframes](CHARACTERS_AND_BATTLEFRAMES.md) — `characters.json` configuration
+- [Spawning & Combat](SPAWNING_AND_COMBAT.md) — NPC spawning and combat flow
 
 ## UdpHosts
 
