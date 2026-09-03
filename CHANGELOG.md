@@ -28,6 +28,10 @@
 
 ### Fixed
 
+- Fix activated abilities (Raptor and every other battleframe) staying purely cosmetic: `InstantActivation`, the chain node that carries each ability's cooldown configuration, was an empty stub, so no cooldown was ever started, the client got an empty cooldown payload and the ability could be re-pressed forever
+- Track the aptitude cooldown category per ability (learned from its activation command) instead of using `AbilityModule.UiCategory`, which is a UI grouping and never matched a real cooldown category
+- Report category cooldowns to the client (`ActiveCooldowns_Group2`) and express the global cooldown window in shard time, so the client-side ability timers no longer jump
+- Log aptitude chain nodes that are still unimplemented server-side, so an ability that plays its animation but does nothing can be traced to the exact placeholder command
 - Fix the character selection screen and the in-game character not matching (selection showed a female Raptor while the game spawned a male Mammoth, because the two were built from separate hardcoded blobs and the gRPC lookup that was meant to reconcile them had no server implementation)
 - Fix Firefall auto-detection failing for every Steam library listed in `libraryfolders.vdf` (Steam stores the library root folder such as `D:\SteamLibrary`, not the `steamapps` folder, so all entries were rejected)
 - Find Steam installations outside `Program Files` through the Windows registry, and standalone Firefall installs under `Program Files`

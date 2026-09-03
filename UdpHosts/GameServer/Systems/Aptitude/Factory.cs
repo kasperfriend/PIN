@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using GameServer.StaticDB;
 using GameServer.Systems.Aptitude.Commands.Activation;
 using GameServer.Systems.Aptitude.Commands.Calldown;
@@ -28,6 +29,7 @@ public class Factory
 {
     private readonly Shard _shard;
     private readonly ILogger _logger;
+    private readonly HashSet<uint> _reportedPlaceholders = [];
 
     public Factory(Shard shard)
     {
@@ -778,6 +780,18 @@ public class Factory
                 return new AttemptToCalldownVehicleCommand(SDBInterface.GetAttemptToCalldownVehicleCommandDef(commandId));
             default:
                 break;
+        }
+
+        // Not implemented server-side. Log it once per command so an ability
+        // that "plays the animation but does nothing" can be traced back to the
+        // exact chain node that is still a placeholder.
+        if (_reportedPlaceholders.Add(commandId))
+        {
+            _logger.Information(
+                "Aptitude command {CommandId} of type {CommandType} ({Environment}) is not implemented server-side, using a placeholder",
+                commandId,
+                commandType,
+                commandTypeRec.Environment);
         }
 
         return new CustomPlaceholderCommand(commandType.ToString(), commandId);
