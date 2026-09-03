@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Aero.Protocol;
@@ -140,30 +141,15 @@ public class CombatController : Base
         {
             var character = player.CharacterEntity;
             var activationTime = query.Time;
+            var shard = character.Shard;
+            var initiator = character as IAptitudeTarget;
+            var targets = new AptitudeTargets();
+
+            bool success = shard.Abilities.HandleActivateAbility(shard, initiator, abilityId, activationTime, targets);
             if (character.IsPlayerControlled)
             {
-                var message = new AbilityActivated
-                {
-                    ActivatedAbilityId = abilityId,
-                    ActivatedTime = activationTime,
-                    AbilityCooldownsData = new AbilityCooldownsData
-                    {
-                        ActiveCooldowns_Group1 = Array.Empty<ActiveCooldown>(),
-                        ActiveCooldowns_Group2 = Array.Empty<ActiveCooldown>(),
-                        Unk = 0,
-                        GlobalCooldown_Activated_Time = activationTime,
-                        GlobalCooldown_ReadyAgain_Time = activationTime + 300,
-                    }
-                };
-                _logger.ForContext<AbilitySystem>()
-                       .Information("ActivateAbility {ActivatedAbilityId} at {ActivatedTime}", message.ActivatedAbilityId, message.ActivatedTime);
-                character.Player.NetChannels[ChannelType.ReliableGss].SendMessage(message, character.EntityId);
+                SendAbilityActivationResponse(character, abilityId, activationTime, success);
             }
-
-            var initiator = character as IAptitudeTarget;
-            var shard = player.CharacterEntity.Shard;
-            var targets = new AptitudeTargets();
-            shard.Abilities.HandleActivateAbility(shard, initiator, abilityId, activationTime, targets);
         }
     }
 
@@ -182,6 +168,8 @@ public class CombatController : Base
         var character = player.CharacterEntity;
         uint abilityId = 0;
 
+        byte abilityCategory = 0;
+
         // Using the local data until we can get the loadout remotely
         if (character.CurrentLoadout != null)
         {
@@ -192,6 +180,7 @@ public class CombatController : Base
                 if (abilityModule != null)
                 {
                     abilityId = abilityModule.AbilityChainId;
+                    abilityCategory = abilityModule.UiCategory;
                 }
             }
         }
@@ -255,28 +244,21 @@ public class CombatController : Base
         if (abilityId != 0)
         {
             var activationTime = activateAbility.Time;
-            if (character.IsPlayerControlled)
+            var shard = character.Shard;
+            var initiator = character as IAptitudeTarget;
+
+            // Server-side cooldown gate: while the ability is cooling down,
+            // reject the activation instead of running the chain again.
+            if (!shard.Abilities.IsAbilityReady(initiator, abilityId, abilityCategory, activationTime, out _))
             {
-                var message = new AbilityActivated
+                if (character.IsPlayerControlled)
                 {
-                    ActivatedAbilityId = abilityId,
-                    ActivatedTime = activationTime,
-                    AbilityCooldownsData = new AbilityCooldownsData
-                    {
-                        ActiveCooldowns_Group1 = Array.Empty<ActiveCooldown>(),
-                        ActiveCooldowns_Group2 = Array.Empty<ActiveCooldown>(),
-                        Unk = 0,
-                        GlobalCooldown_Activated_Time = activationTime,
-                        GlobalCooldown_ReadyAgain_Time = activationTime + 300,
-                    }
-                };
-                _logger.ForContext<AbilitySystem>()
-                       .Information("ActivateAbility {ActivatedAbilityId} at {ActivatedTime}", message.ActivatedAbilityId, message.ActivatedTime);
-                character.Player.NetChannels[ChannelType.ReliableGss].SendMessage(message, character.EntityId);
+                    SendAbilityActivationResponse(character, abilityId, activationTime, activated: false);
+                }
+
+                return;
             }
 
-            var initiator = character as IAptitudeTarget;
-            var shard = player.CharacterEntity.Shard;
             var targets = activateAbility.Targets
             .Where(entityId =>
             {
@@ -292,7 +274,80 @@ public class CombatController : Base
             .Select(entityId => (IAptitudeTarget)shard.Entities[entityId.Backing & 0xffffffffffffff00])
             .ToArray();
 
-            shard.Abilities.HandleActivateAbility(shard, initiator, abilityId, activationTime, new AptitudeTargets(targets));
+            bool success = shard.Abilities.HandleActivateAbility(shard, initiator, abilityId, activationTime, new AptitudeTargets(targets));
+            if (character.IsPlayerControlled)
+            {
+                SendAbilityActivationResponse(character, abilityId, activationTime, success);
+            }
         }
+    }
+
+    /// <summary>
+    /// Acknowledges an ability activation (or its failure) with the cooldown
+    /// payload the client uses to show the ability timer and gate re-use.
+    /// </summary>
+    private void SendAbilityActivationResponse(CharacterEntity character, uint abilityId, uint activationTime, bool activated)
+    {
+        var shard = character.Shard;
+        var state = shard.Abilities.GetOrAddState(character);
+        var cooldownsData = BuildAbilityCooldownsData(shard, state, activationTime);
+
+        if (activated)
+        {
+            var message = new AbilityActivated
+            {
+                ActivatedAbilityId = abilityId,
+                ActivatedTime = activationTime,
+                AbilityCooldownsData = cooldownsData,
+            };
+            _logger.ForContext<AbilitySystem>()
+                   .Information("AbilityActivated {ActivatedAbilityId} at {ActivatedTime}", message.ActivatedAbilityId, message.ActivatedTime);
+            character.Player.NetChannels[ChannelType.ReliableGss].SendMessage(message, character.EntityId);
+        }
+        else
+        {
+            var message = new AbilityFailed
+            {
+                FailedAbilityId = abilityId,
+                Unk2 = 0, // 0 in captures
+                AbilityCooldownsData = cooldownsData,
+            };
+            _logger.ForContext<AbilitySystem>()
+                   .Information("AbilityFailed {FailedAbilityId} at {ActivationTime}", message.FailedAbilityId, activationTime);
+            character.Player.NetChannels[ChannelType.ReliableGss].SendMessage(message, character.EntityId);
+        }
+    }
+
+    private static AbilityCooldownsData BuildAbilityCooldownsData(IShard shard, AbilityState state, uint activationTime)
+    {
+        uint now = shard.CurrentTime;
+
+        var group1 = new List<ActiveCooldown>();
+        uint globalReadyAgain = activationTime + 300;
+        foreach (var entry in state.Cooldowns)
+        {
+            if (!entry.IsActive(now))
+            {
+                continue;
+            }
+
+            if (entry.Kind == AbilityCooldownKind.Local)
+            {
+                group1.Add(entry.ToActiveCooldown());
+            }
+            else if (entry.Kind == AbilityCooldownKind.Global)
+            {
+                globalReadyAgain = Math.Max(globalReadyAgain, entry.ReadyAgainTime);
+            }
+        }
+
+        return new AbilityCooldownsData
+        {
+            ActiveCooldowns_Group1 = group1.ToArray(),
+            ActiveCooldowns_Group2 = Array.Empty<ActiveCooldown>(),
+            Unk = 0,
+            GlobalCooldown_Activated_Time = activationTime,
+            GlobalCooldown_ReadyAgain_Time = globalReadyAgain,
+        };
     }
 }

@@ -11,6 +11,9 @@ public struct ActiveProjectile
     public AmmoFlags.SimulationMode Type;
     public Ammo Ammo;
 
+    /// <summary>Damage dealt when this projectile hits a kinematic (entity) pose shape.</summary>
+    public int DamageAmount;
+
     public Vector3 Origin;
     public Vector3 Direction;
     public Vector3 Velocity;

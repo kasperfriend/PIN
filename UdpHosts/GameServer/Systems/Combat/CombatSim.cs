@@ -14,6 +14,9 @@ public class CombatSim
     private readonly HitFeedback _feedback;
     private readonly HostilityResolver _hostility;
 
+    /// <summary>Exposes the hit/dealt feedback sender for aptitude damage commands.</summary>
+    public HitFeedback HitFeedback => _feedback;
+
     public CombatSim(IEventBus eventBus, DamageSystem damage, Shard shard, HostilityResolver hostility = null)
     {
         _eventBus = eventBus;

@@ -38,6 +38,7 @@ public interface IShard : IPacketSender
     ChatService Chat { get; }
     AdminService Admin { get; }
     DamageSystem Damage { get; }
+    CombatSim Combat { get; }
     CharacterLifecycleService CharacterLifecycle { get; }
     PlayerRespawnService PlayerRespawn { get; }
     uint ZoneId { get; }

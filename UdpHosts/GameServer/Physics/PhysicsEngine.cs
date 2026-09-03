@@ -14,6 +14,7 @@ using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.StaticDB;
 using GameServer.Systems.Combat;
+using GameServer.Systems.ProjectileSim;
 using GameServer.Systems.SystemEvents;
 using Serilog;
 using Shared.Collision;
@@ -285,7 +286,7 @@ public partial class PhysicsEngine
         return hitResult;
     }
 
-    public void HandleProjectileImpact(CharacterEntity source, uint trace, SegmentRaycastHit hit)
+    public void HandleProjectileImpact(CharacterEntity source, uint trace, SegmentRaycastHit hit, int damage = ProjectileSim.LegacyPlaceholderDamage)
     {
         DebugProjectileHitCallbacks?.SendDebugProjectileImpact(source, trace, hit.HitPosition, hit.Normal);
 
@@ -306,7 +307,7 @@ public partial class PhysicsEngine
 
                 _logger.Debug("ProjectileSim Impact on {ShapeName} (headshot={Headshot}, crit={Crit}, damageMod={DamageMod})", poseShapeData.Name, headshot, crit, damageMod);
                 _logger.Debug("You hit {ShapeName} of {EntityId}", poseShapeData.Name, hitEntityId);
-                _eventBus.Enqueue(new ProjectileHitEvent(hitEntityId, 1337, source.EntityId, headshot, crit, damageMod));
+                _eventBus.Enqueue(new ProjectileHitEvent(hitEntityId, damage, source.EntityId, headshot, crit, damageMod));
                 if (source.IsPlayerControlled && source.Player.Preferences.DebugWeapon != 0)
                 {
                     _eventBus.Enqueue(new DebugChatDirectMessageEvent($"You hit {poseShapeData.Name} of {hitEntityId}", source.Player));
