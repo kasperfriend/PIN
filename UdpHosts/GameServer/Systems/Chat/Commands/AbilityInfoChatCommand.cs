@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using GameServer.Data;
+using GameServer.Entities.Character;
 using GameServer.StaticDB;
 using GameServer.Systems.Aptitude;
 using AptCommandType = GameServer.Systems.Aptitude.CommandType;
@@ -222,7 +223,7 @@ public class AbilityInfoChatCommand : ChatCommand
         }
     }
 
-    private static void AppendAbilityState(StringBuilder sb, ChatCommandContext context, GameServer.Entities.Character.CharacterEntity character)
+    private static void AppendAbilityState(StringBuilder sb, ChatCommandContext context, CharacterEntity character)
     {
         if (!context.Shard.Abilities.TryGetState(character, out var state))
         {
