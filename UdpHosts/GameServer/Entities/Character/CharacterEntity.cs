@@ -129,6 +129,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public ulong ArmyGUID { get; set; }
     public sbyte ArmyIsOfficer { get; set; }
     public CharacterStateData CharacterState { get; set; }
+    public CombatFlagsData CombatFlags { get; private set; }
     public int TimePlayed { get; set; }
     public MaxVital MaxShields { get; private set; }
     public MaxVital MaxHealth { get; private set; }
@@ -1193,8 +1194,15 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
     public void SetCombatFlags(CombatFlagsData value)
     {
+        CombatFlags = value;
         Character_CombatController.CombatFlagsProp = value;
         Character_CombatView.CombatFlagsProp = value;
+    }
+
+    /// <summary>Checks a flag on the last known combat flags, e.g. the fall damage immunity.</summary>
+    public bool HasCombatFlag(CombatFlagsData.CharacterCombatFlags flag)
+    {
+        return CombatFlags.Value.HasFlag(flag);
     }
 
     public void EquipItemByGUID(int loadoutId, LoadoutSlotType slot, ulong guid)
@@ -1632,6 +1640,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         StaticInfo = new StaticInfoData();
         CharacterState = new CharacterStateData { State = CharacterStateData.CharacterStatus.Living, Time = Shard.CurrentTime };
         HostilityInfo = new HostilityInfoData { Flags = 0 | HostilityInfoData.HostilityFlags.Faction, FactionId = 1 };
+        CombatFlags = new CombatFlagsData { Value = 0, Time = Shard.CurrentTime };
         SetMaxShields(0, true);
         SetMaxHealth(19192, true);
         GibVisualsInfo = new GibVisuals { Id = 0, Time = Shard.CurrentTime };

@@ -14,10 +14,10 @@ public class DamageSystem
     private static readonly ILogger Logger = Log.ForContext<DamageSystem>();
 
     private readonly IEventBus _eventBus;
-    private readonly Shard _shard;
+    private readonly IShard _shard;
     private readonly INpcDeathRules _rules;
 
-    public DamageSystem(IEventBus eventBus, Shard shard, INpcDeathRules rules)
+    public DamageSystem(IEventBus eventBus, IShard shard, INpcDeathRules rules)
     {
         _eventBus = eventBus;
         _shard = shard;
@@ -31,13 +31,14 @@ public class DamageSystem
             return;
         }
 
+        bool applied;
         if (target is CharacterEntity character)
         {
-            ApplyDamageToCharacter(character, amount, source);
+            applied = ApplyDamageToCharacter(character, amount, source);
         }
         else if (target is DeployableEntity deployable)
         {
-            ApplyDamageToDeployable(deployable, amount, source);
+            applied = ApplyDamageToDeployable(deployable, amount, source);
         }
         else
         {
@@ -45,7 +46,10 @@ public class DamageSystem
             return;
         }
 
-        _eventBus.Publish(new EntityDamagedEvent(target, amount, source));
+        if (applied)
+        {
+            _eventBus.Publish(new EntityDamagedEvent(target, amount, source));
+        }
     }
 
     public void ApplyHeal(IEntity target, int amount, IEntity source = null)
@@ -55,13 +59,14 @@ public class DamageSystem
             return;
         }
 
+        bool applied;
         if (target is CharacterEntity character)
         {
-            ApplyHealToCharacter(character, amount, source);
+            applied = ApplyHealToCharacter(character, amount, source);
         }
         else if (target is DeployableEntity deployable)
         {
-            ApplyHealToDeployable(deployable, amount, source);
+            applied = ApplyHealToDeployable(deployable, amount, source);
         }
         else
         {
@@ -69,15 +74,27 @@ public class DamageSystem
             return;
         }
 
-        _eventBus.Publish(new EntityHealedEvent(target, amount, source));
+        if (applied)
+        {
+            _eventBus.Publish(new EntityHealedEvent(target, amount, source));
+        }
     }
 
     public void Tick(double deltaTime, ulong currentTime, CancellationToken ct)
     {
     }
 
-    private void ApplyDamageToCharacter(CharacterEntity character, int amount, IEntity source)
+    private bool ApplyDamageToCharacter(CharacterEntity character, int amount, IEntity source)
     {
+        if (!character.IsAlive)
+        {
+            // Corpses, characters in bleedout and everyone still spawning can
+            // not be damaged. Bleedout damage is handled by the lifecycle
+            // service on its own.
+            Logger.Debug("{Name} is in state {State}, ignoring damage", character, character.CharacterState.State);
+            return false;
+        }
+
         int remaining = amount;
 
         if (character.CurrentShields > 0)
@@ -91,25 +108,34 @@ public class DamageSystem
         {
             character.SetCurrentHealth(character.CurrentHealth - remaining);
         }
+
+        return true;
     }
 
-    private void ApplyHealToCharacter(CharacterEntity character, int amount, IEntity source)
+    private bool ApplyHealToCharacter(CharacterEntity character, int amount, IEntity source)
     {
+        if (!character.IsAlive)
+        {
+            Logger.Debug("{Name} is in state {State}, ignoring heal", character, character.CharacterState.State);
+            return false;
+        }
+
         character.SetCurrentHealth(character.CurrentHealth + amount);
+        return true;
     }
 
-    private void ApplyDamageToDeployable(DeployableEntity deployable, int amount, IEntity source)
+    private bool ApplyDamageToDeployable(DeployableEntity deployable, int amount, IEntity source)
     {
         if (deployable.IsDead)
         {
-            return;
+            return false;
         }
 
         deployable.SetCurrentHealth(deployable.CurrentHealth - amount);
 
         if (deployable.CurrentHealth > 0)
         {
-            return;
+            return true;
         }
 
         deployable.MarkDead();
@@ -119,15 +145,17 @@ public class DamageSystem
         Logger.Information("{Name} destroyed", deployable);
 
         _shard.EntityMan.SetRemainingLifetime(deployable, (uint)_rules.CorpseLingerMs);
+        return true;
     }
 
-    private void ApplyHealToDeployable(DeployableEntity deployable, int amount, IEntity source)
+    private bool ApplyHealToDeployable(DeployableEntity deployable, int amount, IEntity source)
     {
         if (deployable.IsDead)
         {
-            return;
+            return false;
         }
 
         deployable.SetCurrentHealth(deployable.CurrentHealth + amount);
+        return true;
     }
 }

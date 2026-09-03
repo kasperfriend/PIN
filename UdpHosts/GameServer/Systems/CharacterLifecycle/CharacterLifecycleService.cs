@@ -143,16 +143,31 @@ public class CharacterLifecycleService
             return;
         }
 
-        if (character.CurrentHealth <= 0)
+        if (character.CurrentHealth > 0)
         {
-            if (_rules.BleedoutEnabled && _rules.CanBleedout(character))
-            {
-                TransitionToBleedout(character);
-            }
-            else
-            {
-                TransitionToDead(character);
-            }
+            return;
+        }
+
+        if (!_trackers.TryGetValue(character.EntityId, out var tracker))
+        {
+            return;
+        }
+
+        // Only the transition out of the living state is driven by damage.
+        // Characters already in bleedout die through the bleedout tick and the
+        // dead state is final.
+        if (tracker.State != CharacterLifecycleState.Living)
+        {
+            return;
+        }
+
+        if (_rules.BleedoutEnabled && _rules.CanBleedout(character))
+        {
+            TransitionToBleedout(character);
+        }
+        else
+        {
+            TransitionToDead(character);
         }
     }
 

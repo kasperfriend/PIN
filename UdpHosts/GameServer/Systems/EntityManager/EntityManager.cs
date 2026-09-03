@@ -34,7 +34,7 @@ namespace GameServer.Systems.EntityManager;
 public class EntityManager
 {
     private const byte _serverId = 31;
-    private readonly Shard _shard;
+    private readonly IShard _shard;
     private readonly ILogger _logger;
     private readonly ulong _updateFlushIntervalMs = 5;
     private readonly ulong _scopeInIntervalMs = 20;
@@ -50,7 +50,7 @@ public class EntityManager
     private ulong _lastLifetimeCheck;
     private bool _hasSpawnedZoneEntities;
 
-    public EntityManager(Shard shard)
+    public EntityManager(IShard shard)
     {
         _shard = shard;
         _logger = shard.Logger.ForContext<EntityManager>();
@@ -426,6 +426,12 @@ public class EntityManager
 
         tracker.ExpireAt = _shard.CurrentTimeLong + timeMs;
         _lifetimeByEntity[entity.EntityId] = tracker;
+    }
+
+    /// <summary>Whether a remaining lifetime was set for this entity (e.g. corpse linger).</summary>
+    public bool HasRemainingLifetime(IEntity entity)
+    {
+        return entity != null && _lifetimeByEntity.ContainsKey(entity.EntityId);
     }
 
     public void Tick(double deltaTime, ulong currentTime, CancellationToken ct)
@@ -1828,7 +1834,12 @@ public class EntityManager
     where TNormal : class, IAero
     {
         var entityId = entity.EntityId;
-        foreach (var client in _scopedPlayersByEntity[entityId])
+        if (!_scopedPlayersByEntity.TryGetValue(entityId, out var scopedPlayers))
+        {
+            return;
+        }
+
+        foreach (var client in scopedPlayers)
         {
             if (client.CanReceiveGSS)
             {

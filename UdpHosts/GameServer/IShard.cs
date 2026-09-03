@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using GameServer.Entities;
@@ -39,6 +39,7 @@ public interface IShard : IPacketSender
     AdminService Admin { get; }
     DamageSystem Damage { get; }
     CombatSim Combat { get; }
+    FallDamageSystem FallDamage { get; }
     CharacterLifecycleService CharacterLifecycle { get; }
     PlayerRespawnService PlayerRespawn { get; }
     uint ZoneId { get; }
@@ -51,7 +52,7 @@ public interface IShard : IPacketSender
     uint CurrentTime => unchecked((uint)CurrentTimeLong);
     ushort CurrentShortTime => unchecked((ushort)CurrentTime);
 
-    ulong GetNextGuid(byte type);
+    ulong GetNextGuid(byte type = 0);
     void Run(CancellationToken ct);
     bool Tick(double deltaTime, ulong currentTime, CancellationToken ct);
     void NetworkTick(double deltaTime, ulong currentTime, CancellationToken ct);

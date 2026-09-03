@@ -30,6 +30,8 @@ public class TeleportServerCommand : ServerCommand
             Vector3 destination = new Vector3(x, y, z);
 
             character.SetPosition(destination);
+            context.Shard.FallDamage.ResetFor(character); // Don't let a stale fall speed deal damage at the destination
+
             var forcedMove = new ForcedMovement
             {
                 Data = new ForcedMovementData

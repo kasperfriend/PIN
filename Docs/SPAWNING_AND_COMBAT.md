@@ -208,3 +208,10 @@ Player faction defaults to `1` (Accord). So:
 | Spawn mob (Admin channel)        | `npc 2342 7 15 0`                        |
 | List chat commands               | `\help`                                  |
 | Spawn mob automatically per zone | add a row to `CustomData/character_spawn.json` |
+| Show your vitals                 | `\health`                                |
+| Damage / heal yourself           | `\hurt 5000` / `\heal 5000`              |
+| Simulate a fall landing          | `\fall 30`                               |
+| Bleedout / revive / die / respawn | `\down` / `\revive` / `\kill` / `\respawn` |
+
+The health, damage, death, respawn and fall damage pipeline is documented in
+[HEALTH_SYSTEM.md](HEALTH_SYSTEM.md).
