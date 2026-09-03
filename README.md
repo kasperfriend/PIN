@@ -50,6 +50,14 @@ installation paths:
 `clientdb.sd2` that exists. `MapsPath` and `AssetDBPath` are optional for a
 minimal zone/collision setup but should point at the matching Firefall folders.
 
+The server scans for a Firefall client installation on startup and writes the
+detected paths into `GameServer.config.json` automatically when they are empty.
+It looks in Steam's default install location and in every library listed in
+`libraryfolders.vdf`, then around the server executable/working directory. Any
+values you have set in the file are kept as-is. If you want to point the server
+at a specific copy, set `PIN_FIREFALL_PATH` to the Firefall install directory
+(or `PIN_STEAM_PATH` to the Steam directory) before starting it.
+
 After a local build it lands in
 `UdpHosts\GameServer\bin\Release\net10.0\GameServer.config.json`. In the
 GitHub release archive it is at the root of the zip (`Publish\`), next to

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Threading;
@@ -37,6 +37,7 @@ internal class GameServer : PacketServer
         _settings = serverSettings;
 
         Logger.Information("Serving client {Environment}/{Branch} version {ClientVersion}: GSS protocol {GssVersion}, Matrix protocol {MatrixVersion}", serverSettings.ClientEnvironment, serverSettings.ClientBranch, serverSettings.ClientVersion, serverSettings.GssProtocolVersion, serverSettings.MatrixProtocolVersion);
+        Logger.Information("Firefall data paths -> StaticDBPath: {StaticDBPath} | MapsPath: {MapsPath} | AssetDBPath: {AssetDBPath} | CachePath: {CachePath}", serverSettings.StaticDBPath, serverSettings.MapsPath, serverSettings.AssetDBPath, serverSettings.CachePath);
 
         Logger.ForContext<SDBInterface>().Information("Reading from SDB");
         SDBInterface.Init(sdb);
