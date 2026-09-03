@@ -3,9 +3,15 @@ using GameServer.StaticDB;
 
 namespace GameServer.Systems.Chat.Commands;
 
-[ChatCommand("Spawn a mob (NPC/monster) by characterTypeId, optionally at a location.",
+[ChatCommand(
+    "Spawn a mob (NPC/monster) by characterTypeId, optionally at a location.",
     "npc <characterTypeId> [<x> <y> <z>]",
-    "npc", "character", "monster", "spawn_npc", "spawn_character", "spawn_monster")]
+    "npc",
+    "character",
+    "monster",
+    "spawn_npc",
+    "spawn_character",
+    "spawn_monster")]
 public class SpawnNpcChatCommand : ChatCommand
 {
     public override void Execute(string[] parameters, ChatCommandContext context)

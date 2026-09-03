@@ -19,7 +19,7 @@ internal static class FirefallInstallLocator
     private const string EnvFirefallPathVariable = "PIN_FIREFALL_PATH";
     private const string EnvSteamPathVariable = "PIN_STEAM_PATH";
 
-    private static readonly ILogger Log = Serilog.Log.ForContext("GameServer.FirefallInstallLocator");
+    private static readonly ILogger Log = Serilog.Log.ForContext<FirefallInstallLocator>();
 
     /// <summary>
     ///     Locate a Firefall installation on the machine, or return <c>null</c> when none is found.
