@@ -14,22 +14,47 @@ https://user-images.githubusercontent.com/920861/134824107-03e9f99c-b420-47c7-b7
 2. Edit the `firefall.ini` located in `steamapps\common\Firefall`
 3. Add content from below
 4. Download the [latest PIN release](https://github.com/themeldingwars/PIN/releases/latest)
-5. Make a backup copy of the original `FirefallClient.exe` in `Firefall\system\bin`
-6. Replace the `FirefallClient.exe` with the patched `FirefallClient.exe` from the PIN release
+5. Open `GameServer.config.json` next to `GameServer.dll` (created by the build; if it is missing, copy `GameServer.config.example.json` to `GameServer.config.json`) and set `StaticDBPath`, `MapsPath`, and `AssetDBPath` to your Firefall installation.
+6. Make a backup copy of the original `FirefallClient.exe` in `Firefall\system\bin`
+7. Replace the `FirefallClient.exe` with the patched `FirefallClient.exe` from the PIN release
    - The patched client is **not built by CI** (it is an external binary). Attach it
      manually to the release's **Assets** on the GitHub release page, then download it
      from there. A release produced by CI contains the three servers only.
-7. Make sure the [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) is installed
-8. Trust self-signed development certificates by running `dotnet dev-certs https --trust`
-9. Start all three applications:
+8. Make sure the [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) is installed
+9. Trust self-signed development certificates by running `dotnet dev-certs https --trust`
+10. Start all three applications:
    - GameServer
    - MatrixServer
    - WebHostManager
-10. Start Firefall
-11. Login to the server:
+11. Start Firefall
+12. Login to the server:
     - If Steam auto login has been enabled, you will directly be navigated to the character selection screen
     - Otherwise, leave the login fields blank or enter anything you want and click "Login"
-12. Load into the game by pressing the "Enter World" button
+13. Load into the game by pressing the "Enter World" button
+
+### GameServer config
+
+`GameServer.config.json` sits next to `GameServer.dll` and holds the Firefall
+installation paths:
+
+```json
+{
+  "StaticDBPath": "C:\\Program Files\\Steam\\steamapps\\common\\Firefall\\system\\db\\clientdb.sd2",
+  "MapsPath": "C:\\Program Files\\Steam\\steamapps\\common\\Firefall\\system\\maps",
+  "AssetDBPath": "C:\\Program Files\\Steam\\steamapps\\common\\Firefall\\system\\assetdb",
+  "CachePath": ""
+}
+```
+
+`StaticDBPath` is required; the server will not start until it points at a
+`clientdb.sd2` that exists. `MapsPath` and `AssetDBPath` are optional for a
+minimal zone/collision setup but should point at the matching Firefall folders.
+
+After a local build it lands in
+`UdpHosts\GameServer\bin\Release\net10.0\GameServer.config.json`. In the
+GitHub release archive it is at the root of the zip (`Publish\`), next to
+`GameServer.exe`. `GameServer.config.example.json` is shipped alongside it as
+a fallback template.
 
 ### firefall.ini
 
@@ -69,7 +94,7 @@ PlayIntroMovie = false
    - Include the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) component or install it separately
 2. Recursive clone the repository `git clone --recurse-submodules https://github.com/kasperfriend/PIN.git`
 3. Build the solution
-4. Edit the `GameServer.dll.config` produced by the build in `UdpHosts\GameServer\bin\Release\net10.0` to ensure that `StaticDBPath` is correct.
+4. Edit `GameServer.config.json` produced by the build in `UdpHosts\GameServer\bin\Release\net10.0` (copy `GameServer.config.example.json` to `GameServer.config.json` if it is missing) and set `StaticDBPath`, `MapsPath`, and `AssetDBPath` to your Firefall installation.
 5. Trust self-signed development certificates by running `dotnet dev-certs https --trust`
 6. Start multiple targets at once
    - Visual Studio: Create a `Multiple Startup Projects` target that start WebHostManager, GameServer and MatrixServer

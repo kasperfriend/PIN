@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -39,11 +39,24 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>StaticDB\CustomData\%(RecursiveDir)\%(Filename)%(Extension)</TargetPath>
     </ContentWithTargetPath>
+
+    <None Include="GameServer.config.example.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Protobuf Include="GRPC\GameServerAPI.proto" GrpcServices="Client" />
   </ItemGroup>
   <Target Name="Create_App-config_from_App-Default-config" Condition="!Exists('App.config')" BeforeTargets="Build">
     <Copy SourceFiles="App.Default.config" DestinationFiles="App.config" />
+  </Target>
+  <Target Name="FallbackGameServerConfigToOutput" AfterTargets="CopyFilesToOutputDirectory;Publish">
+    <Copy SourceFiles="GameServer.config.example.json"
+          DestinationFiles="$(OutDir)GameServer.config.json"
+          Condition="!Exists('$(OutDir)GameServer.config.json')" />
+    <Copy SourceFiles="GameServer.config.example.json"
+          DestinationFiles="$(PublishDir)GameServer.config.json"
+          Condition="'$(PublishDir)' != '' and !Exists('$(PublishDir)GameServer.config.json')" />
   </Target>
 </Project>
