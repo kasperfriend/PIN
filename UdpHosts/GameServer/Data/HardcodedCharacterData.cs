@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using AeroMessages.GSS.Character.Event;
 using GameServer.StaticDB;
 using GameServer.StaticDB.Records.dbcharacter;
+using Shared.Common;
 
 namespace GameServer.Data;
 
@@ -17,34 +18,39 @@ public static class HardcodedCharacterData
     public static int GeneratedLoadoutCounter = 20001;
     public static HashSet<uint> HostileFactionIds = [2, 3, 5, 6, 7, 8, 17, 22, 42, 43, 45, 46, 47, 48];
 
+    /// <summary>
+    /// Character used when no character data could be fetched over GRPC.
+    /// Mirrors <see cref="DefaultCharacterTemplate"/> so that the character shown in the
+    /// selection screen matches the one you actually spawn as in game.
+    /// </summary>
     public static BasicCharacterData FallbackData = new()
     {
         CharacterInfo = new BasicCharacterInfo()
         {
             Name = "Fallback",
-            Gender = (uint)CharacterGender.Male,
-            Race = (uint)CharacterRace.Human,
-            TitleId = 135,
-            CurrentBattleframeSDBId = 76331,
+            Gender = DefaultCharacterTemplate.Gender,
+            Race = DefaultCharacterTemplate.Race,
+            TitleId = DefaultCharacterTemplate.TitleId,
+            CurrentBattleframeSDBId = DefaultCharacterTemplate.FrameSdbId,
             ArmyTag = ArmyTag,
             ArmyGuid = ArmyGUID,
             ArmyIsOfficer = true,
         },
         CharacterVisuals = new BasicCharacterVisuals()
         {
-            Head = 10002,
-            Eyes = 0,
-            VoiceSet = 1000,
-            Vehicle = 1000,
-            Glider = 1000,
-            HeadAccessories = [10089, 10106],
-            Ornaments = [10224, 10270, 10061],
+            Head = DefaultCharacterTemplate.HeadId,
+            Eyes = DefaultCharacterTemplate.EyesId,
+            VoiceSet = DefaultCharacterTemplate.VoiceSetId,
+            Vehicle = DefaultCharacterTemplate.VehicleId,
+            Glider = DefaultCharacterTemplate.GliderId,
+            HeadAccessories = DefaultCharacterTemplate.HeadAccessories,
+            Ornaments = DefaultCharacterTemplate.Ornaments,
 
-            SkinColor = 0x52680000u,
-            EyeColor = 0x6a2440e0u,
-            LipColor = 0xffff0000u,
-            HairColor = 0x320D0021u,
-            FacialHairColor = 0x320D0021u,
+            SkinColor = DefaultCharacterTemplate.SkinColor,
+            EyeColor = DefaultCharacterTemplate.EyeColor,
+            LipColor = DefaultCharacterTemplate.LipColor,
+            HairColor = DefaultCharacterTemplate.HairColor,
+            FacialHairColor = DefaultCharacterTemplate.FacialHairColor,
         }
     };
 

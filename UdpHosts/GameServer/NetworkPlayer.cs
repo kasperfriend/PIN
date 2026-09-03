@@ -95,7 +95,7 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         else
         {
             CharacterEntity.Load(HardcodedCharacterData.FallbackData);
-            loadoutId = Inventory.GetLoadoutIdForChassis(76331);
+            loadoutId = Inventory.GetLoadoutIdForChassis(HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
         }
 
         var loadoutRefData = Inventory.GetLoadoutReferenceData(loadoutId);

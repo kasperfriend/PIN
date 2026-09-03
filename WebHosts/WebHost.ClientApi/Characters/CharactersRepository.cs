@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using WebHost.ClientApi.Characters.Models;
+using Shared.Common;
 using WebHost.ClientApi.Models.Base;
 
 namespace WebHost.ClientApi.Characters;
@@ -68,37 +69,37 @@ public class CharactersRepository : ICharactersRepository
                    IsDev = false,
                    IsActive = true,
                    CreatedAt = new DateTime(2017, 1, 3, 23, 41, 26),
-                   TitleId = 0,
+                   TitleId = DefaultCharacterTemplate.TitleId,
                    TimePlayedSecs = 500,
                    NeedsNameChange = false,
-                   MaxFrameLevel = 10,
-                   FrameSdbId = 76334,
-                   CurrentLevel = 10,
-                   Gender = 1,
-                   CurrentGender = "female",
+                   MaxFrameLevel = DefaultCharacterTemplate.MaxFrameLevel,
+                   FrameSdbId = (int)DefaultCharacterTemplate.FrameSdbId,
+                   CurrentLevel = DefaultCharacterTemplate.CurrentLevel,
+                   Gender = (int)DefaultCharacterTemplate.Gender,
+                   CurrentGender = DefaultCharacterTemplate.Gender == 1 ? "female" : "male",
                    EliteRank = 95487,
                    LastSeenAt = DateTime.Now - TimeSpan.FromDays(365),
                    Visuals = new Visuals
                              {
                                  Id = 0,
-                                 Race = 0,
-                                 Gender = 1,
-                                 SkinColor = new ColoredItem { Id = 118969, Value = new ColorValue { Color = 4294930822 } },
-                                 VoiceSet = new Item { Id = 1033 },
-                                 Head = new Item { Id = 10026 },
-                                 EyeColor = new ColoredItem { Id = 118980, Value = new ColorValue { Color = 1633685600 } },
-                                 LipColor = new ColoredItem { Id = 1, Value = new ColorValue { Color = 4294903873 } },
-                                 HairColor = new ColoredItem { Id = 77193, Value = new ColorValue { Color = 1917780001 } },
-                                 FacialHairColor = new ColoredItem { Id = 77193, Value = new ColorValue { Color = 1917780001 } },
-                                 HeadAccessories = new List<ColoredItem> { new() { Id = 10117, Value = new ColorValue { Color = 1211031763 } } },
+                                 Race = (int)DefaultCharacterTemplate.Race,
+                                 Gender = (int)DefaultCharacterTemplate.Gender,
+                                 SkinColor = new ColoredItem { Id = (int)DefaultCharacterTemplate.SkinColorItemId, Value = new ColorValue { Color = (long)DefaultCharacterTemplate.SkinColor } },
+                                 VoiceSet = new Item { Id = (int)DefaultCharacterTemplate.VoiceSetId },
+                                 Head = new Item { Id = (int)DefaultCharacterTemplate.HeadId },
+                                 EyeColor = new ColoredItem { Id = (int)DefaultCharacterTemplate.EyeColorItemId, Value = new ColorValue { Color = (long)DefaultCharacterTemplate.EyeColor } },
+                                 LipColor = new ColoredItem { Id = (int)DefaultCharacterTemplate.LipColorItemId, Value = new ColorValue { Color = (long)DefaultCharacterTemplate.LipColor } },
+                                 HairColor = new ColoredItem { Id = (int)DefaultCharacterTemplate.HairColorItemId, Value = new ColorValue { Color = (long)DefaultCharacterTemplate.HairColor } },
+                                 FacialHairColor = new ColoredItem { Id = (int)DefaultCharacterTemplate.FacialHairColorItemId, Value = new ColorValue { Color = (long)DefaultCharacterTemplate.FacialHairColor } },
+                                 HeadAccessories = new List<ColoredItem> { new() { Id = (int)DefaultCharacterTemplate.HeadAccessoryId, Value = new ColorValue { Color = (long)DefaultCharacterTemplate.HeadAccessoryColor } } },
                                  Ornaments = new List<ColoredItem>(),
-                                 Eyes = new Item { Id = 10001 },
-                                 Hair = new HairItem { Id = 10113, Color = new ColorItem { Id = 77193, Value = 1917780001 } },
-                                 FacialHair = new HairItem { Id = 0, Color = new ColorItem { Id = 77187, Value = 1518862368 } },
-                                 Glider = new Item { Id = 0 },
-                                 Vehicle = new Item { Id = 0 },
+                                 Eyes = new Item { Id = (int)DefaultCharacterTemplate.EyesId },
+                                 Hair = new HairItem { Id = (int)DefaultCharacterTemplate.HairId, Color = new ColorItem { Id = (int)DefaultCharacterTemplate.HairColorItemId, Value = (long)DefaultCharacterTemplate.HairColor } },
+                                 FacialHair = new HairItem { Id = (int)DefaultCharacterTemplate.FacialHairId, Color = new ColorItem { Id = 77187, Value = 1518862368 } },
+                                 Glider = new Item { Id = (int)DefaultCharacterTemplate.GliderId },
+                                 Vehicle = new Item { Id = (int)DefaultCharacterTemplate.VehicleId },
                                  Decals = new List<ColoredTransformableSdbItem>(),
-                                 WarpaintId = 143225,
+                                 WarpaintId = DefaultCharacterTemplate.WarpaintId,
                                  Warpaint = new List<long>
                                             {
                                                 4216738474,
