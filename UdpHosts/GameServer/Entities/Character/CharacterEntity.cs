@@ -1202,7 +1202,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     /// <summary>Checks a flag on the last known combat flags, e.g. the fall damage immunity.</summary>
     public bool HasCombatFlag(CombatFlagsData.CharacterCombatFlags flag)
     {
-        return CombatFlags != null && CombatFlags.Value.HasFlag(flag);
+        return CombatFlags.Value.HasFlag(flag);
     }
 
     public void EquipItemByGUID(int loadoutId, LoadoutSlotType slot, ulong guid)

@@ -34,7 +34,7 @@ namespace GameServer.Systems.EntityManager;
 public class EntityManager
 {
     private const byte _serverId = 31;
-    private readonly Shard _shard;
+    private readonly IShard _shard;
     private readonly ILogger _logger;
     private readonly ulong _updateFlushIntervalMs = 5;
     private readonly ulong _scopeInIntervalMs = 20;

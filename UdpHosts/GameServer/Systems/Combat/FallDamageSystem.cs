@@ -172,6 +172,26 @@ public class FallDamageSystem
         }
     }
 
+    private static bool IsAirborneMovestate(Movestate movestate)
+    {
+        return movestate is Movestate.Falling
+            or Movestate.Jetpack
+            or Movestate.JetpackSprint
+            or Movestate.Glider
+            or Movestate.GliderThrusters
+            or Movestate.GliderStalling
+            or Movestate.KnockdownFalling;
+    }
+
+    private static bool IsThrusterMovestate(Movestate movestate)
+    {
+        return movestate is Movestate.Jetpack
+            or Movestate.JetpackSprint
+            or Movestate.Glider
+            or Movestate.GliderThrusters
+            or Movestate.GliderStalling;
+    }
+
     private FallImpactContext BuildImpactContext(CharacterEntity character, MovementPoseData poseData, FallTracker tracker)
     {
         // WaterLevelAndDesc packs ddddllll: the low nibble is the water level at the character.
@@ -198,8 +218,7 @@ public class FallDamageSystem
         // hit feedback shows a sane number instead of the raw scaling result.
         int damage = result.Lethal ? character.CurrentHealth + character.CurrentShields : result.Damage;
 
-        Logger.Information("{Name} hit the ground at {ImpactSpeed} u/s after {AirTime} ms, taking {Damage} fall damage{Lethal}",
-            character, context.ImpactSpeed, context.AirTimeMs, damage, result.Lethal ? " (lethal)" : string.Empty);
+        Logger.Information("{Name} hit the ground at {ImpactSpeed} u/s after {AirTime} ms, taking {Damage} fall damage{Lethal}", character, context.ImpactSpeed, context.AirTimeMs, damage, result.Lethal ? " (lethal)" : string.Empty);
 
         _damage.ApplyDamage(character, damage, character);
 
@@ -228,26 +247,6 @@ public class FallDamageSystem
             ShortTime = _shard.CurrentShortTime,
             Unk2 = 0,
         });
-    }
-
-    private static bool IsAirborneMovestate(Movestate movestate)
-    {
-        return movestate is Movestate.Falling
-            or Movestate.Jetpack
-            or Movestate.JetpackSprint
-            or Movestate.Glider
-            or Movestate.GliderThrusters
-            or Movestate.GliderStalling
-            or Movestate.KnockdownFalling;
-    }
-
-    private static bool IsThrusterMovestate(Movestate movestate)
-    {
-        return movestate is Movestate.Jetpack
-            or Movestate.JetpackSprint
-            or Movestate.Glider
-            or Movestate.GliderThrusters
-            or Movestate.GliderStalling;
     }
 
     private sealed class FallTracker
