@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag, e.g. v1.3.0. Leave blank to derive the version from Directory.Build.props.'
+        required: false
+        default: ''
+      prerelease:
+        description: 'Mark this release as a pre-release'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+jobs:
+  build-and-release:
+    name: Build & Release (Windows x64)
+    runs-on: windows-2025
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve release tag
+        id: tag
+        shell: pwsh
+        run: |
+          if ("${{ github.event.inputs.release_tag }}" -ne "") {
+            $tag = "${{ github.event.inputs.release_tag }}"
+          } else {
+            $match = [regex]::Match((Get-Content -Raw 'Directory.Build.props'), '<Version>([^<]+)</Version>')
+            if ($match.Success) { $tag = "v$($match.Groups[1].Value)" }
+            else { throw "Could not derive a version from Directory.Build.props. Provide release_tag." }
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Resolved release tag: $tag"
+
+      - name: Publish GameServer
+        run: >
+          dotnet publish UdpHosts/GameServer/GameServer.csproj
+          --configuration Release
+          --runtime win-x64
+          --no-self-contained
+          -p:PublishReadyToRun=true
+          -p:DebugType=None -p:DebugSymbols=false
+          -o Publish
+
+      - name: Publish MatrixServer
+        run: >
+          dotnet publish UdpHosts/MatrixServer/MatrixServer.csproj
+          --configuration Release
+          --runtime win-x64
+          --no-self-contained
+          -p:PublishReadyToRun=true
+          -p:DebugType=None -p:DebugSymbols=false
+          -o Publish
+
+      - name: Publish WebHostManager
+        run: >
+          dotnet publish WebHosts/WebHostManager/WebHostManager.csproj
+          --configuration Release
+          --runtime win-x64
+          --no-self-contained
+          -p:PublishReadyToRun=true
+          -p:DebugType=None -p:DebugSymbols=false
+          -o Publish
+
+      - name: Bundle release files
+        shell: pwsh
+        run: |
+          Copy-Item Start.cmd Publish\Start.cmd
+          Copy-Item README.md Publish\README.md
+          Copy-Item CHANGELOG.md Publish\CHANGELOG.md
+          Compress-Archive -Path Publish\* -DestinationPath "PIN-${{ steps.tag.outputs.tag }}-win-x64.zip" -Force
+          Get-ChildItem "PIN-${{ steps.tag.outputs.tag }}-win-x64.zip" | Select-Object Name, Length
+
+      - name: Create or update GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $zip = "PIN-$tag-win-x64.zip"
+          $prerelease = if ("${{ github.event.inputs.prerelease }}" -eq "true") { "--prerelease" } else { "" }
+
+          $existing = gh release view $tag --json tagName 2>$null
+          if ($null -eq $existing) {
+            gh release create $tag $zip --title $tag --generate-notes --target $env:GITHUB_SHA $prerelease
+          } else {
+            Write-Host "Release $tag already exists, updating assets."
+            gh release upload $tag $zip --clobber
+          }
+          Write-Host "Release URL:"
+          gh release view $tag --json url --jq .url
