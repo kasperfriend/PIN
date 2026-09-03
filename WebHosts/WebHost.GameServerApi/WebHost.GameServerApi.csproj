@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <!-- This is a library consumed by WebHostManager, not a standalone app.
+             The Web SDK defaults to Exe and synthesises an entry point, which
+             would clash with WebHostManager's own Main. -->
+        <OutputType>Library</OutputType>
+        <GenerateProgramFile>false</GenerateProgramFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Google.Protobuf" Version="3.34.1" />
+        <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
+        <PackageReference Include="Grpc.Tools" Version="2.76.0">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Lib\Shared.Common\Shared.Common.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Generate the server stubs from the exact same .proto the GameServer
+             generates its client from, so the two can never drift apart.
+             ProtoRoot is required because the file lives outside this project. -->
+        <Protobuf Include="..\..\UdpHosts\GameServer\GRPC\GameServerAPI.proto"
+                  ProtoRoot="..\..\UdpHosts\GameServer\GRPC"
+                  Link="Protos\GameServerAPI.proto"
+                  GrpcServices="Server" />
+    </ItemGroup>
+
+</Project>

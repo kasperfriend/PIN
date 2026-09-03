@@ -32,6 +32,30 @@ https://user-images.githubusercontent.com/920861/134824107-03e9f99c-b420-47c7-b7
     - Otherwise, leave the login fields blank or enter anything you want and click "Login"
 13. Load into the game by pressing the "Enter World" button
 
+### Character persistence
+
+Characters are stored in `characters.json`, created next to the `WebHostManager`
+binary on first run and seeded with the built-in entries. The same store backs
+both the character selection screen and the GRPC `GameServerAPI` the GameServer
+calls on login, so the character you pick is the character you spawn as.
+
+The GRPC endpoint is hosted by `WebHostManager` on port `5201` (plain HTTP/2, no
+TLS) and must match `GrpcChannelAddress` in the GameServer settings. Both are
+configurable:
+
+```json
+"Firefall": {
+  "GameServerApi": {
+    "Port": 5201,
+    "CharacterStorePath": ""
+  }
+}
+```
+
+Leave `CharacterStorePath` empty to use the default location. If `WebHostManager`
+is not running, the GameServer logs a warning and falls back to a hardcoded
+character.
+
 ### GameServer config
 
 `GameServer.config.json` sits next to `GameServer.dll` and holds the Firefall

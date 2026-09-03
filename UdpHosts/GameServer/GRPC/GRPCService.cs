@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,9 +44,42 @@ public static class GRPCService
         await SendCommandAsync(new Command() { SaveGameSessionData = data });
     }
 
+    /// <summary>
+    /// Persist the battleframe the player just switched to, so the selection
+    /// screen and the next login both reflect it.
+    /// </summary>
+    public static async Task SaveCurrentBattleframeAsync(ulong characterId, uint zoneId, uint battleframeSdbId)
+    {
+        var data = new SaveCurrentBattleframe()
+           {
+               CharacterId = characterId, ZoneId = zoneId, BattleframeSDBId = battleframeSdbId
+           };
+
+        await SendCommandAsync(new Command() { SaveCurrentBattleframe = data });
+    }
+
     public static async Task SendCommandAsync(Command command)
     {
-        await _stream.RequestStream.WriteAsync(command);
+        // The stream is only established once ListenAsync connects. Dropping the
+        // command is far better than taking the shard down on a background task.
+        if (_stream == null)
+        {
+            _logger.Warning("Dropping GRPC command {Subtype}, stream is not connected", command.SubtypeCase);
+            return;
+        }
+
+        try
+        {
+            await _stream.RequestStream.WriteAsync(command);
+        }
+        catch (RpcException ex)
+        {
+            _logger.Warning(ex, "Failed to send GRPC command {Subtype}", command.SubtypeCase);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.Warning(ex, "Failed to send GRPC command {Subtype}", command.SubtypeCase);
+        }
     }
 
     public static async Task ListenAsync(ConcurrentDictionary<uint, INetworkPlayer> clientMap, CancellationToken ct)

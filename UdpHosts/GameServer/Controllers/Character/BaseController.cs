@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Numerics;
 using Aero.Protocol;
 using AeroMessages.GSS;
@@ -11,6 +11,7 @@ using GameServer.Entities.Character;
 using GameServer.Entities.Turret;
 using GameServer.Entities.Vehicle;
 using GameServer.Extensions;
+using GameServer.GRPC;
 using GameServer.Packets;
 using GameServer.StaticDB;
 using GameServer.StaticDB.Records.customdata;
@@ -430,6 +431,13 @@ public class BaseController : Base
         {
             var loadout = new CharacterLoadout(loadoutRefData);
             player.CharacterEntity.ApplyLoadout(loadout);
+
+            // Remember the frame so the character selection screen and the next
+            // login show what the player is actually wearing.
+            _ = GRPCService.SaveCurrentBattleframeAsync(
+                    player.CharacterId + 0xFE,
+                    player.CurrentZone?.ID ?? 0,
+                    loadoutRefData.ChassisId);
 
             // Several UI components (like PaperdollSlotting) only refresh when ON_LEVEL_CHANGED fires.
             // Since we dont yet implement progression we just force an update here.

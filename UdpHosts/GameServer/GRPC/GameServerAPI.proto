@@ -102,6 +102,7 @@ message Command {
    oneof subtype {
       SaveGameSessionData SaveGameSessionData = 1;
       SaveLgvRaceFinish SaveLgvRaceFinish = 2;
+      SaveCurrentBattleframe SaveCurrentBattleframe = 3;
    }
 }
 message Event {
@@ -135,6 +136,11 @@ message PlayerBattleframeVisuals {
    repeated int32 decalgradients = 4 [packed = false];
    repeated int32 warpaint_patterns = 5 [packed = false];
    repeated int32 visual_overrides = 6 [packed = false];
+}
+message SaveCurrentBattleframe {
+   uint64 CharacterId = 1;
+   uint32 ZoneId = 2;
+   uint32 BattleframeSDBId = 3;
 }
 message SaveGameSessionData {
    uint64 CharacterId = 1;
