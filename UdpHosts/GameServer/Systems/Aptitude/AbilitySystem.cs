@@ -18,6 +18,15 @@ public class AbilitySystem
     private readonly Dictionary<ulong, DeployableCalldownRequest> _playerDeployableCalldownRequests;
     private readonly Dictionary<ulong, ResourceNodeBeaconCalldownRequest> _playerThumperCalldownRequests;
     private readonly Dictionary<ulong, AbilityState> _entityAbilityStates = [];
+
+    /// <summary>
+    /// Cooldown category per ability id, learned from the activation command of
+    /// the ability chain the first time it runs. <c>dbitems::AbilityModule.UiCategory</c>
+    /// is a UI grouping and is NOT the aptitude cooldown category, so it cannot
+    /// be used to look up category cooldowns.
+    /// </summary>
+    private readonly Dictionary<uint, uint> _abilityCooldownCategories = [];
+
     private ulong _lastUpdate;
 
     public AbilitySystem(Shard shard)
@@ -89,6 +98,26 @@ public class AbilitySystem
         }
 
         return state;
+    }
+
+    /// <summary>
+    /// Records the aptitude cooldown category an ability belongs to, as read
+    /// from its activation command.
+    /// </summary>
+    public void RegisterAbilityCategory(uint abilityId, uint category)
+    {
+        if (abilityId == 0 || category == 0)
+        {
+            return;
+        }
+
+        _abilityCooldownCategories[abilityId] = category;
+    }
+
+    /// <summary>Returns the known aptitude cooldown category of an ability, or <c>0</c>.</summary>
+    public uint GetAbilityCategory(uint abilityId)
+    {
+        return _abilityCooldownCategories.GetValueOrDefault(abilityId);
     }
 
     public bool TryGetState(IAptitudeTarget entity, out AbilityState state)
@@ -355,6 +384,14 @@ public class AbilitySystem
         if (!TryGetState(entity, out var state))
         {
             return true;
+        }
+
+        // Prefer the aptitude cooldown category learned from the ability's
+        // activation command; the caller may only know the UI category.
+        uint knownCategory = GetAbilityCategory(abilityId);
+        if (knownCategory != 0)
+        {
+            category = knownCategory;
         }
 
         var blocking = state.GetActiveCooldown(abilityId, category, time);

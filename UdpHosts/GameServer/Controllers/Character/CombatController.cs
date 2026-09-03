@@ -300,7 +300,12 @@ public class CombatController : Base
         uint now = shard.CurrentTime;
 
         var group1 = new List<ActiveCooldown>();
-        uint globalReadyAgain = activationTime + 300;
+        var group2 = new List<ActiveCooldown>();
+
+        // The cooldown entries are kept in shard time, so the global cooldown
+        // window has to be expressed in shard time too - mixing in the
+        // client-supplied activation time makes the client timer jump.
+        uint globalReadyAgain = now + 300;
         foreach (var entry in state.Cooldowns)
         {
             if (!entry.IsActive(now))
@@ -308,22 +313,28 @@ public class CombatController : Base
                 continue;
             }
 
-            if (entry.Kind == AbilityCooldownKind.Local)
+            switch (entry.Kind)
             {
-                group1.Add(entry.ToActiveCooldown());
-            }
-            else if (entry.Kind == AbilityCooldownKind.Global)
-            {
-                globalReadyAgain = Math.Max(globalReadyAgain, entry.ReadyAgainTime);
+                case AbilityCooldownKind.Local:
+                    group1.Add(entry.ToActiveCooldown());
+                    break;
+                case AbilityCooldownKind.Category:
+                    group2.Add(entry.ToActiveCooldown());
+                    break;
+                case AbilityCooldownKind.Global:
+                    globalReadyAgain = Math.Max(globalReadyAgain, entry.ReadyAgainTime);
+                    break;
+                default:
+                    break;
             }
         }
 
         return new AbilityCooldownsData
         {
             ActiveCooldowns_Group1 = group1.ToArray(),
-            ActiveCooldowns_Group2 = Array.Empty<ActiveCooldown>(),
+            ActiveCooldowns_Group2 = group2.ToArray(),
             Unk = 0,
-            GlobalCooldown_Activated_Time = activationTime,
+            GlobalCooldown_Activated_Time = now,
             GlobalCooldown_ReadyAgain_Time = globalReadyAgain,
         };
     }
