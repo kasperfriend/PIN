@@ -207,6 +207,7 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         // first hit after a respawn would instantly down the character again.
         CharacterEntity.SetMaxHealth(HardcodedCharacterData.MaxHealth, resetCurrent: true);
         CharacterEntity.SetCurrentShields(0);
+        AssignedShard.Abilities?.ResetEnergy(CharacterEntity);
 
         baseController.ZoneUnlocksProp = 0xFFFFFFFFFFFFFFFFUL;
         baseController.RegionUnlocksProp = 0xFFFFFFFFFFFFFFFFUL;

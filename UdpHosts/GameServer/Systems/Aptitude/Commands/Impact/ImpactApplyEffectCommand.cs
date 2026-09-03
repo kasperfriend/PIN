@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using GameServer.StaticDB.Records.apt;
 
 namespace GameServer.Systems.Aptitude.Commands.Impact;
@@ -14,12 +15,14 @@ public class ImpactApplyEffectCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
-        Context effectContext = new Context(context.Shard, context.Initiator)
-        {
-            ExecutionId = context.ExecutionId,
-            InitTime = context.InitTime,
-            ExecutionHint = ExecutionHint.ApplyEffect
-        };
+        // Effects are part of the activation graph. Copy the complete
+        // activation context so nested energy spends, module power, and
+        // deferred cooldowns remain associated with the root caster.
+        Context effectContext = Context.CopyContext(context);
+        effectContext.Targets = new AptitudeTargets();
+        effectContext.FormerTargets = new AptitudeTargets();
+        effectContext.TargetStack = new Stack<AptitudeTargets>();
+        effectContext.ExecutionHint = ExecutionHint.ApplyEffect;
 
         if (Params.InheritInitPos == 1)
         {
@@ -95,21 +98,22 @@ public class ImpactApplyEffectCommand : Command, ICommand
                 });
             }
 
-            context.Abilities.DoApplyEffect(Params.EffectId, context.Self, effectContext);
+            return context.Abilities.DoApplyEffect(Params.EffectId, context.Self, effectContext);
         }
-        else
-        {
-            if (Params.RemoveOnRollback == 1)
-            {
-                context.Actives.Add(this, new RemoveOnRollbackCommandActiveContext()
-                {
-                    Targets = context.Targets
-                });
-            }
 
-            foreach (IAptitudeTarget target in context.Targets)
+        if (Params.RemoveOnRollback == 1)
+        {
+            context.Actives.Add(this, new RemoveOnRollbackCommandActiveContext()
             {
-                context.Abilities.DoApplyEffect(Params.EffectId, target, effectContext);
+                Targets = context.Targets
+            });
+        }
+
+        foreach (IAptitudeTarget target in context.Targets)
+        {
+            if (!context.Abilities.DoApplyEffect(Params.EffectId, target, effectContext))
+            {
+                return false;
             }
         }
 

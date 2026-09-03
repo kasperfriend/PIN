@@ -464,10 +464,29 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         SetArmyIsOfficer((sbyte)(info.ArmyIsOfficer ? 1 : 0));
     }
 
+    private void UpdateEnergyParamsFromBattleframe(uint chassisId)
+    {
+        var battleframe = SDBInterface.GetBattleframe(chassisId);
+        if (battleframe == null)
+        {
+            return;
+        }
+
+        EnergyParams = new EnergyParamsData
+        {
+            Max = battleframe.BaseEnergy > 0f ? battleframe.BaseEnergy : EnergyParams.Max,
+            Delay = battleframe.EnergyRechargeDelayMs != 0 ? battleframe.EnergyRechargeDelayMs : EnergyParams.Delay,
+            Recharge = battleframe.EnergyRechargePerSec > 0f ? battleframe.EnergyRechargePerSec : EnergyParams.Recharge,
+            Time = Shard.CurrentTime,
+        };
+        Character_BaseController?.EnergyParamsProp = EnergyParams;
+    }
+
     public void ApplyLoadout(CharacterLoadout loadout)
     {
-        Shard.Admin.ApplyEquipmentOverrides(Player, loadout);
+        Shard.Admin?.ApplyEquipmentOverrides(Player, loadout);
         CurrentLoadout = loadout;
+        UpdateEnergyParamsFromBattleframe(loadout.ChassisID);
         RebuildWeaponDetailsCache(loadout);
 
         var emptyVisuals = new VisualsBlock

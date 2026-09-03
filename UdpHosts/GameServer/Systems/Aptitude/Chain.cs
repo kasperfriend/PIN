@@ -45,9 +45,31 @@ public class Chain
                     _logger.Debug("Chain {ChainId} Command {CommandId} - Executing {CommandName}", Id, command.Id, hasMoreInfo ? command : command.GetType().Name);
                 }
 
-                bool commandSuccess = command.Execute(context);
+                var commandCheckpoint = context.EnergyTransaction?.IsActive == true
+                    ? context.EnergyTransaction.CreateCheckpoint()
+                    : null;
+                bool commandSuccess;
+                try
+                {
+                    commandSuccess = command.Execute(context);
+                }
+                catch
+                {
+                    if (commandCheckpoint != null)
+                    {
+                        context.EnergyTransaction.RollbackTo(commandCheckpoint);
+                    }
+
+                    throw;
+                }
+
                 if (!commandSuccess)
                 {
+                    if (commandCheckpoint != null)
+                    {
+                        context.EnergyTransaction.RollbackTo(commandCheckpoint);
+                    }
+
                     chainSuccess = false;
                     break;
                 }
@@ -67,11 +89,33 @@ public class Chain
                     _logger.Debug("Chain {ChainId} Command {CommandId} - Executing {CommandName}", Id, command.Id, hasMoreInfo ? command : command.GetType().Name);
                 }
 
-                bool commandSuccess = command.Execute(context);
+                var commandCheckpoint = context.EnergyTransaction?.IsActive == true
+                    ? context.EnergyTransaction.CreateCheckpoint()
+                    : null;
+                bool commandSuccess;
+                try
+                {
+                    commandSuccess = command.Execute(context);
+                }
+                catch
+                {
+                    if (commandCheckpoint != null)
+                    {
+                        context.EnergyTransaction.RollbackTo(commandCheckpoint);
+                    }
+
+                    throw;
+                }
+
                 if (commandSuccess)
                 {
                     chainSuccess = true;
                     break; // Note: Should further research to confirm if this is correct
+                }
+
+                if (commandCheckpoint != null)
+                {
+                    context.EnergyTransaction.RollbackTo(commandCheckpoint);
                 }
             }
 

@@ -1,4 +1,4 @@
-﻿using GameServer.StaticDB.Records.apt;
+using GameServer.StaticDB.Records.apt;
 
 namespace GameServer.Systems.Aptitude.Commands.Activation;
 
@@ -15,9 +15,10 @@ public class StagedActivationCommand : Command, ICommand
     public bool Execute(Context context)
     {
         // PassRegister and PassBonus are not handled, but they're 0 for all instances; AllowPrediction is client-side
-        if (Params.SelfEffectId != 0)
+        if (Params.SelfEffectId != 0
+            && !context.Abilities.DoApplyEffect(Params.SelfEffectId, context.Self, context))
         {
-            context.Shard.Abilities.DoApplyEffect(Params.SelfEffectId, context.Self, context);
+            return false;
         }
 
         return true;

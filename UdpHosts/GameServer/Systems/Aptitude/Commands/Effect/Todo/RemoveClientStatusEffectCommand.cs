@@ -16,13 +16,14 @@ public class RemoveClientStatusEffectCommand : Command, ICommand
     {
         if (Params.ApplyToSelf == 1)
         {
-            context.Abilities.DoRemoveEffect(context.Self, Params.StatusEffectId);
+            return context.Abilities.DoRemoveEffect(context.Self, Params.StatusEffectId);
         }
-        else
+
+        foreach (IAptitudeTarget target in context.Targets)
         {
-            foreach (IAptitudeTarget target in context.Targets)
+            if (!context.Abilities.DoRemoveEffect(target, Params.StatusEffectId))
             {
-                context.Abilities.DoRemoveEffect(target, Params.StatusEffectId);
+                return false;
             }
         }
 
