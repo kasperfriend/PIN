@@ -66,14 +66,14 @@ public class EntityManager
         return _scopedPlayersByEntity.TryGetValue(entityId, out var players) && players.Contains(player);
     }
 
-    public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null, bool canBleedout = false, Quaternion orientation = Quaternion.Identity)
+    public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null, bool canBleedout = false, Quaternion? orientation = null)
     {
         var characterEntity = new CharacterEntity(_shard, _shard.GetNextGuid(), owner);
         characterEntity.LoadMonster(typeId);
         characterEntity.CanBleedout = canBleedout;
         characterEntity.SetCharacterState(CharacterStateData.CharacterStatus.Living, _shard.CurrentTime);
         characterEntity.SetPosition(position);
-        characterEntity.SetOrientation(orientation);
+        characterEntity.SetOrientation(orientation ?? Quaternion.Identity);
         characterEntity.SetSpawnPose();
         _shard.Physics.CreateKineticEntity(characterEntity);
         _shard.Physics.UpdateEntity(characterEntity);
