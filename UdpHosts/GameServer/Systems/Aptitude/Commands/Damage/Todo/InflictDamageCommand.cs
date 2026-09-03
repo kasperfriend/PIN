@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.Entities.Deployable;
 using GameServer.Enums;
@@ -83,7 +82,7 @@ public class InflictDamageCommand : Command, ICommand
                     continue;
                 }
 
-                if (pair.Value is not IEntity splashTarget || ReferenceEquals(splashTarget, attacker))
+                if (pair.Value is not IAptitudeTarget splashTarget || ReferenceEquals(splashTarget, attacker))
                 {
                     continue;
                 }

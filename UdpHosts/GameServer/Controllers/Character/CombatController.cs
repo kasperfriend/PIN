@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -282,6 +282,39 @@ public class CombatController : Base
         }
     }
 
+    private static AbilityCooldownsData BuildAbilityCooldownsData(IShard shard, AbilityState state, uint activationTime)
+    {
+        uint now = shard.CurrentTime;
+
+        var group1 = new List<ActiveCooldown>();
+        uint globalReadyAgain = activationTime + 300;
+        foreach (var entry in state.Cooldowns)
+        {
+            if (!entry.IsActive(now))
+            {
+                continue;
+            }
+
+            if (entry.Kind == AbilityCooldownKind.Local)
+            {
+                group1.Add(entry.ToActiveCooldown());
+            }
+            else if (entry.Kind == AbilityCooldownKind.Global)
+            {
+                globalReadyAgain = Math.Max(globalReadyAgain, entry.ReadyAgainTime);
+            }
+        }
+
+        return new AbilityCooldownsData
+        {
+            ActiveCooldowns_Group1 = group1.ToArray(),
+            ActiveCooldowns_Group2 = Array.Empty<ActiveCooldown>(),
+            Unk = 0,
+            GlobalCooldown_Activated_Time = activationTime,
+            GlobalCooldown_ReadyAgain_Time = globalReadyAgain,
+        };
+    }
+
     /// <summary>
     /// Acknowledges an ability activation (or its failure) with the cooldown
     /// payload the client uses to show the ability timer and gate re-use.
@@ -316,38 +349,5 @@ public class CombatController : Base
                    .Information("AbilityFailed {FailedAbilityId} at {ActivationTime}", message.FailedAbilityId, activationTime);
             character.Player.NetChannels[ChannelType.ReliableGss].SendMessage(message, character.EntityId);
         }
-    }
-
-    private static AbilityCooldownsData BuildAbilityCooldownsData(IShard shard, AbilityState state, uint activationTime)
-    {
-        uint now = shard.CurrentTime;
-
-        var group1 = new List<ActiveCooldown>();
-        uint globalReadyAgain = activationTime + 300;
-        foreach (var entry in state.Cooldowns)
-        {
-            if (!entry.IsActive(now))
-            {
-                continue;
-            }
-
-            if (entry.Kind == AbilityCooldownKind.Local)
-            {
-                group1.Add(entry.ToActiveCooldown());
-            }
-            else if (entry.Kind == AbilityCooldownKind.Global)
-            {
-                globalReadyAgain = Math.Max(globalReadyAgain, entry.ReadyAgainTime);
-            }
-        }
-
-        return new AbilityCooldownsData
-        {
-            ActiveCooldowns_Group1 = group1.ToArray(),
-            ActiveCooldowns_Group2 = Array.Empty<ActiveCooldown>(),
-            Unk = 0,
-            GlobalCooldown_Activated_Time = activationTime,
-            GlobalCooldown_ReadyAgain_Time = globalReadyAgain,
-        };
     }
 }

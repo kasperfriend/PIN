@@ -31,6 +31,40 @@ public class AbilitySystem
 
     public Factory Factory { get; }
 
+    public static float RegistryOp(float first, float second, Operand op)
+    {
+        if (float.IsNaN(first))
+        {
+            return second;
+        }
+
+        switch (op)
+        {
+            case Operand.ASSIGN:
+                return second;
+            case Operand.ADD:
+            case Operand.ADD_ALT:
+                return second + first;
+            case Operand.MULTIPLY:
+            case Operand.MULTIPLY_ALT:
+                return second * first;
+            case Operand.EXPONENTIATE:
+                _logger.Debug("Uncertain RegistryOp {op}. {second} ^ {first} = {result}", op, second, first, (float)Math.Pow(second, first));
+                return (float)Math.Pow(second, first);
+            case Operand.SUBTRACT:
+                return second - first;
+            case Operand.DIVIDE:
+                return second / first;
+            case Operand.MINIMUM:
+                return (first <= second) ? first : second;
+            case Operand.MAXIMUM:
+                return (first >= second) ? first : second;
+            default:
+                _logger.Warning("Unknown RegistryOp {op}", op);
+                return second;
+        }
+    }
+
     /// <summary>Returns the (created on first use) cooldown/energy state of an aptitude entity.</summary>
     public AbilityState GetOrAddState(IAptitudeTarget entity)
     {
@@ -65,40 +99,6 @@ public class AbilitySystem
     public bool TryGetState(ulong entityId, out AbilityState state)
     {
         return _entityAbilityStates.TryGetValue(entityId, out state);
-    }
-
-    public static float RegistryOp(float first, float second, Operand op)
-    {
-        if (float.IsNaN(first))
-        {
-            return second;
-        }
-
-        switch (op)
-        {
-            case Operand.ASSIGN:
-                return second;
-            case Operand.ADD:
-            case Operand.ADD_ALT:
-                return second + first;
-            case Operand.MULTIPLY:
-            case Operand.MULTIPLY_ALT:
-                return second * first;
-            case Operand.EXPONENTIATE:
-                _logger.Debug("Uncertain RegistryOp {op}. {second} ^ {first} = {result}", op, second, first, (float)Math.Pow(second, first));
-                return (float)Math.Pow(second, first);
-            case Operand.SUBTRACT:
-                return second - first;
-            case Operand.DIVIDE:
-                return second / first;
-            case Operand.MINIMUM:
-                return (first <= second) ? first : second;
-            case Operand.MAXIMUM:
-                return (first >= second) ? first : second;
-            default:
-                _logger.Warning("Unknown RegistryOp {op}", op);
-                return second;
-        }
     }
 
     public void Tick(double deltaTime, ulong currentTime, CancellationToken ct)

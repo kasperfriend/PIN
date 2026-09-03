@@ -112,8 +112,10 @@ public class FireProjectileCommand : Command, ICommand
             Vector3 aimForward = direction;
             Vector3 aimRight = Vector3.Normalize(Vector3.Cross(aimForward, Vector3.UnitZ));
             Vector3 aimUp = Vector3.Normalize(Vector3.Cross(aimRight, aimForward));
-            PRNG.Spread(time, (byte)Params.Hardpoint, bullet, aimForward, aimRight, aimUp, Params.Spread, Vector3.Zero, time, out Vector3 spreadDirection);
-            uint trace = PRNG.Trace(time, bullet);
+            // The PRNG namespace shadows the PRNG type, so reach the class through
+            // the fully qualified namespace (same pattern as WeaponSim).
+            PRNG.PRNG.Spread(time, (byte)Params.Hardpoint, bullet, aimForward, aimRight, aimUp, Params.Spread, Vector3.Zero, time, out Vector3 spreadDirection);
+            uint trace = PRNG.PRNG.Trace(time, bullet);
             context.Shard.ProjectileSim.FireProjectile(shooter, trace, origin, spreadDirection, ammo, range, speed, ammo.ImpactRadius, ammo.MaxRadius, damageInt);
         }
 
