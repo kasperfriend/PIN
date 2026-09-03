@@ -17,6 +17,8 @@
   - Melding Repulsor
 - Add Bepu as physics engine
 - Auto-detect the Firefall installation and populate `GameServer.config.json` paths on startup (via Steam libraries, `libraryfolders.vdf`, or `PIN_FIREFALL_PATH` / `PIN_STEAM_PATH`)
+- Implement the server side of the gRPC `GameServerAPI` (`WebHost.GameServerApi`, hosted by `WebHostManager` on port 5201), so the GameServer can actually load character data instead of always falling back
+- Persist characters to `characters.json`, shared by the character selection screen and the GameServer
 
 ### Changed
 
@@ -25,6 +27,7 @@
 
 ### Fixed
 
+- Fix the character selection screen and the in-game character not matching (selection showed a female Raptor while the game spawned a male Mammoth, because the two were built from separate hardcoded blobs and the gRPC lookup that was meant to reconcile them had no server implementation)
 - Fix Firefall auto-detection failing for every Steam library listed in `libraryfolders.vdf` (Steam stores the library root folder such as `D:\SteamLibrary`, not the `steamapps` folder, so all entries were rejected)
 - Find Steam installations outside `Program Files` through the Windows registry, and standalone Firefall installs under `Program Files`
 - Stop empty values in `GameServer.config.json` from overriding paths configured in the legacy `App.config`

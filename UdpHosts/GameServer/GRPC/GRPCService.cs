@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
@@ -45,7 +46,26 @@ public static class GRPCService
 
     public static async Task SendCommandAsync(Command command)
     {
-        await _stream.RequestStream.WriteAsync(command);
+        // The stream is only established once ListenAsync connects. Dropping the
+        // command is far better than taking the shard down on a background task.
+        if (_stream == null)
+        {
+            _logger.Warning("Dropping GRPC command {Subtype}, stream is not connected", command.SubtypeCase);
+            return;
+        }
+
+        try
+        {
+            await _stream.RequestStream.WriteAsync(command);
+        }
+        catch (RpcException ex)
+        {
+            _logger.Warning(ex, "Failed to send GRPC command {Subtype}", command.SubtypeCase);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.Warning(ex, "Failed to send GRPC command {Subtype}", command.SubtypeCase);
+        }
     }
 
     public static async Task ListenAsync(ConcurrentDictionary<uint, INetworkPlayer> clientMap, CancellationToken ct)

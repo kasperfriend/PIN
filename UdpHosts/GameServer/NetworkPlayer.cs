@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Numerics;
 using System.Threading;
@@ -73,9 +73,10 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         {
             remoteData = await GRPCService.GetCharacterAndBattleframeVisualsAsync((long)characterId);
         }
-        catch
+        catch (Exception ex)
         {
-            Logger.ForContext(typeof(GRPCService)).Warning("Could not get character over GRPC, will use fallback");
+            Logger.ForContext(typeof(GRPCService))
+                  .Warning(ex, "Could not get character over GRPC, will use fallback. Is WebHostManager running?");
         }
 
         // Load inventory so we get loadouts
@@ -91,6 +92,15 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
 
             // Todo: load inventory from db so we can use those loadouts
             loadoutId = Inventory.GetLoadoutIdForChassis(remoteData.CharacterInfo.CurrentBattleframeSDBId);
+
+            if (loadoutId == 0)
+            {
+                Logger.Warning(
+                    "No loadout for battleframe {Battleframe}, falling back to {Fallback}",
+                    remoteData.CharacterInfo.CurrentBattleframeSDBId,
+                    HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
+                loadoutId = Inventory.GetLoadoutIdForChassis(HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
+            }
         }
         else
         {
@@ -116,20 +126,21 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         var wel = new WelcomeToTheMatrix { PlayerID = PlayerId, Unk1 = [], Unk2 = [] };
         NetChannels[ChannelType.Matrix].SendMessage(wel);
 
-        Zone zone;
-        uint zoneId;
+        // The entries in the character selection screen double as a zone picker:
+        // the zone id is encoded in the low 16 bits of the character guid. Honour
+        // that regardless of where the character data came from, otherwise picking
+        // an entry would no longer take you to the matching zone.
+        var zoneId = (uint)(characterId & 0x000000000000ffff);
+        var zone = DataUtils.GetZone(zoneId);
         uint outpostId;
 
-        if (remoteData != null)
+        if (remoteData != null && remoteData.CharacterInfo.LastZoneId == zoneId)
         {
-            zoneId = AssignedShard.ZoneId;
-            zone = DataUtils.GetZone(zoneId);
-            outpostId = remoteData.CharacterInfo.LastZoneId == zoneId ? FindClosestAvailableOutpost(zone, remoteData.CharacterInfo.LastOutpostId) : 0;
+            // Returning to the zone we logged out in, so drop in where we left off.
+            outpostId = FindClosestAvailableOutpost(zone, remoteData.CharacterInfo.LastOutpostId);
         }
         else
         {
-            zoneId = (uint)(characterId & 0x000000000000ffff);
-            zone = DataUtils.GetZone(zoneId);
             outpostId = zone.DefaultOutpostId;
         }
 

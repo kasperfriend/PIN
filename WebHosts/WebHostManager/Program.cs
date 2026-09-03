@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using Shared.Web;
 using WebHost.Chat;
+using WebHost.GameServerApi;
 
 namespace WebHostManager;
 
@@ -38,7 +39,11 @@ internal static class Program
             Log.Information("Starting Web Hosts");
             var ct = CancellationToken.None;
 
-            var hostsTasks = StartHosts(ct);
+            var hostsTasks = StartHosts(ct).ToList();
+
+            // The GRPC GameServerAPI is hosted separately from the REST web hosts
+            // because it needs HTTP/2 cleartext rather than the shared TLS setup.
+            hostsTasks.Add(GameServerApiHost.Build(Configuration).RunAsync(ct));
 
             Log.Information("All Web Hosts started, waiting for all to stop or break/kill signal. (Ctrl-c on Windows)");
 

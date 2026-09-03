@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <ItemGroup>
+        <PackageReference Include="Google.Protobuf" Version="3.34.1" />
+        <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
+        <PackageReference Include="Grpc.Tools" Version="2.76.0">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Lib\Shared.Common\Shared.Common.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Generate the server stubs from the exact same .proto the GameServer
+             generates its client from, so the two can never drift apart. -->
+        <Protobuf Include="..\..\UdpHosts\GameServer\GRPC\GameServerAPI.proto"
+                  Link="Protos\GameServerAPI.proto"
+                  GrpcServices="Server" />
+    </ItemGroup>
+
+</Project>

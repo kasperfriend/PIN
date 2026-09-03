@@ -37,6 +37,7 @@
         <ProjectReference Include="..\WebHost.CatchAll\WebHost.CatchAll.csproj" />
         <ProjectReference Include="..\WebHost.Chat\WebHost.Chat.csproj" />
         <ProjectReference Include="..\WebHost.ClientApi\WebHost.ClientApi.csproj" />
+        <ProjectReference Include="..\WebHost.GameServerApi\WebHost.GameServerApi.csproj" />
         <ProjectReference Include="..\WebHost.InGameApi\WebHost.InGameApi.csproj" />
         <ProjectReference Include="..\WebHost.Market\WebHost.Market.csproj" />
         <ProjectReference Include="..\WebHost.OperatorApi\WebHost.OperatorApi.csproj" />
