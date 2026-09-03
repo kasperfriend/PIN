@@ -376,41 +376,6 @@ public class AbilitySystem
         return success;
     }
 
-    /// <summary>
-    /// Starts the cooldowns queued by the activation node once the chain has
-    /// succeeded. Cooldowns are deliberately not started inside the activation
-    /// command: an ability that fails a later requirement (for example not
-    /// enough energy) must not go on cooldown.
-    /// <para>
-    /// The pending list is shared with copied contexts, so cooldowns queued by
-    /// nested chains (branches, applied effects) are committed with the
-    /// activation they belong to.
-    /// </para>
-    /// </summary>
-    private void CommitActivationCooldowns(Context context, bool success)
-    {
-        if (!success || context.PendingCooldowns.Count == 0)
-        {
-            return;
-        }
-
-        uint time = _shard.CurrentTime;
-        var state = context.Abilities.GetOrAddState(context.Self);
-        foreach (var request in context.PendingCooldowns)
-        {
-            var entry = state.StartCooldown(request.Kind, request.AbilityId, request.Category, request.DurationMs, time);
-            if (entry != null)
-            {
-                _logger.Debug(
-                    "Started {Kind} cooldown for ability {AbilityId} (category {Category}) for {Duration}ms",
-                    request.Kind,
-                    request.AbilityId,
-                    request.Category,
-                    entry.ReadyAgainTime - entry.ActivatedTime);
-            }
-        }
-    }
-
     public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId)
     {
         return HandleActivateAbility(shard, initiator, abilityId, _shard.CurrentTime, new AptitudeTargets());
@@ -459,5 +424,40 @@ public class AbilitySystem
     public void HandleActivateConsumable()
     {
         throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Starts the cooldowns queued by the activation node once the chain has
+    /// succeeded. Cooldowns are deliberately not started inside the activation
+    /// command: an ability that fails a later requirement (for example not
+    /// enough energy) must not go on cooldown.
+    /// <para>
+    /// The pending list is shared with copied contexts, so cooldowns queued by
+    /// nested chains (branches, applied effects) are committed with the
+    /// activation they belong to.
+    /// </para>
+    /// </summary>
+    private void CommitActivationCooldowns(Context context, bool success)
+    {
+        if (!success || context.PendingCooldowns.Count == 0)
+        {
+            return;
+        }
+
+        uint time = _shard.CurrentTime;
+        var state = context.Abilities.GetOrAddState(context.Self);
+        foreach (var request in context.PendingCooldowns)
+        {
+            var entry = state.StartCooldown(request.Kind, request.AbilityId, request.Category, request.DurationMs, time);
+            if (entry != null)
+            {
+                _logger.Debug(
+                    "Started {Kind} cooldown for ability {AbilityId} (category {Category}) for {Duration}ms",
+                    request.Kind,
+                    request.AbilityId,
+                    request.Category,
+                    entry.ReadyAgainTime - entry.ActivatedTime);
+            }
+        }
     }
 }
