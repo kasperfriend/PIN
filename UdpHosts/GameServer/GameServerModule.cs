@@ -1,6 +1,8 @@
-﻿using System;
+using System;
 using System.Configuration;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Aero.Protocol;
 using Autofac;
 using GameServer.Logging;
@@ -146,6 +148,8 @@ public class GameServerModule : Module
                 }
             }
 
+            ApplyPathSettingsFromFile(settings);
+
             ResolveProtocolVersions(settings);
 
             return settings;
@@ -256,6 +260,19 @@ public class GameServerModule : Module
         {
             var settings = ctx.Resolve<GameServerSettings>();
 
+            if (string.IsNullOrWhiteSpace(settings.StaticDBPath))
+            {
+                throw new InvalidOperationException(
+                    "StaticDBPath is not configured. Edit GameServer.config.json next to GameServer.dll and set \"StaticDBPath\" to the full path of clientdb.sd2.");
+            }
+
+            if (!File.Exists(settings.StaticDBPath))
+            {
+                throw new FileNotFoundException(
+                    $"StaticDB file not found at '{settings.StaticDBPath}'. Set \"StaticDBPath\" in GameServer.config.json to the correct clientdb.sd2 path.",
+                    settings.StaticDBPath);
+            }
+
             Log.ForContext<SDBInterface>().Information("Opening SDB from {StaticDBPath}", settings.StaticDBPath);
             var sdb = new SDB();
             sdb.Read(settings.StaticDBPath);
@@ -263,6 +280,71 @@ public class GameServerModule : Module
             return sdb;
         })
         .As<SDB>().SingleInstance();
+    }
+
+    /// <summary>
+    ///     Applies installation paths from GameServer.config.json.
+    ///     The file is optional; when present its path values override the legacy App.config values.
+    /// </summary>
+    private static void ApplyPathSettingsFromFile(GameServerSettings settings)
+    {
+        var configPath = FindConfigFile();
+        if (configPath == null)
+        {
+            return;
+        }
+
+        GameServerConfigFile config;
+        try
+        {
+            var json = File.ReadAllText(configPath);
+            config = JsonSerializer.Deserialize<GameServerConfigFile>(
+                json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex) when (ex is IOException or JsonException)
+        {
+            throw new InvalidOperationException(
+                $"Could not read configuration file '{configPath}'. Fix or remove it and try again.",
+                ex);
+        }
+
+        if (config == null)
+        {
+            throw new InvalidOperationException(
+                $"Configuration file '{configPath}' does not contain valid JSON.");
+        }
+
+        if (config.StaticDBPath != null)
+        {
+            settings.StaticDBPath = config.StaticDBPath;
+        }
+
+        if (config.MapsPath != null)
+        {
+            settings.MapsPath = config.MapsPath;
+        }
+
+        if (config.AssetDBPath != null)
+        {
+            settings.AssetDBPath = config.AssetDBPath;
+        }
+
+        if (config.CachePath != null)
+        {
+            settings.CachePath = config.CachePath;
+        }
+    }
+
+    /// <summary>
+    ///     Locate GameServer.config.json in the working directory or next to the executable.
+    /// </summary>
+    private static string FindConfigFile()
+    {
+        return new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory }
+            .Select(directory => Path.Combine(directory, "GameServer.config.json"))
+            .Distinct()
+            .FirstOrDefault(File.Exists);
     }
 
     /// <summary>

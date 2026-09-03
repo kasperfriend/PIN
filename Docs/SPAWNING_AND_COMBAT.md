@@ -23,6 +23,10 @@ UdpHosts/GameServer/StaticDB/CustomData/
 
 and is loaded through `CustomDBLoader` / `CustomDBInterface`.
 
+The path to `clientdb.sd2` (and the `maps` / `assetdb` directories) is read from
+`GameServer.config.json` next to `GameServer.dll`; edit that file instead of hardcoding
+paths in source.
+
 ### `Tools/MinimalSDB/`
 
 Reads a full `clientdb.sd2`, keeps only the tables the server loader actually

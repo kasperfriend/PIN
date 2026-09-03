@@ -67,19 +67,22 @@ public class GameServerSettings
     public string GrpcChannelAddress { get; set; } = "http://localhost:5201";
 
     /// <summary>
-    ///    File path to "clientdb.sd2" located in the "db" folder of the Firefall installation
+    ///    File path to "clientdb.sd2" located in the "db" folder of the Firefall installation.
+    ///    Configured through GameServer.config.json (or App.config / GameServer.dll.config as a fallback).
     /// </summary>
-    public string StaticDBPath { get; set; } = @"C:\Program Files\Steam\steamapps\common\Firefall\system\db\clientdb.sd2";
+    public string StaticDBPath { get; set; } = string.Empty;
 
     /// <summary>
-    ///    Directory path to the "maps" folder of the Firefall installation
+    ///    Directory path to the "maps" folder of the Firefall installation.
+    ///    Configured through GameServer.config.json (or App.config / GameServer.dll.config as a fallback).
     /// </summary>
-    public string MapsPath { get; set; } = @"C:\Program Files\Steam\steamapps\common\Firefall\system\maps";
+    public string MapsPath { get; set; } = string.Empty;
 
     /// <summary>
-    ///    Directory path to the "assetdb" folder of the Firefall installation
+    ///    Directory path to the "assetdb" folder of the Firefall installation.
+    ///    Configured through GameServer.config.json (or App.config / GameServer.dll.config as a fallback).
     /// </summary>
-    public string AssetDBPath { get; set; } = @"C:\Program Files\Steam\steamapps\common\Firefall\system\assetdb";
+    public string AssetDBPath { get; set; } = string.Empty;
 
     /// <summary>
     ///    Directory path for collision cache files (.bincache, .rbcache). The cache can be pregenerated with the CollisionGenerator tool.
