@@ -50,5 +50,7 @@ python3 selftest.py
 
 ## Note on the real file
 
-`clientdb.sd2` is game data taken from a Firefall installation; it is not
-committed to this repository. Point the tool at your own copy.
+`clientdb.sd2` is game data taken from a Firefall installation. A decoded copy
+of build `prod-1962` (split zip parts under `Tools/`) is used as the reference
+input for `Docs/MOBS_AND_NPCS.md`; the extracted `.sd2` itself stays out of
+Git. Point the tool at your own copy for anything else.

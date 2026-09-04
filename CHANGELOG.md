@@ -7,6 +7,7 @@
 - Implement fall damage: `FallDamageSystem` tracks each player's airborne samples from the client authoritative movement inputs and applies damage on landing based on the fastest downward speed of the fall (water landings, thruster/glider use, knockdown falls and the `immune_falldamage` combat flag negate it; lethal at very high impact speeds)
 - Add a `GameServer.Tests` xUnit project covering `FallDamageMath`, `FallDamageSystem`, `DamageSystem`, `CharacterLifecycleService` and the `CharacterEntity` vital clamping; CI now runs `dotnet test`
 - Add player facing health debug commands to the in-game chat: `\health`, `\hurt <amount>`, `\heal <amount>`, `\fall <speed>`, `\down`, `\revive`, `\kill`, `\respawn`, so the health system can be exercised without enemies
+- Add `Tools/SdbDump`, a standalone decoder for `clientdb.sd2` (port of the FauFau StaticDB format logic PIN loads data through, verified by a round-trip self-test), and `Docs/MOBS_AND_NPCS.md` cataloging every mob/NPC in the database (build `prod-1962`: 3,109 monster rows, 1,772 of them named, grouped by faction) plus turrets and the per-level scaling table
 - Add support for StyleCop & .NET Analyzers
 - Use RIN via gRPC for the player management
 - Add many items to the game
