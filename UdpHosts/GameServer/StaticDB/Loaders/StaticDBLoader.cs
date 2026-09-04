@@ -9,6 +9,7 @@ using Records.aptfs;
 using Records.dbcharacter;
 using Records.dbencounterdata;
 using Records.dbitems;
+using Records.dblocalization;
 using Records.dbphysicsmaterials;
 using Records.dbvisualrecords;
 using Records.dbzonemetadata;
@@ -1403,6 +1404,18 @@ public class StaticDBLoader : ISDBLoader
     {
         return LoadStaticDB<LevelBand>("dbitems::LevelBand")
             .ToDictionary(row => row.Id);
+    }
+
+    public Dictionary<uint, LocalizedText> LoadLocalizedText()
+    {
+        return LoadStaticDB<LocalizedText>("dblocalization::LocalizedText")
+            .ToDictionary(row => row.Id);
+    }
+
+    public Dictionary<uint, MonsterScaling> LoadMonsterScaling()
+    {
+        return LoadStaticDB<MonsterScaling>("dbcharacter::MonsterScaling")
+            .ToDictionary(row => (uint)row.Level);
     }
 
     public Dictionary<uint, ZoneRecord> LoadZoneRecord()

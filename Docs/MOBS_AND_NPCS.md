@@ -3,8 +3,18 @@
 This document is the reference for every mob / NPC definition available in
 Firefall's static database (`clientdb.sd2`) and how PIN turns those rows into
 living entities. The *mechanics* of spawning (chat commands, per-zone JSON,
-combat gating) live in [SPAWNING_AND_COMBAT.md](SPAWNING_AND_COMBAT.md); this
-document is about **the data itself**.
+combat gating) live in [SPAWNING_AND_COMBAT.md](SPAWNING_AND_COMBAT.md); the
+file format, PIN's coverage of it and the generic in-game database commands
+live in [STATIC_DATABASE.md](STATIC_DATABASE.md). This document is about
+**the data itself**.
+
+Anything listed here can be spawned directly by name or id:
+
+```
+\sdb monster aranha           # search the catalog in-game
+\sdbinfo monster 2435         # inspect the row
+\spawn monster Aranha Queen   # spawn it
+```
 
 > Decoded from Firefall build **prod-1962** with `Tools/SdbDump` (see §4.7).
 
@@ -87,6 +97,10 @@ CustomData/character_spawn.json | \npc 290 | admin "npc 290"
   energy pool in the game; abilities do not consume it.
 - On death: `DamageSystem` -> `CharacterLifecycleService` (`CharacterDiedEvent`)
   -> `NpcDeathService` (gib visuals, 10 s corpse linger by default).
+- Display names are now resolvable server-side:
+  `SDBInterface.GetLocalizedString(monster.LocalizedNameId)` reads
+  `dblocalization::LocalizedText`, which is what the `sdb` / `sdbinfo` /
+  `spawn <kind> <name>` commands use.
 - NPC behavior strings (`behavior*`) are **not simulated yet** — spawned mobs
   stand idle until shot; there is no chase/attack AI server-side.
 
@@ -101,7 +115,9 @@ Decoded from the real `clientdb.sd2` of Firefall build **prod-1962** — the exa
 | Rows without a name (tooling/placeholder variants) | 1,337 |
 | Factions represented (named rows) | 17 |
 | Turrets (`dbcharacter::Turret`) | 107 |
-| Deployables (`dbcharacter::Deployable`) | 3,902 |
+| Deployables (`dbcharacter::Deployable`) | 3,902 (2,088 named) |
+| Vehicles (`vcs::VehicleInfo`) | 173 (all named) |
+| Carryables (`dbitems::CarryableObject`) | 105 (71 named) |
 | Levels of monster scaling (`dbcharacter::MonsterScaling`) | 80 |
 
 ### 4.1 Race legend
@@ -2216,6 +2232,267 @@ health/damage; monsters reference a row through `scaling_table_id`
 | 2407 | Tanken Saboteur | Tanken | Hostile Tanken |
 | 356 | Aero | accord | Named NPC (New Eden test spawn) |
 
+### 4.8 Vehicles (`vcs::VehicleInfo`) — 173 rows, all named
+
+Spawn with `\vehicle <id>` or `\spawn vehicle <id|name> [<x> <y> <z>]`.
+`class` is `vcs::VehicleClass`: 1 = ground vehicle, 2 = cart/utility, 3 = air.
+
+| id | name | faction | class |
+|----|------|---------|-------|
+| 13 | Accord Dropship | accord | 3 |
+| 26 | Chosen Darkslip | chosen | 3 |
+| 28 | Cobra Cycle | accord | 1 |
+| 35 | Resonator Bomb | accord | 1 |
+| 36 | Locust Chopper | accord | 1 |
+| 37 | Triton Cycle | accord | 1 |
+| 38 | Courier Cycle | accord | 1 |
+| 41 | Chosen Cycle | — | 1 |
+| 43 | Vespa Cycle | accord | 1 |
+| 47 | Cobra P-39 | accord | 1 |
+| 48 | Terromoto Cobra Cycle | accord | 1 |
+| 49 | Oilspill's Dropship | neutral | 3 |
+| 50 | Cobra K-12 | accord | 1 |
+| 51 | Oilspill's Dropship | neutral | 3 |
+| 52 | Accord Dropship | accord | 3 |
+| 53 | Thumper Cart | accord | 2 |
+| 54 | Cobra R-54 | accord | 1 |
+| 56 | ThumperCart Thumper | accord | 1 |
+| 57 | ThumperCart Cart | friendly | 1 |
+| 59 | Omnidyne-M LGV | accord | 1 |
+| 60 | Holo Whale | accord | 1 |
+| 64 | Accord Black Ops Drop Ship | accord | 3 |
+| 66 | Convoy | accord | 0 |
+| 71 | Jaguar K-17 MGV | accord | 5 |
+| 80 | Cobra Cycle | accord | 1 |
+| 81 | _Chosen Darkslip | chosen | 3 |
+| 82 | Chosen Darkslip | chosen | 3 |
+| 83 | Vapor Cycle | accord | 1 |
+| 86 | Oilspill's Dropship | accord | 3 |
+| 87 | Oilspill's Dropship | accord | 3 |
+| 88 | Vortex Cycle | accord | 1 |
+| 89 | Accord Armored Dropship | accord | 3 |
+| 90 | U.A.S. Vanguard | accord | 6 |
+| 91 | Accord Armored Dropship | accord | 3 |
+| 92 | Harbinger Shields | chosen | 3 |
+| 93 | Bloodkings Dropship | bandit | 3 |
+| 94 | Oilspill's Dropship | accord | 3 |
+| 95 | Zephyr Cycle | accord | 1 |
+| 97 | Convoy Mobile AA | accord | 0 |
+| 99 | Chosen General Zod's Super Darkslip | chosen | 3 |
+| 100 | Interceptor Assault  | accord | 1 |
+| 101 | Chosen Darkslip | chosen | 3 |
+| 102 | Arclight Missile | accord | 3 |
+| 103 | Chosen Darkslip | chosen | 3 |
+| 104 | Accord Gunship | accord | 3 |
+| 105 | Accord Armored Dropship | accord | 3 |
+| 106 | Chosen Darkslip | chosen | 3 |
+| 107 | Lancer M3 | accord | 1 |
+| 108 | DH Armored Dropship | accord | 3 |
+| 109 | Chosen Darkslip | chosen | 3 |
+| 110 | Cobra P-1 | accord | 1 |
+| 111 | Accord Dropship | accord | 3 |
+| 112 | Ranger All-Terrain MGV | accord | 5 |
+| 113 | Blitz Assault LGV | accord | 1 |
+| 114 | Convoy (NonDrivable) | accord | 0 |
+| 115 | U.A.S. Vanguard | accord | 6 |
+| 116 | Cobra XLR | accord | 1 |
+| 117 | Bumblebee | accord | 5 |
+| 118 | Wasteland Armored Dropship | accord | 3 |
+| 119 | Thumper Cart  | accord | 2 |
+| 121 | BSU Test Vehicle | accord | 5 |
+| 122 | Convoy MGV | accord | 5 |
+| 123 | TEST Convoy MGV | accord | 5 |
+| 124 | Rental Cobra R-54 | accord | 1 |
+| 125 | Red Line Accord Dropship | accord | 3 |
+| 126 | Blue Line Accord Dropship | accord | 3 |
+| 127 | RX1 Resource Hauler | accord | 0 |
+| 128 | Cheetah Model S | accord | 1 |
+| 129 | Cobra Turbo LGV | accord | 1 |
+| 130 | Locust Turbo Chopper | accord | 1 |
+| 131 | Cobra Turbo P-39 | accord | 1 |
+| 132 | Terromoto Turbo Cobra | accord | 1 |
+| 133 | Cobra Turbo K-12 | accord | 1 |
+| 134 | Omnidyne-M Turbo | accord | 1 |
+| 135 | Cobra Turbo P-1 | accord | 1 |
+| 136 | Cobra Turbo XLR | accord | 1 |
+| 137 | Cobra Turbo R-54 | accord | 1 |
+| 138 | Vapor Turbo Cycle | accord | 1 |
+| 139 | Vortex Turbo Cycle | accord | 1 |
+| 140 | Zephyr Turbo Cycle | accord | 1 |
+| 141 | TEST Repulsor Convoy MGV | accord | 5 |
+| 142 | TEST Convoy MGV No Cargo | accord | 5 |
+| 143 | Chosen Darkslip | chosen | 3 |
+| 144 | Accord Cargo Ship | accord | 2 |
+| 145 | TEST Operation Vehicle | accord | 5 |
+| 146 | OLD Chosen Cycle | — | 1 |
+| 147 | Brahma Transport | accord | 3 |
+| 148 | Chosen Sweeper | chosen | 1 |
+| 149 | Vanilla MGV | accord | 5 |
+| 150 | TS-RC8 "Snowsquall" MGV | accord | 5 |
+| 151 | Jaguar K-27 Turbo Assault Vehicle | accord | 5 |
+| 152 | RX2 Re-enforced Resource Hauler | accord | 0 |
+| 153 | Interceptor RX Turbo Assault | accord | 1 |
+| 154 | Blitz Assault Turbo LGV | accord | 1 |
+| 155 | Chosen Darkslip | chosen | 3 |
+| 156 | Reaper Armored Dropship | Reapers | 3 |
+| 157 | Surf Board | accord | 1 |
+| 159 | Reaper Armored Gunship | Reapers | 3 |
+| 160 | Reaper APC - Old Test | bandit | 0 |
+| 161 | Weekly Convoy MGV | accord | 5 |
+| 162 | Chosen Cycle | — | 1 |
+| 163 | MGV_MoneyBomb_Base | accord | 5 |
+| 164 | MGV_MoneyBomb_VIP | accord | 5 |
+| 165 | Chosen Dropship | chosen | 3 |
+| 167 | Mine Cart | accord | 2 |
+| 168 | Repulsor Generator | accord | 2 |
+| 169 | Wooden Barrel | accord | 2 |
+| 170 | Test Derby LGV | accord | 1 |
+| 171 | Test Brontodon | accord | 1 |
+| 172 | Operation Test MGV | accord | 5 |
+| 173 | Test Brontodon - Flight Path | accord | 1 |
+| 174 | APC | accord | 0 |
+| 175 | Drivable APC | accord | 0 |
+| 176 | Reaper APC | Reapers | 0 |
+| 178 | Grasshopper K-18 | accord | 1 |
+| 179 | Lancer Gold | accord | 1 |
+| 180 | Elevator  | accord | 4 |
+| 181 | [PVP] TDM Respawner | accord | 3 |
+| 182 | TransHub Ship | accord | 6 |
+| 183 | AA Turret Cart | friendly | 1 |
+| 184 | Agrievan | chosen | 2 |
+| 185 | ARES-Team Transport | accord | 0 |
+| 186 | Abe's test LGV | accord | 1 |
+| 187 | Accord Supply Dropship | accord | 3 |
+| 189 | Accord A-10 Mamba LGV | accord | 1 |
+| 190 | Communications Array | accord | 2 |
+| 191 | ARES-Team Transport Non-Drivable | accord | 0 |
+| 192 | A_LGVCycle04 | accord | 1 |
+| 194 | Oilspill's Dropship | accord | 3 |
+| 195 | MoonFestival LGV | accord | 1 |
+| 197 | Blazing Hope LGV | accord | 1 |
+| 198 | Blazing Hope MGV | accord | 5 |
+| 199 | Operation Test - Doesnt Work.  | accord | 0 |
+| 200 | Mobile AA | accord | 0 |
+| 201 | A1 Hauler | accord | 0 |
+| 202 | _M05_Mi751_CM4_No_Exit - Accord Dropship | accord | 3 |
+| 203 | Bsu_TestLGV | accord | 1 |
+| 204 | Infinite LGV | accord | 1 |
+| 205 | Forester MGV | accord | 5 |
+| 206 | Fury Monster MGV | accord | 5 |
+| 207 | Tarantula LGV | accord | 1 |
+| 208 | Accord Dropship | accord | 3 |
+| 209 | Phoenix LGV | accord | 1 |
+| 210 | Sonic Wave LGV | accord | 1 |
+| 211 | Death Rose LGV | accord | 1 |
+| 212 | Wood Pecker LGV | accord | 1 |
+| 213 | Celebrity MGV | accord | 5 |
+| 214 | Rising Star LGV | accord | 1 |
+| 215 | Top Dog LGV | accord | 1 |
+| 216 | Ace LGV | accord | 1 |
+| 218 | Omnidyne-M Flagship MGV | accord | 5 |
+| 219 | Hummingbird Racer | accord | 1 |
+| 220 | Mosquito Racer | accord | 1 |
+| 221 | Kestrel Racer | accord | 1 |
+| 222 | Black Widow Racer | accord | 1 |
+| 223 | Cherub LGV | accord | 1 |
+| 224 | Blue Kestrel (level 50 epic mgv) | accord | 5 |
+| 225 | [TEST] jwoe - DT gunship | accord | 3 |
+| 226 | Accord Disintegrator Gunship | accord | 3 |
+| 227 | Chosen Darkslip | chosen | 3 |
+| 228 | Devil's Tusk Zone Event - Accord Dropship | accord | 3 |
+| 229 | [Raid] Trolly | friendly | 1 |
+| 230 | Prototype Assault Gunship | accord | 3 |
+| 231 | Chosen Cycle | — | 1 |
+| 232 | Chosen Raptor | chosen | 1 |
+| 233 | Accord Liberator Class Dropship | accord | 3 |
+| 234 | U.A.S. Victory | accord | 6 |
+| 235 | Chosen Gunship (level 50 epic) | chosen | 3 |
+| 335 | Accord Player Fighter | accord | 3 |
+| 336 | Accord Armored Dropship | accord | 3 |
+| 337 | Accord Medivac Dropship | accord | 3 |
+| 338 | Chosen Raptor | chosen | 1 |
+| 339 | Copy of Jaguar K-17 MGV TESTING | accord | 5 |
+
+### 4.9 Carryables (`dbitems::CarryableObject`) — 105 rows, 71 named
+
+Spawn with `\carryable <id>` or `\spawn carryable <id|name> [<x> <y> <z>]`.
+The 34 unnamed rows (ids 2–9, 12–20, …) are internal placeholders and are only
+reachable by id.
+
+| id | name | type | pickup radius |
+|----|------|------|----------------|
+| 10 | Crashed Thumper Part | 1 | 5.0 |
+| 11 | Ball | 2 | 2.0 |
+| 21 | SIN Liquid Canister | 1 | 2.0 |
+| 22 | Red Resonator | 2 | 2.0 |
+| 23 | White Resonator | 2 | 2.0 |
+| 24 | Black Resonator | 2 | 2.0 |
+| 26 | Accord Datapad | 1 | 2.0 |
+| 27 | Drill Parts | 1 | 2.0 |
+| 29 | Tainted Crystite | 1 | 2.0 |
+| 30 | Crystite Core | 1 | 2.0 |
+| 31 | Chosen Energy Source | 1 | 2.0 |
+| 32 | Civilian Personal Effects | 1 | 2.0 |
+| 33 | Medical Supplies | 1 | 2.0 |
+| 37 | Jetball | 2 | 2.0 |
+| 38 | Explosives | 1 | 1.0 |
+| 39 | Thumper Repair Unit | 1 | 2.0 |
+| 40 | Disposable Jetball | 2 | 2.0 |
+| 141 | Harvester Part | 1 | 2.0 |
+| 142 | Bandit Datapad | 1 | 2.0 |
+| 144 | Bridge Parts | 1 | 1.0 |
+| 145 | Server Key A | 1 | 0.0 |
+| 146 | Server Key B | 1 | 0.0 |
+| 147 | Server Key C | 1 | 0.0 |
+| 152 | Biotoxin Sample | 1 | 2.0 |
+| 155 | Anti Personnel Turret | 2 | 2.0 |
+| 156 | Accord Gate Key | 1 | 2.0 |
+| 157 | BUD | 2 | 3.0 |
+| 158 | Delirium Engine Core | 1 | 2.0 |
+| 159 | The One-of-Many Ring | 1 | 2.0 |
+| 161 | Headless Horseman's Head | 2 | 2.0 |
+| 162 | Coolant | 1 | 2.0 |
+| 163 | Present | 1 | 2.0 |
+| 164 | Nutrepaste | 1 | 2.0 |
+| 165 | Green Crystal | 1 | 2.0 |
+| 166 | Red Crystal | 1 | 2.0 |
+| 167 | Yellow Crystal | 1 | 2.0 |
+| 168 | Datapad | 1 | 2.0 |
+| 169 | Resonance Accelerator | 1 | 2.0 |
+| 170 | Repulsor Parts | 1 | 1.0 |
+| 175 | Cargo | 1 | 1.0 |
+| 176 | Cargo | 1 | 1.0 |
+| 177 | Cargo | 1 | 1.0 |
+| 178 | Scrambler Grenade | 1 | 3.0 |
+| 180 | Accord Weapon Supplies | 2 | 2.0 |
+| 181 | Door Access Keycard | 1 | 2.0 |
+| 185 | Crashed Sleigh Part | 1 | 5.0 |
+| 189 | Nautilus Bait | 1 | 2.0 |
+| 191 | Explosive Charge | 1 | 3.0 |
+| 193 | Jetball | 2 | 4.0 |
+| 194 | Keycard | 1 | 2.0 |
+| 196 | Disarmed Proximity Mine | 1 | 2.0 |
+| 197 | Disarmed Proximity Mine | 1 | 2.0 |
+| 198 | Generator Repair Parts | 1 | 1.0 |
+| 199 | Tissue Sample | 1 | 2.0 |
+| 200 | Poison Vial | 1 | 2.0 |
+| 201 | Relic Container | 1 | 2.0 |
+| 202 | Encryption Codes | 1 | 2.0 |
+| 203 | Datacrypt | 1 | 2.0 |
+| 204 | Box of Gadgets | 1 | 2.0 |
+| 205 | Box of Supplies | 1 | 2.0 |
+| 206 | Chosen Implant | 1 | 2.0 |
+| 207 | Drone Component | 1 | 2.0 |
+| 208 | Datakey | 1 | 2.0 |
+| 209 | Chosen Transmitter | 1 | 2.0 |
+| 210 | Stolen Crystite | 1 | 2.0 |
+| 211 | Torque Ring | 1 | 2.0 |
+| 212 | Weapons Crate | 1 | 2.0 |
+| 213 | Ball | 2 | 2.0 |
+| 214 | Chosen Tech | 1 | 2.0 |
+| 215 | SIN Implant | 1 | 2.0 |
+| 216 | Bandit Laundry | 1 | 2.0 |
+
 ### 4.7 Regenerating this catalog
 
 
@@ -2231,6 +2508,13 @@ logic as the `FauFau` library PIN uses; verified by its round-trip self-test).
 ```sh
 # Full mobs report (monsters + names + factions + scaling + turrets)
 python3 Tools/SdbDump/sdb_dump.py monsters /path/to/clientdb.sd2 -o monsters.json
+
+# Everything spawnable (monsters, deployables, vehicles, carryables, turrets)
+python3 Tools/SdbDump/sdb_dump.py spawnables /path/to/clientdb.sd2 -o spawnables.json
+python3 Tools/SdbDump/sdb_dump.py spawnables /path/to/clientdb.sd2 vehicle
+
+# How much of the file PIN actually loads
+python3 Tools/SdbDump/sdb_dump.py coverage /path/to/clientdb.sd2
 
 # Anything else, table by table
 python3 Tools/SdbDump/sdb_dump.py dump /path/to/clientdb.sd2 dbcharacter::Faction

@@ -61,9 +61,45 @@ will not register hits (see gating conditions below).
 
 ---
 
+### `Tools/SdbDump/`
+
+A dependency-free Python decoder for `clientdb.sd2` that needs no Firefall
+installation. Use it to browse tables, dump them as JSON, produce the mobs
+report, list every spawnable row, or report how much of the file PIN reads:
+
+```sh
+python3 Tools/SdbDump/sdb_dump.py info       clientdb.sd2
+python3 Tools/SdbDump/sdb_dump.py coverage   clientdb.sd2
+python3 Tools/SdbDump/sdb_dump.py spawnables clientdb.sd2 -o spawnables.json
+```
+
+The format itself, PIN's coverage of it, and the in-game database commands are
+documented in [STATIC_DATABASE.md](STATIC_DATABASE.md).
+
+---
+
 ## 2. Spawning enemies
 
-There are three ways to spawn an enemy:
+There are four ways to spawn an enemy:
+
+### A0. Generic database spawn command (recommended)
+
+`spawn <kind> <id|name> [<x> <y> <z>]` works from chat and from the Admin
+channel, and covers monsters, deployables, vehicles, carryables and turrets. It
+accepts names as well as ids, and comes with `sdb` (browse/search) and
+`sdbinfo` (inspect a row):
+
+```
+\sdb monster aranha 10        # find the ids
+\sdbinfo monster 2435         # inspect Aranha Queen
+\spawn monster Aranha Queen   # spawn it at your feet
+\spawn npc 290 -25.5 118 492  # or by id at a position
+```
+
+Implementation: `Systems/Spawning/SDBSpawner.cs` + `StaticDB/SDBCatalog.cs`.
+Full reference in [STATIC_DATABASE.md](STATIC_DATABASE.md#4-spawning-from-the-database-in-game).
+
+The typed commands below still exist and behave exactly as before.
 
 ### A. Runtime chat command
 
@@ -204,9 +240,14 @@ Player faction defaults to `1` (Accord). So:
 
 | Action                            | Command                                  |
 |-----------------------------------|------------------------------------------|
-| Spawn mob at player              | `\npc 1196`                              |
+| Spawn mob at player              | `\npc 1196` or `\spawn monster 1196`     |
 | Spawn mob at position            | `\npc 528 5 15 0`                        |
 | Spawn mob (Admin channel)        | `npc 2342 7 15 0`                        |
+| Spawn anything by name           | `\spawn monster Aranha Queen`            |
+| Spawn a deployable / vehicle     | `\spawn deployable 395` / `\spawn vehicle Cobra XLR` |
+| Spawn a carryable / turret       | `\spawn carryable 26` / `\spawn turret Minigun Turret` |
+| Search the static database       | `\sdb monster chosen 20`                 |
+| Inspect a database row           | `\sdbinfo deployable 395`                |
 | List chat commands               | `\help`                                  |
 | Spawn mob automatically per zone | add a row to `CustomData/character_spawn.json` |
 | Show your vitals                 | `\health`                                |
