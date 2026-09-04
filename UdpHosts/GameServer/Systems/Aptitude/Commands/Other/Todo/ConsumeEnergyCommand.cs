@@ -15,6 +15,7 @@ public class ConsumeEnergyCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
+        uint time = context.Shard.CurrentTime;
         float amount = AbilitySystem.RegistryOp(context.Register, Params.Amount, (Operand)Params.AmountRegop);
         if (Params.AmountRegop != 0 && context.Register == 0f)
         {
@@ -33,70 +34,38 @@ public class ConsumeEnergyCommand : Command, ICommand
             return true;
         }
 
+        // The energy pool is server-tracked as an approximation of the client
+        // simulated pool, so ConsumeEnergy keeps server-side requirements
+        // (RequireEnergy / EnergyToDamage) consistent with the chain's costs.
         bool allowOvercharge = Params.AllowOvercharge == 1;
         if (Params.OnTargets == 1)
         {
-            // Preflight every target first. Without this pass a drain over a
-            // group could spend from early targets and then fail on a later
-            // target, leaving a partially applied command.
-            var targets = context.Targets.ToArray();
-            foreach (IAptitudeTarget target in targets)
+            // The cost is charged to the targets (e.g. energy drain abilities)
+            // instead of the caster.
+            foreach (IAptitudeTarget target in context.Targets)
             {
-                if (!context.Abilities.CanSpendEnergy(target, amount, allowOvercharge, context.Shard.CurrentTime))
-                {
-                    Logger.Debug(
-                        "{Command} {CommandId} rejected: target {Target} has insufficient energy for {Amount}",
-                        nameof(ConsumeEnergyCommand),
-                        Params.Id,
-                        target,
-                        amount);
-                    return false;
-                }
-            }
-
-            foreach (IAptitudeTarget target in targets)
-            {
-                if (!context.Abilities.TrySpendEnergy(context, target, amount, allowOvercharge, out var remaining))
-                {
-                    return false;
-                }
-
+                var targetState = context.Abilities.GetOrAddState(target);
+                targetState.SpendEnergy(amount, time, allowOvercharge);
                 Logger.Information(
                     "{Command} {CommandId} consumed {Amount} energy from target {Target}, {Remaining} remaining",
                     nameof(ConsumeEnergyCommand),
                     Params.Id,
                     amount,
                     target,
-                    remaining);
+                    targetState.Energy);
             }
         }
         else
         {
-            if (!context.Abilities.CanSpendEnergy(context.Self, amount, allowOvercharge, context.Shard.CurrentTime))
-            {
-                var state = context.Abilities.GetOrAddState(context.Self);
-                Logger.Debug(
-                    "{Command} {CommandId} rejected: {Self} has {Energy} energy, needs {Amount}",
-                    nameof(ConsumeEnergyCommand),
-                    Params.Id,
-                    context.Self,
-                    state.Energy,
-                    amount);
-                return false;
-            }
-
-            if (!context.Abilities.TrySpendEnergy(context, context.Self, amount, allowOvercharge, out var remaining))
-            {
-                return false;
-            }
-
+            var state = context.Abilities.GetOrAddState(context.Self);
+            state.SpendEnergy(amount, time, allowOvercharge);
             Logger.Information(
                 "{Command} {CommandId} consumed {Amount} energy from {Self}, {Remaining} remaining",
                 nameof(ConsumeEnergyCommand),
                 Params.Id,
                 amount,
                 context.Self,
-                remaining);
+                state.Energy);
         }
 
         if (Params.AllowPrediction == 1)

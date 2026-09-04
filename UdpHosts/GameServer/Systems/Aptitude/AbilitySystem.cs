@@ -95,7 +95,6 @@ public class AbilitySystem
                 state.EnergyRegenPerSecond = character.EnergyParams.Recharge;
                 state.EnergyRegenDelayMs = character.EnergyParams.Delay;
                 state.LastEnergySpendTime = _shard.CurrentTime;
-                state.EnergyPoolInitialized = true;
             }
 
             _entityAbilityStates[entity.EntityId] = state;
@@ -109,88 +108,13 @@ public class AbilitySystem
             state.MaxEnergy = existingCharacter.EnergyParams.Max;
             state.EnergyRegenPerSecond = existingCharacter.EnergyParams.Recharge;
             state.EnergyRegenDelayMs = existingCharacter.EnergyParams.Delay;
-            if (!state.EnergyPoolInitialized)
-            {
-                state.Energy = state.MaxEnergy;
-                state.LastEnergySpendTime = _shard.CurrentTime;
-                state.LastEnergyUpdateTime = _shard.CurrentTime;
-            }
-            else if (state.Energy > state.MaxEnergy)
+            if (state.Energy > state.MaxEnergy)
             {
                 state.Energy = state.MaxEnergy;
             }
-
-            state.EnergyPoolInitialized = true;
         }
 
         return state;
-    }
-
-    /// <summary>
-    /// Returns whether an entity can pay an energy amount at the current server
-    /// time without changing its pool. This is used to preflight target drains
-    /// so a multi-target command cannot partially spend before failing.
-    /// </summary>
-    public bool CanSpendEnergy(IAptitudeTarget entity, float amount, bool allowOvercharge, uint time)
-    {
-        if (entity == null)
-        {
-            return false;
-        }
-
-        if (amount <= 0f || allowOvercharge)
-        {
-            return true;
-        }
-
-        var state = GetOrAddState(entity);
-        return state.GetProjectedEnergy(time) >= amount;
-    }
-
-    /// <summary>
-    /// Pays an energy amount and records the old pool in the activation
-    /// transaction. Non-overcharge spending is an availability gate, not a
-    /// clamped best-effort deduction.
-    /// </summary>
-    public bool TrySpendEnergy(Context context, IAptitudeTarget entity, float amount, bool allowOvercharge, out float remaining)
-    {
-        remaining = 0f;
-        if (entity == null || amount < 0f)
-        {
-            return false;
-        }
-
-        var state = GetOrAddState(entity);
-        // Capture before UpdateEnergy as well as before SpendEnergy. A failed
-        // activation must not leave a passive-regeneration timestamp change
-        // behind when its energy transaction is rolled back.
-        context.EnergyTransaction?.Capture(state);
-        uint time = context.Shard.CurrentTime;
-        state.UpdateEnergy(time);
-
-        if (!allowOvercharge && state.Energy < amount)
-        {
-            remaining = state.Energy;
-            return false;
-        }
-
-        if (amount <= 0f)
-        {
-            remaining = state.Energy;
-            return true;
-        }
-
-        remaining = state.SpendEnergy(amount, time, allowOvercharge);
-        return true;
-    }
-
-    /// <summary>Refills an entity's server-side ability energy pool.</summary>
-    public void ResetEnergy(IAptitudeTarget entity)
-    {
-        var state = GetOrAddState(entity);
-        state.Energy = state.MaxEnergy;
-        state.LastEnergySpendTime = _shard.CurrentTime;
-        state.LastEnergyUpdateTime = _shard.CurrentTime;
     }
 
     /// <summary>
@@ -321,7 +245,7 @@ public class AbilitySystem
         bool applyResult = effect.ApplyChain?.Execute(applyContext) ?? true;
         if (!applyResult)
         {
-            // An energy requirement in an effect apply chain is part of the
+            // A failed requirement inside an effect apply chain is part of the
             // enclosing activation. Do not leave the newly-added effect behind
             // when that chain rejects the activation.
             target.ClearEffect(effectState);
@@ -482,17 +406,15 @@ public class AbilitySystem
             Targets = targets ?? new AptitudeTargets(),
             InitTime = activationTime,
             ExecutionHint = ExecutionHint.Ability,
-            EnergyTransaction = new AbilityEnergyTransaction(),
         };
 
-        return ExecuteAbilityActivation(context, abilityId, ability.Chain, ownsEnergyTransaction: true);
+        return ExecuteAbilityActivation(context, abilityId, ability.Chain, isRootActivation: true);
     }
 
     /// <summary>
     /// Executes an ability called from another aptitude chain. The called
-    /// ability gets its own identity, while the caster, module, pending
-    /// cooldown list, and energy transaction remain those of the root
-    /// activation.
+    /// ability gets its own identity, while the caster, module, and pending
+    /// cooldown list remain those of the root activation.
     /// </summary>
     internal bool HandleCalledAbility(Context parentContext, uint abilityId)
     {
@@ -511,18 +433,18 @@ public class AbilitySystem
 
         var context = Context.CopyContext(parentContext);
         // Call used to start the called ability with an empty target set. Keep
-        // that targeting boundary while carrying the activation identity and
-        // transaction across it.
+        // that targeting boundary while carrying the activation identity
+        // across it.
         context.Targets = new AptitudeTargets();
         context.FormerTargets = new AptitudeTargets();
         context.TargetStack = new Stack<AptitudeTargets>();
         context.ChainId = ability.Chain;
         context.AbilityId = abilityId;
         context.ExecutionHint = ExecutionHint.Ability;
-        return ExecuteAbilityActivation(context, abilityId, ability.Chain, ownsEnergyTransaction: false);
+        return ExecuteAbilityActivation(context, abilityId, ability.Chain, isRootActivation: false);
     }
 
-    private bool ExecuteAbilityActivation(Context context, uint abilityId, uint chainId, bool ownsEnergyTransaction)
+    private bool ExecuteAbilityActivation(Context context, uint abilityId, uint chainId, bool isRootActivation)
     {
         _logger.Information(
             "HandleActivateAbility: Ability {AbilityId} starting Chain {ChainId} (module {AbilityModuleId})",
@@ -531,9 +453,9 @@ public class AbilitySystem
             context.AbilityModuleId);
 
         var chain = Factory.LoadChain(chainId);
-        // Keep the resolved command list visible while validating data-driven
-        // costs. This distinguishes a missing ConsumeEnergy node from a
-        // factory/SDB mapping problem without requiring a debugger.
+        // Keep the resolved command list visible while debugging activations.
+        // This distinguishes a missing command from a factory/SDB mapping
+        // problem without requiring a debugger.
         foreach (var command in chain.Commands)
         {
             _logger.Information(
@@ -544,66 +466,18 @@ public class AbilitySystem
                 command.GetType().FullName);
         }
 
-        var energyTransaction = context.EnergyTransaction;
-        var checkpoint = energyTransaction?.CreateCheckpoint();
-        bool success = false;
-        try
-        {
-            if (!TryApplyFallbackEnergyCost(context, abilityId))
-            {
-                return false;
-            }
+        bool success = chain.Execute(context);
 
-            success = chain.Execute(context);
-            return success;
-        }
-        finally
+        // The root activation owns cooldown commit: an ability that fails a
+        // later requirement (for example a nested chain rejection) must not go
+        // on cooldown. Called abilities queue into the shared pending list,
+        // which the root commits when the whole activation succeeds.
+        if (isRootActivation)
         {
-            if (!success)
-            {
-                if (ownsEnergyTransaction)
-                {
-                    energyTransaction?.Rollback();
-                }
-                else if (checkpoint != null)
-                {
-                    energyTransaction.RollbackTo(checkpoint);
-                }
-            }
-            else if (ownsEnergyTransaction)
-            {
-                energyTransaction?.Commit();
-                CommitActivationCooldowns(context, success);
-            }
-        }
-    }
-
-    private bool TryApplyFallbackEnergyCost(Context context, uint abilityId)
-    {
-        if (!AbilityEnergyCostResolver.TryGetFallbackCost(abilityId, context.AbilityModuleId, out var amount)
-            || AbilityEnergyCostResolver.HasDataDrivenEnergySpend(abilityId))
-        {
-            return true;
+            CommitActivationCooldowns(context, success);
         }
 
-        if (!TrySpendEnergy(context, context.ActivationInitiator, amount, false, out var remaining))
-        {
-            _logger.Debug(
-                "Ability {AbilityId} rejected before its chain: {Initiator} has {Energy} energy, needs {Required}",
-                abilityId,
-                context.ActivationInitiator,
-                remaining,
-                amount);
-            return false;
-        }
-
-        _logger.Information(
-            "Ability {AbilityId} consumed fallback cost {Amount} energy from {Initiator}, {Remaining} remaining",
-            abilityId,
-            amount,
-            context.ActivationInitiator,
-            remaining);
-        return true;
+        return success;
     }
 
     public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId)

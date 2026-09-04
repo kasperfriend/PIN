@@ -77,22 +77,16 @@ public class RequireEnergyByRangeCommand : Command, ICommand
             return false;
         }
 
-        if (Params.AlsoConsume == 1 && minEnergy > 0f)
+        if (Params.AlsoConsume == 1)
         {
-            if (!context.Abilities.TrySpendEnergy(context, context.Self, minEnergy, false, out var remaining))
-            {
-                // Keep this command an actual requirement even if the energy
-                // pool changes between the range check and the spend.
-                return false;
-            }
-
+            state.SpendEnergy(minEnergy, time, allowOvercharge: false);
             Logger.Debug(
                 "{Command} {CommandId} consumed {Amount} energy from {Self}, {Remaining} remaining",
                 nameof(RequireEnergyByRangeCommand),
                 Params.Id,
                 minEnergy,
                 context.Self,
-                remaining);
+                state.Energy);
         }
 
         if (Params.AllowPrediction == 1)

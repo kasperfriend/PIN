@@ -38,8 +38,8 @@ public class Context
 
     /// <summary>
     /// The immutable caster identity for the root activation. <see cref="Initiator"/>
-    /// can be overridden by effect commands for aptitude semantics, so energy
-    /// fallback costs and activation cooldowns must use this value instead.
+    /// can be overridden by effect commands for aptitude semantics, so
+    /// activation cooldowns must use this value instead.
     /// </summary>
     public IAptitudeTarget ActivationInitiator { get; set; }
 
@@ -63,13 +63,6 @@ public class Context
     /// consume the cooldown.
     /// </summary>
     public List<AbilityCooldownRequest> PendingCooldowns { get; set; } = [];
-
-    /// <summary>
-    /// Energy transaction for the root activation. Copied contexts share this
-    /// object so energy spent by nested effects and calls is rolled back with
-    /// the root chain when any later command fails.
-    /// </summary>
-    public AbilityEnergyTransaction EnergyTransaction { get; set; }
 
     public static Context CopyContext(Context original)
     {
@@ -95,7 +88,6 @@ public class Context
             ExecutionHint = original.ExecutionHint,
             ExecutionId = original.ExecutionId,
             PendingCooldowns = original.PendingCooldowns,
-            EnergyTransaction = original.EnergyTransaction,
         };
     }
 
