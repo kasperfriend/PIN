@@ -127,7 +127,8 @@ keyed by zone (`zone_id`):
 - This is what the `character_spawn.json` added in this branch does for zones
   `12` and `1003`.
 
-Known monster type ids used during testing:
+Known monster type ids used during testing (each verified against the SDB —
+see the [Mobs & NPCs Catalog](MOBS_AND_NPCS.md) for the full database listing):
 
 | id   | name                 |
 |------|----------------------|

@@ -7,6 +7,7 @@
 - Implement fall damage: `FallDamageSystem` tracks each player's airborne samples from the client authoritative movement inputs and applies damage on landing based on the fastest downward speed of the fall (water landings, thruster/glider use, knockdown falls and the `immune_falldamage` combat flag negate it; lethal at very high impact speeds)
 - Add a `GameServer.Tests` xUnit project covering `FallDamageMath`, `FallDamageSystem`, `DamageSystem`, `CharacterLifecycleService` and the `CharacterEntity` vital clamping; CI now runs `dotnet test`
 - Add player facing health debug commands to the in-game chat: `\health`, `\hurt <amount>`, `\heal <amount>`, `\fall <speed>`, `\down`, `\revive`, `\kill`, `\respawn`, so the health system can be exercised without enemies
+- Add `Tools/SdbDump`, a standalone decoder for `clientdb.sd2` (port of the FauFau StaticDB format logic PIN loads data through, verified by a round-trip self-test), and `Docs/MOBS_AND_NPCS.md` cataloging every mob/NPC in the database (build `prod-1962`: 3,109 monster rows, 1,772 of them named, grouped by faction) plus turrets and the per-level scaling table
 - Add support for StyleCop & .NET Analyzers
 - Use RIN via gRPC for the player management
 - Add many items to the game
@@ -32,14 +33,14 @@
 ### Fixed
 
 - Fix the first hit after a respawn instantly downing the character again: `NetworkPlayer.Respawn` wrote the reset health only into the replicated controller props while the entity stayed at 0 HP; it now resets vitals through `CharacterEntity.SetMaxHealth`/`SetCurrentShields` so server state and client view agree
+- Keep ability energy client-simulated like the live game: abilities do not cost (or get gated by) the regular energy pool - only the jetpack/thrust drains it. Client-environment aptitude energy commands (`RequireEnergy`, `ConsumeEnergy`, `ConsumeEnergyOverTime`, `RequireEnergyByRange`) load as no-ops on the server again, and the hardcoded per-activation fallback costs were removed
+- Derive the replicated jetpack energy parameters (`EnergyParams`: max, recharge rate, recharge delay) from the equipped battleframe's SDB record whenever a loadout is applied
 - `DamageSystem` no longer damages or heals characters that are not in the `Living` state (corpses and bleeding out characters were fully damageable before), and `EntityDamagedEvent`/`EntityHealedEvent` are only published when the damage/heal actually applied
 - `CharacterLifecycleService` only transitions out of the `Living` state now, so stray damage events can no longer skip the bleedout phase or double-fire death transitions
 - Respawn and teleport reset the fall damage tracker, so stale fall speeds cannot deal damage at the destination
-- Implement ability energy costs server-side: `RequireEnergy` gates the chain on the current energy pool, `ConsumeEnergy` deducts the SDB cost (respecting `AllowOvercharge` debt and `OnTargets` target drain), and `ConsumeEnergyOverTime` drains channelled abilities per duration tick
 - Wire the aptitude register pipeline so data-driven amounts are computed correctly: `LoadRegisterFromStat` (aptitude stat modifiers, e.g. energy/cooldown), `LoadRegisterFromModulePower` (ability module power rating), and `PushRegister`/`PopRegister`/`PeekRegister` are now implemented and resolved in `Factory`; chains that multiply an SDB amount by a loaded value no longer collapse to 0
-- Implement `RequireEnergyByRange` (energy band plus optional target range gate, optional `AlsoConsume`) so abilities that gate on an energy range enforce it instead of passing for free
 - Mirror the client recharge model in the server `AbilityState`: regeneration waits `EnergyParams.Delay` after the last spend, an overcharged (negative) pool keeps recharging back through zero, and `EnergyToDamage` converts the actual tracked pool instead of assuming a full one
-- Start activation cooldowns only after the whole ability chain succeeded (queued by `InstantActivation`, committed by `AbilitySystem.HandleActivateAbility`), so an ability that fails its energy requirement does not go on cooldown
+- Start activation cooldowns only after the whole ability chain succeeded (queued by `InstantActivation`, committed by `AbilitySystem.HandleActivateAbility`), so an ability that fails a later requirement does not go on cooldown
 - Fix activated abilities (Raptor and every other battleframe) staying purely cosmetic: `InstantActivation`, the chain node that carries each ability's cooldown configuration, was an empty stub, so no cooldown was ever started, the client got an empty cooldown payload and the ability could be re-pressed forever
 - Track the aptitude cooldown category per ability (learned from its activation command) instead of using `AbilityModule.UiCategory`, which is a UI grouping and never matched a real cooldown category
 - Report category cooldowns to the client (`ActiveCooldowns_Group2`) and express the global cooldown window in shard time, so the client-side ability timers no longer jump

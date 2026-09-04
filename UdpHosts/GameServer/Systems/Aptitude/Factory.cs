@@ -93,21 +93,13 @@ public class Factory
         return chain;
     }
 
-    private static bool IsServerAuthoritativeEnergyCommand(CommandType commandType)
-    {
-        return commandType is CommandType.RequireEnergy
-            or CommandType.ConsumeEnergy
-            or CommandType.ConsumeEnergyOverTime
-            or CommandType.RequireEnergyByRange;
-    }
-
     [System.Diagnostics.CodeAnalysis.SuppressMessage("StyleCop.CSharp.LayoutRules", "SA1515:Single-line comment should be preceded by blank line", Justification = "Disregard here so we don't create unneccessary grouping")]
     public ICommand LoadCommand(uint commandId, uint typeId)
     {
         var commandTypeRec = SDBInterface.GetCommandType(typeId);
         var commandType = (CommandType)commandTypeRec.Id;
 
-        if (commandTypeRec.Environment == "client" && !IsServerAuthoritativeEnergyCommand(commandType))
+        if (commandTypeRec.Environment == "client")
         {
             // Far as I know we don't care about client commands on the server, though the params can be helpful.
             return new CustomNOOPCommand(commandType.ToString(), commandId);
