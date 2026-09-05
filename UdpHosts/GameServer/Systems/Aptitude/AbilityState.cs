@@ -217,6 +217,18 @@ public class AbilityState
         }
     }
 
+    /// <summary>
+    /// Clears every tracked cooldown (local, category and global) and returns
+    /// the number of entries that were removed. Used by the
+    /// <c>ResetCooldowns</c> aptitude command ("Cooldown - Reset Abilities").
+    /// </summary>
+    public int ResetCooldowns()
+    {
+        int removed = _cooldowns.Count;
+        _cooldowns.Clear();
+        return removed;
+    }
+
     /// <summary>Advances passive energy regeneration to <paramref name="time"/> (ms).</summary>
     public void UpdateEnergy(uint time)
     {
