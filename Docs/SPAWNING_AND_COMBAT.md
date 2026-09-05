@@ -71,10 +71,15 @@ report, list every spawnable row, or report how much of the file PIN reads:
 python3 Tools/SdbDump/sdb_dump.py info       clientdb.sd2
 python3 Tools/SdbDump/sdb_dump.py coverage   clientdb.sd2
 python3 Tools/SdbDump/sdb_dump.py spawnables clientdb.sd2 -o spawnables.json
+
+# Write the checked-in reference documents (Markdown spreadsheet + CSV per kind)
+python3 Tools/SdbDump/spawn_reference.py     clientdb.sd2
 ```
 
 The format itself, PIN's coverage of it, and the in-game database commands are
-documented in [STATIC_DATABASE.md](STATIC_DATABASE.md).
+documented in [STATIC_DATABASE.md](STATIC_DATABASE.md). Every spawnable row,
+with the exact command that creates it, is in
+[SpawnReference/](SpawnReference/README.md).
 
 ---
 
@@ -98,6 +103,8 @@ accepts names as well as ids, and comes with `sdb` (browse/search) and
 
 Implementation: `Systems/Spawning/SDBSpawner.cs` + `StaticDB/SDBCatalog.cs`.
 Full reference in [STATIC_DATABASE.md](STATIC_DATABASE.md#4-spawning-from-the-database-in-game).
+Which ids/names exist for each kind — all 7,396 of them, with the exact command
+per row — is in [SpawnReference/](SpawnReference/README.md).
 
 The typed commands below still exist and behave exactly as before.
 
@@ -248,6 +255,7 @@ Player faction defaults to `1` (Accord). So:
 | Spawn a carryable / turret       | `\spawn carryable 26` / `\spawn turret Minigun Turret` |
 | Search the static database       | `\sdb monster chosen 20`                 |
 | Inspect a database row           | `\sdbinfo deployable 395`                |
+| Look up any spawnable id/name    | [Docs/SpawnReference/](SpawnReference/README.md) |
 | List chat commands               | `\help`                                  |
 | Spawn mob automatically per zone | add a row to `CustomData/character_spawn.json` |
 | Show your vitals                 | `\health`                                |

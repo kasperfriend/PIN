@@ -1,0 +1,106 @@
+id,name,spawn_command,description,interact_text,pickup_by,ability_granted_name,ability_granted_id,activate_ability_friendly,activate_ability_hostile,allow_friendly_pickup,allow_hostile_pickup,allow_vehicle_carry,created_status_effect,dropped_status_effect_friendly,dropped_status_effect_hostile,first_picked_up_status_effect,interact_string,interaction_time_ms,is_exclusive,localized_description_id,localized_name_id,max_per_character,picked_up_status_effect_friendly,picked_up_status_effect_hostile,pickup_by_interaction,pickup_cooldown,pickup_radius,scope_range,should_track_for_pvp_scoreboard,stopped_moving_status_effect,thrown_pickup_radius,type,visual_group,visual_group_idx,visual_record_id
+2,,\spawn carryable 2,,,touch,,0,0,0,1,1,1,0,0,0,0,0,0,1,158857,158856,2,0,2387,0,0,5,0,0,0,5,1,0,0,16130
+3,,\spawn carryable 3,,,touch,,0,0,0,1,1,1,0,0,0,0,0,0,1,158855,158854,1,2721,2721,0,0,5,0,0,0,5,1,0,0,16130
+5,,\spawn carryable 5,,,touch,,0,0,0,1,1,1,0,0,0,0,0,0,1,158851,158850,1,438,438,0,0,5,0,0,0,5,1,0,0,17327
+6,,\spawn carryable 6,,,touch,,0,0,0,1,1,1,0,0,0,0,0,0,1,158849,158848,1,2387,2387,0,0,5,0,0,0,5,1,0,0,16130
+8,,\spawn carryable 8,,,touch,,0,0,0,0,1,1,0,0,0,0,0,0,1,180524,180523,1,0,2892,0,0,0,0,0,0,0,1,0,0,10074
+9,,\spawn carryable 9,,,touch,,0,0,0,1,1,1,1058,0,0,0,0,0,1,158847,158846,1,990,990,0,500,1,0,0,0,1,1,0,0,11471
+10,Crashed Thumper Part,\spawn carryable 10,,Pick up,interact,,0,0,0,1,0,0,7971,0,0,0,349643,2000,1,158845,158844,1,7652,0,1,0,5,0,0,0,5,1,0,0,17683
+11,Ball,\spawn carryable 11,Ball for PvP Jet Ball game type,,touch,,0,0,0,1,0,1,3765,0,0,0,0,0,1,158983,158982,1,3744,3744,0,1500,2,0,1,0,2,2,0,0,17427
+21,SIN Liquid Canister,\spawn carryable 21,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,175640,1,4238,0,0,1000,2,0,0,0,0,1,0,0,17596
+22,Red Resonator,\spawn carryable 22,,,interact,,0,0,0,1,1,1,4392,0,0,0,0,0,1,178031,178030,1,4315,4315,1,1500,2,0,0,0,2,2,0,0,17718
+23,White Resonator,\spawn carryable 23,,,interact,,0,0,0,1,1,1,4393,0,0,0,0,0,1,178033,178032,1,4316,4316,1,1500,2,0,0,0,2,2,0,0,17716
+24,Black Resonator,\spawn carryable 24,,,interact,,0,0,0,1,1,1,4394,0,0,0,0,0,1,178035,178034,1,4317,4317,1,1500,2,0,0,0,2,2,0,0,17717
+26,Accord Datapad,\spawn carryable 26,Tossable Accord Datapad,,touch,,0,0,0,1,0,1,4085,0,0,0,0,500,1,179601,179600,1,4308,0,0,1000,2,0,0,0,0,1,0,0,18792
+27,Drill Parts,\spawn carryable 27,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,179629,1,4219,0,0,1000,2,0,0,0,0,1,0,0,17681
+29,Tainted Crystite,\spawn carryable 29,,,touch,,0,0,0,1,0,1,4506,0,0,0,0,500,1,0,182842,1,4382,0,0,1000,2,0,0,0,0,1,0,0,17666
+30,Crystite Core,\spawn carryable 30,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,183689,1,4508,0,0,1000,2,0,0,0,0,1,0,0,17666
+31,Chosen Energy Source,\spawn carryable 31,,,touch,,0,0,0,1,0,1,4510,0,0,0,0,500,1,0,183693,1,4522,0,0,1000,2,0,0,0,0,1,0,0,17821
+32,Civilian Personal Effects,\spawn carryable 32,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,183697,1,4771,0,0,1000,2,0,0,0,0,1,0,0,17586
+33,Medical Supplies,\spawn carryable 33,,,touch,,0,0,0,1,0,0,0,0,0,0,0,500,1,0,183700,1,4509,0,0,1000,2,0,0,0,0,1,0,0,17589
+34,,\spawn carryable 34,,,interact,,0,0,0,1,0,1,4783,0,0,0,0,0,1,197140,197139,1,4787,4787,1,500,1,0,0,0,1,1,0,0,14323
+35,,\spawn carryable 35,,,interact,,0,0,0,1,0,1,4783,0,0,0,0,0,1,197336,197335,1,4787,4787,1,500,1,0,0,0,1,1,0,0,14323
+36,,\spawn carryable 36,,,interact,,0,0,0,1,0,1,4783,0,0,0,0,0,1,197338,197337,1,4787,4787,1,500,1,0,0,0,1,1,0,0,14323
+37,Jetball,\spawn carryable 37,Ball for Jetball Toss,,touch,,0,0,0,1,1,1,3765,0,0,0,0,0,1,197434,197433,1,4792,0,0,1500,2,0,0,0,2,2,0,0,17427
+38,Explosives,\spawn carryable 38,Explosives,,interact,,0,0,0,1,0,1,4382,0,0,0,0,0,1,198789,198788,1,4882,4882,1,500,1,0,0,0,1,1,0,0,17034
+39,Thumper Repair Unit,\spawn carryable 39,,,interact,,0,0,0,1,0,1,5121,0,0,0,0,500,1,0,199882,1,5033,0,1,1000,2,0,0,0,0,1,53,0,0
+40,Disposable Jetball,\spawn carryable 40,Vendor-sold temp jetball - disappears after a brief duration on the ground.,,touch,,0,0,0,1,1,1,4979,0,0,0,0,0,1,199932,199931,1,4980,4980,0,1500,2,0,0,4991,2,2,0,0,17427
+141,Harvester Part,\spawn carryable 141,Tech part for campaign mission 1,Pick up,interact,,0,0,0,1,0,1,0,0,0,0,349643,250,1,207232,207231,1,5554,0,1,1500,2,0,0,0,2,1,0,0,17683
+142,Bandit Datapad,\spawn carryable 142,Tanken Datapad to open caches,,interact,,0,0,0,1,0,1,4085,0,0,0,0,500,1,208590,208589,1,5804,0,1,1000,2,0,0,0,0,1,0,0,16927
+144,Bridge Parts,\spawn carryable 144,Despawns while idle,,touch,,0,0,0,1,1,1,6211,0,0,0,0,0,1,209638,209637,1,6214,0,0,500,1,0,0,0,1,1,0,0,17682
+145,Server Key A,\spawn carryable 145,Key to hack the Razorwind Terminal,,interact,,0,0,0,1,1,0,5986,0,0,0,0,1000,1,212907,212906,1,0,0,1,0,0,0,0,0,5,1,0,0,18649
+146,Server Key B,\spawn carryable 146,Key to hack the Razorwind Terminal,,interact,,0,0,0,1,1,0,5987,0,0,0,0,1000,1,212909,212908,1,0,0,1,0,0,0,0,0,5,1,0,0,18653
+147,Server Key C,\spawn carryable 147,Key to hack the Razorwind Terminal,,interact,,0,0,0,1,1,0,5989,0,0,0,0,1000,1,212911,212910,1,0,0,1,0,0,0,0,0,5,1,0,0,18656
+151,,\spawn carryable 151,,,interact,,0,0,0,1,0,1,5121,0,0,0,0,500,1,220825,220824,1,6431,0,1,1000,2,0,0,0,0,1,53,0,0
+152,Biotoxin Sample,\spawn carryable 152,,Pick up,interact,,0,0,0,1,0,0,8111,0,0,0,349643,4000,1,222577,222576,1,7891,0,1,1000,2,0,0,7896,0,1,0,0,17821
+154,,\spawn carryable 154,,,interact,,0,0,0,1,0,0,6845,0,0,0,0,0,1,222840,222839,1,6568,0,1,1500,2,0,0,0,2,2,0,0,19739
+155,Anti Personnel Turret,\spawn carryable 155,,,touch,,0,0,0,1,0,1,6845,0,0,0,0,1000,1,251052,251051,1,6967,0,0,1500,2,0,0,6970,2,2,0,0,19739
+156,Accord Gate Key,\spawn carryable 156,Campaign Mission 3 gate key,,interact,,0,0,0,1,0,1,4085,0,0,0,0,500,1,255932,255931,1,7124,0,1,1000,2,0,0,0,0,1,0,0,16927
+157,BUD,\spawn carryable 157,Wasteland Base upgrade deployable,,interact,,0,0,0,1,0,1,6845,0,0,0,0,2000,1,256802,256801,1,7170,0,1,1500,3,0,0,7214,3,2,0,0,18943
+158,Delirium Engine Core,\spawn carryable 158,,,interact,,0,0,0,1,0,1,4510,0,0,0,0,1500,1,0,305063,1,7765,0,1,1000,2,0,0,0,0,1,0,0,17821
+159,The One-of-Many Ring,\spawn carryable 159,Throw in a doom-y mountain to achieve the impossible,Pick up,interact,,0,0,0,1,1,1,8050,0,0,0,349643,1000,1,356180,356179,1,8048,0,1,2000,2,0,0,0,2,1,0,0,19733
+160,,\spawn carryable 160,,,touch,,0,0,0,1,1,1,4979,0,0,0,0,0,1,408295,408294,1,8305,0,0,1500,2,0,0,4991,2,2,0,0,17427
+161,Headless Horseman's Head,\spawn carryable 161,,,touch,,0,0,0,1,1,0,8339,0,0,0,0,0,1,409397,409396,1,8340,0,0,1500,2,0,0,0,2,2,0,0,19992
+162,Coolant,\spawn carryable 162,,,interact,,0,0,0,1,0,1,0,0,0,0,0,1000,1,0,411623,1,8462,0,1,1000,2,0,0,0,0,1,0,0,17596
+163,Present,\spawn carryable 163,,,interact,,0,0,0,1,0,1,7971,0,0,0,0,2000,1,0,411681,1,8467,0,1,2000,2,0,0,6686,0,1,0,0,17077
+164,Nutrepaste,\spawn carryable 164,,,interact,,0,0,0,1,0,1,0,0,0,0,0,1000,1,0,415812,1,8487,8487,1,1000,2,0,0,0,0,1,0,0,17596
+165,Green Crystal,\spawn carryable 165,,,interact,,0,0,0,1,0,1,0,0,0,0,0,1000,1,0,415958,1,8499,0,1,1000,2,0,0,0,0,1,0,0,17596
+166,Red Crystal,\spawn carryable 166,,,interact,,0,0,0,1,0,1,0,0,0,0,0,1000,1,0,415965,1,8500,0,1,1000,2,0,0,0,0,1,0,0,17596
+167,Yellow Crystal,\spawn carryable 167,,,interact,,0,0,0,1,0,1,0,0,0,0,0,1000,1,0,415969,1,8501,0,1,1000,2,0,0,0,0,1,0,0,17596
+168,Datapad,\spawn carryable 168,,,interact,,0,0,0,1,0,1,4085,0,0,0,0,500,1,416105,416104,1,8531,0,1,1000,2,0,1,0,0,1,0,0,18792
+169,Resonance Accelerator,\spawn carryable 169,,,interact,,0,0,0,1,0,1,5121,0,0,0,0,500,1,0,423873,1,8749,0,1,1000,2,0,0,0,0,1,0,0,17683
+170,Repulsor Parts,\spawn carryable 170,,,touch,,0,0,0,1,1,1,0,0,0,0,0,0,1,0,426793,1,9021,0,0,1500,1,0,0,0,1,1,0,0,18468
+171,,\spawn carryable 171,,,interact,,0,0,0,1,0,1,6845,0,0,0,0,1000,1,0,432329,1,9099,0,1,1500,2,0,0,0,2,2,0,0,19739
+172,,\spawn carryable 172,,,touch,,0,0,0,1,0,1,6845,0,0,0,0,1000,1,0,432623,1,9147,0,0,1500,2,0,0,9145,2,2,0,0,19739
+173,,\spawn carryable 173,,,touch,,0,0,0,1,0,1,6845,0,0,0,0,1000,1,0,432627,1,9148,0,0,1500,2,0,0,9146,2,2,0,0,19739
+174,,\spawn carryable 174,,,interact,,0,0,0,1,0,1,6845,0,0,0,0,1000,1,0,432927,1,9191,0,1,1500,2,0,0,0,2,2,0,0,19739
+175,Cargo,\spawn carryable 175,Deposited at convoy encounters to get them to start,Pick up,interact,,0,0,0,1,1,1,0,0,0,0,349643,500,1,434970,434969,1,9237,0,1,1500,1,0,0,0,2,1,0,0,13688
+176,Cargo,\spawn carryable 176,Deposited at convoy encounters to get them to start,Pick up,interact,,0,0,0,1,1,1,0,0,0,0,349643,500,1,435812,435811,1,9267,0,1,1500,1,0,0,0,2,1,0,0,18040
+177,Cargo,\spawn carryable 177,,Pick up,interact,,0,0,0,1,1,1,0,0,0,0,349643,500,1,0,435814,1,9268,0,1,1500,1,0,0,0,2,1,0,0,18468
+178,Scrambler Grenade,\spawn carryable 178,"Bandit Grenade dropped on death, used to disable/weaken radio barricades",,touch,,0,0,0,1,1,1,9273,0,0,0,0,0,1,435826,435825,1,9275,9275,0,1500,3,0,0,9277,2,1,0,0,18614
+179,,\spawn carryable 179,,,touch,,0,0,0,1,0,1,4392,0,0,0,0,0,1,438100,438099,1,9314,0,0,1500,2,0,0,0,2,2,0,0,17718
+180,Accord Weapon Supplies,\spawn carryable 180,Weapon supplies smugglers are trying to remove in Smuggler Sprint,,interact,,0,0,0,0,0,1,9617,0,0,0,0,1500,1,438677,438676,1,9366,9366,1,1500,2,0,0,0,2,2,0,0,20413
+181,Door Access Keycard,\spawn carryable 181,Tossable Accord Datapad,,touch,,0,0,0,1,0,1,4085,0,0,0,0,500,1,467732,467731,1,9527,0,0,1000,2,0,0,0,0,1,0,0,18792
+182,,\spawn carryable 182,,,touch,,0,0,0,1,0,0,0,0,0,0,0,500,1,0,473189,1,9548,0,0,1000,2,0,0,0,0,1,0,0,13685
+183,,\spawn carryable 183,,Pick up,interact,,0,0,0,1,1,0,7971,0,0,0,349643,2000,1,479023,479022,1,9673,0,1,0,5,0,0,0,5,1,0,0,17683
+184,,\spawn carryable 184,,Pick up,interact,,0,0,0,1,1,0,10493,0,0,0,349643,2000,1,479032,479031,1,9675,0,1,1500,5,0,0,0,5,1,0,0,20525
+185,Crashed Sleigh Part,\spawn carryable 185,,Pick up,interact,,0,0,0,1,1,0,7971,0,0,0,349643,2000,1,480629,480628,1,9892,0,1,3000,5,0,0,6686,5,1,0,0,17683
+186,,\spawn carryable 186,,,touch,,0,0,0,1,0,1,6845,0,0,0,0,1000,1,0,483281,1,10075,0,0,1500,2,0,0,10147,2,2,0,0,19739
+187,,\spawn carryable 187,,,touch,,0,0,0,1,0,1,6845,0,0,0,0,1000,1,0,483293,1,10076,0,0,1500,2,0,0,10088,2,2,0,0,19739
+188,,\spawn carryable 188,,,touch,,0,0,0,1,0,1,6845,0,0,0,0,1000,1,0,483299,1,10077,0,0,1500,2,0,0,10089,2,2,0,0,19739
+189,Nautilus Bait,\spawn carryable 189,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,0,0,493610,1,10398,0,0,1000,2,0,1,0,0,1,0,0,19174
+190,,\spawn carryable 190,,,interact,,0,0,0,1,0,1,4510,0,0,0,0,1500,1,496047,496046,1,0,0,1,1000,2,0,0,0,0,1,0,0,20321
+191,Explosive Charge,\spawn carryable 191,Has player place the charge over a fragile wall to destroy!,,touch,,0,0,0,0,0,1,9273,0,0,0,0,0,1,511367,511366,1,11084,0,0,1500,3,0,0,11085,2,1,0,0,18614
+192,,\spawn carryable 192,,,touch,,0,0,0,1,1,1,4979,0,0,0,0,0,1,530231,530230,1,4980,4980,0,1500,2,0,0,4991,2,2,0,0,17427
+193,Jetball,\spawn carryable 193,Ball for PvP Jet Ball game type. Copied from ID 11,,touch,,0,0,0,1,0,1,3765,0,0,0,0,0,1,531739,531738,1,11166,11166,0,250,4,1000,1,11446,4,2,0,0,17427
+194,Keycard,\spawn carryable 194,Tossable Accord Datapad,,touch,,0,0,0,1,0,1,4085,0,0,0,0,500,1,531946,531945,1,11170,0,0,1000,2,0,0,0,0,1,0,0,18792
+195,,\spawn carryable 195,,,touch,,0,0,0,1,0,1,4085,11672,0,0,0,2000,1,604660,604659,1,11667,0,0,1000,2,0,0,0,0,1,0,0,18614
+196,Disarmed Proximity Mine,\spawn carryable 196,Tossable Mine. Requires some scripting support to intercept status effect signals.,,touch,,0,0,0,1,0,1,11680,0,0,0,0,2000,1,606071,606070,1,11681,0,0,1000,2,0,0,0,0,1,0,0,18614
+197,Disarmed Proximity Mine,\spawn carryable 197,,,interact,,0,0,0,1,0,1,12234,0,0,0,0,2000,1,616449,616448,1,12233,0,1,1000,2,0,0,0,0,1,0,0,18614
+198,Generator Repair Parts,\spawn carryable 198,,,interact,,0,0,0,1,1,1,12889,0,0,0,0,0,1,839871,839870,1,12907,0,1,500,1,0,0,0,1,1,0,0,17682
+199,Tissue Sample,\spawn carryable 199,,,touch,,0,0,0,1,0,1,0,0,13517,0,0,500,1,0,903308,1,13516,0,0,250,2,0,0,0,1,1,0,0,19174
+200,Poison Vial,\spawn carryable 200,,,touch,,0,0,0,1,0,1,0,0,13543,0,0,500,1,0,903390,1,13542,0,0,250,2,0,0,0,1,1,0,0,17565
+201,Relic Container,\spawn carryable 201,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,903517,1,13561,0,0,250,2,0,0,0,1,1,0,0,14886
+202,Encryption Codes,\spawn carryable 202,Tossable Accord Datapad,,touch,,0,0,0,1,0,1,4085,0,0,0,0,500,1,903602,903601,1,13566,0,0,250,2,0,0,0,0,1,0,0,18792
+203,Datacrypt,\spawn carryable 203,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,904867,1,13583,0,0,250,2,0,0,0,1,1,0,0,17761
+204,Box of Gadgets,\spawn carryable 204,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,905171,1,13587,0,0,250,2,0,0,0,1,1,0,0,10392
+205,Box of Supplies,\spawn carryable 205,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,906133,1,13641,0,0,250,2,0,0,0,1,1,0,0,13754
+206,Chosen Implant,\spawn carryable 206,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,906417,1,13663,0,0,250,2,0,0,0,1,1,0,0,17821
+207,Drone Component,\spawn carryable 207,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,906823,1,13688,0,0,250,2,0,0,0,1,1,0,0,20918
+208,Datakey,\spawn carryable 208,Tossable Accord Datapad,,touch,,0,0,0,1,0,1,4085,0,0,0,0,500,1,907807,907806,1,13757,0,0,250,2,0,0,0,0,1,0,0,18792
+209,Chosen Transmitter,\spawn carryable 209,Tossable Accord Datapad,,touch,,0,0,0,1,0,1,4085,0,0,0,0,500,1,908425,908424,1,13781,0,0,250,2,0,0,0,0,1,0,0,18468
+210,Stolen Crystite,\spawn carryable 210,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,912193,1,13893,0,0,250,2,0,0,0,1,1,0,0,14886
+211,Torque Ring,\spawn carryable 211,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,912200,1,13894,0,0,250,2,0,0,0,1,1,0,0,19208
+212,Weapons Crate,\spawn carryable 212,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,912206,1,13899,0,0,250,2,0,0,0,1,1,0,0,13754
+213,Ball,\spawn carryable 213,Prison Recreation Ball,,touch,,0,0,0,1,1,1,0,0,0,0,0,0,1,913499,913498,1,13936,13936,0,1500,2,0,0,0,2,2,0,0,17427
+214,Chosen Tech,\spawn carryable 214,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,1,0,913877,1,13976,0,0,250,2,0,0,0,1,1,0,0,20525
+215,SIN Implant,\spawn carryable 215,,,touch,,0,0,0,1,0,1,4085,0,0,0,0,500,1,0,913893,1,13979,0,0,250,2,0,0,0,1,1,0,0,18792
+216,Bandit Laundry,\spawn carryable 216,,,touch,,0,0,0,1,0,1,13981,0,0,0,0,500,1,0,913914,1,13980,0,0,250,2,0,0,0,1,1,0,0,17586
+217,,\spawn carryable 217,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,0,0,926204,1,14330,0,0,1000,2,0,0,14329,0,1,0,0,17426
+218,,\spawn carryable 218,,,touch,,0,0,0,1,0,1,0,0,0,0,0,500,0,0,926222,1,14334,0,0,1000,2,0,0,14335,0,1,0,0,17426
+220,,\spawn carryable 220,,,touch,,0,0,0,1,1,1,12889,0,0,0,0,0,1,0,958978,1,15113,0,0,500,1,0,0,0,1,1,0,0,17682
+221,,\spawn carryable 221,,,touch,,0,0,0,1,1,1,15147,0,0,0,0,0,1,0,959083,1,15152,15152,0,1500,2,0,0,0,2,2,0,0,17718
+222,,\spawn carryable 222,,,touch,,0,0,0,1,1,1,15148,0,0,0,0,0,1,959086,959085,1,15153,15153,0,1500,2,0,0,0,2,2,0,0,17716
+223,,\spawn carryable 223,,,touch,,0,0,0,1,1,1,15149,0,0,0,0,0,1,0,959088,1,15154,15154,0,1500,2,0,0,0,2,2,0,0,17717
+224,,\spawn carryable 224,,,touch,,0,0,0,1,1,1,15150,0,0,0,0,0,1,0,959094,1,15156,15156,0,1500,2,0,0,0,2,2,0,0,17717
+225,,\spawn carryable 225,,,touch,,0,0,0,1,1,1,15151,0,0,0,0,0,1,0,959096,1,15157,15157,0,1500,2,0,0,0,2,2,0,0,17717

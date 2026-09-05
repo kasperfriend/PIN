@@ -4,6 +4,10 @@
 
 ### Added
 
+- Add `Docs/SpawnReference/`, the full catalog of everything PIN can spawn: one Markdown spreadsheet per kind (`MOBS.md` 3,109 rows, `DEPLOYABLES.md` 3,902, `VEHICLES.md` 173, `CARRYABLES.md` 105, `TURRETS.md` 107 - 7,396 rows in total) where every row lists its resolved name, faction/category/class and the exact `\spawn <kind> <id>` command, plus an index document with the command syntax, kind aliases, the faction table and the monster scaling table
+- Add `Docs/SpawnReference/csv/`, the same rows as spreadsheets with **every** raw SDB column plus resolved foreign keys (chassis, weapons, loot tables, deployable category/function, vehicle class, granted ability, titles) for filtering in Excel/LibreOffice or diffing between builds
+- Add `Tools/SdbDump/spawn_reference.py`, the generator for that folder: it imports the `sdb_dump.py` decoder, joins the spawnable tables against the lookup tables and decrypts only the `dblocalization::LocalizedText` rows those tables reference, so a full regeneration takes ~30 s and needs nothing but Python 3
+- Deployables are catalogued for the first time (all 3,902 rows, 2,088 of them named, grouped by `DeployableCategory` / `DeployableFunction`)
 - Implement fall damage: `FallDamageSystem` tracks each player's airborne samples from the client authoritative movement inputs and applies damage on landing based on the fastest downward speed of the fall (water landings, thruster/glider use, knockdown falls and the `immune_falldamage` combat flag negate it; lethal at very high impact speeds)
 - Add a `GameServer.Tests` xUnit project covering `FallDamageMath`, `FallDamageSystem`, `DamageSystem`, `CharacterLifecycleService` and the `CharacterEntity` vital clamping; CI now runs `dotnet test`
 - Add player facing health debug commands to the in-game chat: `\health`, `\hurt <amount>`, `\heal <amount>`, `\fall <speed>`, `\down`, `\revive`, `\kill`, `\respawn`, so the health system can be exercised without enemies
@@ -32,6 +36,7 @@
 
 ### Changed
 
+- `Tools/SdbDump`: `spawnables` now decrypts only the localized strings the printed rows reference instead of building the whole 175k-row `dblocalization::LocalizedText` map, which takes the run from ~15 min down to ~15 s (output is byte-identical)
 - Update build pipeline to support .NET 8 & 9 and the latest macOS version
 - Update most dependencies
 

@@ -6,6 +6,7 @@ PIN is split into two areas:
 - [Characters & Battleframes](CHARACTERS_AND_BATTLEFRAMES.md) — `characters.json` configuration
 - [Spawning & Combat](SPAWNING_AND_COMBAT.md) — NPC spawning and combat flow
 - [Static Database](STATIC_DATABASE.md) — the `clientdb.sd2` format, what PIN loads from it, and the in-game `spawn` / `sdb` / `sdbinfo` commands
+- [Spawnable Reference](SpawnReference/README.md) — **every** spawnable row in `clientdb.sd2` (mobs, deployables, vehicles, carryables, turrets) as a spreadsheet, each with the exact command that spawns it, plus CSV exports
 - [Mobs & NPCs Catalog](MOBS_AND_NPCS.md) — every mob/NPC in `clientdb.sd2` (decoded with `Tools/SdbDump`)
 - [Health System](HEALTH_SYSTEM.md) — health, damage, death, respawn and fall damage
 

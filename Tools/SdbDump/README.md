@@ -50,6 +50,35 @@ Optional flags: `--game-dir <dir>` to point at PIN's `UdpHosts/GameServer`
 for name harvesting (auto-detected by default) and `--names <file>` to add
 extra candidate table names.
 
+## Generating Docs/SpawnReference
+
+`spawn_reference.py` is the generator behind
+[`Docs/SpawnReference`](../../Docs/SpawnReference/README.md): the full
+spawnable catalog, one Markdown spreadsheet **and** one CSV per kind, where
+every row carries the exact `\spawn <kind> <id>` command.
+
+```sh
+# rewrite every document + CSV in Docs/SpawnReference (~30 s)
+python3 spawn_reference.py /path/to/clientdb.sd2
+
+# somewhere else, or only part of it
+python3 spawn_reference.py /path/to/clientdb.sd2 --out-dir /tmp/ref
+python3 spawn_reference.py /path/to/clientdb.sd2 --kinds monster,turret --no-csv
+```
+
+It imports `sdb_dump.py` as its decoder, so it needs nothing but Python 3.
+Beyond `spawnables` it also resolves the foreign keys a player actually cares
+about — faction, chassis, weapons, loot tables, deployable category/function,
+vehicle class, granted ability — by reading the small lookup tables
+(`dbcharacter::Faction`, `DeployableCategory`, `DeployableFunction`,
+`vcs::VehicleClass`, `dbitems::LootTable`, `dbitems::RootItem`,
+`apt::AbilityData`, `dbcharacter::MonsterTitle`, `TurretWeapon`) and
+decrypting **only** the `dblocalization::LocalizedText` rows those tables
+reference. The CSVs additionally contain every raw column of each SDB record.
+
+Run it after changing `SDBCatalog.cs` / the spawn commands, or when pointing
+PIN at a different Firefall build, and commit the result.
+
 ## Verification
 
 `selftest.py` builds a synthetic `.sd2` from scratch (header, obfuscation,
@@ -64,5 +93,12 @@ python3 selftest.py
 
 `clientdb.sd2` is game data taken from a Firefall installation. A decoded copy
 of build `prod-1962` (split zip parts under `Tools/`) is used as the reference
-input for `Docs/MOBS_AND_NPCS.md`; the extracted `.sd2` itself stays out of
-Git. Point the tool at your own copy for anything else.
+input for `Docs/MOBS_AND_NPCS.md` and `Docs/SpawnReference/`; the extracted
+`.sd2` itself stays out of Git. Point the tool at your own copy for anything
+else.
+
+```sh
+cat Tools/clientdb.zip.001 Tools/clientdb.zip.002 > /tmp/clientdb.zip
+unzip -o /tmp/clientdb.zip -d /tmp/sdb
+python3 Tools/SdbDump/spawn_reference.py /tmp/sdb/clientdb.sd2
+```

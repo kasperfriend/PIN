@@ -789,15 +789,67 @@ SPAWNABLE_KINDS = {
 }
 
 
-def _localized(db):
-    """id -> English string map from dblocalization::LocalizedText."""
+def _needed_text_ids(db, references):
+    """Collect the LocalizedText ids referenced by `(table, column)` pairs.
+
+    Reads a single integer column per table, which is cheap; used to keep
+    `_localized` from decrypting strings nobody asked for.
+    """
+    needed = set()
+    for table_name, column in references:
+        table = db.find_table(table_name)
+        if table is None:
+            continue
+        field = next((f for f in table["fields"]
+                      if table["column_names"].get(f["id"]) == column), None)
+        if field is None:
+            continue
+        for y in range(table["row_count"]):
+            value = db.row_field(table, field, y)
+            if value:
+                needed.add(value)
+    return needed
+
+
+def _localized(db, only_ids=None):
+    """id -> English string map from dblocalization::LocalizedText.
+
+    `dblocalization::LocalizedText` has ~175k rows and every string is decrypted
+    with a freshly seeded Mersenne twister, so building the full map costs
+    minutes of pure Python. Callers that know which ids they need pass them as
+    `only_ids`: the id column is scanned (integers only) and just those strings
+    are decrypted, which turns a full `spawnables` run from ~15 min into ~30 s.
+    """
     table = db.find_table("dblocalization::LocalizedText")
     if table is None:
         return {}
+
+    id_field = text_field = text_index = None
+    for index, field in enumerate(table["fields"]):
+        name = table["column_names"].get(field["id"])
+        if name == "id":
+            id_field = field
+        elif name == "english":
+            text_field, text_index = field, index
+
+    if only_ids is None or id_field is None or text_field is None:
+        out = {}
+        for row in db.rows(table):
+            rid, eng = row.get("id"), row.get("english")
+            if rid is not None and eng and eng.strip():
+                out[rid] = eng
+        return out
+
+    wanted = set(only_ids)
     out = {}
-    for row in db.rows(table):
-        rid, eng = row.get("id"), row.get("english")
-        if rid is not None and eng and eng.strip():
+    for y in range(table["row_count"]):
+        rid = db.row_field(table, id_field, y)
+        if rid not in wanted:
+            continue
+        if text_index in db.row_nulls(table, y):
+            continue
+        eng = db.row_field(table, text_field, y)
+        if eng and eng.strip():
             out[rid] = eng
     return out
 
@@ -809,7 +861,19 @@ def cmd_spawnables(db, args):
     with ids, resolved names and the fields the in-game `sdbinfo` shows.
     """
     db.resolve_names(load_names(args.names))
-    text = _localized(db)
+
+    kinds = [args.table] if args.table else list(SPAWNABLE_KINDS)
+    for kind in kinds:
+        if kind not in SPAWNABLE_KINDS:
+            print(f"error: unknown kind {kind!r}; expected one of "
+                  f"{', '.join(SPAWNABLE_KINDS)}", file=sys.stderr)
+            return 1
+
+    # Only decrypt the strings these rows reference (see _localized).
+    references = [(SPAWNABLE_KINDS[kind][0], SPAWNABLE_KINDS[kind][1]) for kind in kinds
+                  if SPAWNABLE_KINDS[kind][1] != "name"]
+    references.append(("dbcharacter::Faction", "localized_name_id"))
+    text = _localized(db, _needed_text_ids(db, references))
 
     factions = {}
     ftable = db.find_table("dbcharacter::Faction")
@@ -817,13 +881,8 @@ def cmd_spawnables(db, args):
         for row in db.rows(ftable):
             factions[row.get("id")] = row.get("internal_name") or text.get(row.get("localized_name_id"))
 
-    kinds = [args.table] if args.table else list(SPAWNABLE_KINDS)
     out = {"patch": db.patch, "kinds": {}}
     for kind in kinds:
-        if kind not in SPAWNABLE_KINDS:
-            print(f"error: unknown kind {kind!r}; expected one of "
-                  f"{', '.join(SPAWNABLE_KINDS)}", file=sys.stderr)
-            return 1
         tname, name_col, extra = SPAWNABLE_KINDS[kind]
         table = db.find_table(tname)
         if table is None:
