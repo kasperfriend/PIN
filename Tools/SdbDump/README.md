@@ -32,7 +32,19 @@ python3 sdb_dump.py dump /path/to/clientdb.sd2 dbcharacter::Monster -o monster.j
 # Full mobs/NPCs report: dbcharacter::Monster joined with localization names,
 # factions and MonsterScaling, plus the dbcharacter::Turret table
 python3 sdb_dump.py monsters /path/to/clientdb.sd2 -o monsters.json
+
+# Everything PIN's in-game `spawn <kind> <id|name>` command can create:
+# monsters, deployables, vehicles, carryables and turrets, with resolved names
+python3 sdb_dump.py spawnables /path/to/clientdb.sd2 -o spawnables.json
+python3 sdb_dump.py spawnables /path/to/clientdb.sd2 vehicle   # one kind
+
+# How much of the file PIN's StaticDBLoader actually reads, and which
+# identified tables are still unused
+python3 sdb_dump.py coverage /path/to/clientdb.sd2
 ```
+
+`spawnables` mirrors `GameServer/StaticDB/SDBCatalog.cs`, so the offline dump
+and the in-game `sdb` command list the same rows.
 
 Optional flags: `--game-dir <dir>` to point at PIN's `UdpHosts/GameServer`
 for name harvesting (auto-detected by default) and `--names <file>` to add

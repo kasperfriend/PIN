@@ -772,6 +772,148 @@ def cmd_monsters(db, args):
     return 0
 
 
+SPAWNABLE_KINDS = {
+    # kind      -> (table, name column, extra columns to include)
+    "monster":   ("dbcharacter::Monster",     "localized_name_id",
+                  ["faction_id", "chassis_id", "weapon1_id", "weapon2_id", "behavior",
+                   "scaling_table_id", "loot_table_id", "health_regen", "ai_spawn_delay_ms"]),
+    "deployable": ("dbcharacter::Deployable", "localized_name_id",
+                  ["default_faction", "standard_health", "start_hitpoints",
+                   "deployable_category", "function", "scale", "build_time_ms"]),
+    "vehicle":   ("vcs::VehicleInfo",         "localized_name_id",
+                  ["faction_id", "vehicle_class", "race", "scaling_table_id"]),
+    "carryable": ("dbitems::CarryableObject", "localized_name_id",
+                  ["type", "visual_record_id", "pickup_radius", "ability_granted_id"]),
+    "turret":    ("dbcharacter::Turret",      "name",
+                  ["posture", "attack_type", "behavior", "visualrec"]),
+}
+
+
+def _localized(db):
+    """id -> English string map from dblocalization::LocalizedText."""
+    table = db.find_table("dblocalization::LocalizedText")
+    if table is None:
+        return {}
+    out = {}
+    for row in db.rows(table):
+        rid, eng = row.get("id"), row.get("english")
+        if rid is not None and eng and eng.strip():
+            out[rid] = eng
+    return out
+
+
+def cmd_spawnables(db, args):
+    """Catalog of everything PIN's `spawn` command can create from the SDB.
+
+    Mirrors GameServer/StaticDB/SDBCatalog.cs: one section per spawn kind,
+    with ids, resolved names and the fields the in-game `sdbinfo` shows.
+    """
+    db.resolve_names(load_names(args.names))
+    text = _localized(db)
+
+    factions = {}
+    ftable = db.find_table("dbcharacter::Faction")
+    if ftable is not None:
+        for row in db.rows(ftable):
+            factions[row.get("id")] = row.get("internal_name") or text.get(row.get("localized_name_id"))
+
+    kinds = [args.table] if args.table else list(SPAWNABLE_KINDS)
+    out = {"patch": db.patch, "kinds": {}}
+    for kind in kinds:
+        if kind not in SPAWNABLE_KINDS:
+            print(f"error: unknown kind {kind!r}; expected one of "
+                  f"{', '.join(SPAWNABLE_KINDS)}", file=sys.stderr)
+            return 1
+        tname, name_col, extra = SPAWNABLE_KINDS[kind]
+        table = db.find_table(tname)
+        if table is None:
+            print(f"warning: {tname} not in this database", file=sys.stderr)
+            continue
+
+        entries = []
+        for row in db.rows(table):
+            rid = row.get("id")
+            if rid is None:
+                continue
+            if name_col == "name":
+                name = row.get("name") or None
+            else:
+                name = text.get(row.get(name_col))
+            entry = {"id": rid, "name": name}
+            fid = row.get("faction_id", row.get("default_faction"))
+            if fid:
+                entry["faction"] = factions.get(fid)
+            for col in extra:
+                if col in row:
+                    entry[col] = _jsonable(row[col])
+            entries.append(entry)
+
+        entries.sort(key=lambda e: e["id"])
+        named = sum(1 for e in entries if e["name"])
+        out["kinds"][kind] = {
+            "table": tname, "count": len(entries), "named": named,
+            "spawn_command": f"spawn {kind} <id|name> [<x> <y> <z>]",
+            "entries": entries,
+        }
+        print(f"{kind:<10} {len(entries):>5} rows ({named} named)  {tname}", file=sys.stderr)
+
+    _emit(out, args.output)
+    return 0
+
+
+def cmd_coverage(db, args):
+    """Report how much of the .sd2 PIN actually reads.
+
+    Compares the tables in the file against the `LoadStaticDB<T>("...")` calls
+    in PIN's StaticDBLoader, so it is obvious which game data is still unused.
+    """
+    table_names, _cols = harvest_pin_names(args.game_dir)
+    loaded = set(table_names)
+    db.resolve_names(load_names(args.names) + list(loaded))
+
+    present = {t["name"]: t for t in db.tables if t["name"]}
+    total_rows = sum(t["row_count"] for t in db.tables)
+    loaded_rows = sum(t["row_count"] for n, t in present.items() if n in loaded)
+
+    print(f"file           : {args.sdb}")
+    print(f"patch          : {db.patch}")
+    print(f"tables in file : {len(db.tables)}")
+    print(f"identified     : {len(present)}")
+    print(f"loaded by PIN  : {sum(1 for n in present if n in loaded)}")
+    print(f"unidentified   : {len(db.tables) - len(present)}")
+    print(f"rows           : {loaded_rows:,} of {total_rows:,} "
+          f"({100.0 * loaded_rows / max(total_rows, 1):.1f}%) in PIN-loaded tables")
+    print()
+
+    by_schema = {}
+    for name, table in present.items():
+        schema = name.split("::")[0]
+        stats = by_schema.setdefault(schema, [0, 0, 0])
+        stats[1] += 1
+        stats[2] += table["row_count"]
+        if name in loaded:
+            stats[0] += 1
+    print("schema               loaded/known   rows")
+    for schema in sorted(by_schema):
+        got, known, rows = by_schema[schema]
+        print(f"  {schema:<20} {got:>4}/{known:<5} {rows:>10,}")
+
+    unread = sorted(n for n in present if n not in loaded)
+    if unread:
+        print()
+        print("identified but NOT read by PIN:")
+        for name in unread:
+            print(f"  {name:<45} rows={present[name]['row_count']}")
+
+    stale = sorted(n for n in loaded if n not in present)
+    if stale:
+        print()
+        print("read by PIN but missing from this file:")
+        for name in stale:
+            print(f"  {name}")
+    return 0
+
+
 def _column_candidates(table, extra):
     """Column names can only be guessed by candidates; return known ones."""
     candidates = set(extra or [])
@@ -792,9 +934,9 @@ def _emit(obj, output):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Firefall StaticDB (.sd2) dumper")
-    parser.add_argument("command", choices=["info", "tables", "dump", "monsters"])
+    parser.add_argument("command", choices=["info", "tables", "dump", "monsters", "spawnables", "coverage"])
     parser.add_argument("sdb", help="path to clientdb.sd2")
-    parser.add_argument("table", nargs="?", help="table name for 'dump' (schema::Name)")
+    parser.add_argument("table", nargs="?", help="table name for 'dump' (schema::Name), or kind for 'spawnables'")
     parser.add_argument("-o", "--output", help="write JSON here instead of stdout")
     parser.add_argument("--names", help="extra candidate table-name list (one per line)")
     parser.add_argument("--game-dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "UdpHosts", "GameServer"),
@@ -822,6 +964,8 @@ def main(argv=None):
         "tables": cmd_tables,
         "dump": cmd_dump,
         "monsters": cmd_monsters,
+        "spawnables": cmd_spawnables,
+        "coverage": cmd_coverage,
     }[args.command](db, args)
 
 

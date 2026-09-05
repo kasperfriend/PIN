@@ -8,6 +8,7 @@ using Records.aptfs;
 using Records.dbcharacter;
 using Records.dbencounterdata;
 using Records.dbitems;
+using Records.dblocalization;
 using Records.dbphysicsmaterials;
 using Records.dbvisualrecords;
 using Records.dbzonemetadata;
@@ -25,6 +26,7 @@ public class SDBInterface
     private static List<FactionRelations> _factionRelations;
     private static Dictionary<uint, List<FactionReputations>> _factionReputations;
     private static Dictionary<uint, Monster> _monster;
+    private static Dictionary<uint, MonsterScaling> _monsterScaling;
     private static Dictionary<uint, Turret> _turret;
     private static Dictionary<uint, PoseType> _poseType;
     private static Dictionary<uint, CharInfo> _charInfo;
@@ -68,6 +70,9 @@ public class SDBInterface
     private static Dictionary<uint, Blueprints> _blueprints;
     private static Dictionary<uint, List<Blueprint_Items>> _blueprintItems;
     private static Dictionary<uint, List<BattleframeVisuals>> _battleframeVisuals;
+
+    // dblocalization
+    private static Dictionary<uint, LocalizedText> _localizedText;
 
     // dbzonemetadata
     private static Dictionary<uint, ZoneRecord> _zoneRecord;
@@ -285,6 +290,7 @@ public class SDBInterface
         _factionRelations = loader.LoadFactionRelations();
         _factionReputations = loader.LoadFactionReputations();
         _monster = loader.LoadMonster();
+        _monsterScaling = loader.LoadMonsterScaling();
         _turret = loader.LoadTurret();
         _poseType = loader.LoadPoseType();
         _charInfo = loader.LoadCharInfo();
@@ -328,6 +334,9 @@ public class SDBInterface
         _blueprints = loader.LoadBlueprints();
         _blueprintItems = loader.LoadBlueprintItems();
         _battleframeVisuals = loader.LoadBattleframeVisuals();
+
+        // dblocalization
+        _localizedText = loader.LoadLocalizedText();
 
         // dbzonemetadata
         _zoneRecord = loader.LoadZoneRecord();
@@ -566,6 +575,7 @@ public class SDBInterface
 
     public static Dictionary<byte, CharCreateLoadoutSlots> GetCharCreateLoadoutSlots(uint id) => _charCreateLoadoutSlots.GetValueOrDefault(id);
     public static Deployable GetDeployable(uint id) => _deployable?.GetValueOrDefault(id);
+    public static IReadOnlyDictionary<uint, Deployable> GetDeployables() => _deployable;
     public static DeployableFunction GetDeployableFunction(uint id) => _deployableFunction.GetValueOrDefault(id);
     public static DeployableCategory GetDeployableCategory(uint id) => _deployableCategory.GetValueOrDefault(id);
     public static DamageType GetDamageType(byte id) => _damageType.GetValueOrDefault(id);
@@ -578,7 +588,11 @@ public class SDBInterface
     public static List<FactionReputations> GetFactionReputations(uint id) => _factionReputations.GetValueOrDefault(id);
 
     public static Monster GetMonster(uint id) => _monster.GetValueOrDefault(id);
+    public static IReadOnlyDictionary<uint, Monster> GetMonsters() => _monster;
+    public static MonsterScaling GetMonsterScaling(uint level) => _monsterScaling?.GetValueOrDefault(level);
+    public static IReadOnlyDictionary<uint, MonsterScaling> GetMonsterScalings() => _monsterScaling;
     public static Turret GetTurret(uint id) => _turret.GetValueOrDefault(id);
+    public static IReadOnlyDictionary<uint, Turret> GetTurrets() => _turret;
     public static PoseType GetPoseType(uint id) => _poseType.GetValueOrDefault(id);
     public static CharInfo GetCharInfo(uint id) => _charInfo.GetValueOrDefault(id);
 
@@ -598,6 +612,7 @@ public class SDBInterface
     public static AbilityModule GetAbilityModule(uint id) => _abilityModule.GetValueOrDefault(id);
     public static Battleframe GetBattleframe(uint id) => _battleframe.GetValueOrDefault(id);
     public static CarryableObject GetCarryableObject(uint id) => _carryableObject.GetValueOrDefault(id);
+    public static IReadOnlyDictionary<uint, CarryableObject> GetCarryableObjects() => _carryableObject;
     public static Weapons GetWeapon(uint id) => _weapons.GetValueOrDefault(id);
     public static WeaponTemplates GetWeaponTemplate(uint id) => _weaponTemplates.GetValueOrDefault(id);
     public static WeaponTemplateModifiers GetWeaponTemplateModifiers(uint id) => _weaponTemplateModifiers.GetValueOrDefault(id);
@@ -612,6 +627,19 @@ public class SDBInterface
     public static Blueprints GetBlueprint(uint id) => _blueprints.GetValueOrDefault(id);
     public static List<Blueprint_Items> GetBlueprintItems(uint blueprintId) => _blueprintItems.GetValueOrDefault(blueprintId);
     public static List<BattleframeVisuals> GetBattleframeVisuals(uint id) => _battleframeVisuals.GetValueOrDefault(id);
+
+    // dblocalization
+    public static LocalizedText GetLocalizedText(uint id) => _localizedText?.GetValueOrDefault(id);
+
+    /// <summary>
+    /// Resolve a localization id to its English string, or null when the id is
+    /// unknown / the row has no English text (many rows in clientdb.sd2 are blank).
+    /// </summary>
+    public static string GetLocalizedString(uint id)
+    {
+        var row = GetLocalizedText(id);
+        return string.IsNullOrWhiteSpace(row?.English) ? null : row.English;
+    }
 
     // dbzonemetadata
     public static ZoneRecord GetZoneRecord(uint id) => _zoneRecord.GetValueOrDefault(id);
@@ -803,6 +831,7 @@ public class SDBInterface
     // vcs
     public static VehicleClass GetVehicleClass(byte id) => _vehicleClass.GetValueOrDefault(id);
     public static VehicleInfo GetVehicleInfo(ushort id) => _vehicleInfo.GetValueOrDefault(id);
+    public static IReadOnlyDictionary<ushort, VehicleInfo> GetVehicleInfos() => _vehicleInfo;
     public static Dictionary<uint, BaseComponentDef> GetBaseComponentDef(ushort id) => _baseComponentDef.GetValueOrDefault(id);
     public static ScopingComponentDef GetScopingComponentDef(uint id) => _scopingComponentDef.GetValueOrDefault(id);
     public static DriverComponentDef GetDriverComponentDef(uint id) => _driverComponentDef.GetValueOrDefault(id);

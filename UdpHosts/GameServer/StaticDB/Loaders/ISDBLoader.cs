@@ -6,6 +6,7 @@ using Records.aptfs;
 using Records.dbcharacter;
 using Records.dbencounterdata;
 using Records.dbitems;
+using Records.dblocalization;
 using Records.dbphysicsmaterials;
 using Records.dbvisualrecords;
 using Records.dbzonemetadata;
@@ -23,6 +24,7 @@ public interface ISDBLoader
     List<FactionRelations> LoadFactionRelations();
     Dictionary<uint, List<FactionReputations>> LoadFactionReputations();
     Dictionary<uint, Monster> LoadMonster();
+    Dictionary<uint, MonsterScaling> LoadMonsterScaling();
     Dictionary<uint, Turret> LoadTurret();
     Dictionary<uint, PoseType> LoadPoseType();
     Dictionary<uint, CharInfo> LoadCharInfo();
@@ -65,6 +67,9 @@ public interface ISDBLoader
     Dictionary<uint, Blueprints> LoadBlueprints();
     Dictionary<uint, List<Blueprint_Items>> LoadBlueprintItems();
     Dictionary<uint, List<BattleframeVisuals>> LoadBattleframeVisuals();
+
+    // dblocalization
+    Dictionary<uint, LocalizedText> LoadLocalizedText();
 
     // dbzonemetadata
     Dictionary<uint, ZoneRecord> LoadZoneRecord();
