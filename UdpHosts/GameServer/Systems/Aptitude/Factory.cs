@@ -320,8 +320,8 @@ public class Factory
             //     return new AddPhysicsCommand(SDBInterface.GetAddPhysicsCommandDef(commandId));
             case CommandType.RequireReload:
                 return new RequireReloadCommand(SDBInterface.GetRequireReloadCommandDef(commandId));
-            // case CommandType.TargetByExists:
-            //     return new TargetByExistsCommand(CustomDBInterface.GetTargetByExistsCommandDef(commandId));
+            case CommandType.TargetByExists:
+                return new TargetByExistsCommand(CustomDBInterface.GetTargetByExistsCommandDef(commandId));
             case CommandType.InteractionType:
                 return new InteractionTypeCommand(SDBInterface.GetInteractionTypeCommandDef(commandId));
             case CommandType.TargetStackEmpty:
