@@ -9,6 +9,7 @@ using GameServer.Entities;
 using GameServer.Entities.Outpost;
 using GameServer.Physics;
 using GameServer.Systems.Admin;
+using GameServer.Systems.Ai;
 using GameServer.Systems.Aptitude;
 using GameServer.Systems.CharacterLifecycle;
 using GameServer.Systems.Chat;
@@ -47,7 +48,7 @@ public class Shard : IShard
         EventBus = new EventBus();
         var debugCallbacks = new DebugProjectileHitCallbacks(this);
         Physics = new PhysicsEngine(EventBus, Settings.ZoneId, Settings.MapsPath, Settings.AssetDBPath, Settings.LoadMapsCollision, debugCallbacks, false, Settings.CachePath, Settings.ForceReloadZone);
-        AI = new AIEngine();
+        AI = new AiEngine(this);
         Movement = new MovementRelay(this);
         Abilities = new AbilitySystem(this);
         EntityMan = new EntityManager(this);
@@ -72,7 +73,7 @@ public class Shard : IShard
     public IDictionary<uint, INetworkPlayer> Clients { get; }
     public EventBus EventBus { get; }
     public PhysicsEngine Physics { get; }
-    public AIEngine AI { get; }
+    public AiEngine AI { get; }
     public MovementRelay Movement { get; }
     public EntityManager EntityMan { get; }
     public EncounterManager EncounterMan { get; }

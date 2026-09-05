@@ -12,6 +12,7 @@ using GameServer.Entities.Character;
 using GameServer.Entities.Outpost;
 using GameServer.Physics;
 using GameServer.Systems.Admin;
+using GameServer.Systems.Ai;
 using GameServer.Systems.Aptitude;
 using GameServer.Systems.CharacterLifecycle;
 using GameServer.Systems.Chat;
@@ -41,9 +42,12 @@ public sealed class FakeShard : IShard
         Damage = new DamageSystem(EventBus, this, new StandardNpcDeathRules());
         CharacterLifecycle = new CharacterLifecycleService(this, EventBus, new StandardCharacterLifecycleRules());
         FallDamage = new FallDamageSystem(this, Damage, new StandardFallDamageRules());
+        AI = new AiEngine(this, new StandardAiRules(), new AlwaysHostileAiHostility(), AiAttackFeedback, new FakeAiMonsterStats());
     }
 
     public EventBus EventBus { get; } = new();
+
+    public RecordingAiAttackFeedback AiAttackFeedback { get; } = new();
 
     public EntityManager EntityMan { get; }
 
@@ -73,7 +77,7 @@ public sealed class FakeShard : IShard
 
     public PhysicsEngine Physics { get; } = null;
 
-    public AIEngine AI { get; } = null;
+    public AiEngine AI { get; set; }
 
     public MovementRelay Movement { get; } = null;
 

@@ -79,6 +79,10 @@ public class EntityManager
         _shard.Physics.UpdateEntity(characterEntity);
         _shard.CharacterLifecycle.OnCharacterCreated(characterEntity);
         Add(characterEntity.EntityId, characterEntity);
+
+        // Spawned characters are NPCs; the engine ignores player controlled ones.
+        _shard.AI?.Register(characterEntity);
+
         return characterEntity;
     }
 
@@ -578,6 +582,8 @@ public class EntityManager
             {
                 _shard.CharacterLifecycle.OnCharacterRemoved(characterEntity);
             }
+
+            _shard.AI?.Unregister(guid);
 
             if (_shard.Physics.HasEntity(entity))
             {

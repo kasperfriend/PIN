@@ -4,10 +4,10 @@ This document explains how the PIN server loads its data, how to spawn enemies
 (NPCs / mobs), and how shooting those enemies flows through the combat systems.
 It is written for developers working on the GameServer.
 
-> NOTE: `README.md` still lists "There is no combat, projectile or damage
-> simulation" — that is **stale**. The branch now wires `WeaponSim`,
-> `ProjectileSim`, `CombatSim`, `DamageSystem`, and `HitFeedback` into the
-> `Shard` (`Shard.cs`). Enemies just need to exist and be targetable.
+> Spawned NPCs are not scenery: `AiEngine` registers every character that goes
+> through `EntityManager.SpawnCharacter` and drives it. See
+> [NPC_AI.md](NPC_AI.md) for the state machine, the aggro triggers, the attack
+> path and the tunables.
 
 ---
 
@@ -206,6 +206,24 @@ which `CharacterLifecycleService` turns into a death transition
 (`CharacterDiedEvent`). `NpcDeathService` then applies gib visuals and a corpse
 linger.
 
+### The other direction: NPCs shooting you
+
+`AiEngine` runs the reverse path on the shard tick. A mob acquires you by
+proximity or by being shot, walks towards you and, once you are inside its attack
+range with an unobstructed line of sight, applies flat damage through the same
+`DamageSystem` and sends the same `TookHit` feedback a weapon hit produces:
+
+```
+AiEngine.Tick
+  -> AiBrain.Decide              (Idle / Chase / Attack / Return / Dead)
+    -> DamageSystem.ApplyDamage  (shields, then health)
+      -> EntityDamagedEvent      (bleedout / death for the player)
+    -> HitFeedback.TookDebugHit  (TookHit to scoped clients)
+```
+
+Attacks are hitscan, so there is nothing to dodge. Full details, the tunables and
+the `\ai` commands are in [NPC_AI.md](NPC_AI.md).
+
 ### Faction / hostility gate
 
 `CombatSim.OnProjectileHit` blocks a hit only when the stance is `Friendly` or
@@ -262,6 +280,9 @@ Player faction defaults to `1` (Accord). So:
 | Damage / heal yourself           | `\hurt 5000` / `\heal 5000`              |
 | Simulate a fall landing          | `\fall 30`                               |
 | Bleedout / revive / die / respawn | `\down` / `\revive` / `\kill` / `\respawn` |
+| Show NPC AI status                 | `\ai`                                     |
+| Freeze / unfreeze every mob        | `\ai off` / `\ai on`                      |
+| List mobs with their AI state      | `\ai list`                                |
 
 The health, damage, death, respawn and fall damage pipeline is documented in
 [HEALTH_SYSTEM.md](HEALTH_SYSTEM.md).
