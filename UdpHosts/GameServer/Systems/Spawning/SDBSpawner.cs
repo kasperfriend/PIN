@@ -1,9 +1,9 @@
-namespace GameServer.Systems.Spawning;
-
 using System;
 using System.Globalization;
 using System.Numerics;
 using GameServer.StaticDB;
+
+namespace GameServer.Systems.Spawning;
 
 /// <summary>
 /// Shared implementation of the generic "spawn something from the static
