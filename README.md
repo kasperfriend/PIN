@@ -116,10 +116,11 @@ PlayIntroMovie = false
 - Call down vehicles and some deployables
 - Health, damage, shields, bleedout/death/respawn and fall damage (see `Docs/HEALTH_SYSTEM.md`)
 - Projectile combat against spawned NPCs (`Docs/SPAWNING_AND_COMBAT.md`)
+- Server side NPC AI: spawned mobs notice you, chase, shoot back, give up when they are dragged too far from their spawn point (see `Docs/NPC_AI.md`)
 
 ### Limitations
 
-- No AI: enemies can be spawned but do not fight back
+- NPC AI is a single state machine: no pathfinding, no animations, no projectiles and the per monster SDB behaviour trees are ignored
 - Most of the UI doesn't work properly
 - Most abilities are not fully working
 - Vehicles only have physics if a player is driving it (client-side)

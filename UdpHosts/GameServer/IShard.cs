@@ -5,6 +5,7 @@ using GameServer.Entities;
 using GameServer.Entities.Outpost;
 using GameServer.Physics;
 using GameServer.Systems.Admin;
+using GameServer.Systems.Ai;
 using GameServer.Systems.Aptitude;
 using GameServer.Systems.CharacterLifecycle;
 using GameServer.Systems.Chat;
@@ -28,7 +29,7 @@ public interface IShard : IPacketSender
     IDictionary<ulong, IEncounter> Encounters { get; }
     IDictionary<uint, IDictionary<uint, OutpostEntity>> Outposts { get; }
     PhysicsEngine Physics { get; }
-    AIEngine AI { get; }
+    AiEngine AI { get; }
     MovementRelay Movement { get; }
     EntityManager EntityMan { get; }
     EncounterManager EncounterMan { get; }

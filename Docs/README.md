@@ -9,6 +9,7 @@ PIN is split into two areas:
 - [Spawnable Reference](SpawnReference/README.md) — **every** spawnable row in `clientdb.sd2` (mobs, deployables, vehicles, carryables, turrets) as a spreadsheet, each with the exact command that spawns it, plus CSV exports
 - [Mobs & NPCs Catalog](MOBS_AND_NPCS.md) — every mob/NPC in `clientdb.sd2` (decoded with `Tools/SdbDump`)
 - [Health System](HEALTH_SYSTEM.md) — health, damage, death, respawn and fall damage
+- [NPC AI](NPC_AI.md) — how spawned mobs target, chase, attack and leash, and how to tune it
 
 ## UdpHosts
 
