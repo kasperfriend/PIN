@@ -109,7 +109,11 @@ public class AiBrain
 
         State = State switch
         {
-            AiBrainState.Idle when engaged && perception.DistanceToTarget <= _rules.AggroRadius
+            // Acquiring from Idle needs an actual sighting, not just a live target. Without
+            // the visibility check the give-up path above would drop the target and this arm
+            // would immediately re-adopt it, so a mob would "forget and rediscover" a player
+            // standing behind cover every TargetLostTimeoutMs instead of ever giving up.
+            AiBrainState.Idle when engaged && perception.TargetVisible && perception.DistanceToTarget <= _rules.AggroRadius
                 => AiBrainState.Chase,
             AiBrainState.Chase when perception.TargetVisible && perception.DistanceToTarget <= _rules.AttackRange
                 => AiBrainState.Attack,

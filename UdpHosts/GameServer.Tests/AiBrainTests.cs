@@ -171,6 +171,29 @@ public class AiBrainTests
     }
 
     [Fact]
+    public void GivenUp_TargetInsideAggroRange_StaysForgottenUntilSeenAgain()
+    {
+        // Regression: the give-up path drops the target to Idle, and the Idle acquisition
+        // arm used to re-adopt it in the same decision because the target was merely alive.
+        // A mob hidden behind cover inside the aggro radius therefore never gave up, it just
+        // forgot and rediscovered the player every TargetLostTimeoutMs.
+        var brain = new AiBrain(Rules, 0);
+        brain.Decide(Seen(20f, 0f, 100));
+        brain.Decide(Hidden(20f, 0f, 4000)); // gives up
+
+        var stillHidden = brain.Decide(Hidden(20f, 0f, 5000));
+        Assert.Equal(AiBrainState.Idle, stillHidden.State);
+
+        var stillHiddenLater = brain.Decide(Hidden(20f, 0f, 20000));
+        Assert.Equal(AiBrainState.Idle, stillHiddenLater.State);
+
+        // One sighting is enough to re-engage.
+        var seenAgain = brain.Decide(Seen(20f, 0f, 20100));
+        Assert.Equal(AiBrainState.Chase, seenAgain.State);
+        Assert.True(brain.WantsTarget);
+    }
+
+    [Fact]
     public void AnyState_DraggedPastLeash_WalksHome()
     {
         var brain = new AiBrain(Rules, 0);

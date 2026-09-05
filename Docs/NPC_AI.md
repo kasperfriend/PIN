@@ -82,6 +82,12 @@ Two details worth knowing:
 * **Giving up is time based.** Losing line of sight does not drop the target
   immediately - the NPC keeps hunting for `TargetLostTimeoutMs` and only then
   forgets. Dying or despawning drops it at once.
+* **Re-engaging needs a sighting.** Acquiring a target out of Idle requires line of
+  sight, not merely a live target in range. Without that, the give-up path above
+  would drop the target and the acquisition step would re-adopt it in the very same
+  decision, so a mob would forget and rediscover a player standing behind cover
+  every `TargetLostTimeoutMs` instead of ever giving up. Getting shot bypasses this
+  (`Aggro` moves straight to Chase), so you cannot hide from a mob you just hit.
 
 ### Aggro triggers
 
