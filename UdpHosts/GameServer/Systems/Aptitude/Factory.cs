@@ -224,8 +224,8 @@ public class Factory
                 return new RequireMovingCommand(SDBInterface.GetRequireMovingCommandDef(commandId));
             // case CommandType.RequireTryingToMove:
             //     return new RequireTryingToMoveCommand(CustomDBInterface.GetRequireTryingToMoveCommandDef(commandId));
-            // case CommandType.RequireInRange:
-            //     return new RequireInRangeCommand(SDBInterface.GetRequireInRangeCommandDef(commandId));
+            case CommandType.RequireInRange:
+                return new RequireInRangeCommand(SDBInterface.GetRequireInRangeCommandDef(commandId));
             // case CommandType.TinyObjectCreate:
             //     return new TinyObjectCreateCommand(CustomDBInterface.GetTinyObjectCreateCommandDef(commandId));
             // case CommandType.TinyObjectDestroy:
