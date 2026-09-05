@@ -12,7 +12,7 @@
         <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)/stylecop.ruleset</CodeAnalysisRuleSet>
     </PropertyGroup>
     <PropertyGroup>
-        <Version>1.2.0</Version>
+        <Version>0.2.0</Version>
         <Company>The Melding Wars</Company>
         <Copyright>Copyright © 2019-2026 by The Melding Wars</Copyright>
         <Product>Pirate Intelligence Network</Product>
