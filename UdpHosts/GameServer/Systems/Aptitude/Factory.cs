@@ -447,8 +447,8 @@ public class Factory
                 return new RequireEnergyByRangeCommand(SDBInterface.GetRequireEnergyByRangeCommandDef(commandId));
             // case CommandType.NetworkStealth:
             //     return new NetworkStealthCommand(CustomDBInterface.GetNetworkStealthCommandDef(commandId));
-            // case CommandType.ResetCooldowns:
-            //     return new ResetCooldownsCommand(CustomDBInterface.GetResetCooldownsCommandDef(commandId));
+            case CommandType.ResetCooldowns:
+                return new ResetCooldownsCommand(CustomDBInterface.GetResetCooldownsCommandDef(commandId));
             // case CommandType.RewardAssist:
             //     return new RewardAssistCommand(CustomDBInterface.GetRewardAssistCommandDef(commandId));
             // case CommandType.DeployableUpgrade:
