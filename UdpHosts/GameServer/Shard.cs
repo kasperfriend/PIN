@@ -48,7 +48,7 @@ public class Shard : IShard
         EventBus = new EventBus();
         var debugCallbacks = new DebugProjectileHitCallbacks(this);
         Physics = new PhysicsEngine(EventBus, Settings.ZoneId, Settings.MapsPath, Settings.AssetDBPath, Settings.LoadMapsCollision, debugCallbacks, false, Settings.CachePath, Settings.ForceReloadZone);
-        AI = new AiEngine(this);
+        AI = new AiEngine(this, EventBus);
         Movement = new MovementRelay(this);
         Abilities = new AbilitySystem(this);
         EntityMan = new EntityManager(this);

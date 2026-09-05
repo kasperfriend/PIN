@@ -42,7 +42,7 @@ public sealed class FakeShard : IShard
         Damage = new DamageSystem(EventBus, this, new StandardNpcDeathRules());
         CharacterLifecycle = new CharacterLifecycleService(this, EventBus, new StandardCharacterLifecycleRules());
         FallDamage = new FallDamageSystem(this, Damage, new StandardFallDamageRules());
-        AI = new AiEngine(this, new StandardAiRules(), new AlwaysHostileAiHostility(), AiAttackFeedback, new FakeAiMonsterStats());
+        AI = new AiEngine(this, EventBus, new StandardAiRules(), new AlwaysHostileAiHostility(), AiAttackFeedback, new FakeAiMonsterStats());
     }
 
     public EventBus EventBus { get; } = new();

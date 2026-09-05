@@ -52,11 +52,11 @@ public class AiEngine
 
     public AiEngine(
         IShard shard,
+        IEventBus eventBus,
         IAiRules rules = null,
         IAiHostility hostility = null,
         IAiAttackFeedback feedback = null,
-        IAiMonsterStats monsterStats = null,
-        IEventBus eventBus = null)
+        IAiMonsterStats monsterStats = null)
     {
         _shard = shard ?? throw new ArgumentNullException(nameof(shard));
         _rules = rules ?? new StandardAiRules();
@@ -65,9 +65,9 @@ public class AiEngine
         _monsterStats = monsterStats ?? new SdbAiMonsterStats();
         _logger = shard.Logger?.ForContext<AiEngine>() ?? Log.ForContext<AiEngine>();
 
-        var bus = eventBus ?? shard.EventBus;
-        bus?.Subscribe<EntityDamagedEvent>(OnEntityDamaged);
-        bus?.Subscribe<CharacterDiedEvent>(OnCharacterDied);
+        // The bus is injected like every other system's: IShard does not expose it.
+        eventBus?.Subscribe<EntityDamagedEvent>(OnEntityDamaged);
+        eventBus?.Subscribe<CharacterDiedEvent>(OnCharacterDied);
     }
 
     /// <summary>Runtime kill switch, toggled by the <c>ai</c> chat/admin command.</summary>

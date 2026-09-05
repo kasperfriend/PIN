@@ -26,6 +26,7 @@ public class AiEngineTests
         {
             shard.AI = new AiEngine(
                 shard,
+                shard.EventBus,
                 rules ?? new StandardAiRules(),
                 new AlwaysHostileAiHostility(),
                 shard.AiAttackFeedback,
@@ -239,7 +240,7 @@ public class AiEngineTests
     public void FriendlyNpc_NeverAggros()
     {
         var shard = new FakeShard();
-        shard.AI = new AiEngine(shard, new StandardAiRules(), new NeverHostileAiHostility(), shard.AiAttackFeedback, new FakeAiMonsterStats());
+        shard.AI = new AiEngine(shard, shard.EventBus, new StandardAiRules(), new NeverHostileAiHostility(), shard.AiAttackFeedback, new FakeAiMonsterStats());
 
         var npc = CreateLivingCharacter(shard, Vector3.Zero);
         shard.Entities[npc.EntityId] = npc;
