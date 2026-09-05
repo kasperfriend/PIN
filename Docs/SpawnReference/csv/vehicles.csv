@@ -1,0 +1,174 @@
+id,name,spawn_command,class_name,faction,faction_id,gameplay_priority_boost,localized_name_id,race,scaling_table_id,vehicle_class
+13,Accord Dropship,\spawn vehicle 13,Dropship,accord,1,0,204867,0,10003,3
+26,Chosen Darkslip,\spawn vehicle 26,Dropship,chosen,2,200,205081,2,10003,3
+28,Cobra Cycle,\spawn vehicle 28,LGV,accord,1,0,205082,0,10003,1
+35,Resonator Bomb,\spawn vehicle 35,LGV,accord,1,0,205358,0,10003,1
+36,Locust Chopper,\spawn vehicle 36,LGV,accord,1,0,205359,0,10003,1
+37,Triton Cycle,\spawn vehicle 37,LGV,accord,1,0,205434,0,10003,1
+38,Courier Cycle,\spawn vehicle 38,LGV,accord,1,0,205435,0,10003,1
+41,Chosen Cycle,\spawn vehicle 41,LGV,,0,0,205436,2,10003,1
+43,Vespa Cycle,\spawn vehicle 43,LGV,accord,1,0,205438,0,10003,1
+47,Cobra P-39,\spawn vehicle 47,LGV,accord,1,0,205439,0,10003,1
+48,Terromoto Cobra Cycle,\spawn vehicle 48,LGV,accord,1,0,205443,0,10003,1
+49,Oilspill's Dropship,\spawn vehicle 49,Dropship,neutral,9,0,205445,11,10003,3
+50,Cobra K-12,\spawn vehicle 50,LGV,accord,1,0,205475,0,10003,1
+51,Oilspill's Dropship,\spawn vehicle 51,Dropship,neutral,9,0,205476,11,10003,3
+52,Accord Dropship,\spawn vehicle 52,Dropship,accord,1,0,205477,0,10003,3
+53,Thumper Cart,\spawn vehicle 53,Cargo,accord,1,0,205478,0,10003,2
+54,Cobra R-54,\spawn vehicle 54,LGV,accord,1,0,205479,0,10003,1
+56,ThumperCart Thumper,\spawn vehicle 56,LGV,accord,1,0,205480,0,10003,1
+57,ThumperCart Cart,\spawn vehicle 57,LGV,friendly,4,0,205481,7,10003,1
+59,Omnidyne-M LGV,\spawn vehicle 59,LGV,accord,1,0,205482,0,10003,1
+60,Holo Whale,\spawn vehicle 60,LGV,accord,1,0,205484,0,10003,1
+64,Accord Black Ops Drop Ship,\spawn vehicle 64,Dropship,accord,1,0,205485,0,10003,3
+66,Convoy,\spawn vehicle 66,HGV,accord,1,0,205486,0,10003,0
+71,Jaguar K-17 MGV,\spawn vehicle 71,MGV,accord,1,0,205527,0,10003,5
+80,Cobra Cycle,\spawn vehicle 80,LGV,accord,1,0,205528,0,10003,1
+81,_Chosen Darkslip,\spawn vehicle 81,Dropship,chosen,2,0,205529,2,10003,3
+82,Chosen Darkslip,\spawn vehicle 82,Dropship,chosen,2,0,205531,2,10003,3
+83,Vapor Cycle,\spawn vehicle 83,LGV,accord,1,0,205532,0,10003,1
+86,Oilspill's Dropship,\spawn vehicle 86,Dropship,accord,1,0,205534,0,10003,3
+87,Oilspill's Dropship,\spawn vehicle 87,Dropship,accord,1,0,206715,0,10003,3
+88,Vortex Cycle,\spawn vehicle 88,LGV,accord,1,0,207163,0,10003,1
+89,Accord Armored Dropship,\spawn vehicle 89,Dropship,accord,1,0,207238,0,10003,3
+90,U.A.S. Vanguard,\spawn vehicle 90,Battlecruiser,accord,1,0,209633,0,10003,6
+91,Accord Armored Dropship,\spawn vehicle 91,Dropship,accord,1,0,209693,0,10003,3
+92,Harbinger Shields,\spawn vehicle 92,Dropship,chosen,2,0,211828,2,10003,3
+93,Bloodkings Dropship,\spawn vehicle 93,Dropship,bandit,8,0,212864,10,10003,3
+94,Oilspill's Dropship,\spawn vehicle 94,Dropship,accord,1,0,213357,0,10003,3
+95,Zephyr Cycle,\spawn vehicle 95,LGV,accord,1,0,214526,0,10003,1
+97,Convoy Mobile AA,\spawn vehicle 97,HGV,accord,1,0,219125,0,10003,0
+99,Chosen General Zod's Super Darkslip,\spawn vehicle 99,Dropship,chosen,2,0,219259,2,10003,3
+100,Interceptor Assault,\spawn vehicle 100,LGV,accord,1,0,219620,0,10003,1
+101,Chosen Darkslip,\spawn vehicle 101,Dropship,chosen,2,0,219689,2,10003,3
+102,Arclight Missile,\spawn vehicle 102,Dropship,accord,1,0,221870,0,10003,3
+103,Chosen Darkslip,\spawn vehicle 103,Dropship,chosen,2,0,221897,2,10003,3
+104,Accord Gunship,\spawn vehicle 104,Dropship,accord,1,0,222164,0,10003,3
+105,Accord Armored Dropship,\spawn vehicle 105,Dropship,accord,1,0,222683,0,10003,3
+106,Chosen Darkslip,\spawn vehicle 106,Dropship,chosen,2,0,223284,2,10003,3
+107,Lancer M3,\spawn vehicle 107,LGV,accord,1,0,224428,0,10003,1
+108,DH Armored Dropship,\spawn vehicle 108,Dropship,accord,1,0,227678,0,10003,3
+109,Chosen Darkslip,\spawn vehicle 109,Dropship,chosen,2,0,250876,2,10003,3
+110,Cobra P-1,\spawn vehicle 110,LGV,accord,1,0,254576,0,10003,1
+111,Accord Dropship,\spawn vehicle 111,Dropship,accord,1,0,257803,0,10003,3
+112,Ranger All-Terrain MGV,\spawn vehicle 112,MGV,accord,1,0,262716,0,10003,5
+113,Blitz Assault LGV,\spawn vehicle 113,LGV,accord,1,0,263084,0,10003,1
+114,Convoy (NonDrivable),\spawn vehicle 114,HGV,accord,1,0,266597,0,10003,0
+115,U.A.S. Vanguard,\spawn vehicle 115,Battlecruiser,accord,1,0,324115,0,10003,6
+116,Cobra XLR,\spawn vehicle 116,LGV,accord,1,0,332396,0,10003,1
+117,Bumblebee,\spawn vehicle 117,MGV,accord,1,0,332422,0,10003,5
+118,Wasteland Armored Dropship,\spawn vehicle 118,Dropship,accord,1,0,355841,0,10003,3
+119,Thumper Cart,\spawn vehicle 119,Cargo,accord,1,0,364180,0,10003,2
+121,BSU Test Vehicle,\spawn vehicle 121,MGV,accord,1,0,415954,0,10003,5
+122,Convoy MGV,\spawn vehicle 122,MGV,accord,1,0,416282,0,10003,5
+123,TEST Convoy MGV,\spawn vehicle 123,MGV,accord,1,0,421919,0,10003,5
+124,Rental Cobra R-54,\spawn vehicle 124,LGV,accord,1,0,423601,0,10003,1
+125,Red Line Accord Dropship,\spawn vehicle 125,Dropship,accord,1,0,424061,0,10003,3
+126,Blue Line Accord Dropship,\spawn vehicle 126,Dropship,accord,1,0,424062,0,10003,3
+127,RX1 Resource Hauler,\spawn vehicle 127,HGV,accord,1,0,424073,0,10003,0
+128,Cheetah Model S,\spawn vehicle 128,LGV,accord,1,0,424883,0,10003,1
+129,Cobra Turbo LGV,\spawn vehicle 129,LGV,accord,1,0,426001,0,10003,1
+130,Locust Turbo Chopper,\spawn vehicle 130,LGV,accord,1,0,426002,0,10003,1
+131,Cobra Turbo P-39,\spawn vehicle 131,LGV,accord,1,0,426003,0,10003,1
+132,Terromoto Turbo Cobra,\spawn vehicle 132,LGV,accord,1,0,426004,0,10003,1
+133,Cobra Turbo K-12,\spawn vehicle 133,LGV,accord,1,0,426005,0,10003,1
+134,Omnidyne-M Turbo,\spawn vehicle 134,LGV,accord,1,0,426006,0,10003,1
+135,Cobra Turbo P-1,\spawn vehicle 135,LGV,accord,1,0,426007,0,10003,1
+136,Cobra Turbo XLR,\spawn vehicle 136,LGV,accord,1,0,426008,0,10003,1
+137,Cobra Turbo R-54,\spawn vehicle 137,LGV,accord,1,0,426009,0,10003,1
+138,Vapor Turbo Cycle,\spawn vehicle 138,LGV,accord,1,0,426010,0,10003,1
+139,Vortex Turbo Cycle,\spawn vehicle 139,LGV,accord,1,0,426011,0,10003,1
+140,Zephyr Turbo Cycle,\spawn vehicle 140,LGV,accord,1,0,426012,0,10003,1
+141,TEST Repulsor Convoy MGV,\spawn vehicle 141,MGV,accord,1,0,426716,0,10003,5
+142,TEST Convoy MGV No Cargo,\spawn vehicle 142,MGV,accord,1,0,432351,0,10003,5
+143,Chosen Darkslip,\spawn vehicle 143,Dropship,chosen,2,0,432507,2,10003,3
+144,Accord Cargo Ship,\spawn vehicle 144,Cargo,accord,1,0,435847,0,10003,2
+145,TEST Operation Vehicle,\spawn vehicle 145,MGV,accord,1,0,439837,0,10003,5
+146,OLD Chosen Cycle,\spawn vehicle 146,LGV,,0,0,468196,2,10003,1
+147,Brahma Transport,\spawn vehicle 147,Dropship,accord,1,0,477777,0,10003,3
+148,Chosen Sweeper,\spawn vehicle 148,LGV,chosen,2,0,478436,2,10003,1
+149,Vanilla MGV,\spawn vehicle 149,MGV,accord,1,0,480943,0,10003,5
+150,"TS-RC8 ""Snowsquall"" MGV",\spawn vehicle 150,MGV,accord,1,0,480990,0,10003,5
+151,Jaguar K-27 Turbo Assault Vehicle,\spawn vehicle 151,MGV,accord,1,0,481152,0,10003,5
+152,RX2 Re-enforced Resource Hauler,\spawn vehicle 152,HGV,accord,1,0,481153,0,10003,0
+153,Interceptor RX Turbo Assault,\spawn vehicle 153,LGV,accord,1,0,481154,0,10003,1
+154,Blitz Assault Turbo LGV,\spawn vehicle 154,LGV,accord,1,0,481155,0,10003,1
+155,Chosen Darkslip,\spawn vehicle 155,Dropship,chosen,2,0,482705,2,10003,3
+156,Reaper Armored Dropship,\spawn vehicle 156,Dropship,Reapers,46,0,486565,10,10003,3
+157,Surf Board,\spawn vehicle 157,LGV,accord,1,0,487126,0,10003,1
+159,Reaper Armored Gunship,\spawn vehicle 159,Dropship,Reapers,46,0,487791,10,10003,3
+160,Reaper APC - Old Test,\spawn vehicle 160,HGV,bandit,8,0,487881,10,10003,0
+161,Weekly Convoy MGV,\spawn vehicle 161,MGV,accord,1,0,490283,0,10003,5
+162,Chosen Cycle,\spawn vehicle 162,LGV,,0,0,492630,2,10003,1
+163,MGV_MoneyBomb_Base,\spawn vehicle 163,MGV,accord,1,0,492800,0,10003,5
+164,MGV_MoneyBomb_VIP,\spawn vehicle 164,MGV,accord,1,0,492801,0,10003,5
+165,Chosen Dropship,\spawn vehicle 165,Dropship,chosen,2,0,493572,0,10003,3
+167,Mine Cart,\spawn vehicle 167,Cargo,accord,1,0,496060,0,10003,2
+168,Repulsor Generator,\spawn vehicle 168,Cargo,accord,1,0,496136,0,10003,2
+169,Wooden Barrel,\spawn vehicle 169,Cargo,accord,1,0,496139,0,10003,2
+170,Test Derby LGV,\spawn vehicle 170,LGV,accord,1,0,498340,0,10003,1
+171,Test Brontodon,\spawn vehicle 171,LGV,accord,1,0,499204,0,10003,1
+172,Operation Test MGV,\spawn vehicle 172,MGV,accord,1,0,500709,0,10003,5
+173,Test Brontodon - Flight Path,\spawn vehicle 173,LGV,accord,1,0,500798,0,10003,1
+174,APC,\spawn vehicle 174,HGV,accord,1,0,568573,0,10003,0
+175,Drivable APC,\spawn vehicle 175,HGV,accord,1,0,575683,0,10003,0
+176,Reaper APC,\spawn vehicle 176,HGV,Reapers,46,0,575684,0,10003,0
+178,Grasshopper K-18,\spawn vehicle 178,LGV,accord,1,0,601547,0,10003,1
+179,Lancer Gold,\spawn vehicle 179,LGV,accord,1,0,603863,0,10003,1
+180,Elevator,\spawn vehicle 180,Train,accord,1,0,604484,0,10003,4
+181,[PVP] TDM Respawner,\spawn vehicle 181,Dropship,accord,1,0,604526,0,10003,3
+182,TransHub Ship,\spawn vehicle 182,Battlecruiser,accord,1,0,610387,0,10003,6
+183,AA Turret Cart,\spawn vehicle 183,LGV,friendly,4,0,613077,7,10003,1
+184,Agrievan,\spawn vehicle 184,Cargo,chosen,2,0,614471,2,10003,2
+185,ARES-Team Transport,\spawn vehicle 185,HGV,accord,1,0,615678,0,10003,0
+186,Abe's test LGV,\spawn vehicle 186,LGV,accord,1,0,641266,0,10003,1
+187,Accord Supply Dropship,\spawn vehicle 187,Dropship,accord,1,0,698588,0,10003,3
+189,Accord A-10 Mamba LGV,\spawn vehicle 189,LGV,accord,1,0,742821,0,10003,1
+190,Communications Array,\spawn vehicle 190,Cargo,accord,1,0,779714,0,10003,2
+191,ARES-Team Transport Non-Drivable,\spawn vehicle 191,HGV,accord,1,0,786514,0,10003,0
+192,A_LGVCycle04,\spawn vehicle 192,LGV,accord,1,0,805243,0,10003,1
+194,Oilspill's Dropship,\spawn vehicle 194,Dropship,accord,1,0,817212,0,10003,3
+195,MoonFestival LGV,\spawn vehicle 195,LGV,accord,1,0,839900,0,10003,1
+197,Blazing Hope LGV,\spawn vehicle 197,LGV,accord,1,0,857951,0,10003,1
+198,Blazing Hope MGV,\spawn vehicle 198,MGV,accord,1,0,858138,0,10003,5
+199,Operation Test - Doesnt Work.,\spawn vehicle 199,HGV,accord,1,0,862452,0,10003,0
+200,Mobile AA,\spawn vehicle 200,HGV,accord,1,0,862474,10,10003,0
+201,A1 Hauler,\spawn vehicle 201,HGV,accord,1,0,862915,0,10003,0
+202,_M05_Mi751_CM4_No_Exit - Accord Dropship,\spawn vehicle 202,Dropship,accord,1,0,866399,0,10003,3
+203,Bsu_TestLGV,\spawn vehicle 203,LGV,accord,1,0,869273,0,10003,1
+204,Infinite LGV,\spawn vehicle 204,LGV,accord,1,0,869314,0,10003,1
+205,Forester MGV,\spawn vehicle 205,MGV,accord,1,0,871679,0,10003,5
+206,Fury Monster MGV,\spawn vehicle 206,MGV,accord,1,0,871685,0,10003,5
+207,Tarantula LGV,\spawn vehicle 207,LGV,accord,1,0,871692,0,10003,1
+208,Accord Dropship,\spawn vehicle 208,Dropship,accord,1,0,895247,0,10003,3
+209,Phoenix LGV,\spawn vehicle 209,LGV,accord,1,0,895543,0,10003,1
+210,Sonic Wave LGV,\spawn vehicle 210,LGV,accord,1,0,895544,0,10003,1
+211,Death Rose LGV,\spawn vehicle 211,LGV,accord,1,0,895545,0,10003,1
+212,Wood Pecker LGV,\spawn vehicle 212,LGV,accord,1,0,895546,0,10003,1
+213,Celebrity MGV,\spawn vehicle 213,MGV,accord,1,0,895553,0,10003,5
+214,Rising Star LGV,\spawn vehicle 214,LGV,accord,1,0,895568,0,10003,1
+215,Top Dog LGV,\spawn vehicle 215,LGV,accord,1,0,895571,0,10003,1
+216,Ace LGV,\spawn vehicle 216,LGV,accord,1,0,895572,0,10003,1
+218,Omnidyne-M Flagship MGV,\spawn vehicle 218,MGV,accord,1,0,903481,0,10003,5
+219,Hummingbird Racer,\spawn vehicle 219,LGV,accord,1,0,913606,0,10003,1
+220,Mosquito Racer,\spawn vehicle 220,LGV,accord,1,0,913619,0,10003,1
+221,Kestrel Racer,\spawn vehicle 221,LGV,accord,1,0,913760,0,10003,1
+222,Black Widow Racer,\spawn vehicle 222,LGV,accord,1,0,913761,0,10003,1
+223,Cherub LGV,\spawn vehicle 223,LGV,accord,1,0,916364,0,10003,1
+224,Blue Kestrel (level 50 epic mgv),\spawn vehicle 224,MGV,accord,1,0,916564,0,10003,5
+225,[TEST] jwoe - DT gunship,\spawn vehicle 225,Dropship,accord,1,0,916707,7,10003,3
+226,Accord Disintegrator Gunship,\spawn vehicle 226,Dropship,accord,1,0,918123,7,10003,3
+227,Chosen Darkslip,\spawn vehicle 227,Dropship,chosen,2,0,918197,7,10003,3
+228,Devil's Tusk Zone Event - Accord Dropship,\spawn vehicle 228,Dropship,accord,1,0,918269,7,10003,3
+229,[Raid] Trolly,\spawn vehicle 229,LGV,friendly,4,0,926163,7,10003,1
+230,Prototype Assault Gunship,\spawn vehicle 230,Dropship,accord,1,0,930900,10,10003,3
+231,Chosen Cycle,\spawn vehicle 231,LGV,,0,0,930955,2,10003,1
+232,Chosen Raptor,\spawn vehicle 232,LGV,chosen,2,0,931718,8,10003,1
+233,Accord Liberator Class Dropship,\spawn vehicle 233,Dropship,accord,1,0,933528,7,10003,3
+234,U.A.S. Victory,\spawn vehicle 234,Battlecruiser,accord,1,0,947131,0,10003,6
+235,Chosen Gunship (level 50 epic),\spawn vehicle 235,Dropship,chosen,2,0,950553,8,10003,3
+335,Accord Player Fighter,\spawn vehicle 335,Dropship,accord,1,0,958212,0,10003,3
+336,Accord Armored Dropship,\spawn vehicle 336,Dropship,accord,1,0,959031,0,10003,3
+337,Accord Medivac Dropship,\spawn vehicle 337,Dropship,accord,1,0,959114,7,10003,3
+338,Chosen Raptor,\spawn vehicle 338,LGV,chosen,2,0,959237,8,10003,1
+339,Copy of Jaguar K-17 MGV TESTING,\spawn vehicle 339,MGV,accord,1,0,986290,0,10003,5

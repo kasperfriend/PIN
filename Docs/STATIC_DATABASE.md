@@ -12,6 +12,7 @@ reads, and how to **spawn things straight out of it** with the in-game
 
 Related reading:
 
+- [SpawnReference/](SpawnReference/README.md) — **the full spawnable catalog**: one spreadsheet per kind, every row with its exact spawn command
 - [MOBS_AND_NPCS.md](MOBS_AND_NPCS.md) — the full mob/NPC catalog (names, ids, factions)
 - [SPAWNING_AND_COMBAT.md](SPAWNING_AND_COMBAT.md) — how a spawned entity is replicated and fights
 - [CHARACTERS_AND_BATTLEFRAMES.md](CHARACTERS_AND_BATTLEFRAMES.md) — player-side `characters.json`
@@ -124,6 +125,13 @@ them in `StaticDB/SDBCatalog.cs`:
 "Named" = the row's `localized_name_id` resolves to non-empty English text.
 Unnamed rows are real and spawnable, they are just placeholders, cut content or
 internal variants; they can only be referenced by id.
+
+Every one of those 7,396 rows — with its resolved name, faction, category,
+chassis, weapons, loot tables and the **exact command that spawns it** — is
+written out as a spreadsheet in [SpawnReference/](SpawnReference/README.md),
+one document plus one CSV per kind. That folder is the lookup table for
+"what can I spawn, and how"; this document is about the file format and the
+commands themselves.
 
 Every `Monster` id in that table is also documented, faction by faction, in
 [MOBS_AND_NPCS.md](MOBS_AND_NPCS.md).
@@ -288,6 +296,10 @@ python3 Tools/SdbDump/sdb_dump.py coverage /tmp/clientdb.sd2
 python3 Tools/SdbDump/sdb_dump.py spawnables /tmp/clientdb.sd2 -o spawnables.json
 python3 Tools/SdbDump/sdb_dump.py spawnables /tmp/clientdb.sd2 vehicle
 
+# The Docs/SpawnReference folder: one Markdown spreadsheet + one CSV per kind,
+# every row with its exact spawn command (~30 s)
+python3 Tools/SdbDump/spawn_reference.py /tmp/clientdb.sd2
+
 # Overview / single tables / the mobs report
 python3 Tools/SdbDump/sdb_dump.py info     /tmp/clientdb.sd2
 python3 Tools/SdbDump/sdb_dump.py dump     /tmp/clientdb.sd2 dbcharacter::Turret -o turrets.json
@@ -297,5 +309,8 @@ python3 Tools/SdbDump/sdb_dump.py monsters /tmp/clientdb.sd2 -o monsters.json
 python3 Tools/SdbDump/selftest.py
 ```
 
-Note that `dblocalization::LocalizedText` has 175k rows, so any command that
-resolves names takes ~10 s and a few hundred MB of RAM.
+Note that `dblocalization::LocalizedText` has 175k rows and every string is
+decrypted with its own Mersenne-twister seeding, so the name-resolving commands
+only decrypt the ids the rows they print actually reference (`monsters` still
+builds the full map and is the slow one). `spawnables` and `spawn_reference.py`
+finish in well under a minute.

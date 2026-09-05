@@ -16,6 +16,12 @@ Anything listed here can be spawned directly by name or id:
 \spawn monster Aranha Queen   # spawn it
 ```
 
+> Looking for the id of a deployable, vehicle, carryable or turret, or for a
+> copy-pasteable command per row? [SpawnReference/](SpawnReference/README.md) is
+> the flat spreadsheet of **every** spawnable row in the database (7,396 rows
+> across the five kinds, plus CSV exports). This document is the deeper dive
+> into the mob tables themselves.
+
 > Decoded from Firefall build **prod-1962** with `Tools/SdbDump` (see §4.7).
 
 ---
