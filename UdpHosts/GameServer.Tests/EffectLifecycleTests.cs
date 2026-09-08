@@ -136,7 +136,7 @@ public class EffectLifecycleTests
         Tick(shard, character, 10_801); // 3419's 750 ms elapses; the handoff applies 3418 and 9495.
         Assert.True(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
 
-        Tick(shard, character, 10_901); // 9495's first AirborneDuration tick: grounded, so it dies.
+        Tick(shard, character, 11_001); // 9495's first AirborneDuration tick: grounded, so it dies.
         Assert.DoesNotContain(character.GetActiveEffects(), state => state?.Effect.Id == 9495);
 
         Tick(shard, character, 11_302); // 3418's 500 ms grace is over and no gliding pose arrived.
@@ -161,9 +161,9 @@ public class EffectLifecycleTests
 
         // Repeated duration evaluations while the client is still being pushed: profile effect, flight
         // profile and permission must all survive even though no pose ever arrived.
-        Tick(shard, character, 10_901); // 9495's first AirborneDuration tick
-        Tick(shard, character, 11_302); // 3418's first post-grace RequireMovestate tick
-        Tick(shard, character, 12_001); // 3418's next RequireMovestate tick
+        Tick(shard, character, 10_901); // just before 9495's first duration slot (100 ms frequency)
+        Tick(shard, character, 11_302); // 9495's airborne tick + 3418's first post-grace movestate tick
+        Tick(shard, character, 12_001); // 3418's next movestate tick
         Assert.NotNull(Active(character, 9495));
         Assert.NotNull(Active(character, 3418));
         Assert.True(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
