@@ -1,5 +1,6 @@
 using AeroMessages.GSS.Character;
 using GameServer.Entities.Character;
+using GameServer.Entities.Deployable;
 using GameServer.StaticDB.Records.aptfs;
 using GameServer.Systems.Aptitude;
 using GameServer.Systems.Aptitude.Commands.Requirement;
@@ -66,7 +67,7 @@ public class RequireAimModeCommandTests
 
         // Deployable owned chains (no owner, no character among the targets) cannot answer an aim-mode
         // question; like the other character requirements, "not applicable" is a pass, not a failure.
-        var context = new Context(shard, new GameServer.Entities.Deployable.DeployableEntity(shard, shard.GetNextGuid(), type: 395, abilitySrcId: 0));
+        var context = new Context(shard, new DeployableEntity(shard, shard.GetNextGuid(), type: 395, abilitySrcId: 0));
         Assert.True(command.Execute(context));
     }
 
