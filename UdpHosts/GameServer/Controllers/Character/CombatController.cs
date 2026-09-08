@@ -77,12 +77,11 @@ public class CombatController : Base
         var query = packet.Unpack<UseScope>();
 
         // InScope is a signed byte, any non-zero value means "scoped in".
-        // Casting it straight to byte would turn -1 into 255 and make the client disagree with the server.
         bool inScope = query.InScope != 0;
 
         player.CharacterEntity.SetFireMode(1, new FireModeData
         {
-           Mode = (byte)(inScope ? 1 : 0),
+           Mode = (byte)query.InScope,
            Time = query.Time,
         });
 
