@@ -67,6 +67,18 @@ public class ForcePushCommand : Command, ICommand
             // 500 ms, matching the launch effect's own 500 ms restrict_movement duration.
             uint time = context.Shard.CurrentTime;
             var player = character.Player;
+
+            // The aptitude gates that keep the launch effects alive (AirborneDuration, RequireMovestate
+            // gliding/falling) read the character's *reported* pose, but no post-launch pose can exist until
+            // the forced-movement window below has played. Without a provisional window the server tore its
+            // own launch down on the first duration ticks (see Docs/GLIDER_AND_ADS.md). Seed the movement
+            // state nibble so movestate reads agree with the pending window, and open the window until 1.5 s
+            // after the forced movement ends. MovementRelay closes the window again as soon as the client's
+            // poses say the launch is over, so a client that never leaves the ground still ends the launch
+            // normally.
+            character.MovementStateContainer.MovementStateValue =
+                (ushort)((character.MovementStateContainer.MovementStateValue & 0x00FF) | 0x7000);
+            character.MarkServerLaunchPending(time);
             var message = new ForcedMovement
             {
                 Data = new AeroMessages.GSS.ForcedMovementData

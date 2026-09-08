@@ -81,25 +81,7 @@ public class EffectLifecycleTests
         // The relevant prod-1962 graph from the report: 3419 waits 750 ms, then grants 3418.
         // 3418 lasts while airborne OR for its first 500 ms, and applies profile effect 9495.
         // After 2000 ms, 9495 hands off to 3417, which lasts until landing. Client-only visuals omitted.
-        factory.Chains[1508823] = Commands(
-            new RequireMovestateCommand(new RequireMovestateCommandDef { Id = 1508823, Falling = 1, Gliding = 1, Stall = 1, Thruster = 1 }),
-            Timer(500));
-        factory.Effects[3419] = MakeEffect(3419, duration: Commands(Timer(750)), remove: Commands(Apply(3418)));
-        factory.Effects[3418] = MakeEffect(3418,
-            apply: Commands(
-                new ModifyPermissionCommand(new ModifyPermissionCommandDef { Id = 1508828, Glider = true }),
-                new ModifyPermissionCommand(new ModifyPermissionCommandDef { Id = 1508827, GliderHud = true }),
-                Apply(9495)),
-            duration: Commands(new LogicOrChainCommand(new LogicOrChainCommandDef { Id = 1508830, OrChain = 1508823 })));
-        factory.Effects[9495] = MakeEffect(9495,
-            apply: Commands(Profile(1509279, 18)),
-            duration: Commands(Timer(2000), new AirborneDurationCommand(new AirborneDurationCommandDef())),
-            remove: Commands(Apply(3417)));
-        factory.Effects[3417] = MakeEffect(3417,
-            apply: Commands(Profile(1511094, 18)),
-            duration: Commands(new AirborneDurationCommand(new AirborneDurationCommandDef())));
-        factory.Effects[3418].Data.UpdateFrequency = 500;
-        factory.Effects[3417].Data.UpdateFrequency = 250;
+        InstallPadGraph(factory);
 
         var activation = new Context(shard, pad) { InitTime = 10_000, AppliedEffects = [] };
         Assert.True(shard.Abilities.DoApplyEffect(3419, character, activation));
@@ -133,6 +115,68 @@ public class EffectLifecycleTests
         character.IsAirborne = false;
         character.MovementStateContainer.MovementStateValue = 0x1000;
         Tick(shard, character, 20_601);
+        Assert.All(character.GetActiveEffects(), Assert.Null);
+        Assert.False(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
+        Assert.False(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider_hud]);
+        Assert.Equal(7u, character.GliderProfileId);
+    }
+
+    [Fact]
+    public void GliderTransition_WithoutAPoseOrLaunchWindowTheGatesTearTheHandoffDown()
+    {
+        // This is the third report's server side verbatim: the client never reports an airborne pose after
+        // the launch, so the profile effect dies on its first AirborneDuration tick (~250 ms in the log) and
+        // the permission on its first post-grace RequireMovestate tick (~500 ms in the log). Without the
+        // provisional launch window the chain cannot survive a launch that has no pose behind it yet.
+        var (shard, factory, character) = CreateRuntime(10_000);
+        character.SetGliderProfileId(7);
+        InstallPadGraph(factory);
+
+        Assert.True(shard.Abilities.DoApplyEffect(3419, character, new Context(shard, character) { InitTime = 10_000 }));
+        Tick(shard, character, 10_801); // 3419's 750 ms elapses; the handoff applies 3418 and 9495.
+        Assert.True(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
+
+        Tick(shard, character, 10_901); // 9495's first AirborneDuration tick: grounded, so it dies.
+        Assert.DoesNotContain(character.GetActiveEffects(), state => state?.Effect.Id == 9495);
+
+        Tick(shard, character, 11_302); // 3418's 500 ms grace is over and no gliding pose arrived.
+        Assert.All(character.GetActiveEffects(), Assert.Null);
+        Assert.False(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
+        Assert.Equal(7u, character.GliderProfileId);
+    }
+
+    [Fact]
+    public void GliderTransition_LaunchWindowKeepsTheHandoffAliveUntilTheClientPoseArrives()
+    {
+        // ForcePush opened the provisional launch window (MarkServerLaunchPending). The client has not
+        // reported any pose yet - as far as the server knows it is still standing on the pad - so the window
+        // is the only thing that can satisfy the airborne/gliding gates while the forced movement plays.
+        var (shard, factory, character) = CreateRuntime(10_000);
+        character.SetGliderProfileId(7);
+        InstallPadGraph(factory);
+        character.MarkServerLaunchPending(10_000); // deadline 12_050 = push + 550 ms forced window + 1.5 s margin
+
+        Assert.True(shard.Abilities.DoApplyEffect(3419, character, new Context(shard, character) { InitTime = 10_000 }));
+        Tick(shard, character, 10_801); // handoff
+
+        // Repeated duration evaluations while the client is still being pushed: profile effect, flight
+        // profile and permission must all survive even though no pose ever arrived.
+        Tick(shard, character, 10_901); // 9495's first AirborneDuration tick
+        Tick(shard, character, 11_302); // 3418's first post-grace RequireMovestate tick
+        Tick(shard, character, 12_001); // 3418's next RequireMovestate tick
+        Assert.NotNull(Active(character, 9495));
+        Assert.NotNull(Active(character, 3418));
+        Assert.True(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
+        Assert.True(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider_hud]);
+        Assert.Equal(18u, character.GliderProfileId);
+
+        // The client's first movement input after the push arrives and reports a grounded pose: the window
+        // closes and the reported pose is the truth again, so the handoff unwinds exactly like a landing.
+        character.ClearServerLaunchPending();
+        character.IsAirborne = false;
+        character.MovementStateContainer.MovementStateValue = 0x1000;
+        Tick(shard, character, 12_102); // 9495 dies on its AirborneDuration gate and hands off to 3417.
+        Tick(shard, character, 12_502); // 3417 dies on its airborne gate, 3418 on its movestate gate.
         Assert.All(character.GetActiveEffects(), Assert.Null);
         Assert.False(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
         Assert.False(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider_hud]);
@@ -270,6 +314,35 @@ public class EffectLifecycleTests
         Assert.Same(context.PendingCooldowns, child.PendingCooldowns);
         Assert.Same(context.AppliedEffects, child.AppliedEffects);
         Assert.Equal(3f, context.Register);
+    }
+
+    /// <summary>
+    ///     The relevant prod-1962 graph from the reports: 3419 waits 750 ms, then grants 3418.
+    ///     3418 lasts while airborne/gliding OR for its first 500 ms, and applies profile effect 9495.
+    ///     After 2000 ms (or when no longer airborne), 9495 hands off to 3417, which lasts until landing.
+    ///     Client-only visuals omitted.
+    /// </summary>
+    private static void InstallPadGraph(FakeAptitudeFactory factory)
+    {
+        factory.Chains[1508823] = Commands(
+            new RequireMovestateCommand(new RequireMovestateCommandDef { Id = 1508823, Falling = 1, Gliding = 1, Stall = 1, Thruster = 1 }),
+            Timer(500));
+        factory.Effects[3419] = MakeEffect(3419, duration: Commands(Timer(750)), remove: Commands(Apply(3418)));
+        factory.Effects[3418] = MakeEffect(3418,
+            apply: Commands(
+                new ModifyPermissionCommand(new ModifyPermissionCommandDef { Id = 1508828, Glider = true }),
+                new ModifyPermissionCommand(new ModifyPermissionCommandDef { Id = 1508827, GliderHud = true }),
+                Apply(9495)),
+            duration: Commands(new LogicOrChainCommand(new LogicOrChainCommandDef { Id = 1508830, OrChain = 1508823 })));
+        factory.Effects[9495] = MakeEffect(9495,
+            apply: Commands(Profile(1509279, 18)),
+            duration: Commands(Timer(2000), new AirborneDurationCommand(new AirborneDurationCommandDef())),
+            remove: Commands(Apply(3417)));
+        factory.Effects[3417] = MakeEffect(3417,
+            apply: Commands(Profile(1511094, 18)),
+            duration: Commands(new AirborneDurationCommand(new AirborneDurationCommandDef())));
+        factory.Effects[3418].Data.UpdateFrequency = 500;
+        factory.Effects[3417].Data.UpdateFrequency = 250;
     }
 
     private static (FakeShard Shard, FakeAptitudeFactory Factory, CharacterEntity Character) CreateRuntime(ulong time = 60_000)
