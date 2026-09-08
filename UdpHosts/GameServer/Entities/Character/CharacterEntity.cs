@@ -88,6 +88,49 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public bool CanBleedout { get; set; }
     public short TimeSinceLastJump { get; set; }
     public bool IsAirborne { get; set; }
+
+    /// <summary>
+    ///     Provisional launch state the server keeps for a character it has just pushed with a launch impulse
+    ///     (a glider pad's <c>ForcePush</c>), so the aptitude gates that keep the launch effects alive do not
+    ///     tear the launch down before the client can confirm it.
+    ///     Movement is client-authoritative: the launch effects are applied and their duration chains first run
+    ///     while the client is still playing the forced movement the server commanded (or should have started),
+    ///     so <c>AirborneDuration</c> and <c>RequireMovestate</c> would read the pre-launch pose - the client
+    ///     cannot report a post-launch pose before the forced window has played - and expire the chain
+    ///     250-500 ms into the launch (as observed in the field logs).
+    ///     <see cref="ServerLaunchPendingSinceTime" /> is the push time, <see cref="ServerLaunchPendingUntilTime" />
+    ///     the deadline (push + 550 ms forced window + 1500 ms handoff margin). The window ends at the deadline
+    ///     on its own, or earlier when a <c>MovementInput</c> arrives that reports the character airborne
+    ///     (the launch worked) or that arrives after the forced window has ended (the pose is the client's own
+    ///     truth again).
+    /// </summary>
+    public uint ServerLaunchPendingSinceTime { get; private set; }
+
+    /// <summary>Deadline (shard epoch ms) of the provisional post-launch window.</summary>
+    public uint ServerLaunchPendingUntilTime { get; private set; }
+
+    /// <summary>True while the server is still waiting for the launch to be confirmed or given up.</summary>
+    public bool IsServerLaunchPending => ServerLaunchPendingUntilTime != 0
+        && unchecked((int)(ServerLaunchPendingUntilTime - Shard.CurrentTime)) > 0;
+
+    /// <summary>True while the forced movement the server commanded (push + 550 ms) may still be playing.</summary>
+    public bool IsServerLaunchForcedWindowActive => IsServerLaunchPending
+        && unchecked((int)(ServerLaunchPendingUntilTime - 1500 - Shard.CurrentTime)) > 0;
+
+    /// <summary>Opens the provisional post-launch window for a push sent at <paramref name="time" />.</summary>
+    public void MarkServerLaunchPending(uint time)
+    {
+        ServerLaunchPendingSinceTime = time;
+        ServerLaunchPendingUntilTime = unchecked(time + 550 + 1500);
+    }
+
+    /// <summary>Closes the provisional post-launch window (a client pose confirmed the outcome, or it is over).</summary>
+    public void ClearServerLaunchPending()
+    {
+        ServerLaunchPendingSinceTime = 0;
+        ServerLaunchPendingUntilTime = 0;
+    }
+
     public bool IsMoving { get => MovementStateContainer.Sprint || MovementStateContainer.Movement; }
     public bool IsCrouching { get => MovementStateContainer.Crouch; }
     public bool IsAttached { get => AttachedToEntity != null; }
@@ -892,6 +935,10 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         if (characterStatus != CharacterStateData.CharacterStatus.Living)
         {
             SetScopedState(false, time);
+
+            // A death/bleedout/despawn during a launch ends any provisional launch window: effects are being
+            // torn down anyway, and a resurrected character must not still count as gliding from an old push.
+            ClearServerLaunchPending();
         }
 
         CharacterState = new CharacterStateData

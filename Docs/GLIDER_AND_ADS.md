@@ -77,6 +77,7 @@ follow the original caster.
 | Wings permission | `PermissionFlags.glider` | `ModifyPermission` |
 | Glider HUD | `PermissionFlags.glider_hud` | `ModifyPermission` |
 | Movement state | `MovementStateContainer`; glider nibble is 7 (`0x7000` in the full state) | Client `MovementInput` |
+| Provisional launch window | `CharacterEntity.ServerLaunchPendingSince/UntilTime` | `ForcePush` (opens), first decisive `MovementInput` or expiry (closes) |
 | Landing damage exemption | Actual glider/jetpack movement during the fall | `FallDamageSystem` |
 
 The relevant `prod-1962` graph for shared pad ability **35181**, chain **1001671**:
@@ -95,6 +96,42 @@ The relevant `prod-1962` graph for shared pad ability **35181**, chain **1001671
 `RegisterMovementEffect` rows **1508976/1508977** have `on_client=1, on_server=0`. Their
 flight audio/particle effect **723** is intentionally registered by the client, not applied
 by the server. Those debug no-ops are not evidence that glider permission was denied.
+
+## The launch window: why the server must not judge a launch it just commanded
+
+Movement is client-authoritative, so every gate that keeps the launch chain alive
+(`AirborneDuration` on 9495/3417, `RequireMovestate` on 3418's OR chain) reads the pose the
+client last *reported*. The client cannot report a post-launch pose before it has played
+the forced movement the server just sent it, but the chain's first duration ticks run at
++250/+500 ms — inside that window. In the field logs this tore the launch apart
+deterministically: 9495 expired ~260 ms after the handoff, 3417 ~258 ms, 3418 ~518 ms, and
+the pad re-triggered from proximity again ~2 s later. `RegisterMovementEffect`-based
+workarounds cannot fix this: the failing gates are durations/requirements, not effect
+registration, and replicating client-only effect 723 server-side pollutes the shared status
+effect slots.
+
+So when `ForcePush` sends a launch it also marks the character as
+**launch-pending** (`MarkServerLaunchPending`): it seeds the movement state nibble to
+glider (`0x7000`) and opens a window that runs to push time + 550 ms (the forced movement
+it commanded) + 1500 ms handoff margin. While the window is open:
+
+- `AirborneDuration` counts the character as airborne;
+- `RequireMovestate` answers gliding/falling/… from the *pending launch*, not the stale
+  ground pose;
+- the seeded glider movement state also serves anything else that reads the container
+  directly (movement-effect registrations, collision shape selection).
+
+The window is provisional and self-limiting — it never grants permanent gliding. A
+`MovementInput` closes it as soon as the pose can answer the question the window exists
+for: the pose reports the character airborne (launch confirmed, client truth takes over),
+or the pose arrives after the commanded forced window ended (the client's own state again).
+If no pose ever arrives the window simply expires at its deadline. Each close logs
+`[Glider] Launch handoff: first MovementInput after server push MoveState=... AirTime=...
+Airborne=... VelocityZ=...` — that line is the diagnostic that separates "the client never
+left the pad" from "the server tore the launch down". A standing `MoveState` with positive
+air time on the first post-push input means the launch itself failed client-side and no
+server gate was at fault; falling/glider with negative air time means the launch worked and
+the chain must stay up (regression-test the gates if it does not).
 
 The existing `ForcedMovement` type-5 launch window is still 50 ms ahead through 550 ms
 ahead. Both endpoints and the packet's short time now use one clock snapshot, and the
@@ -121,6 +158,14 @@ The server continues to replicate effect slots on the combat controller/view and
 owner's local-effects controller, retaining the client event time for direct ADS application.
 The new `[Scope]` line reports **actual resulting state**, not just the requested boolean:
 weapon index, both fire modes, effect id/time, movement state and combat flags.
+
+`RequireAimModeCommandDef` (command type 130, environment `both`) is wired in the aptitude
+`Factory` instead of being a permanent `return true` stub. It resolves the character of the
+activation like the other character requirements (deployable-owned chains included), passes
+when the activation has no character at all, and answers from `FireMode_1`: mode 1 = scoped
+passes, 0 = hip fire fails, with `Negate` inverting. Only five rows exist in prod-1962
+(43383, 139930, 420492, 1309995, 1315149), mostly as short scope-gated chains; the aim
+pose/camera itself remains client work, so the in-game checks below are still the arbiter.
 
 ## Remaining limitations
 
@@ -154,6 +199,11 @@ Use one continuous log covering scope-in/launch through scope-out/landing:
    changes and `[Effect]` expiry ages. New effects must have a fresh lifetime at each handoff;
    profile 18 must remain active after the 9495-to-3417 transition. Confirm actual airborne/
    gliding movement, not just a wing animation.
+4. The `[Glider] Launch handoff` line after each push tells which side failed: airborne /
+   negative air time means the launch reached the client and the chain must survive it
+   (regression); a standing / positive air time handoff while still on the pad means the
+   client never started the forced movement, and the retrigger cadence (was ~2 s) plus the
+   post-handoff `[Effect]` ages are the numbers to report.
 4. Land, then reuse the pad. Permissions and profile must reset on landing, and one launch
    must not leave the next launch disabled or continuously retrigger while still active.
 

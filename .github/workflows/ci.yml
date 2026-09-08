@@ -49,8 +49,13 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          if [ -f "$RUNNER_TEMP/test-output.log" ]; then
-            tail -n 40 "$RUNNER_TEMP/test-output.log" | while IFS= read -r line; do echo "::error::$line"; done
+          log="$RUNNER_TEMP/test-output.log"
+          if [ -f "$log" ]; then
+            # GitHub keeps only the first few step annotations, so put the failing-test block from the
+            # end of the detailed xunit log first; plain pass lines used to hide the [FAIL] block.
+            last_fail=$(grep -nE '\[FAIL\]|Error Message:|Failed!' "$log" | tail -n 1 | cut -d: -f1)
+            { if [ -n "$last_fail" ]; then sed -n "${last_fail},\$p" "$log" | head -n 12; else tail -n 40 "$log"; fi; } \
+              | while IFS= read -r line; do echo "::error::$line"; done
           fi
       - name: Publish
         if: matrix.platform.name == 'Windows' && matrix.dotnet.name == '.NET 10'

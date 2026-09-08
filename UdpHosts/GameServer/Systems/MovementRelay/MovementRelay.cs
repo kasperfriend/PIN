@@ -1,11 +1,14 @@
 using AeroMessages.GSS.Character;
 using AeroMessages.GSS.Character.Event;
 using GameServer.Entities;
+using Serilog;
 
 namespace GameServer.Systems.MovementRelay;
 
 public class MovementRelay
 {
+    private static readonly ILogger Logger = Log.ForContext<MovementRelay>();
+
     private readonly Shard _shard;
 
     public MovementRelay(Shard shard)
@@ -45,6 +48,24 @@ public class MovementRelay
         character.TimeSinceLastJump = poseData.TimeSinceLastJump;
 
         character.IsAirborne = poseData.GroundTimePositiveAirTimeNegative < 0;
+
+        // A pose from the client is the truth the aptitude gates must use from here on. If the server was still
+        // inside the provisional window it opened when it pushed this character (glider pad launch), a pose
+        // closes that window once it can answer the question the window exists for: the client reports the
+        // character airborne (the launch worked), or the forced movement the server commanded has ended and
+        // the pose is the client's own again. Poses received while the forced movement may still be playing
+        // are the client's in-between state and do not end the window. Log what the client actually reported
+        // so a launch that never produced an airborne pose is distinguishable from one the server tore down
+        // too early.
+        bool closedServerLaunch = character.IsServerLaunchPending
+            && (!character.IsServerLaunchForcedWindowActive || poseData.GroundTimePositiveAirTimeNegative < 0);
+        if (closedServerLaunch)
+        {
+            character.ClearServerLaunchPending();
+            Logger.Debug(
+                "[Glider] Launch handoff: first MovementInput after server push MoveState={MoveState} AirTime={AirTime} Airborne={Airborne} VelocityZ={VelocityZ}",
+                posRotState.MovementState, poseData.GroundTimePositiveAirTimeNegative, character.IsAirborne, poseData.Velocity.Z);
+        }
 
         // Feed the pose into the fall damage tracker (applies damage on landings)
         _shard.FallDamage.OnMovementInput(character, poseData);

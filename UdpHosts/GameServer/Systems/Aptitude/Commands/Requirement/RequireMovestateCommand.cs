@@ -31,7 +31,12 @@ public class RequireMovestateCommand : Command, ICommand
 
         bool result = false;
         {
-            var movestate = character.MovementStateContainer.Movestate;
+            // A launch the server itself commanded (glider pad ForcePush) has no reported pose behind it yet:
+            // the first duration gates of the launch effects run while the client is still playing the forced
+            // movement. Treat the character as gliding for the provisional launch window
+            // (see CharacterEntity.MarkServerLaunchPending) so those gates cannot tear the launch down before
+            // the client's poses confirm the flight or the window expires.
+            var movestate = character.IsServerLaunchPending ? Movestate.Glider : character.MovementStateContainer.Movestate;
 
             if (Params.Standing == 1 && (movestate == Movestate.Standing))
             {
