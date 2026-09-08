@@ -43,11 +43,12 @@ public class RegisterMovementEffectCommand : Command, ICommand
             return true;
         }
 
-        if (Params.OnServer != 1)
+        if (Params.OnServer != 1 && Params.MovestateIndex < 7)
         {
             // The client runs its own copy of this chain and performs the registration against its local
-            // simulation; the server only registers server-side effects (OnServer == 1). The glider pad's rows
-            // are client-side (effect 723 is audio and particles), so the server steps over them here.
+            // simulation; the server only registers server-side effects (OnServer == 1). However, the server
+            // must track glider movement states (indices 7, 8, 9) to properly evaluate RequireMovestateCommand
+            // conditions, even though the visual effects (audio, particles) are client-side only.
             Logger.Debug("[{Command} {CommandId}] is client-side (statusfx {StatusfxId}, movestate {MovestateIndex}), server skips it",
                 nameof(RegisterMovementEffectCommand), Params.Id, Params.StatusfxId, Params.MovestateIndex);
 
@@ -61,7 +62,14 @@ public class RegisterMovementEffectCommand : Command, ICommand
 
     public void OnApply(Context context, ICommandActiveContext activeCommandContext)
     {
-        if (context.Self is not CharacterEntity character || Params.OnServer != 1)
+        if (context.Self is not CharacterEntity character)
+        {
+            return;
+        }
+
+        // Server must track glider movement states (indices 7, 8, 9) to properly evaluate RequireMovestateCommand
+        // conditions, even though the visual effects are client-side only. For other states, only register if OnServer == 1.
+        if (Params.OnServer != 1 && Params.MovestateIndex < 7)
         {
             return;
         }

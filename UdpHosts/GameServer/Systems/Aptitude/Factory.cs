@@ -319,8 +319,8 @@ public class Factory
             //     return new TargetCharacterNPCsCommand(CustomDBInterface.GetTargetCharacterNPCsCommandDef(commandId));
             // case CommandType.NPCBehaviorChange:
             //     return new NPCBehaviorChangeCommand(CustomDBInterface.GetNPCBehaviorChangeCommandDef(commandId));
-            // case CommandType.RequireAimMode:
-            //     return new RequireAimModeCommand(SDBInterface.GetRequireAimModeCommandDef(commandId));
+            case CommandType.RequireAimMode:
+                return new RequireAimModeCommand(SDBInterface.GetRequireAimModeCommandDef(commandId));
             // case CommandType.SlotAmmo:
             //     return new SlotAmmoCommand(SDBInterface.GetSlotAmmoCommandDef(commandId));
             // case CommandType.AddPhysics:
