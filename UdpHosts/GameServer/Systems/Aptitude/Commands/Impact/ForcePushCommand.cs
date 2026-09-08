@@ -59,6 +59,14 @@ public class ForcePushCommand : Command, ICommand
             var velocity = new Vector3(character.Velocity[0], character.Velocity[1], character.Velocity[2]);
             velocity.Z += strength;
 
+            // The server's ability chain depends on the player entering the glider movement state immediately
+            // after the launch. MovementInput remains authoritative and will overwrite this provisional state
+            // with the client's first real glider/falling/grounded pose. Keeping the state provisional here is
+            // important because the first client movement packet can arrive after the 500 ms launch handoff,
+            // while RequireMovestate is what keeps the wing/profile effect alive until that handoff.
+            character.MovementStateContainer.MovementStateValue =
+                (ushort)((character.MovementStateContainer.MovementStateValue & 0x00FF) | 0x7000);
+
             // The client holds the forced movement (and its velocity) for the [Time1, Time2] window on the
             // shared epoch clock (time-synced against Shard.CurrentTime). A window must be real for the
             // client to apply anything at all: a 1 ms window expires before, or while, the packet is in
@@ -84,7 +92,7 @@ public class ForcePushCommand : Command, ICommand
 
                 ShortTime = unchecked((ushort)time),
             };
-            Logger.Debug("[Glider] ForcePush {CommandId} Target={Target} Strength={Strength} Velocity={Velocity} Start={StartTime} End={EndTime}",
+            Logger.Debug("[Glider] ForcePush {CommandId} Target={Target} Strength={Strength} Velocity={Velocity} Start={StartTime} End={EndTime} ProvisionalMoveState=Glider",
                 Params.Id, character.EntityId, strength, velocity, message.Data.Params5.Time1, message.Data.Params5.Time2);
             player.NetChannels[ChannelType.ReliableGss].SendMessage(message, character.EntityId);
         }
