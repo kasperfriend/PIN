@@ -289,18 +289,12 @@ public class CombatController : Base
             }
 
             var targets = activateAbility.Targets
-            .Where(entityId =>
+            .Select(entityId => 
             {
-                try
-                {
-                    return shard.Entities[entityId.Backing & 0xffffffffffffff00] != null;
-                }
-                catch
-                {
-                    return false;
-                }
+                shard.Entities.TryGetValue(entityId.Backing & 0xffffffffffffff00, out var target);
+                return target as IAptitudeTarget;
             })
-            .Select(entityId => (IAptitudeTarget)shard.Entities[entityId.Backing & 0xffffffffffffff00])
+            .Where(target => target != null)
             .ToArray();
 
             bool success = shard.Abilities.HandleActivateAbility(shard, initiator, abilityId, activationTime, new AptitudeTargets(targets), abilityModuleId: moduleId);
