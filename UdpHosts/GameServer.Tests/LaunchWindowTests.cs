@@ -43,7 +43,7 @@ public class LaunchWindowTests
         Assert.False(command.Execute(context));
 
         // Closing the window with the client's handoff pose ends it too.
-        character.MarkServerLaunchPending(10_000);
+        character.MarkServerLaunchPending(11_000); // clock is at 12_051, deadline 13_050 still ahead
         Assert.True(command.Execute(context));
         character.ClearServerLaunchPending();
         Assert.False(command.Execute(context));
