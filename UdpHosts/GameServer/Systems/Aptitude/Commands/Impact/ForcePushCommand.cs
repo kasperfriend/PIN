@@ -59,13 +59,18 @@ public class ForcePushCommand : Command, ICommand
             var velocity = new Vector3(character.Velocity[0], character.Velocity[1], character.Velocity[2]);
             velocity.Z += strength;
 
-            // Type 5 is a one-frame velocity impulse, not a held trajectory. Time1/Time2 are the shared
-            // epoch-ms clock (time-synced against Shard.CurrentTime); the live client and upstream PIN
-            // both fire it as now+19 / now+20. A previous attempt stretched that to a 500 ms hold so the
-            // packet would "survive latency" — field logs then showed the client never left the pad
-            // (`Launch handoff ... MoveState=4096 Airborne=False VelocityZ=0`) while the wing animation
-            // still played. The 1 ms window is the impulse itself; widening it is what stopped the launch.
-            uint time = context.Shard.CurrentTime;
+            // Type 5 is a one-frame velocity impulse, not a held trajectory. Live wire truth
+            // (2016 captures, two (0,0,33) pad launches): the client rewinds to the stamped time,
+            // REPLACES its velocity with the message vector, and re-simulates ballistically to now
+            // (201 ms rewind -> +6.0 m / 26.6 m/s; 251 ms -> +7.2 m / 24.7 m/s, both exact). The
+            // stamps MUST therefore be past/present: a future Time1 is never applied (the client
+            // cannot rewind into the future), which is why now+19/now+20 never launched on any
+            // latency, and a 500 ms hold window failed the same way. The live proximity-fired pads
+            // stamp Time1 = send time, Time2 = Time1+1, ShortTime = Time1_low16; we stamp 25 ms in
+            // the past so the rewind is strictly forward even with clock jitter between server and
+            // client (~0.8 m / ~0.8 m/s of catch-up are invisible in game).
+            uint now = context.Shard.CurrentTime;
+            uint impulseAt = unchecked(now - 25);
             var player = character.Player;
 
             // The aptitude gates that keep the launch effects alive (AirborneDuration, RequireMovestate
@@ -78,7 +83,7 @@ public class ForcePushCommand : Command, ICommand
             // normally.
             character.MovementStateContainer.MovementStateValue =
                 (ushort)((character.MovementStateContainer.MovementStateValue & 0x00FF) | 0x7000);
-            character.MarkServerLaunchPending(time);
+            character.MarkServerLaunchPending(now);
             var message = new ForcedMovement
             {
                 Data = new AeroMessages.GSS.ForcedMovementData
@@ -89,13 +94,13 @@ public class ForcePushCommand : Command, ICommand
                     Params5 = new AeroMessages.GSS.ForcedMovementType5Params
                     {
                         Velocity = velocity,
-                        Time1 = unchecked(time + 19),
-                        Time2 = unchecked(time + 20),
+                        Time1 = impulseAt,
+                        Time2 = unchecked(impulseAt + 1),
                         Unk2 = 0
                     }
                 },
 
-                ShortTime = context.Shard.CurrentShortTime,
+                ShortTime = unchecked((ushort)impulseAt),
             };
             Logger.Debug("[Glider] ForcePush {CommandId} Target={Target} Strength={Strength} Velocity={Velocity} Start={StartTime} End={EndTime}",
                 Params.Id, character.EntityId, strength, velocity, message.Data.Params5.Time1, message.Data.Params5.Time2);
