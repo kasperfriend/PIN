@@ -180,7 +180,12 @@ Consequences of the rule, as chosen:
 - `HardcodedCharacterData.MaxHealth` (19192) is no longer the player pool: it
   survives only as the construction-time default before any loadout is applied
   (and as the pool NPCs keep when even `MonsterScaling` has no row for their
-  level).
+  level). The respawn path re-derives the pool through this same rule
+  (`CharacterEntity.ResetMaxHealthFromDatabase` in `NetworkPlayer.Respawn`,
+  which also runs on the first `ScheduleUpdateRequest` of a login), so zoning
+  in or dying no longer resets a player to the flat default — a fresh frame
+  spawns at its level-1 item-sum pool without `setlevel` having to re-derive
+  it, and a respawn after `setlevel 45` comes back at the level-45 pool.
 - The community-documented original formula (`((Base Health + Core Health) ×
   Frame Health Bonus) × Level Modifier`) cannot be reproduced from this build's
   rows alone: `Battleframe.base_health` is 0 for playable frames and no table
@@ -195,7 +200,7 @@ Consequences of the rule, as chosen:
 | Question | Answer |
 |---|---|
 | Is the replicated player stat sheet DB-correct? | Yes — it is the sum of the equipped items' `AttributeRange` rows (default loadouts come from `CharCreateLoadoutSlots`); the stale captured constructor seed was removed |
-| Is player max health DB-derived? | Yes — item Health sum + `LevelItemAttributes` curve at the frame's progression level, × the one documented pool-scale constant (§4); NPCs keep their `MonsterScaling` pool |
+| Is player max health DB-derived? | Yes — item Health sum + `LevelItemAttributes` curve at the frame's progression level, × the one documented pool-scale constant (§4), on loadout apply *and* on respawn; NPCs keep their `MonsterScaling` pool |
 | Do player weapons deal DB damage? | Yes — item attribute 954 "Damage Per Round" at the shooter's progression level (the curve the per-level preset rows encode), with template fallback and ammo-defined distance falloff |
 | Is player level DB-driven? | Partially — frame progression level (1 until XP exists) is now the replicated level, the health-curve index and the weapon-damage scale; NPC difficulty keeps its own anchor |
 | What would still need a capture? | The ×3 pool-scale constant (§4) and the module-scalar replication (`ApplyLoadout` TODO) |
