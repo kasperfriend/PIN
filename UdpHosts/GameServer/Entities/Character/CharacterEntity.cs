@@ -495,6 +495,35 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
         ApplyLoadout(loadout);
 
+        // ApplyLoadout only builds the collision component for chassis owners (players and
+        // chassis-wearing NPCs) — the `chassis.SdbId != 0` block is the only place Collision
+        // is assigned. Most creatures have no battleframe chassis and instead point at their
+        // pose type directly on the Monster row, so synthesize the component here; otherwise
+        // CreateKineticEntity dereferences a null Collision and every spawn of such a monster
+        // throws NullReferenceException.
+        if (Collision == null)
+        {
+            var monsterPoseType = monsterInfo.PosetypeId != 0 ? SDBInterface.GetPoseType(monsterInfo.PosetypeId) : null;
+            if (monsterPoseType != null)
+            {
+                Collision = new CharacterCollisionComponent
+                {
+                    PoseTypeRecord = monsterPoseType,
+                    Scale = monsterInfo.MinRandScale > 0f ? monsterInfo.MinRandScale : 1f,
+                };
+            }
+            else
+            {
+                // No pose data at all. Install an empty component so GetCharacterPoseAsset
+                // finds no collision ids and physics falls back to its default shape
+                // instead of throwing.
+                Log.Warning(
+                    "LoadMonster: monster {MonsterId} has no chassis and no usable PosetypeId ({PosetypeId}); using the physics fallback shape",
+                    typeId, monsterInfo.PosetypeId);
+                Collision = new CharacterCollisionComponent();
+            }
+        }
+
         // Temp hack to equip weapon
         if (monsterInfo.Weapon1Id != 0)
         {
