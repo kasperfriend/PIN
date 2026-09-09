@@ -1284,7 +1284,10 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     /// </summary>
     private bool IsForeignInitiator(EntityId initiator)
     {
-        return initiator.Backing != 0 && initiator.Backing != AeroEntityId.Backing;
+        // Compare the entity id itself, not the whole backing value: the low byte of an EntityId is the
+        // controller id, which differs between an entity's own AeroEntityId and the same entity seen from
+        // another controller's field.
+        return initiator.Backing != 0 && initiator.Id != AeroEntityId.Id;
     }
 
     public override void SetStatusEffect(byte index, ushort time, StatusEffectData data)
