@@ -35,6 +35,14 @@ namespace GameServer.Systems.EntityManager;
 public class EntityManager
 {
     private const byte _serverId = 31;
+
+    /// <summary>
+    ///     How many queued scope-ins one 20 ms gate may send. One per gate (the old behaviour) paces a
+    ///     zone's worth of keyframes far too slowly for a login in a populated area; a batch bounds the
+    ///     reliable-channel burst while still finishing a typical login's scope-ins in well under a second.
+    /// </summary>
+    private const int MaxScopeInsPerTick = 16;
+
     private readonly IShard _shard;
     private readonly ILogger _logger;
     private readonly ulong _updateFlushIntervalMs = 5;
@@ -493,13 +501,17 @@ public class EntityManager
             }
         }
 
-        // Process queued scope-ins
+        // Process queued scope-ins. A scope-in sends the entity's keyframes over the reliable channel,
+        // so the queue is paced — but one entity per gate made a login in a populated area stream its
+        // surrounding entities in at 50 per second, seconds of visible pop-in. A small batch keeps the
+        // same pacing while making the surrounding world appear promptly.
         if (!_queuedScopeIn.IsEmpty && currentTime > _lastScopeIn + _scopeInIntervalMs)
         {
-            bool ok = _queuedScopeIn.TryDequeue(out ScopeInRequest request);
-            if (ok)
+            var processed = 0;
+            while (processed < MaxScopeInsPerTick && _queuedScopeIn.TryDequeue(out var request))
             {
                 ScopeIn(request.Player, request.Entity);
+                processed++;
             }
 
             _lastScopeIn = currentTime;

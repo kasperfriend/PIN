@@ -29,6 +29,24 @@ public abstract class PacketServer : IPacketSender
         Logger = logger.ForContext<PacketServer>();
         ListenEndpoint = new IPEndPoint(IPAddress.Any, port);
         ServerSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows surfaces the ICMP port-unreachable of a peer that vanished as a WSAECONNRESET
+            // error on this socket's next SendTo/ReceiveFrom — every send to a dead client would
+            // throw (and log) until something notices the client is gone. Linux never had this
+            // behaviour, so it stays Windows-only. Best effort: if the ioctl is unavailable the
+            // send thread's existing error handling copes.
+            const int SIO_UDP_CONNRESET = -1744830452;
+            try
+            {
+                ServerSocket.IOControl(SIO_UDP_CONNRESET, BitConverter.GetBytes(0), null);
+            }
+            catch (Exception ex) when (ex is SocketException or PlatformNotSupportedException or InvalidOperationException)
+            {
+                Logger.Debug(ex, "Could not disable SIO_UDP_CONNRESET on the UDP socket");
+            }
+        }
     }
 
     public bool IsRunning { get; private set; }

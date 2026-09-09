@@ -20,7 +20,22 @@ public abstract class BaseAptitudeEntity : BaseEntity, IAptitudeTarget
 
     public CharacterEntity Owner { get; }
 
-    public List<EffectState> GetActiveEffects() => [.. ActiveEffects];
+    public List<EffectState> GetActiveEffects()
+    {
+        // Fast path for the overwhelmingly common case — nothing active. The 32-slot copy below used
+        // to run for every entity on every ability-system tick (and again for each aptitude command
+        // that touches effects), which made it the biggest single allocator on a populated shard.
+        // Callers null-check each entry, so an empty list is exactly what an all-null copy gave them.
+        for (var i = 0; i < MaxEffectCount; i++)
+        {
+            if (ActiveEffects[i] != null)
+            {
+                return [.. ActiveEffects];
+            }
+        }
+
+        return [];
+    }
 
     public override string ToString()
     {

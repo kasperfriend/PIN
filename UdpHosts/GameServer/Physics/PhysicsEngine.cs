@@ -55,7 +55,16 @@ public partial class PhysicsEngine
         _forceReload = forceReload;
         DebugProjectileHitCallbacks = debugProjectileHitCallbacks;
 
-        var targetThreadCount = int.Max(1, Environment.ProcessorCount > 4 ? Environment.ProcessorCount - 2 : Environment.ProcessorCount - 1);
+        // The 20 Hz timestep of a zone shard does not have enough work to keep a large dispatcher
+        // fleet busy: every Bepu dispatch thread is a spinning worker that competes with the game
+        // client for a core, and the typical setup runs server and client on the same machine. This
+        // simulation profile (mostly static zone geometry plus a few hundred kinematic bodies) is
+        // comfortably served by a handful of threads, so cap the fleet.
+        const int MaxDispatcherThreads = 4;
+        var targetThreadCount = int.Clamp(
+            Environment.ProcessorCount > 4 ? Environment.ProcessorCount - 2 : Environment.ProcessorCount - 1,
+            1,
+            MaxDispatcherThreads);
 
         BufferPool = new BufferPool();
         ThreadDispatcher = new ThreadDispatcher(targetThreadCount);
