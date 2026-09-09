@@ -34,12 +34,12 @@ public static class CharacterResolver
     public static CharacterRecord Find(IEnumerable<CharacterRecord> characters, ulong characterGuid)
     {
         var candidates = AsList(characters);
+
+        // Legacy behaviour of CharacterStore.Get: an unknown guid still resolved
+        // to the admin account's entry for the zone encoded in its low 16 bits.
+        // Kept so odd callers keep getting a character instead of a failure.
         return FindByGuid(candidates, characterGuid)
                ?? FindClobberedUnique(candidates, characterGuid)
-               // Legacy behaviour of CharacterStore.Get: an unknown guid still
-               // resolved to the admin account's entry for the zone encoded in
-               // its low 16 bits. Kept so odd callers keep getting a character
-               // instead of a failure.
                ?? FindLegacyZone(candidates, characterGuid & ZoneMask);
     }
 

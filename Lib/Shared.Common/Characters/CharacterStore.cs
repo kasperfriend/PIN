@@ -272,6 +272,32 @@ public static class CharacterStore
         Save();
     }
 
+    /// <summary>
+    /// Create the built-in entries for one account. Each one is a zone you can
+    /// load into, which is how PIN has always used the selection screen. Pure
+    /// function so the seeding can be unit tested.
+    /// </summary>
+    public static IReadOnlyList<CharacterRecord> BuildZoneSeed(ulong accountId, ulong guidPrefix)
+    {
+        var seed = new List<CharacterRecord>(SeedZones.Length);
+
+        for (var i = 0; i < SeedZones.Length; i++)
+        {
+            var (name, zoneId) = SeedZones[i];
+            seed.Add(new CharacterRecord
+                     {
+                         AccountId = accountId,
+                         CharacterGuid = guidPrefix + (ulong)zoneId,
+                         Name = name,
+                         SortOrder = i,
+                         LastZoneId = (uint)zoneId,
+                         LastSeenAt = DateTime.UtcNow - TimeSpan.FromDays(365)
+                     });
+        }
+
+        return seed;
+    }
+
     /// <summary>Write the store back to disk.</summary>
     public static void Save()
     {
@@ -308,32 +334,6 @@ public static class CharacterStore
         {
             // Persistence is best effort; never take a server down over it.
         }
-    }
-
-    /// <summary>
-    /// Create the built-in entries for one account. Each one is a zone you can
-    /// load into, which is how PIN has always used the selection screen. Pure
-    /// function so the seeding can be unit tested.
-    /// </summary>
-    public static IReadOnlyList<CharacterRecord> BuildZoneSeed(ulong accountId, ulong guidPrefix)
-    {
-        var seed = new List<CharacterRecord>(SeedZones.Length);
-
-        for (var i = 0; i < SeedZones.Length; i++)
-        {
-            var (name, zoneId) = SeedZones[i];
-            seed.Add(new CharacterRecord
-                     {
-                         AccountId = accountId,
-                         CharacterGuid = guidPrefix + (ulong)zoneId,
-                         Name = name,
-                         SortOrder = i,
-                         LastZoneId = (uint)zoneId,
-                         LastSeenAt = DateTime.UtcNow - TimeSpan.FromDays(365)
-                     });
-        }
-
-        return seed;
     }
 
     /// <summary>

@@ -66,7 +66,7 @@ public class AccountsController : ControllerBase
 
         _logger.LogInformation("Created account {AccountId} ({Email})", account.AccountId, account.Email);
 
-        return new { error = false };
+        return Ok(new { error = false });
     }
 
     /// <summary>

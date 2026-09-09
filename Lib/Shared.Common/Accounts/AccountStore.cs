@@ -47,8 +47,10 @@ public sealed class AccountStore
     private const int PasswordIterations = 10000;
     private const int MaxEmailLength = 254;
 
+    /// <summary>created_at reported for the seeded admin (unix 1358612495, from the original service's example).</summary>
+    private static readonly DateTime AdminCreatedAt = new(2013, 1, 17, 18, 21, 35, DateTimeKind.Utc);
+
     private static readonly object DefaultLock = new();
-    private static AccountStore defaultStore;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -56,9 +58,20 @@ public sealed class AccountStore
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    private static AccountStore defaultStore;
+
     private readonly object writeLock = new();
+
     private readonly ConcurrentDictionary<ulong, AccountRecord> accounts = new();
+
     private readonly string storePath;
+
+    /// <summary>Create (or open) a store at <paramref name="storePath"/>. A missing or empty file seeds the admin account.</summary>
+    /// <param name="storePath">Path of the JSON file; null/empty for the default location next to the binary.</param>
+    public AccountStore(string storePath = null)
+        : this(ResolvePath(storePath), load: true)
+    {
+    }
 
     private AccountStore(string path, bool load)
     {
@@ -69,12 +82,8 @@ public sealed class AccountStore
         }
     }
 
-    /// <summary>Create (or open) a store at <paramref name="storePath"/>. A missing or empty file seeds the admin account.</summary>
-    /// <param name="storePath">Path of the JSON file; null/empty for the default location next to the binary.</param>
-    public AccountStore(string storePath = null)
-        : this(ResolvePath(storePath), load: true)
-    {
-    }
+    /// <summary>Path of the backing JSON file.</summary>
+    public string StorePath => storePath;
 
     /// <summary>
     /// The process-wide store. Lazily falls back to the default file location;
@@ -92,6 +101,73 @@ public sealed class AccountStore
         _ = CreateDefault(storePath);
     }
 
+    /// <summary>
+    /// Hash a password for storage: base64(16 random salt bytes + 32 PBKDF2-HMACSHA256 bytes).
+    /// </summary>
+    public static string HashPassword(string password)
+    {
+        var salt = RandomNumberGenerator.GetBytes(PasswordSaltLength);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, PasswordIterations, HashAlgorithmName.SHA256, PasswordHashLength);
+
+        var combined = new byte[PasswordSaltLength + PasswordHashLength];
+        salt.AsSpan().CopyTo(combined);
+        hash.AsSpan().CopyTo(combined.AsSpan(PasswordSaltLength));
+
+        return Convert.ToBase64String(combined);
+    }
+
+    /// <summary>Verify a plaintext password against a stored <see cref="AccountRecord.PasswordHash"/>.</summary>
+    public static bool VerifyPassword(string password, string storedHash)
+    {
+        if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(storedHash))
+        {
+            return false;
+        }
+
+        try
+        {
+            var combined = Convert.FromBase64String(storedHash);
+            if (combined.Length != PasswordSaltLength + PasswordHashLength)
+            {
+                return false;
+            }
+
+            var salt = combined.AsSpan(0, PasswordSaltLength);
+            var expected = combined.AsSpan(PasswordSaltLength);
+            var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, PasswordIterations, HashAlgorithmName.SHA256, PasswordHashLength);
+
+            return CryptographicOperations.FixedTimeEquals(expected, actual);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Normalize an email the way uid derivation does: trim, then fold ASCII
+    /// A-Z to lowercase (see <see cref="Red5Auth.LowercaseAsciiBytes"/> for why
+    /// not <see cref="string.ToLowerInvariant"/>).
+    /// </summary>
+    public static string NormalizeEmail(string email)
+    {
+        if (string.IsNullOrEmpty(email))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = email.Trim().ToCharArray();
+        for (var i = 0; i < trimmed.Length; i++)
+        {
+            if (trimmed[i] is >= 'A' and <= 'Z')
+            {
+                trimmed[i] = (char)(trimmed[i] + 32);
+            }
+        }
+
+        return new string(trimmed);
+    }
+
     private static AccountStore CreateDefault(string storePath)
     {
         lock (DefaultLock)
@@ -107,9 +183,6 @@ public sealed class AccountStore
                    ? Path.Combine(AppContext.BaseDirectory, "accounts.json")
                    : storePath;
     }
-
-    /// <summary>Path of the backing JSON file.</summary>
-    public string StorePath => storePath;
 
     /// <summary>Every account, ordered by id.</summary>
     public IReadOnlyList<AccountRecord> GetAll()
@@ -272,71 +345,30 @@ public sealed class AccountStore
         return true;
     }
 
-    /// <summary>
-    /// Hash a password for storage: base64(16 random salt bytes + 32 PBKDF2-HMACSHA256 bytes).
-    /// </summary>
-    public static string HashPassword(string password)
+    /// <summary>Write the store back to disk (atomic temp-file + move, best effort).</summary>
+    public void Save()
     {
-        var salt = RandomNumberGenerator.GetBytes(PasswordSaltLength);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, PasswordIterations, HashAlgorithmName.SHA256, PasswordHashLength);
-
-        var combined = new byte[PasswordSaltLength + PasswordHashLength];
-        salt.AsSpan().CopyTo(combined);
-        hash.AsSpan().CopyTo(combined.AsSpan(PasswordSaltLength));
-
-        return Convert.ToBase64String(combined);
-    }
-
-    /// <summary>Verify a plaintext password against a stored <see cref="AccountRecord.PasswordHash"/>.</summary>
-    public static bool VerifyPassword(string password, string storedHash)
-    {
-        if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(storedHash))
+        lock (writeLock)
         {
-            return false;
-        }
-
-        try
-        {
-            var combined = Convert.FromBase64String(storedHash);
-            if (combined.Length != PasswordSaltLength + PasswordHashLength)
+            try
             {
-                return false;
+                var directory = Path.GetDirectoryName(storePath);
+                if (!string.IsNullOrEmpty(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                var json = JsonSerializer.Serialize(accounts.Values.OrderBy(a => a.AccountId).ToList(), JsonOptions);
+                var tempPath = storePath + ".tmp";
+                File.WriteAllText(tempPath, json);
+                File.Move(tempPath, storePath, true);
             }
-
-            var salt = combined.AsSpan(0, PasswordSaltLength);
-            var expected = combined.AsSpan(PasswordSaltLength);
-            var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, PasswordIterations, HashAlgorithmName.SHA256, PasswordHashLength);
-
-            return CryptographicOperations.FixedTimeEquals(expected, actual);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Normalize an email the way uid derivation does: trim, then fold ASCII
-    /// A-Z to lowercase (see <see cref="Red5Auth.LowercaseAsciiBytes"/> for why
-    /// not <see cref="string.ToLowerInvariant"/>).
-    /// </summary>
-    public static string NormalizeEmail(string email)
-    {
-        if (string.IsNullOrEmpty(email))
-        {
-            return string.Empty;
-        }
-
-        var trimmed = email.Trim().ToCharArray();
-        for (var i = 0; i < trimmed.Length; i++)
-        {
-            if (trimmed[i] is >= 'A' and <= 'Z')
+            catch (Exception ex)
             {
-                trimmed[i] = (char)(trimmed[i] + 32);
+                // Persistence is best effort; never take a server down over it.
+                Log.Warning(ex, "Failed to persist the account store at {StorePath}", storePath);
             }
         }
-
-        return new string(trimmed);
     }
 
     /// <summary>Next free account id: one above the highest allocated id (never below the admin id).</summary>
@@ -404,31 +436,5 @@ public sealed class AccountStore
 
         Log.Information("Seeded the default account {Email}/{Password} (id {AccountId})", AdminEmail, AdminPassword, AdminAccountId);
         Save();
-    }
-
-    /// <summary>Write the store back to disk (atomic temp-file + move, best effort).</summary>
-    public void Save()
-    {
-        lock (writeLock)
-        {
-            try
-            {
-                var directory = Path.GetDirectoryName(storePath);
-                if (!string.IsNullOrEmpty(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-
-                var json = JsonSerializer.Serialize(accounts.Values.OrderBy(a => a.AccountId).ToList(), JsonOptions);
-                var tempPath = storePath + ".tmp";
-                File.WriteAllText(tempPath, json);
-                File.Move(tempPath, storePath, true);
-            }
-            catch (Exception ex)
-            {
-                // Persistence is best effort; never take a server down over it.
-                Log.Warning(ex, "Failed to persist the account store at {StorePath}", storePath);
-            }
-        }
     }
 }
