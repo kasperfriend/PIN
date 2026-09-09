@@ -76,13 +76,14 @@ public class ForcePushCommand : Command, ICommand
             // The aptitude gates that keep the launch effects alive (AirborneDuration, RequireMovestate
             // gliding/falling) read the character's *reported* pose, but no post-launch pose can exist until
             // the client has applied this impulse. Without a provisional window the server tore its own
-            // launch down on the first duration ticks (see Docs/GLIDER_AND_ADS.md). Seed the movement
-            // state nibble so movestate reads agree with the pending window, and open the window until 1.5 s
-            // after the server-side wait. MovementRelay closes the window again as soon as the client's
-            // poses say the launch is over, so a client that never leaves the ground still ends the launch
-            // normally.
-            character.MovementStateContainer.MovementStateValue =
-                (ushort)((character.MovementStateContainer.MovementStateValue & 0x00FF) | 0x7000);
+            // launch down on the first duration ticks (see Docs/GLIDER_AND_ADS.md).
+            //
+            // This is deliberately only a server-side waiting marker + gate grace. The impulse has not been
+            // applied by the client yet, so the server must not pretend the character's movement state is
+            // glider (no 0x7000 seed here). MovementRelay uses the same marker to hold back the in-range
+            // grounded ConfirmedPoseUpdate to the authoring client until the client actually reports the
+            // airborne pose, otherwise the client would be told "your grounded pose is authoritative" in the
+            // same tick its pending impulse is still in flight and would drop it.
             character.MarkServerLaunchPending(now);
             var message = new ForcedMovement
             {

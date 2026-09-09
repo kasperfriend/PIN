@@ -54,9 +54,10 @@ public class MovementRelay
         // closes that window once it can answer the question the window exists for: the client reports the
         // character airborne (the launch worked), or the forced movement the server commanded has ended and
         // the pose is the client's own again. Poses received while the forced movement may still be playing
-        // are the client's in-between state and do not end the window. Log what the client actually reported
-        // so a launch that never produced an airborne pose is distinguishable from one the server tore down
-        // too early.
+        // are the client's in-between state and do not end the window — and, as far as the authoring client is
+        // concerned, are not confirmed back yet either (see ShouldHoldAuthoringConfirmation below). Log what
+        // the client actually reported so a launch that never produced an airborne pose is distinguishable
+        // from one the server tore down too early.
         bool closedServerLaunch = character.IsServerLaunchPending
             && (!character.IsServerLaunchForcedWindowActive || poseData.GroundTimePositiveAirTimeNegative < 0);
         if (closedServerLaunch)
@@ -76,7 +77,15 @@ public class MovementRelay
         // Update with physics
         _shard.Physics.UpdateEntity(character);
 
-        // Confirm the pose with the client
+        // Confirm the pose with the client. Do *not* confirm a still-grounded pose to the authoring client
+        // while a launch the server just commanded is still pending and inside its forced window: the client
+        // receives the ForcedMovement impulse asynchronously, and if its first post-push MovementInput (still
+        // grounded, because the impulse has not been applied yet) is confirmed immediately, the client treats
+        // that grounded pose as authoritative and drops the pending launch - the observed `MoveState=4096 ...
+        // Airborne=False VelocityZ=0` failure. Holding the confirm gives the client a handful of milliseconds
+        // to apply the impulse; the next input (or the first one after the forced window ends) then gets the
+        // normal authoritative confirmation.
+        bool holdAuthoringConfirmation = ShouldHoldAuthoringConfirmation(character, poseData);
         var confirmedPose = new ConfirmedPoseUpdate
         {
             PoseData = new MovementPoseData
@@ -98,7 +107,15 @@ public class MovementRelay
             },
             NextShortTime = unchecked((ushort)(input.ShortTime + 90)) // This value has to be in the future, nobody cares why.
         };
-        client.NetChannels[ChannelType.UnreliableGss].SendMessage(confirmedPose, character.EntityId);
+        if (!holdAuthoringConfirmation)
+        {
+            client.NetChannels[ChannelType.UnreliableGss].SendMessage(confirmedPose, character.EntityId);
+        }
+        else
+        {
+            Logger.Debug("[Glider] Held authoring pose confirm: pending launch, reported AirTime={AirTime} MoveState={MoveState}",
+                poseData.GroundTimePositiveAirTimeNegative, movementStateValue);
+        }
 
         // Forward update to remote clients
         var currentPose = new CurrentPoseUpdate
@@ -124,9 +141,10 @@ public class MovementRelay
             bool isSelf = remoteClient.SocketId == client.SocketId;
 
             // Never re-apply the "remote avatar" CurrentPoseUpdate to the client that authored it:
-            // it already got the authoritative answer as a ConfirmedPoseUpdate above, and re-applying
-            // its own pose on every movement tick is what made the first person animation flicker
-            // between states while sprinting. So only the pose broadcast is skipped for self.
+            // it already got the authoritative answer as a ConfirmedPoseUpdate above (or is deliberately
+            // waiting for the pending launch to be confirmed), and re-applying its own pose on every
+            // movement tick is what made the first person animation flicker between states while sprinting.
+            // So only the pose broadcast is skipped for self.
             if (!isSelf)
             {
                 remoteClient.NetChannels[ChannelType.UnreliableGss].SendMessage(currentPose, character.EntityId);
@@ -191,5 +209,20 @@ public class MovementRelay
         var delta = unchecked((ushort)(current - previous));
 
         return delta >= 0x8000;
+    }
+
+    /// <summary>
+    ///     True while the authoring client's confirmed pose must be held back: a launch (<c>ForcePush</c>) is
+    ///     pending, its forced-window grace is still active, and the client's latest reported pose is still
+    ///     grounded. The client applies the ForcedMovement impulse asynchronously, so a grounded input can
+    ///     legitimately arrive before that impulse has taken effect; confirming that grounded pose immediately
+    ///     makes it authoritative and makes the client drop the pending launch. Once the client reports
+    ///     airborne, or once the forced window ends (the launch failed), confirmation resumes.
+    /// </summary>
+    internal static bool ShouldHoldAuthoringConfirmation(Entities.Character.CharacterEntity character, MovementPoseData poseData)
+    {
+        return character.IsServerLaunchPending
+            && character.IsServerLaunchForcedWindowActive
+            && poseData.GroundTimePositiveAirTimeNegative >= 0;
     }
 }

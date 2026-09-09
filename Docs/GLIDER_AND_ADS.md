@@ -111,15 +111,31 @@ registration, and replicating client-only effect 723 server-side pollutes the sh
 effect slots.
 
 So when `ForcePush` sends a launch it also marks the character as
-**launch-pending** (`MarkServerLaunchPending`): it seeds the movement state nibble to
-glider (`0x7000`) and opens a window that runs to push time + 550 ms (a server-side wait
-for the client's first post-impulse pose) + 1500 ms handoff margin. While the window is open:
+**launch-pending** (`MarkServerLaunchPending`): a waiting marker plus gate grace that runs
+to push time + 550 ms (a server-side wait for the client's first post-impulse pose) +
+1500 ms handoff margin. While the window is open:
 
 - `AirborneDuration` counts the character as airborne;
 - `RequireMovestate` answers gliding/falling/… from the *pending launch*, not the stale
-  ground pose;
-- the seeded glider movement state also serves anything else that reads the container
-  directly (movement-effect registrations, collision shape selection).
+  ground pose.
+
+The server deliberately does **not** seed the movement state nibble to glider (`0x7000`)
+at push time. The client has not applied the impulse yet, so pretending the character is
+gliding server-side would contradict the only client-facing evidence. The gate grace reads
+the pending marker instead; anything that reads the reported movement state directly keeps
+the client's actual pre-launch pose until the client reports the launch.
+
+The most important use of the marker is **holding the authoring pose confirm**. The client
+receives the `ForcedMovement` Type 5 impulse asynchronously; its first post-push
+`MovementInput` can still be grounded because the impulse has not taken effect yet.
+`MovementRelay` must not confirm that grounded pose back over `UnreliableGss` in the same
+tick, or the client treats the grounded pose as authoritative and drops the pending launch
+— the observed `[Glider] Launch handoff ... MoveState=4096 AirTime=32767 Airborne=False
+VelocityZ=0` failure. While a launch is pending *and* the forced window is active *and* the
+reported pose is still grounded, the authoring client's `ConfirmedPoseUpdate` is held back;
+remote clients still get `CurrentPoseUpdate` and every client still gets `JumpActioned`.
+Confirmation resumes as soon as the client reports airborne, or at the end of the forced
+window if it never left the pad.
 
 The window is provisional and self-limiting — it never grants permanent gliding. A
 `MovementInput` closes it as soon as the pose can answer the question the window exists
@@ -309,6 +325,10 @@ dotnet test UdpHosts/GameServer.Tests/GameServer.Tests.csproj -c Release
 - `ScopedStateTests`: real `UseScope`/weapon/fire-mode handlers, a sustained scope effect,
   replicated controller fields, scope-out, death/external cleanup, stale packets and zero
   timestamps at clock wrap.
+- `LaunchWindowTests` and `ForcePushCommandTests`: launch-pending gate grace expiry/wrap,
+  the grounded authoring confirm holding while a launch is pending, the fresh `now+19` /
+  `now+20` / current `ShortTime` Type 5 body, and that `ForcePush` does not overwrite the
+  reported movement state with the glider nibble.
 - Existing `PermissionAndGliderProfileCommandTests`, `CombatFlagsCommandTests`,
   `RequirementServerCommandTests`, `RegisterMovementEffectCommandTests`,
   `ProximityAbilityRetriggerTests` and `ChannelReliableTests` cover the related components.

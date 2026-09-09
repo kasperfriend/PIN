@@ -66,6 +66,11 @@ public class ForcePushCommandTests
 
         // The launch-pending window is still opened at push time (server-side), independent of the wire stamp.
         Assert.True(character.IsServerLaunchPending);
+
+        // The marker is a waiting grace for the server's own gates, not a claim that the client is already
+        // gliding: ForcePush must not overwrite the reported movement state with the glider nibble while the
+        // impulse is still in flight (MovementRelay holds the grounded authoring confirm instead).
+        Assert.NotEqual(Movestate.Glider, character.MovementStateContainer.Movestate);
     }
 
     [Theory]

@@ -1,8 +1,10 @@
+using AeroMessages.GSS.Character;
 using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.aptfs;
 using GameServer.Systems.Aptitude;
 using GameServer.Systems.Aptitude.Commands.Duration;
 using GameServer.Systems.Aptitude.Commands.Requirement;
+using GameServer.Systems.MovementRelay;
 using GameServer.Tests.Fakes;
 using Xunit;
 
@@ -110,6 +112,31 @@ public class LaunchWindowTests
     }
 
     [Fact]
+    public void AuthoringPoseConfirm_IsHeldWhileTheLaunchIsStillPendingAndGrounded()
+    {
+        var shard = new FakeShard { CurrentTimeLong = 10_000 };
+        var character = FakeCharacterFactory.Create(shard);
+        character.MarkServerLaunchPending(10_000); // forced window active until 10_550
+
+        // The client can legitimately report a still-grounded pose before its pending ForcedMovement impulse has
+        // been applied; confirming that pose immediately would make it authoritative and drop the launch.
+        Assert.True(MovementRelay.ShouldHoldAuthoringConfirmation(character, Pose(airTime: 32767)));
+
+        // Once the client reports airborne, the ground truth is the launch successor and confirmation resumes.
+        Assert.False(MovementRelay.ShouldHoldAuthoringConfirmation(character, Pose(airTime: -1)));
+
+        // After the forced window the server no longer waits; if the client never left the pad, confirming the
+        // grounded pose is the correct way to hand authority back to the client.
+        shard.CurrentTimeLong = 10_551;
+        Assert.False(MovementRelay.ShouldHoldAuthoringConfirmation(character, Pose(airTime: 32767)));
+
+        // Outside a pending launch the normal confirm path is always used.
+        character.ClearServerLaunchPending();
+        shard.CurrentTimeLong = 10_000;
+        Assert.False(MovementRelay.ShouldHoldAuthoringConfirmation(character, Pose(airTime: 32767)));
+    }
+
+    [Fact]
     public void LaunchWindow_ExpiryAndForcedWindowAreWrapSafe()
     {
         var shard = new FakeShard { CurrentTimeLong = uint.MaxValue - 100ul };
@@ -126,6 +153,14 @@ public class LaunchWindowTests
 
         shard.CurrentTimeLong = 2_000; // wrapped: deadline passed too
         Assert.False(character.IsServerLaunchPending);
+    }
+
+    private static MovementPoseData Pose(short airTime)
+    {
+        return new MovementPoseData
+        {
+            GroundTimePositiveAirTimeNegative = airTime,
+        };
     }
 
     private static (FakeShard Shard, CharacterEntity Character, AirborneDurationCommand Command) CreateRuntime(ulong time)
