@@ -47,9 +47,6 @@ public sealed class AccountStore
     private const int PasswordIterations = 10000;
     private const int MaxEmailLength = 254;
 
-    /// <summary>created_at reported for the seeded admin (unix 1358612495, from the original service's example).</summary>
-    private static readonly DateTime AdminCreatedAt = new(2013, 1, 17, 18, 21, 35, DateTimeKind.Utc);
-
     private static readonly object DefaultLock = new();
 
     private static readonly JsonSerializerOptions JsonOptions = new()
