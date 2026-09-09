@@ -86,6 +86,32 @@ public class ScopedStateTests
     }
 
     /// <summary>
+    ///     Live confirms a scope-in with two more halves: the effect slot replicates a zero-based stack
+    ///     count (a fresh apply carries Stack 0, never 1) and <c>WeaponFireBaseTime</c> arrives as
+    ///     <c>{T &amp; 0xFFFF, 0x81}</c> alongside <c>FireMode_0 = {1, T}</c>, while scope-out replicates
+    ///     FM0 alone (2014-09-19 capture). The client drops rifle IronSights when either half is missing.
+    /// </summary>
+    [Fact]
+    public void UseScope_ReplicatesLiveScopeAnswer_StackZeroAndScopedWeaponState()
+    {
+        var (_, character, player, controller) = CreateRuntime();
+        controller.UseScope(player, player, character.EntityId, Packet(60_001, 1));
+
+        var slot = character.Character_CombatController.StatusEffects_0Prop.Value;
+        Assert.Equal(1313u, slot.Id);
+        Assert.Equal((byte)0, slot.Stack);
+        Assert.Equal(60_001u, slot.Time);
+
+        var fireBaseTime = character.Character_CombatController.WeaponFireBaseTimeProp;
+        Assert.Equal(unchecked((ushort)60_001), fireBaseTime.ChangeTime);
+        Assert.Equal((byte)0x81, fireBaseTime.Unk);
+
+        // Scope-out replicates FM0 alone and leaves the weapon base time untouched, like live.
+        controller.UseScope(player, player, character.EntityId, Packet(60_002, 0));
+        Assert.Equal(fireBaseTime, character.Character_CombatController.WeaponFireBaseTimeProp);
+    }
+
+    /// <summary>
     ///     Scoping out hands the replicated fire mode back to the mode the player selected: a character that
     ///     switched to the underbarrel keeps firing the underbarrel once it stops aiming.
     /// </summary>

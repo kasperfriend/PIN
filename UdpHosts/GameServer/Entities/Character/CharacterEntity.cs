@@ -1174,6 +1174,18 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         var mode = (byte)(scoped ? 1 : _selectedFireMode);
         WriteFireMode(0, new FireModeData { Mode = mode, Time = time });
         WriteFireMode(1, new FireModeData { Mode = (byte)(scoped ? 1 : 0), Time = time });
+
+        if (scoped)
+        {
+            // Live confirms the scoped weapon state alongside FireMode_0: every scope-in in the 2014
+            // capture pairs FM0 {1,T} with WeaponFireBaseTime {T & 0xFFFF, 0x81}, while scope-out
+            // replicates FM0 alone. Without the 0x80 bit the client drops rifle IronSights again.
+            Character_CombatController?.WeaponFireBaseTimeProp = new WeaponFireBaseTimeData
+            {
+                ChangeTime = unchecked((ushort)time),
+                Unk = 0x81
+            };
+        }
     }
 
     /// <summary>
