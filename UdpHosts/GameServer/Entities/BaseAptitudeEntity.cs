@@ -82,7 +82,10 @@ public abstract class BaseAptitudeEntity : BaseEntity, IAptitudeTarget
         var data = new StatusEffectData
         {
             Id = state.Effect.Id,
-            Stack = state.Stacks,
+            // Live sends a zero-based stack count: a fresh single-stack apply replicates Stack 0 (2014
+            // capture: every scope apply and every other fresh apply carries Stack 0). The client drops
+            // gated applies (rifle IronSights via RequirementServer) when this arrives as 1.
+            Stack = (byte)(state.Stacks - 1),
             Initiator = state.Context.Initiator.AeroEntityId,
             Time = state.Time,
             MoreDataFlag = 0
