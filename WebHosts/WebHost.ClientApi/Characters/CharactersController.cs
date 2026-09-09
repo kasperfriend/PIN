@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
+using Shared.Common.Accounts;
+using WebHost.ClientApi.Accounts;
 using WebHost.ClientApi.Characters.Models;
 
 namespace WebHost.ClientApi.Characters;
@@ -14,11 +16,21 @@ public class CharactersController : ControllerBase
         _charactersRepository = charactersRepository;
     }
 
+    /// <summary>
+    /// The character selection list of the account that signed the request
+    /// (identified via its X-Red5-Signature, same as the login). Unauthenticated
+    /// callers keep seeing the built-in admin account's entries, which is what
+    /// everyone got before the account system existed.
+    /// </summary>
     [Route("api/v2/characters/list")]
     [HttpGet]
     public CharactersList GetCharactersList()
     {
-        return _charactersRepository.GetCharacters();
+        var account = HttpContext.TryGetRed5Account()
+                      ?? AccountStore.Default.Get(AccountStore.AdminAccountId)
+                      ?? AccountStore.Default.GetAll().FirstOrDefault();
+
+        return _charactersRepository.GetCharacters(account?.AccountId ?? AccountStore.AdminAccountId);
     }
 
     [Route("api/v1/characters/{characterId}/data")]

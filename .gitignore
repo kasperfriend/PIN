@@ -377,3 +377,8 @@ FodyWeavers.xsd
 # PIN character store (runtime player data, machine local)
 characters.json
 characters.json.tmp
+
+# PIN account store (runtime player data, machine local)
+accounts.json
+accounts.json.tmp
+accounts.json.corrupt

@@ -10,16 +10,20 @@ namespace WebHost.ClientApi.Characters;
 /// Serves the character selection screen from the shared <see cref="CharacterStore"/>,
 /// the same store the GameServer reads over GRPC. Keeping both on one source of
 /// truth is what stops the selected character and the in-game character diverging.
+///
+/// The list is scoped to the account that signed the request, so every player
+/// only sees their own characters (each account gets its own copy of the
+/// zone-picker seed entries).
 /// </summary>
 public class CharactersRepository : ICharactersRepository
 {
-    public CharactersList GetCharacters()
+    public CharactersList GetCharacters(ulong accountId)
     {
         CharacterStore.Init();
 
         return new CharactersList
                {
-                   Characters = CharacterStore.GetAll().Select(ToApiCharacter).ToList(),
+                   Characters = CharacterStore.GetAll(accountId).Select(ToApiCharacter).ToList(),
                    IsDev = false,
                    RbBalance = 0,
                    NameChangeCost = 100

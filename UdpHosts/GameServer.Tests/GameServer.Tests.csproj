@@ -13,5 +13,9 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\GameServer\GameServer.csproj"/>
+    <!-- Direct reference for the Shared.Common account/character store tests
+         (project references are transitive, but the tests use these types
+         explicitly and should not depend on GameServer pulling them in). -->
+    <ProjectReference Include="..\..\Lib\Shared.Common\Shared.Common.csproj"/>
   </ItemGroup>
 </Project>

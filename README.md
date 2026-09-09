@@ -28,9 +28,48 @@ https://user-images.githubusercontent.com/920861/134824107-03e9f99c-b420-47c7-b7
    - WebHostManager
 11. Start Firefall
 12. Login to the server:
-    - If Steam auto login has been enabled, you will directly be navigated to the character selection screen
-    - Otherwise, leave the login fields blank or enter anything you want and click "Login"
+    - Enter the email and password of a PIN account — the first run seeds the built-in **`admin` / `admin`** account — or create a new account (see [Account system](#account-system))
+    - If Steam auto login skips the login screen, the login is rejected and the client falls back to the login form; enter account credentials there
 13. Load into the game by pressing the "Enter World" button
+
+### Account system
+
+Accounts are stored in `accounts.json`, created next to the `WebHostManager`
+binary on first run and seeded with the built-in `admin`/`admin` account (the
+account the login previously hardcoded). Login verifies the credentials the way
+the original game did: the client signs every request with a secret derived
+from email + password (the Red5 signature scheme), and the server checks that
+signature against the stored account — a wrong password is a wrong signature,
+so it fails with the client's usual `ERR_INCORRECT_USERPASS` error.
+
+New accounts can be created from the client's account creation form
+(`POST api/v2/accounts`) or any HTTP client:
+
+```sh
+curl -k -X POST https://localhost:44302/api/v2/accounts \
+  -H "Content-Type: application/json" \
+  -d '{"email":"player@example.com","confirm_email":"player@example.com","password":"hunter2","confirm_password":"hunter2"}'
+```
+
+Characters belong to accounts: each account gets its own copy of the
+zone-picker entries in `characters.json`, and the selection screen shows only
+the logged-in account's characters.
+
+The store location is configurable:
+
+```json
+"Firefall": {
+  "Accounts": {
+    "AccountStorePath": ""
+  }
+}
+```
+
+Leave `AccountStorePath` empty to use the default location.
+
+> **Full guide:** See [`Docs/ACCOUNTS.md`](Docs/ACCOUNTS.md) for the file
+> format, the signature scheme, per-account characters, and troubleshooting
+> (including how to reset a lost admin password).
 
 ### Character persistence
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Shared.Common.Accounts;
 
 namespace Shared.Common.Characters;
 
@@ -9,10 +10,17 @@ namespace Shared.Common.Characters;
 /// This is the single record that both the web character list (selection screen)
 /// and the GameServer (via GRPC) read from, so the character you pick is the
 /// character you spawn as.
+///
+/// Characters belong to an account (<see cref="AccountId"/>); the character
+/// selection screen shows only the logged-in account's entries. Records from
+/// before the account system default to the seeded admin account.
 /// </summary>
 public class CharacterRecord
 {
     public ulong CharacterGuid { get; set; }
+
+    /// <summary>Owning account (<see cref="AccountStore.AdminAccountId"/> for legacy records).</summary>
+    public ulong AccountId { get; set; } = AccountStore.AdminAccountId;
 
     public string Name { get; set; } = string.Empty;
 
