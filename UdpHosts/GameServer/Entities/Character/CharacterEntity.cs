@@ -1048,8 +1048,8 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     }
 
     /// <summary>
-    ///     Re-derives the character's health pool from the database (debug cheat <c>hp</c>
-    ///     reset): the loadout/level health rule for players, the
+    ///     Re-derives the character's health pool from the database (the respawn path and
+    ///     the debug cheat <c>hp</c> reset): the loadout/level health rule for players, the
     ///     <c>dbcharacter::MonsterScaling</c> row for monsters that were leveled by
     ///     <see cref="LoadMonster"/>. Leaves the current pool untouched when no database
     ///     source applies. Fills the pool to full.

@@ -114,8 +114,23 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         // the replicated props stay in sync. Writing only the controller props
         // (as this used to do) leaves CurrentHealth at 0 on the entity, so the
         // first hit after a respawn would instantly down the character again.
-        CharacterEntity.SetMaxHealth(HardcodedCharacterData.MaxHealth, resetCurrent: true);
-        CharacterEntity.SetCurrentShields(0);
+        // The pool is re-derived from the database (loadout item Health + the
+        // frame progression level's curve): resetting to the flat
+        // HardcodedCharacterData.MaxHealth here used to stomp the DB-derived
+        // pool back to 19,192 every time a player zoned in, which is why a
+        // fresh character spawned with the pre-loadout construction default
+        // until `setlevel` re-derived it. Respawn also runs on the first
+        // ScheduleUpdateRequest, i.e. right when a freshly logged-in character
+        // finishes loading the zone.
+        CharacterEntity.ResetMaxHealthFromDatabase();
+        // ResetMaxHealthFromDatabase leaves the pool untouched when no database
+        // source applies (a loadout without item Health and no MonsterScaling
+        // row), so refill explicitly: a respawn always comes back at full
+        // vitals. Shields fill the same way (players carry MaxShields 0 in this
+        // build — there is no shield item attribute — so this is a no-op for
+        // them but stays correct the day one exists).
+        CharacterEntity.SetCurrentHealth(CharacterEntity.MaxHealth.Value);
+        CharacterEntity.SetCurrentShields(CharacterEntity.MaxShields.Value);
 
         baseController.ZoneUnlocksProp = 0xFFFFFFFFFFFFFFFFUL;
         baseController.RegionUnlocksProp = 0xFFFFFFFFFFFFFFFFUL;

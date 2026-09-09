@@ -40,6 +40,17 @@ GSS) and to scoped players (unreliable GSS) every ~5ms.
 > what the client sees and desyncs the server state. This was the reason the
 > first hit after a respawn used to instantly down the character again.
 
+`NetworkPlayer.Respawn` — which also runs on the first
+`ScheduleUpdateRequest` of a login, i.e. right when the client finishes
+loading the zone — resets vitals through
+`CharacterEntity.ResetMaxHealthFromDatabase` (the database rule of
+`Docs/PLAYER_STATS_AND_HEALTH.md` §4: loadout item Health + the frame
+progression level's curve) followed by an explicit fill, so a respawn always
+comes back at full health of the **database-derived** pool. It must not reset
+to the flat construction-time default (`HardcodedCharacterData.MaxHealth`,
+19192): doing that stomped the pool `ApplyLoadout` had computed, which is why
+fresh characters used to zone in at ~19k HP until `setlevel` re-derived it.
+
 ### Lifecycle states
 
 `CharacterStateData.CharacterStatus` (replicated) and the internal
