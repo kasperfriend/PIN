@@ -28,6 +28,7 @@ public class EncounterManager
     private readonly ConcurrentDictionary<ulong, Lifetime> _lifetimeByEncounter = new();
 
     private readonly Shard _shard;
+    private readonly Serilog.ILogger _logger = Serilog.Log.ForContext<EncounterManager>();
     private ulong _lastUpdateFlush;
     private ulong _lastLifetimeCheck;
     private bool _hasSpawnedZoneEncounters;
@@ -63,6 +64,11 @@ public class EncounterManager
         ResourceNodeBeaconCalldownCommandDef commandDef)
     {
         var thumperEntity = _shard.EntityMan.SpawnThumper(nodeType, position, owner, commandDef);
+        if (thumperEntity == null || owner?.Player == null)
+        {
+            _logger.Error("CreateThumper: failed to spawn the thumper entity (nodeType {nodeType})", nodeType);
+            return null;
+        }
 
         // add squadmates later
         var thumper = new Thumper(
@@ -80,17 +86,35 @@ public class EncounterManager
 
     public void SpawnZoneEncounters(uint zoneId)
     {
+        // Isolate each definition: one malformed row must not abort the remaining spawns
         foreach (var entry in CustomDBInterface.GetZoneMeldingRepulsors(zoneId))
         {
-            var guid = _shard.GetNextGuid((byte)Controller.Encounter);
-            Add(guid, new MeldingRepulsor(_shard, guid, [], entry.Value));
+            try
+            {
+                var guid = _shard.GetNextGuid((byte)Controller.Encounter);
+                Add(guid, new MeldingRepulsor(_shard, guid, [], entry.Value));
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "SpawnZoneEncounters: failed to spawn melding repulsor {repulsorId}", entry.Key);
+            }
         }
 
         foreach (var entry in CustomDBInterface.GetZoneLgvRaces(zoneId))
         {
-            var t = entry.Value.Terminal;
-            var terminal = _shard.EntityMan.SpawnDeployable(820, t.Position, t.Orientation);
-            terminal.Encounter = new EncounterComponent() { SpawnDef = entry.Value, Events = EncounterComponent.Event.Interaction };
+            try
+            {
+                var t = entry.Value.Terminal;
+                var terminal = _shard.EntityMan.SpawnDeployable(820, t.Position, t.Orientation);
+                if (terminal != null)
+                {
+                    terminal.Encounter = new EncounterComponent() { SpawnDef = entry.Value, Events = EncounterComponent.Event.Interaction };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "SpawnZoneEncounters: failed to spawn lgv race terminal {raceId}", entry.Key);
+            }
         }
     }
 

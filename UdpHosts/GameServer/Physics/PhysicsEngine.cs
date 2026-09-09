@@ -161,9 +161,17 @@ public partial class PhysicsEngine
     public BodyHandle CreateKineticEntity(BaseEntity entity)
     {
         _logger.Debug("CreateKineticEntity Base {entityId}", entity.EntityId);
-        var assetId = entity.Collision.HitboxCollisionId;
         var offset = Vector3.Zero;
-        var scale = entity.Collision.Scale;
+
+        // Spawn paths assign Collision before calling; a missing component (broken/missing
+        // row) degrades to the fallback shape instead of throwing out of the spawn path.
+        var scale = entity.Collision?.Scale ?? 1f;
+        var assetId = entity.Collision?.HitboxCollisionId ?? 0;
+        if (entity.Collision == null)
+        {
+            _logger.Warning("CreateKineticEntity: entity {entityId} has no collision component, using fallback shape", entity.EntityId);
+        }
+
         var pose = new RigidPose { Position = entity.Position, Orientation = Quaternion.Inverse(entity.Orientation) };
         var key = new AssetCompoundKey(assetId, offset, scale);
         var shape = GetAssetShape(key);
@@ -380,14 +388,20 @@ public partial class PhysicsEngine
 
         var hitHandler = default(RayHitHandler);
         hitHandler.T = maxRange;
-        hitHandler.AvoidSourceBody = true;
-        hitHandler.SourceBody = _entityIdToBody[source.EntityId];
+
+        // The source has no body yet in some edge cases (spawn racing, physics-less setups) —
+        // just ray cast without the exclusion rather than throwing on the lookup.
+        hitHandler.AvoidSourceBody = _entityIdToBody.TryGetValue(source.EntityId, out var sourceBody);
+        hitHandler.SourceBody = sourceBody;
+
         Simulation.RayCast(origin, direction, float.MaxValue, BufferPool, ref hitHandler);
         if (hitHandler.T < maxRange)
         {
             outHit = true;
             outPos = origin + (direction * hitHandler.T);
-            outEnt = _bodyToEntityId[hitHandler.HitCollidable.BodyHandle];
+
+            // The hit can be static world geometry, which has no entity — report entity 0.
+            outEnt = _bodyToEntityId.GetValueOrDefault(hitHandler.HitCollidable.BodyHandle);
         }
 
         return (outHit, outPos, outEnt);

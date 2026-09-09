@@ -44,10 +44,13 @@ public class LgvRace : BaseEncounter, IExitAttachmentHandler, IProximityHandler,
             data.Start.Orientation,
             SoloParticipant?.CharacterEntity,
             true);
-        vehicle.Encounter = new EncounterComponent()
-            {
-                EncounterId = entityId, Instance = this, Events = EncounterComponent.Event.ExitAttachment
-            };
+        if (vehicle != null)
+        {
+            vehicle.Encounter = new EncounterComponent()
+                {
+                    EncounterId = entityId, Instance = this, Events = EncounterComponent.Event.ExitAttachment
+                };
+        }
 
         View = new HudTimerView()
                {

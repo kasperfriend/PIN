@@ -9,6 +9,8 @@ namespace GameServer.Systems.Encounters;
 
 public abstract class BaseEncounter : IEncounter
 {
+    protected static readonly Serilog.ILogger Logger = Serilog.Log.ForContext<BaseEncounter>();
+
     protected static readonly Random Rng = new();
 
     protected BaseEncounter(IShard shard, ulong entityId, HashSet<INetworkPlayer> participants)

@@ -276,13 +276,19 @@ public class SDBUtils
     public static VehicleInfoResult GetDetailedVehicleInfo(ushort vehicleId)
     {
         var vehicleInfo = SDBInterface.GetVehicleInfo(vehicleId);
+        if (vehicleInfo == null)
+        {
+            _logger.Error("GetDetailedVehicleInfo could not find vehicle {vehicleId}", vehicleId);
+            return null;
+        }
+
         var vehicleClass = SDBInterface.GetVehicleClass(vehicleInfo.VehicleClass);
         var baseComponents = SDBInterface.GetBaseComponentDef(vehicleId);
         var result = new VehicleInfoResult()
         {
             VehicleId = vehicleId,
             FactionId = vehicleInfo.FactionId,
-            Class = vehicleClass.Name,
+            Class = vehicleClass?.Name ?? string.Empty,
             ScopeRange = 150,
             SpawnHeight = 1,
             SpawnAbility = 0,
@@ -312,6 +318,15 @@ public class SDBUtils
             var componentId = baseComponent.Id;
 
             var componentType = (ComponentType)baseComponent.SdbGuid;
+
+            // A component row the vehicle references but the component table lacks: skip it
+            // (defaults stand) rather than throwing out of the vehicle build.
+            if (!ComponentRowExists(componentType, componentId))
+            {
+                _logger.Error("Vehicle {vehicleId} references a missing {componentType} component row {componentId}; skipping it", vehicleId, componentType, componentId);
+                continue;
+            }
+
             switch (componentType)
             {
                 case ComponentType.Scoping:
@@ -383,6 +398,28 @@ public class SDBUtils
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Whether the component-def row a vehicle's component list points at actually exists.
+    /// The getters all resolve through <c>GetValueOrDefault</c>, so a dangling reference
+    /// surfaces as null — this keeps the derefs in <see cref="GetDetailedVehicleInfo"/> safe.
+    /// </summary>
+    private static bool ComponentRowExists(ComponentType componentType, uint componentId)
+    {
+        return componentType switch
+        {
+            ComponentType.Scoping => SDBInterface.GetScopingComponentDef(componentId) != null,
+            ComponentType.Driver => SDBInterface.GetDriverComponentDef(componentId) != null,
+            ComponentType.Passenger => SDBInterface.GetPassengerComponentDef(componentId) != null,
+            ComponentType.Ability => SDBInterface.GetAbilityComponentDef(componentId) != null,
+            ComponentType.Damage => SDBInterface.GetDamageComponentDef(componentId) != null,
+            ComponentType.StatusEffect => SDBInterface.GetStatusEffectComponentDef(componentId) != null,
+            ComponentType.Turret => SDBInterface.GetTurretComponentDef(componentId) != null,
+            ComponentType.Deployable => SDBInterface.GetDeployableComponentDef(componentId) != null,
+            ComponentType.HullSegment => SDBInterface.GetHullSegmentComponentDef(componentId) != null,
+            _ => true,
+        };
     }
 
     /// <summary>

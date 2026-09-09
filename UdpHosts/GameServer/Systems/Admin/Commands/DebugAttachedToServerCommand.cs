@@ -40,8 +40,8 @@ public class DebugAttachedToServerCommand : ServerCommand
             Unk3 = value2,
         },
         character.AttachedToEntity,
-        character.Collision.AttachmentPoseId,
-        character.Collision.AttachmentPoseOffset);
+        character.Collision?.AttachmentPoseId ?? 0,
+        character.Collision?.AttachmentPoseOffset ?? default);
         SourceFeedback($"Setting Unk2 = {value1}, Unk3 = {value2} (Role {prevData.Role})", context);
     }
 }

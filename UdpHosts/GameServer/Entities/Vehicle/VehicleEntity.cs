@@ -280,7 +280,9 @@ public sealed class VehicleEntity : BaseAptitudeEntity, IAptitudeTarget
 
         Collision = new CollisionComponent
         {
-            HitboxCollisionId = vehicleInfo.HullSegment.RemotePoseFile,
+            // Vehicles without a hull segment component have no pose file; 0 makes physics
+            // fall back to its default shape instead of crashing on the deref.
+            HitboxCollisionId = vehicleInfo.HullSegment?.RemotePoseFile ?? 0,
             Scale = 1f,
         };
 
@@ -506,7 +508,7 @@ public sealed class VehicleEntity : BaseAptitudeEntity, IAptitudeTarget
 
         if (character.IsPlayerControlled && seatConfig.Role == AttachmentRole.Turret)
         {
-            Turrets[seatConfig.TurretIndex].SetControllingPlayer(character.Player);
+            Turrets.ElementAtOrDefault(seatConfig.TurretIndex)?.SetControllingPlayer(character.Player);
 
             return;
         }
@@ -544,7 +546,7 @@ public sealed class VehicleEntity : BaseAptitudeEntity, IAptitudeTarget
                 }
                 else if (character.IsPlayerControlled && seat.Role == AttachmentRole.Turret)
                 {
-                    Turrets[seat.TurretIndex].SetControllingPlayer(null);
+                    Turrets.ElementAtOrDefault(seat.TurretIndex)?.SetControllingPlayer(null);
                 }
 
                 break;
@@ -570,7 +572,7 @@ public sealed class VehicleEntity : BaseAptitudeEntity, IAptitudeTarget
 
         if (character.IsPlayerControlled && seatConfig.Role == AttachmentRole.Turret)
         {
-            Turrets[seatConfig.TurretIndex].SetControllingPlayer(character.Player);
+            Turrets.ElementAtOrDefault(seatConfig.TurretIndex)?.SetControllingPlayer(character.Player);
 
             return;
         }
