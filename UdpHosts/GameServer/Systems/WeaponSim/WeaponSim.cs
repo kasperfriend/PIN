@@ -67,7 +67,10 @@ public class WeaponSim
         // attribute (954) when it has one, falling back to the resolved weapon template's
         // damage_per_round (the value NPC/turret weapons fight at), and only then to the
         // legacy flat placeholder. The ammo row then applies distance falloff at impact.
-        int roundDamage = WeaponDamageMath.ResolveRoundDamage(attrsDict, weapon.DamagePerRound, ProjectileSim.LegacyPlaceholderDamage);
+        // Note: the class is reached through its namespace because inside
+        // GameServer.Systems.* the sibling namespace GameServer.Systems.ProjectileSim
+        // shadows the using-imported class of the same name.
+        int roundDamage = WeaponDamageMath.ResolveRoundDamage(attrsDict, weapon.DamagePerRound, ProjectileSim.ProjectileSim.LegacyPlaceholderDamage);
 
         // Weapon Sim State
         var weaponSimState = GetOrCreateState(entity, activeWeaponDetails, time);

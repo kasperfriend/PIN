@@ -9,6 +9,7 @@ using GameServer.Systems.Ai;
 using GameServer.Systems.Aptitude;
 using GameServer.Systems.CharacterLifecycle;
 using GameServer.Systems.Chat;
+using GameServer.Systems.Cheats;
 using GameServer.Systems.Combat;
 using GameServer.Systems.CombatLog;
 using GameServer.Systems.Encounters;
@@ -39,7 +40,7 @@ public interface IShard : IPacketSender
     WeaponSim WeaponSim { get; }
     ChatService Chat { get; }
     AdminService Admin { get; }
-    GameServer.Systems.Cheats.CheatService Cheats { get; }
+    CheatService Cheats { get; }
     DamageSystem Damage { get; }
     CombatSim Combat { get; }
     ICombatLogSink CombatLog { get; }
