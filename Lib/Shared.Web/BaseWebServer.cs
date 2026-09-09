@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Security.Authentication;
@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -61,6 +62,16 @@ public abstract class BaseWebServer
                                                 })
                     .ConfigureServices(serviceConfigurationBuilder =>
                                        {
+                                           // ASP.NET Core routing has no built-in 'ulong' inline
+                                           // route constraint, but the api/v3 controllers use
+                                           // templates like {characterId:ulong}. Registering the
+                                           // constraint here (for every web host) is load-bearing:
+                                           // without it the endpoint matcher fails to build and
+                                           // each request to the host 500s — the login flow of
+                                           // WebHost.ClientApi included.
+                                           serviceConfigurationBuilder.Configure<RouteOptions>(options =>
+                                               options.ConstraintMap["ulong"] = typeof(ULongRouteConstraint));
+
                                            serviceConfigurationBuilder.AddSingleton(configuration.GetSection("Firefall")
                                                                                                  .Get<Firefall>())
                                                                       .AddSwaggerGen()
