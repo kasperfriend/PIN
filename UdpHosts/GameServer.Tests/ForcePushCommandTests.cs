@@ -1,3 +1,4 @@
+using System;
 using System.Buffers.Binary;
 using AeroMessages.GSS.Character;
 using GameServer.Entities.Character;
