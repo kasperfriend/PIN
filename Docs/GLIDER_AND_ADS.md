@@ -305,7 +305,10 @@ Use one continuous log covering scope-in/launch through scope-out/landing:
    changes and `[Effect]` expiry ages. New effects must have a fresh lifetime at each handoff;
    profile 18 must remain active after the 9495-to-3417 transition. Confirm actual airborne/
    gliding movement, not just a wing animation.
-4. The `[Glider] Launch handoff` line after each push tells which side failed: airborne /
+4. The `[Glider] Held authoring pose confirm` line is expected at most once while the
+   client is between receiving the impulse and reporting the launch; it shows the server is
+   not telling the client its grounded pose is authoritative during that window. The
+   `[Glider] Launch handoff` line after each push tells which side failed: airborne /
    negative air time means the launch reached the client and the chain must survive it
    (regression); a standing / positive air time handoff while still on the pad means the
    client never started the forced movement, and the retrigger cadence (was ~2 s) plus the
