@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Numerics;
 using System.Threading;
+using System.Threading.Tasks;
 using AeroMessages.GSS;
 using AeroMessages.GSS.Character;
 using AeroMessages.GSS.Character.Controller;
@@ -48,7 +49,37 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         Preferences = new PlayerPreferences();
     }
 
-    public async void Login(ulong characterId)
+    public void Login(ulong characterId)
+    {
+        // Login awaits the character service, so it runs across continuations. Fire the
+        // async half as a task instead of `async void`: an exception after the first await
+        // used to escape into the thread pool and take the whole server process down, and
+        // LoginAsync keeps that failure on this connection.
+        _ = LoginAsync(characterId);
+    }
+
+    private async Task LoginAsync(ulong characterId)
+    {
+        try
+        {
+            await LoginCore(characterId);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Login for character {CharacterId} failed; closing the connection", characterId);
+
+            try
+            {
+                NetChannels[ChannelType.Control].SendMessage(new AeroMessages.Control.CloseConnection { Unk = [0, 0, 0, 0] });
+            }
+            catch (Exception sendEx)
+            {
+                Logger.Warning(sendEx, "Could not send CloseConnection after a failed login");
+            }
+        }
+    }
+
+    private async Task LoginCore(ulong characterId)
     {
         PlayerId = 0x4658281c142e9f00ul;
         var guid = characterId & 0xffffffffffffff00;
@@ -292,7 +323,14 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
             return zone.DefaultOutpostId;
         }
 
-        var targetOutpost = outposts[targetOutpostId];
+        // The target comes from persisted character data (LastOutpostId), so it can name an
+        // outpost this zone no longer has: indexing the map directly would throw a
+        // KeyNotFoundException straight through Login's continuations. Fall back to the
+        // default outpost instead.
+        if (!outposts.TryGetValue(targetOutpostId, out var targetOutpost))
+        {
+            return zone.DefaultOutpostId;
+        }
 
         if (!targetOutpost.IsCapturedByHostiles)
         {

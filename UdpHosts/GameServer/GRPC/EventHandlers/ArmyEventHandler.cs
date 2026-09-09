@@ -45,6 +45,13 @@ public static class ArmyEventHandler
 
         var playerEntity = player.CharacterEntity;
 
+        // The army event can arrive while the matched player is still between socket
+        // creation and login completing, where no character entity exists yet.
+        if (playerEntity == null)
+        {
+            return;
+        }
+
         var staticInfo = playerEntity.StaticInfo;
         staticInfo.ArmyTag = DataUtils.FormatArmyTag(e.ArmyTag);
 
@@ -113,6 +120,13 @@ public static class ArmyEventHandler
     {
         foreach (var armyMember in GetArmyMembers(clients, e.ArmyGuid))
         {
+            // A member can still be mid-login (no character entity yet); its tag is
+            // refreshed by the login flow itself once the entity exists.
+            if (armyMember.CharacterEntity == null)
+            {
+                continue;
+            }
+
             var staticInfo = armyMember.CharacterEntity.StaticInfo;
             staticInfo.ArmyTag = DataUtils.FormatArmyTag(e.ArmyTag);
 
@@ -122,7 +136,7 @@ public static class ArmyEventHandler
 
     private static IEnumerable<INetworkPlayer> GetArmyMembers(IDictionary<uint, INetworkPlayer> clients, ulong armyGuid)
     {
-        return clients.Values.Where(p => p.CharacterEntity.Character_BaseController.ArmyGUIDProp == armyGuid);
+        return clients.Values.Where(p => p.CharacterEntity?.Character_BaseController.ArmyGUIDProp == armyGuid);
     }
 
     private static void SendMessageToCharacter(

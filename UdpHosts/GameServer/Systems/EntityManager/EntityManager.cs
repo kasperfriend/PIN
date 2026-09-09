@@ -532,7 +532,9 @@ public class EntityManager
         if (currentTime > _lastScopeCheck + _scopeCheckIntervalMs)
         {
             _lastScopeCheck = currentTime;
-            var players = _shard.Clients.Values.Where((client) => client.CanReceiveGSS);
+            // Materialize the player snapshot once: players is otherwise a lazy Where over the
+            // client map that gets re-enumerated (and re-filtered) for every entity below.
+            var players = _shard.Clients.Values.Where((client) => client.CanReceiveGSS).ToArray();
             var entities = _shard.Entities.Values;
 
             foreach (var entity in entities)
@@ -546,6 +548,7 @@ public class EntityManager
                 }
 
                 float distanceThreshold = entity.GetScopeRange();
+                float distanceThresholdSq = distanceThreshold * distanceThreshold;
                 var entityPosition = entity.Position;
                 foreach (var player in players)
                 {
@@ -576,8 +579,9 @@ public class EntityManager
                     else
                     {
                         var playerPosition = player.CharacterEntity.Position;
-                        float distance = Vector3.Distance(entityPosition, playerPosition);
-                        shouldBeScoped = distance <= distanceThreshold;
+                        // DistanceSquared avoids a square root per entity x player pair in this
+                        // O(entities x players) scan; both sides of the comparison are squared.
+                        shouldBeScoped = Vector3.DistanceSquared(entityPosition, playerPosition) <= distanceThresholdSq;
                     }
 
                     // Resolve shouldBeScoped

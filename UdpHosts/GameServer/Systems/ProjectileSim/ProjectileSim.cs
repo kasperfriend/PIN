@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Numerics;
 using System.Threading;
 using GameServer.Entities.Character;
@@ -19,10 +18,21 @@ public class ProjectileSim
     /// </summary>
     public const int LegacyPlaceholderDamage = 1337;
 
+    /// <summary>
+    /// How often in-flight projectiles are stepped. The shard thread runs unbounded (it
+    /// spins between the subsystems' own intervals), and without a gate this Tick ran on
+    /// every spin iteration: the per-projectile physics raycast was issued thousands of
+    /// times per second and the homing integration below advanced a missile by a full
+    /// 50 ms of flight on *every* iteration, i.e. at CPU speed instead of real time.
+    /// 20 ms matches the ability system's cadence and keeps impact detection snappy.
+    /// </summary>
+    private const ulong UpdateIntervalMs = 20;
+
     private readonly Shard _shard;
     private readonly Serilog.ILogger _logger;
     private readonly DebugProjectileHitCallbacks? _debugCallbacks;
     private readonly ConcurrentDictionary<(ulong EntityId, uint TraceId), ActiveProjectile> _activeProjectiles;
+    private ulong _lastUpdate;
 
     public ProjectileSim(Shard shard, DebugProjectileHitCallbacks? debugCallbacks = null)
     {
@@ -94,10 +104,31 @@ public class ProjectileSim
 
     public void Tick(double deltaTime, ulong currentTime, CancellationToken ct)
     {
-        var keys = _activeProjectiles.Keys.ToArray();
-
-        foreach (var key in keys)
+        if (_activeProjectiles.IsEmpty || ct.IsCancellationRequested)
         {
+            // Keep the homing step clock fresh while nothing is in flight, so the first
+            // update of the next volley steps by the interval instead of the whole quiet
+            // period between volleys. Only the shard thread ever calls this.
+            _lastUpdate = currentTime;
+            return;
+        }
+
+        if (currentTime <= _lastUpdate + UpdateIntervalMs)
+        {
+            return;
+        }
+
+        var elapsedSinceUpdateMs = _lastUpdate == 0 ? UpdateIntervalMs : currentTime - _lastUpdate;
+        _lastUpdate = currentTime;
+
+        // Enumerate the live dictionary instead of snapshotting Keys.ToArray():
+        // ConcurrentDictionary's enumerator is safe during concurrent modification
+        // (new projectiles are simply picked up on the next tick), and this loop
+        // no longer allocates a key array on every update.
+        foreach (var entry in _activeProjectiles)
+        {
+            var key = entry.Key;
+
             if (!_activeProjectiles.TryGetValue(key, out var projectile))
             {
                 continue;
@@ -128,7 +159,7 @@ public class ProjectileSim
                     break;
 
                 case AmmoFlags.SimulationMode.Homing:
-                    basePosition = UpdateHoming(ref projectile, elapsedMs, projectile.CurrentPosition - projectile.DrunkOffset);
+                    basePosition = UpdateHoming(ref projectile, elapsedMs, projectile.CurrentPosition - projectile.DrunkOffset, elapsedSinceUpdateMs);
                     break;
 
                 default:
@@ -234,7 +265,7 @@ public class ProjectileSim
         return proj.StartPosition + (proj.InitialVelocity * t) + (gravityAccel * (0.5f * t * t));
     }
 
-    private Vector3 UpdateHoming(ref ActiveProjectile proj, uint elapsedMs, Vector3 basePosition)
+    private Vector3 UpdateHoming(ref ActiveProjectile proj, uint elapsedMs, Vector3 basePosition, ulong stepMs)
     {
         if (proj.TargetEntityId != 0 && _shard.Entities.TryGetValue(proj.TargetEntityId, out var target))
         {
@@ -247,7 +278,12 @@ public class ProjectileSim
                 proj.Velocity = Vector3.Lerp(proj.Velocity, homingStrength * toTargetDir, 0.1f);
             }
 
-            basePosition += proj.Velocity * 0.05f;
+            // Integrate by the time actually elapsed since the previous projectile update, not by a
+            // fixed 50 ms step: this Tick used to run on every unbounded shard-loop iteration, so a
+            // homing missile covered 50 ms of flight per spin (hundreds of steps per real second).
+            // The step is clamped so a long stall (GC pause, debugger) cannot teleport the missile.
+            float clampedStepMs = Math.Min(stepMs, 100ul);
+            basePosition += proj.Velocity * (clampedStepMs / 1000f);
         }
         else
         {

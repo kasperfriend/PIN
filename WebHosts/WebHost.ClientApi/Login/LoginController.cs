@@ -27,7 +27,7 @@ The Pirate Intelligence Network is here to serve you all the content you'd want
         return new HttpResponseMessage { Content = new StringContent(Html, Encoding.UTF8, "text/html") };
     }
 
-    [Route("api/v3/characters/{characterId}/login_streak")]
+    [Route("api/v3/characters/{characterId:ulong}/login_streak")]
     [HttpGet]
     public object GetLoginStreak(string characterId)
     {

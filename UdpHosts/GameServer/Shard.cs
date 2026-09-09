@@ -150,14 +150,16 @@ public class Shard : IShard
 
     public bool MigrateOut(INetworkPlayer player)
     {
-        if (Clients.ContainsKey(player.SocketId))
+        // TryRemove is the check-and-remove in one atomic step: ContainsKey followed by Remove
+        // races with a concurrent MigrateOut of the same player (both threads can pass the
+        // ContainsKey check and then run the cleanup twice).
+        if (((ConcurrentDictionary<uint, INetworkPlayer>)Clients).TryRemove(new KeyValuePair<uint, INetworkPlayer>(player.SocketId, player)))
         {
             if (Entities.ContainsKey(player.CharacterId))
             {
                 EntityMan.Remove(player.CharacterId);
             }
 
-            Clients.Remove(player.SocketId);
             Admin.ClearPlayer(player);
             Cheats.Forget(player);
             return true;
@@ -168,14 +170,13 @@ public class Shard : IShard
 
     public bool MigrateIn(INetworkPlayer player)
     {
-        if (Clients.ContainsKey(player.SocketId))
+        // TryAdd keeps the ContainsKey/Add pair atomic, so Init cannot run twice for the
+        // same player when two threads race to migrate the same socket in.
+        if (((ConcurrentDictionary<uint, INetworkPlayer>)Clients).TryAdd(player.SocketId, player))
         {
+            player.Init(this);
             return true;
         }
-
-        player.Init(this);
-
-        Clients.Add(player.SocketId, player);
 
         return true;
     }

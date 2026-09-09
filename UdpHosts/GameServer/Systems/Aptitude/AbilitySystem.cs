@@ -826,15 +826,21 @@ public class AbilitySystem
         var chain = Factory.LoadChain(chainId);
         // Keep the resolved command list visible while debugging activations.
         // This distinguishes a missing command from a factory/SDB mapping
-        // problem without requiring a debugger.
-        foreach (var command in chain.Commands)
+        // problem without requiring a debugger. Verbose, not Information: with
+        // the chain cache the resolution itself is no longer proof the chain
+        // was rebuilt, and printing every command of every activation kept a
+        // busy shard's console (the slowest part of the tick loop) saturated.
+        if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Verbose))
         {
-            _logger.Information(
-                "Ability {AbilityId} chain {ChainId} resolved command {CommandId} as {CommandType}",
-                abilityId,
-                chainId,
-                command.Id,
-                command.GetType().FullName);
+            foreach (var command in chain.Commands)
+            {
+                _logger.Verbose(
+                    "Ability {AbilityId} chain {ChainId} resolved command {CommandId} as {CommandType}",
+                    abilityId,
+                    chainId,
+                    command.Id,
+                    command.GetType().FullName);
+            }
         }
 
         bool success = chain.Execute(context);

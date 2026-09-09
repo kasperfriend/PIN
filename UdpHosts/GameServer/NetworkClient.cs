@@ -207,8 +207,8 @@ public class NetworkClient : INetworkClient
     {
         var typecode = packet.Read<byte>();
         Span<byte> entity = stackalloc byte[8];
-        packet.Read(7).ToArray().CopyTo(entity);
-        var entityId = BitConverter.ToUInt64(entity) << 8;
+        packet.Read(7).Span.CopyTo(entity);
+        var entityId = BinaryPrimitives.ReadUInt64LittleEndian(entity) << 8;
         var messageId = packet.Read<byte>();
 
         WireIds.ResolveGssRoute(AssignedShard.Settings.GssProtocolVersion, typecode, out var ns, out var viewOrdinal);

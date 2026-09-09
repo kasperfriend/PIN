@@ -44,7 +44,7 @@ public class ArmiesController : ControllerBase
         return pageResults;
     }
 
-    [Route("api/v3/armies/{armyId}")]
+    [Route("api/v3/armies/{armyId:ulong}")]
     [HttpGet]
     public object GetArmy(string armyId)
     {
@@ -91,7 +91,7 @@ public class ArmiesController : ControllerBase
         return army;
     }
 
-    [Route("api/v3/armies/{armyId}/members")]
+    [Route("api/v3/armies/{armyId:ulong}/members")]
     [HttpGet]
     [Produces("application/json")]
     public object GetArmyMembers(string armyId)
@@ -174,7 +174,7 @@ public class ArmiesController : ControllerBase
         return pageResults;
     }
 
-    [Route("api/v3/armies/{armyId}/applications")]
+    [Route("api/v3/armies/{armyId:ulong}/applications")]
     [HttpGet]
     public object GetArmyMemberApplications(string armyId)
     {
@@ -220,7 +220,7 @@ public class ArmiesController : ControllerBase
         return armyApplications;
     }
 
-    [Route("api/v3/armies/{armyId}/members/ranks")]
+    [Route("api/v3/armies/{armyId:ulong}/members/ranks")]
     [HttpGet]
     public object GetArmyRanks(string armyId)
     {
@@ -293,7 +293,7 @@ public class ArmiesController : ControllerBase
         return armyRanks;
     }
 
-    [Route("api/v3/armies/{armyId}/members/{rankId}/rank")]
+    [Route("api/v3/armies/{armyId:ulong}/members/{rankId}/rank")]
     [HttpGet]
     public object GetArmyRankAccess(string armyId, string rankId)
     {
