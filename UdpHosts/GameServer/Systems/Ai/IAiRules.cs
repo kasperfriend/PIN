@@ -13,7 +13,25 @@ public interface IAiRules
     /// <summary>Distance in metres at which an idle NPC notices a hostile player.</summary>
     float AggroRadius { get; }
 
-    /// <summary>Distance in metres at which a chasing NPC switches into the attack state.</summary>
+    /// <summary>
+    ///     Vertical bound of that notice range in metres: a player this far above (or below) an NPC
+    ///     is not acquired at all, however close they are to it horizontally. 0 turns the bound off
+    ///     and makes the aggro volume a cylinder instead of a squashed sphere.
+    /// </summary>
+    /// <remarks>
+    ///     Without it a mob two storeys below a player walks up to the wall under them and stays
+    ///     engaged forever (there is no pathfinding to solve the height difference yet), which reads
+    ///     as "the mob found me through the floor".
+    /// </remarks>
+    float MaxAcquisitionHeightDelta { get; }
+
+    /// <summary>
+    ///     Distance in metres at which a chasing NPC switches into the attack state, measured
+    ///     straight-line (including the height difference, see <see cref="AiVectors.Distance" />).
+    ///     This is the monster's reach: as long as PIN has no NPC projectiles it is a melee reach,
+    ///     so it is deliberately close to the monster's own melee weapon row
+    ///     (<c>dbitems::WeaponTemplates.range</c>, e.g. 2.6 m for "NPC Melee Medium (Spyder)").
+    /// </summary>
     float AttackRange { get; }
 
     /// <summary>
@@ -22,6 +40,13 @@ public interface IAiRules
     ///     the range does not flip the state machine every tick.
     /// </summary>
     float AttackRangeExit { get; }
+
+    /// <summary>
+    ///     Largest height difference in metres a single attack may span. A melee swing reaches a
+    ///     player standing on a crate or in the middle of a jump, but not one standing on the
+    ///     balcony the mob is circling underneath.
+    /// </summary>
+    float MaxAttackHeightDelta { get; }
 
     /// <summary>Distance in metres the NPC tries to keep from its target once engaged.</summary>
     float StandoffRange { get; }
@@ -36,9 +61,17 @@ public interface IAiRules
     int AttackCooldownMs { get; }
 
     /// <summary>
+    ///     The share of the monster's per-level damage rating that one attack commits. The rating
+    ///     is a balance figure (see <see cref="IAiMonsterStats.GetAttackDamage" />), not a per-swing
+    ///     amount, and using it whole makes a monster kill a same-level player in one or two hits.
+    /// </summary>
+    float AttackDamageFraction { get; }
+
+    /// <summary>
     ///     Fallback damage applied to the target by one attack when the monster has no
     ///     <c>dbcharacter::MonsterScaling</c> damage row for its level. NPCs whose level resolves
-    ///     normally attack for the database value instead, resolved once at registration.
+    ///     normally attack for <see cref="AttackDamageFraction"/> of the database rating instead,
+    ///     so this value is already a per-swing number and is not scaled any further.
     /// </summary>
     int AttackDamage { get; }
 

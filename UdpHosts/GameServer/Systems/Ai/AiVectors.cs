@@ -18,6 +18,29 @@ public static class AiVectors
     }
 
     /// <summary>
+    ///     Straight-line distance between two points, including Z. An attack is measured over this
+    ///     distance: a player standing 3 m above a mob is 3 m away from it whether or not they are
+    ///     standing on the same tile, and a melee swing cannot reach that.
+    /// </summary>
+    public static float Distance(Vector3 a, Vector3 b)
+    {
+        float dx = a.X - b.X;
+        float dy = a.Y - b.Y;
+        float dz = a.Z - b.Z;
+        return MathF.Sqrt((dx * dx) + (dy * dy) + (dz * dz));
+    }
+
+    /// <summary>
+    ///     Absolute height difference between two points in metres. 0 when they are on the same
+    ///     level, and never negative, so it reads the same for a target above the NPC as for one
+    ///     below it.
+    /// </summary>
+    public static float HeightDelta(Vector3 a, Vector3 b)
+    {
+        return MathF.Abs(a.Z - b.Z);
+    }
+
+    /// <summary>
     ///     Builds the orientation a character must have to face along <paramref name="forward" />.
     /// </summary>
     /// <remarks>

@@ -66,11 +66,14 @@ public class WeaponSim
         // Per-round damage comes from the database: the weapon item's own "Damage Per Round"
         // attribute (954) when it has one, falling back to the resolved weapon template's
         // damage_per_round (the value NPC/turret weapons fight at), and only then to the
-        // legacy flat placeholder. The ammo row then applies distance falloff at impact.
+        // legacy flat placeholder. The wielder's battleframe progression level scales the
+        // database value up through the item-level damage curve the database itself uses for
+        // its per-level weapon variants (WeaponDamageMath.DamageLevelScale). The ammo row then
+        // applies distance falloff at impact.
         // Note: the class is reached through its namespace because inside
         // GameServer.Systems.* the sibling namespace GameServer.Systems.ProjectileSim
         // shadows the using-imported class of the same name.
-        int roundDamage = WeaponDamageMath.ResolveRoundDamage(attrsDict, weapon.DamagePerRound, ProjectileSim.ProjectileSim.LegacyPlaceholderDamage);
+        int roundDamage = WeaponDamageMath.ResolveRoundDamage(attrsDict, weapon.DamagePerRound, ProjectileSim.ProjectileSim.LegacyPlaceholderDamage, entity.FrameProgressionLevel);
 
         // Weapon Sim State
         var weaponSimState = GetOrCreateState(entity, activeWeaponDetails, time);

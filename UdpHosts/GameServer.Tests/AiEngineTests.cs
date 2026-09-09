@@ -128,10 +128,10 @@ public class AiEngineTests
     }
 
     [Fact]
-    public void ChasingNpc_ReachingAttackRange_StartsDamagingThePlayer()
+    public void ChasingNpc_ReachingMeleeRange_StartsDamagingThePlayer()
     {
         var rules = new StandardAiRules { AttackDamage = 180 };
-        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(10f, 0f, 0f), rules);
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(3f, 0f, 0f), rules);
 
         Tick(shard, FirstTick); // Idle -> Chase
         Assert.Empty(shard.AiAttackFeedback.Attacks);
@@ -144,12 +144,71 @@ public class AiEngineTests
     }
 
     [Fact]
+    public void ChasingNpc_ThatCannotReachThePlayer_NeverDamagesThem()
+    {
+        // Regression: the shipped attack range was 45 m, i.e. a mob opened its (hitscan, no
+        // projectile at all) attack the moment it noticed you. PIN has no NPC projectiles yet, so
+        // a monster only lands a hit once it is within its melee reach.
+        var rules = new StandardAiRules { AttackDamage = 180 };
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(40f, 0f, 0f), rules);
+
+        for (ulong time = FirstTick; time < FirstTick + (Step * 10); time += Step)
+        {
+            Tick(shard, time);
+        }
+
+        Assert.True(npc.Position.X > 0f, "the mob should be closing in on the player it aggroed");
+        Assert.True(npc.Position.X < 8f, "and getting somewhere, but it has not arrived yet");
+        Assert.Equal(new AiBrainState?(AiBrainState.Chase), shard.AI.GetState(npc.EntityId));
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
+        Assert.Equal(100_000, player.CurrentHealth);
+    }
+
+    [Fact]
+    public void NpcStandingUnderAPlayer_DoesNotHitThemThroughTheFloor()
+    {
+        // The other half of "they attack me when I am above them". The player is 1.5 m off to the
+        // side and 3 m up: the straight-line distance (3.35 m) is inside the mob's reach, so this
+        // is the height band alone refusing to let a swing travel up through the platform.
+        var rules = new StandardAiRules { AttackDamage = 180 };
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(1.5f, 0f, 3f), rules);
+
+        for (ulong time = FirstTick; time < FirstTick + (Step * 10); time += Step)
+        {
+            Tick(shard, time);
+        }
+
+        // It is already inside its standoff distance (1.5 m), so it has nowhere left to walk - the
+        // only thing standing between the player and 180 damage per second is the height band.
+        Assert.NotEqual(new AiBrainState?(AiBrainState.Attack), shard.AI.GetState(npc.EntityId));
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
+        Assert.Equal(100_000, player.CurrentHealth);
+    }
+
+    [Fact]
+    public void NpcDoesNotAcquireAPlayerFarAboveIt()
+    {
+        // A player 30 m straight up is inside the 55 m aggro *radius* but nowhere near a fight;
+        // the acquisition volume is squashed vertically so the mob does not lock on and then stand
+        // under them forever with nothing to do.
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(2f, 0f, 30f));
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Equal(Vector3.Zero, npc.Position);
+    }
+
+    [Fact]
     public void AttackingNpc_UsesDatabaseDamageForItsLevelOverTheRulesFallback()
     {
-        // The rules value (180) must lose to the monster stat source's damage for the NPC's level.
-        var rules = new StandardAiRules { AttackDamage = 180 };
+        // The rules value (180) must lose to the monster stat source's rating for the NPC's level,
+        // and the rating is only worth its per-attack fraction of that: 500 x 1 = 500 here, with
+        // the fraction pinned to 1 so this test is about *which source wins*, not about the scale.
+        var rules = new StandardAiRules { AttackDamage = 180, AttackDamageFraction = 1f };
         var stats = new FakeAiMonsterStats(attackDamage: 500);
-        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(10f, 0f, 0f), rules, stats, npcLevel: 37);
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(3f, 0f, 0f), rules, stats, npcLevel: 37);
 
         // Registration asked the stat source for damage at the NPC's own level.
         var request = Assert.Single(stats.AttackDamageRequests);
@@ -162,10 +221,28 @@ public class AiEngineTests
     }
 
     [Fact]
+    public void AttackingNpc_CommitsItsFractionOfTheDatabaseDamageRating()
+    {
+        // The shipped 0.1: a level's MonsterScaling.damage is a rating, not one swing. At the
+        // level-45 row (13,934) that is 1,393 per hit instead of 13,934 - which is the difference
+        // between "a mob kills a same-level player in one or two hits" and a fight.
+        var rules = new StandardAiRules { AttackDamage = 180, AttackDamageFraction = 0.1f };
+        var stats = new FakeAiMonsterStats(attackDamage: 13_934);
+        var (shard, _, player) = CreateWorld(Vector3.Zero, new Vector3(3f, 0f, 0f), rules, stats, npcLevel: 45);
+
+        Tick(shard, FirstTick); // Idle -> Chase
+        Tick(shard, FirstTick + Step); // Chase -> Attack, first hit lands
+        Assert.Equal(100_000 - 1_393, player.CurrentHealth);
+        Assert.Equal(1_393, Assert.Single(shard.AiAttackFeedback.Attacks).Damage);
+    }
+
+    [Fact]
     public void AttackingNpc_FallsBackToRulesDamage_WhenTheDatabaseHasNoRowForItsLevel()
     {
-        var rules = new StandardAiRules { AttackDamage = 76 };
-        var (shard, _, player) = CreateWorld(Vector3.Zero, new Vector3(10f, 0f, 0f), rules, npcLevel: 5);
+        // The fallback is already a per-swing number: applying the fraction to it too would make a
+        // monster with no database row hit for a tenth of a tenth.
+        var rules = new StandardAiRules { AttackDamage = 76, AttackDamageFraction = 0.1f };
+        var (shard, _, player) = CreateWorld(Vector3.Zero, new Vector3(3f, 0f, 0f), rules, npcLevel: 5);
 
         Tick(shard, FirstTick); // Idle -> Chase
         Tick(shard, FirstTick + Step); // first hit lands
@@ -179,7 +256,7 @@ public class AiEngineTests
     public void AttackingNpc_RespectsItsCooldown()
     {
         var rules = new StandardAiRules { AttackDamage = 100, AttackCooldownMs = 1000 };
-        var (shard, _, player) = CreateWorld(Vector3.Zero, new Vector3(10f, 0f, 0f), rules);
+        var (shard, _, player) = CreateWorld(Vector3.Zero, new Vector3(3f, 0f, 0f), rules);
 
         Tick(shard, FirstTick);
         Tick(shard, FirstTick + Step); // first hit
