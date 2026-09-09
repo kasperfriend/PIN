@@ -78,7 +78,7 @@ public class MeldingRepulsor : BaseEncounter, IInteractionHandler, IDonationHand
         _controlPointIndex = repulsorDef.MeldingPosition.ControlPointIndex;
 
         _startPosition = repulsorDef.MeldingPosition.Position;
-        if (adp?.FromPoints == null || adp?.ToPoints == null
+        if (adp.FromPoints == null || adp.ToPoints == null
             || _controlPointIndex >= adp.FromPoints.Length || _controlPointIndex >= adp.ToPoints.Length)
         {
             Logger.Error("MeldingRepulsor {entityId}: control point index {controlPointIndex} out of bounds for melding perimeter {perimeterSetName}; the encounter will not work", entityId, _controlPointIndex, repulsorDef.PerimiterSetName);
