@@ -98,20 +98,20 @@ public class AccountsController : ControllerBase
 
         _logger.LogInformation("Account {AccountId} ({Email}) logged in", account.AccountId, account.Email);
 
-        return new AccountStatus
-               {
-                   AccountId = account.AccountId,
-                   CanLogin = true,
-                   IsDev = account.IsDev,
-                   SteamAuthPrompt = false,
-                   SkipPrecursor = false,
-                   CaisStatus = new CaisStatus { Duration = 0, ExpiresAt = 0, State = "disabled" },
-                   CharacterLimit = account.CharacterLimit,
-                   IsVip = true,
-                   VipExpiration = 0,
-                   CreatedAt = new DateTimeOffset(account.CreatedAt).ToUnixTimeSeconds(),
-                   Events = LoginEvents.FixedEvents()
-               };
+        return Ok(new AccountStatus
+                  {
+                      AccountId = account.AccountId,
+                      CanLogin = true,
+                      IsDev = account.IsDev,
+                      SteamAuthPrompt = false,
+                      SkipPrecursor = false,
+                      CaisStatus = new CaisStatus { Duration = 0, ExpiresAt = 0, State = "disabled" },
+                      CharacterLimit = account.CharacterLimit,
+                      IsVip = true,
+                      VipExpiration = 0,
+                      CreatedAt = new DateTimeOffset(account.CreatedAt).ToUnixTimeSeconds(),
+                      Events = LoginEvents.FixedEvents()
+                  });
     }
 
     [Route("api/v2/accounts/current/status")]
@@ -144,15 +144,6 @@ public class AccountsController : ControllerBase
         }
 
         Ok();
-    }
-
-    private ObjectResult Error(string code, string message)
-    {
-        var result = new ObjectResult(new ApiError { Code = code, Message = message })
-                     {
-                         StatusCode = 500
-                     };
-        return result;
     }
 
     [Route("api/v2/accounts/character_slots")]
@@ -299,5 +290,14 @@ public class AccountsController : ControllerBase
          */
 
         Ok();
+    }
+
+    private ObjectResult Error(string code, string message)
+    {
+        var result = new ObjectResult(new ApiError { Code = code, Message = message })
+                     {
+                         StatusCode = 500
+                     };
+        return result;
     }
 }

@@ -39,13 +39,13 @@ public sealed class AccountStore
     /// <summary>Character slots per account; the seeded zone-picker list needs all of them.</summary>
     public const int DefaultCharacterLimit = 40;
 
-    /// <summary>created_at reported for the seeded admin (unix 1358612495, from the original service's example).</summary>
-    private static readonly DateTime AdminCreatedAt = new(2013, 1, 17, 18, 21, 35, DateTimeKind.Utc);
-
     private const int PasswordSaltLength = 16;
     private const int PasswordHashLength = 32;
     private const int PasswordIterations = 10000;
     private const int MaxEmailLength = 254;
+
+    /// <summary>created_at reported for the seeded admin (unix 1358612495, from the original service's example).</summary>
+    private static readonly DateTime AdminCreatedAt = new(2013, 1, 17, 18, 21, 35, DateTimeKind.Utc);
 
     private static readonly object DefaultLock = new();
 
@@ -79,14 +79,14 @@ public sealed class AccountStore
         }
     }
 
-    /// <summary>Path of the backing JSON file.</summary>
-    public string StorePath => storePath;
-
     /// <summary>
     /// The process-wide store. Lazily falls back to the default file location;
     /// call <see cref="Init"/> early to pin a configured path (idempotent).
     /// </summary>
     public static AccountStore Default => defaultStore ?? CreateDefault(null);
+
+    /// <summary>Path of the backing JSON file.</summary>
+    public string StorePath => storePath;
 
     /// <summary>
     /// Initialize the process-wide store from a configured path. Safe to call
