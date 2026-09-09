@@ -75,7 +75,7 @@ public class WeaponDamageMathTests
     public void Falloff_KeepsFullDamage_WhenTheAmmoHasNoDecay(float distance)
     {
         // damage_decay = 0: plasma balls, tesla, rockets - flat damage over the whole flight.
-        Assert.Equal(100, WeaponDamageMath.ApplyDamageFalloff(100, distance, range: 100f, damageDecay: 0, decayRangeFrac: 0.7f, minDamageFrac: 0.33f));
+        Assert.Equal(100, WeaponDamageMath.ApplyDamageFalloff(100, distance, weaponRange: 100f, damageDecay: 0, decayRangeFrac: 0.7f, minDamageFrac: 0.33f));
     }
 
     [Fact]
