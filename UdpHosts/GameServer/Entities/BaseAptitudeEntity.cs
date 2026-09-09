@@ -90,6 +90,7 @@ public abstract class BaseAptitudeEntity : BaseEntity, IAptitudeTarget
         var index = state.Index;
         SetStatusEffect(index, time, data);
         Shard.EntityMan.FlushChanges(this); // Force flush so that we communicate every change
+        OnStatusEffectReplicated(state.Effect.Id, state.Time);
 
         return state;
     }
@@ -106,8 +107,28 @@ public abstract class BaseAptitudeEntity : BaseEntity, IAptitudeTarget
         var time = unchecked((ushort)state.Context.Shard.CurrentTime);
         ClearStatusEffect(state.Index, time, state.Effect.Id);
         Shard.EntityMan.FlushChanges(this); // Force flush so that we communicate every change
+        OnStatusEffectCleared(state.Effect.Id, state.Context.Shard.CurrentTime);
     }
 
     public abstract void SetStatusEffect(byte index, ushort time, StatusEffectData data);
     public abstract void ClearStatusEffect(byte index, ushort time, uint debugEffectId);
+
+    /// <summary>
+    ///     Invoked right after a newly applied status effect has been replicated (and force flushed) to the
+    ///     relevant clients, so entity types can hang protocol echoes of the same event off it. The
+    ///     effect's wire values are passed on: <paramref name="eventTime" /> is the event time the slot's
+    ///     data carries.
+    /// </summary>
+    protected virtual void OnStatusEffectReplicated(uint effectId, uint eventTime)
+    {
+    }
+
+    /// <summary>
+    ///     Invoked right after a removed status effect's slot clear has been replicated (and force flushed)
+    ///     to the relevant clients. <paramref name="serverTime" /> is the server current time the slot
+    ///     clear was stamped with.
+    /// </summary>
+    protected virtual void OnStatusEffectCleared(uint effectId, uint serverTime)
+    {
+    }
 }

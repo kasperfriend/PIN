@@ -202,6 +202,79 @@ public class ScopedStateTests
         Assert.Equal(1f, character.GetCurrentStatModifierValue(StatModifierIdentifier.RunSpeedMult));
     }
 
+    [Fact]
+    public void UseScope_SendsTheCombatLogConfirmationRowTheCaptureDocuments()
+    {
+        var (_, character, player, controller) = CreateRuntime();
+        player.AttachRealChannels();
+
+        controller.UseScope(player, player, character.EntityId, Packet(60_001, 1));
+        player.FlushAttachedChannels();
+
+        // The row the 2014 capture documents: attributed to the weapon, carrying the scope statusfx and the
+        // client's UseScope time. Public and private logs each carry it to the owner, so find it twice.
+        Assert.True(CountPacketsContaining(player, StatusFxRowBytes(source: 0x01, logType: 0x0B, effectId: 1313, time: 60_001u)) >= 2);
+    }
+
+    [Fact]
+    public void UseScopeOut_EchoesTheRemoveRowStampedWithServerTime()
+    {
+        var (_, character, player, controller) = CreateRuntime();
+        player.AttachRealChannels();
+
+        controller.UseScope(player, player, character.EntityId, Packet(60_001, 1));
+        controller.UseScope(player, player, character.EntityId, Packet(60_100, 0));
+        player.FlushAttachedChannels();
+
+        // The remove row carries the server clear time the slot clear itself was stamped with.
+        Assert.True(CountPacketsContaining(player, StatusFxRowBytes(source: 0x01, logType: 0x0C, effectId: 1313, time: 60_000u)) >= 2);
+    }
+
+    [Fact]
+    public void ChainAppliedEffect_IsAttributedToTheStatusFxSystem()
+    {
+        var (shard, character, player, _) = CreateRuntime();
+        player.AttachRealChannels();
+        ((FakeAptitudeFactory)shard.Abilities.Factory).Effects[9001] = ScopeEffect(9001);
+
+        Assert.True(shard.Abilities.DoApplyEffect(9001, character, new Context(shard, character) { InitTime = 60_042 }));
+        player.FlushAttachedChannels();
+
+        // Not the weapon's scope effect, so the row is attributed to the status effect system.
+        Assert.True(CountPacketsContaining(player, StatusFxRowBytes(source: 0x06, logType: 0x0B, effectId: 9001, time: 60_042u)) >= 2);
+    }
+
+    private static byte[] StatusFxRowBytes(byte source, byte logType, uint effectId, uint time)
+    {
+        // HaveData = 1 (int32), Bytes = 10 (ushort), then the row: 1 source, 1 log type, 4 id, 4 time.
+        var bytes = new byte[16];
+        bytes[0] = 1;
+        bytes[4] = 10;
+        bytes[6] = source;
+        bytes[7] = logType;
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), effectId);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(12), time);
+        return bytes;
+    }
+
+    private static int CountPacketsContaining(FakeNetworkPlayer player, byte[] needle)
+    {
+        return player.SentPackets.Count(packet => Contains(packet.Span, needle));
+    }
+
+    private static bool Contains(ReadOnlySpan<byte> haystack, ReadOnlySpan<byte> needle)
+    {
+        for (var start = 0; start + needle.Length <= haystack.Length; start++)
+        {
+            if (haystack.Slice(start, needle.Length).SequenceEqual(needle))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static (FakeShard Shard, CharacterEntity Character, FakeNetworkPlayer Player, ScopeController Controller) CreateRuntime(ulong time = 60_000)
     {
         var shard = new FakeShard { CurrentTimeLong = time };

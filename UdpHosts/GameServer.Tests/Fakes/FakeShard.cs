@@ -17,6 +17,7 @@ using GameServer.Systems.Aptitude;
 using GameServer.Systems.CharacterLifecycle;
 using GameServer.Systems.Chat;
 using GameServer.Systems.Combat;
+using GameServer.Systems.CombatLog;
 using GameServer.Systems.Encounters;
 using GameServer.Systems.EntityManager;
 using GameServer.Systems.MovementRelay;
@@ -43,6 +44,7 @@ public sealed class FakeShard : IShard
         CharacterLifecycle = new CharacterLifecycleService(this, EventBus, new StandardCharacterLifecycleRules());
         FallDamage = new FallDamageSystem(this, Damage, new StandardFallDamageRules());
         AI = new AiEngine(this, EventBus, new StandardAiRules(), new AlwaysHostileAiHostility(), AiAttackFeedback, new FakeAiMonsterStats());
+        CombatLog = new CombatLogSink();
     }
 
     public EventBus EventBus { get; } = new();
@@ -56,6 +58,8 @@ public sealed class FakeShard : IShard
     public CharacterLifecycleService CharacterLifecycle { get; }
 
     public FallDamageSystem FallDamage { get; }
+
+    public ICombatLogSink CombatLog { get; }
 
     public ulong CurrentTimeLong { get; set; } = 60_000;
 
@@ -164,6 +168,12 @@ public sealed class FakeNetworkPlayer : INetworkPlayer
 
     public ConcurrentQueue<Memory<byte>> SequencedMessages { get; }
 
+    /// <summary>
+    ///     Every packet chunk flushed out of the attached channels by <see cref="FlushAttachedChannels" />,
+    ///     in order. Empty until <see cref="AttachRealChannels" /> wires real channels up.
+    /// </summary>
+    public List<Memory<byte>> SentPackets { get; } = new();
+
     public List<string> SentDebugMessages { get; } = new();
 
     /// <summary>
@@ -212,8 +222,35 @@ public sealed class FakeNetworkPlayer : INetworkPlayer
     {
     }
 
+    /// <summary>
+    ///     Attaches the real channel implementations, wired to this player, so tests can observe the bytes the
+    ///     server sends. The channels used to be absent entirely; production code tolerates that, so only the
+    ///     tests that want to inspect outbound traffic attach them.
+    /// </summary>
+    public void AttachRealChannels(
+        Aero.Protocol.GssVersion gssProtocolVersion = Aero.Protocol.GssVersion.V67,
+        Aero.Protocol.MatrixVersion matrixProtocolVersion = Aero.Protocol.MatrixVersion.V26)
+    {
+        var logger = new LoggerConfiguration().CreateLogger();
+        NetChannels = Channel
+                     .GetChannels(this, logger, gssProtocolVersion, matrixProtocolVersion)
+                     .ToImmutableDictionary();
+    }
+
+    /// <summary>
+    ///     Drains the attached channels' outgoing queues into <see cref="SentPackets" />.
+    /// </summary>
+    public void FlushAttachedChannels()
+    {
+        foreach (var channel in NetChannels.Values)
+        {
+            channel.Process(CancellationToken.None);
+        }
+    }
+
     public void Send(Memory<byte> packet)
     {
+        SentPackets.Add(packet);
     }
 
     public void SendAck(ChannelType forChannel, ushort forSequenceNumber, DateTime? received = null)

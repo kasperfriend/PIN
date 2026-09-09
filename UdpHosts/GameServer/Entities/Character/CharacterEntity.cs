@@ -87,6 +87,40 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public new CharacterCollisionComponent Collision { get; set; }
     public INetworkPlayer Player { get; set; }
     public bool IsPlayerControlled => Player != null;
+
+    /// <summary>
+    ///     The combat log echo of a status effect application. The live server sends these rows for every
+    ///     status effect it applies to or removes from a character — the client's copy of the effect needs
+    ///     them to confirm its locally predicted counterpart (the scope/ADS effect in particular carries a
+    ///     <c>tfRequireServerConfirmed</c> duration gate and only the confirmation row releases it).
+    /// </summary>
+    protected override void OnStatusEffectReplicated(uint effectId, uint eventTime)
+    {
+        Shard?.CombatLog?.EmitApplyToOwner(this, StatusFxSourceFor(effectId, applied: true), effectId, eventTime);
+    }
+
+    /// <summary>
+    ///     The combat log echo of a status effect removal, mirroring <see cref="OnStatusEffectReplicated" />.
+    /// </summary>
+    protected override void OnStatusEffectCleared(uint effectId, uint serverTime)
+    {
+        Shard?.CombatLog?.EmitRemoveFromOwner(this, StatusFxSourceFor(effectId, applied: false), effectId, serverTime);
+    }
+
+    /// <summary>
+    ///     The scope effect is attributed to the weapon exactly like the capture shows
+    ///     (<c>SourceType = Weapon</c> for <c>&lt;scope statusfx&gt;</c>); effects the aptitude chains apply
+    ///     are attributed to the status effect system.
+    /// </summary>
+    private CombatLogRow.CombatSourceType StatusFxSourceFor(uint effectId, bool applied)
+    {
+        return GetActiveWeaponDetails()?.ScopeStatusFx == effectId
+            ? CombatLogRow.CombatSourceType.Weapon
+            : applied
+              ? CombatLogRow.CombatSourceType.StatusFx_Apply
+              : CombatLogRow.CombatSourceType.StatusFx_Remove;
+    }
+
     public Vector3 Velocity { get; set; }
     public Vector3 AimDirection { get; set; }
     public short MovementState { get; set; }

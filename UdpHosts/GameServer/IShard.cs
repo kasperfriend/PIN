@@ -10,6 +10,7 @@ using GameServer.Systems.Aptitude;
 using GameServer.Systems.CharacterLifecycle;
 using GameServer.Systems.Chat;
 using GameServer.Systems.Combat;
+using GameServer.Systems.CombatLog;
 using GameServer.Systems.Encounters;
 using GameServer.Systems.EntityManager;
 using GameServer.Systems.MovementRelay;
@@ -40,6 +41,7 @@ public interface IShard : IPacketSender
     AdminService Admin { get; }
     DamageSystem Damage { get; }
     CombatSim Combat { get; }
+    ICombatLogSink CombatLog { get; }
     FallDamageSystem FallDamage { get; }
     CharacterLifecycleService CharacterLifecycle { get; }
     PlayerRespawnService PlayerRespawn { get; }

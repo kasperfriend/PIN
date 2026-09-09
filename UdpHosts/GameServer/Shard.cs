@@ -14,6 +14,7 @@ using GameServer.Systems.Aptitude;
 using GameServer.Systems.CharacterLifecycle;
 using GameServer.Systems.Chat;
 using GameServer.Systems.Combat;
+using GameServer.Systems.CombatLog;
 using GameServer.Systems.Encounters;
 using GameServer.Systems.EntityManager;
 using GameServer.Systems.MovementRelay;
@@ -60,6 +61,7 @@ public class Shard : IShard
         var npcDeathRules = new StandardNpcDeathRules();
         Damage = new DamageSystem(EventBus, this, npcDeathRules);
         Combat = new CombatSim(EventBus, Damage, this);
+        CombatLog = new CombatLogSink();
         FallDamage = new FallDamageSystem(this, Damage, new StandardFallDamageRules());
         CharacterLifecycle = new CharacterLifecycleService(this, EventBus, new StandardCharacterLifecycleRules());
         PlayerRespawn = new PlayerRespawnService(this, EventBus, new StandardPlayerRespawnRules(), CharacterLifecycle);
@@ -84,6 +86,7 @@ public class Shard : IShard
     public AdminService Admin { get; }
     public DamageSystem Damage { get; }
     public CombatSim Combat { get; }
+    public ICombatLogSink CombatLog { get; }
     public FallDamageSystem FallDamage { get; }
     public CharacterLifecycleService CharacterLifecycle { get; }
     public PlayerRespawnService PlayerRespawn { get; }

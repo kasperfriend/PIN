@@ -211,15 +211,19 @@ later, over and over, with no server-side removal in between).
 These are differences from the live captures that are *not* implemented yet. They are the next
 things to try if the sights still drop in game, in this order:
 
-1. **Combat log rows.** The live server sends `PublicCombatLog` (and `PrivateCombatLog`)
-   rows for every status effect it applies to or removes from a character — the scope effect
-   included — with `SourceType` `StatusFx_Apply`/`StatusFx_Remove`, the effect id and the same
-   event time it writes into the status effect slot. PIN sends none. Aero already carries the
-   message (`AeroMessages.GSS.Character.Event.PublicCombatLog`, `CombatLogMessage`,
-   `CombatLogRow` type 11/12), so this is a contained change: queue rows in
-   `SetStatusEffect`/`ClearStatusEffect` and flush them batched (the live server batches them
-   ~150 ms after the fact). The client-side `RequireServerConfirmed` requirement (command type
-   113) in the scope effect's duration chain is the reason to suspect this matters.
+1. ~~**Combat log rows.**~~ **Addressed.** The live server sends `PublicCombatLog` (and
+   `PrivateCombatLog`) rows for every status effect it applies to or removes from a character —
+   the scope effect included — the effect id and the same event time it writes into the status
+   effect slot, with `SourceType = Weapon` for the scope effect. PIN sent none, so the client's
+   predicted scope effect stayed unconfirmed and the `RequireServerConfirmed` row in its own
+   duration chain (`tfRequireServerConfirmed`, effect 1313 chain 1605146) cut it roughly a second
+   after the sights came up — the observed ADS flicker while RMB is held. The server now emits
+   both rows to the owner for every character statusfx apply/remove, right after the force
+   flush (`BaseAptitudeEntity.OnStatusEffectReplicated`/`OnStatusEffectCleared` →
+   `CharacterEntity` → `GameServer.Systems.CombatLog.CombatLogSink`); `Bytes` is the byte count
+   of the concatenated rows (10 bytes per statusfx row). The live server batches rows ~150 ms
+   after the fact and also carries the public log on the ObserverView route; both refinements
+   are unverified niceties, not sent yet.
 2. **Local-effects controller.** The 2016 capture writes `LocalEffectsController` entries
    only for effects on *other* entities (always a foreign entity id, never the player's own).
    PIN mirrors every status effect into the owner's local-effects controller, self-applied
@@ -267,7 +271,11 @@ Use one continuous log covering scope-in/launch through scope-out/landing:
    unexpected `[Effect] ... duration ... ended` or `[Scope] ... removed externally` during a
    hold, and — the actual regression — no `UseScope InScope=0` that you did not cause: a
    scope-out that arrives while you are still holding the button means the client still
-   disagrees with the replicated state.
+   disagrees with the replicated state. Every `Character.SetStatusEffect`/`ClearStatusEffect`
+   while holding (one pair per raise/lower) is now followed by a `PublicCombatLog`/
+   `PrivateCombatLog` echo to the owner confirming the same effect id and time; if the sights
+   still drop despite those rows reaching the client, a packet capture is the way to tell
+   whether the row ever arrives.
 2. If the pose snaps back while the log still shows an active scoped state, include whether
    the client emitted `UseScope InScope=0` **before you released the button**. Capture the
    client-side diagnostic log or inbound controller updates too if available. This separates
