@@ -45,6 +45,7 @@ public sealed class FakeShard : IShard
         FallDamage = new FallDamageSystem(this, Damage, new StandardFallDamageRules());
         AI = new AiEngine(this, EventBus, new StandardAiRules(), new AlwaysHostileAiHostility(), AiAttackFeedback, new FakeAiMonsterStats());
         CombatLog = new CombatLogSink();
+        Cheats = new GameServer.Systems.Cheats.CheatService(this);
     }
 
     public EventBus EventBus { get; } = new();
@@ -96,6 +97,8 @@ public sealed class FakeShard : IShard
     public ChatService Chat { get; } = null;
 
     public AdminService Admin { get; } = null;
+
+    public GameServer.Systems.Cheats.CheatService Cheats { get; }
 
     public CombatSim Combat { get; } = null;
 

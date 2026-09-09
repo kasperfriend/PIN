@@ -31,6 +31,18 @@ public class DamageSystem
             return;
         }
 
+        // Debug cheats: a player-controlled source scales outgoing damage (dmg <mult>,
+        // dmg -1 = one hit kill). Self inflicted damage (hurtme, fall damage, bleedout)
+        // is excluded so the cheats only ever boost what the player does to others.
+        if (source != target && source is CharacterEntity { IsPlayerControlled: true } playerSource && playerSource.Player != null)
+        {
+            amount = _shard.Cheats.ApplyOutgoingDamage(playerSource.Player, amount);
+            if (amount <= 0)
+            {
+                return;
+            }
+        }
+
         bool applied;
         if (target is CharacterEntity character)
         {

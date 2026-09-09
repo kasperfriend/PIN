@@ -1008,6 +1008,71 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         SetMaxHealth(CharacterHealthMath.ComputeMaxHealth(itemHealthSum, levelCurve), resetCurrent: false);
     }
 
+    /// <summary>
+    ///     Max battleframe progression level PIN accepts for the <c>setlevel</c> debug
+    ///     cheat: the last row of <c>dbitems::FrameProgressionLevel</c> and of the
+    ///     <c>dbitems::LevelItemAttributes</c> health curve is 50.
+    /// </summary>
+    public const byte MaxFrameProgressionLevel = 50;
+
+    /// <summary>
+    ///     Changes the progression level of the worn battleframe (debug cheat
+    ///     <c>setlevel</c>): stores the clamped level, refreshes the replicated level props
+    ///     (Level/EffectiveLevel, the equipment view's level) and re-derives the health
+    ///     pool from the current loadout so the level curve applies immediately. The frame
+    ///     XP panel refresh is sent by the caller (it needs the net channel).
+    /// </summary>
+    public void SetFrameProgressionLevel(byte newLevel)
+    {
+        FrameProgressionLevel = Math.Clamp(newLevel, (byte)1, MaxFrameProgressionLevel);
+
+        if (Character_BaseController != null)
+        {
+            Character_BaseController.LevelProp = FrameProgressionLevel;
+            Character_BaseController.EffectiveLevelProp = FrameProgressionLevel;
+        }
+
+        if (Character_EquipmentView != null)
+        {
+            Character_EquipmentView.LevelProp = FrameProgressionLevel;
+        }
+
+        if (CurrentLoadout != null)
+        {
+            RefreshMaxHealthFromLoadout(CurrentLoadout);
+        }
+    }
+
+    /// <summary>
+    ///     Re-derives the character's health pool from the database (debug cheat <c>hp</c>
+    ///     reset): the loadout/level health rule for players, the
+    ///     <c>dbcharacter::MonsterScaling</c> row for monsters that were leveled by
+    ///     <see cref="LoadMonster"/>. Leaves the current pool untouched when no database
+    ///     source applies. Fills the pool to full.
+    /// </summary>
+    public void ResetMaxHealthFromDatabase()
+    {
+        if (IsPlayerControlled && CurrentLoadout != null)
+        {
+            if (CurrentLoadout.ItemAttributes.TryGetValue(CharacterHealthMath.HealthAttributeId, out float itemHealthSum)
+                && itemHealthSum > 0f)
+            {
+                float levelCurve = SDBInterface.GetLevelItemAttributeValue(CharacterHealthMath.HealthAttributeId, FrameProgressionLevel);
+                SetMaxHealth(CharacterHealthMath.ComputeMaxHealth(itemHealthSum, levelCurve), resetCurrent: true);
+                return;
+            }
+        }
+
+        if (MonsterLevel != 0)
+        {
+            var scaling = SDBInterface.GetMonsterScaling(MonsterLevel);
+            if (scaling != null)
+            {
+                SetMaxHealth((int)scaling.Health, resetCurrent: true);
+            }
+        }
+    }
+
     public void SetCharacterStats(CharacterStatsData value)
     {
         CharacterStats = value;

@@ -12,6 +12,7 @@ using GameServer.Systems.Admin;
 using GameServer.Systems.Ai;
 using GameServer.Systems.Aptitude;
 using GameServer.Systems.CharacterLifecycle;
+using GameServer.Systems.Cheats;
 using GameServer.Systems.Chat;
 using GameServer.Systems.Combat;
 using GameServer.Systems.CombatLog;
@@ -59,6 +60,7 @@ public class Shard : IShard
         Chat = new ChatService(this, EventBus);
         Admin = new AdminService(this);
         var npcDeathRules = new StandardNpcDeathRules();
+        Cheats = new CheatService(this);
         Damage = new DamageSystem(EventBus, this, npcDeathRules);
         Combat = new CombatSim(EventBus, Damage, this);
         CombatLog = new CombatLogSink();
@@ -84,6 +86,7 @@ public class Shard : IShard
     public WeaponSim WeaponSim { get; }
     public ChatService Chat { get; }
     public AdminService Admin { get; }
+    public CheatService Cheats { get; }
     public DamageSystem Damage { get; }
     public CombatSim Combat { get; }
     public ICombatLogSink CombatLog { get; }
@@ -135,6 +138,7 @@ public class Shard : IShard
         Abilities.Tick(deltaTime, currentTime, ct);
         WeaponSim.Tick(deltaTime, currentTime, ct);
         ProjectileSim.Tick(deltaTime, currentTime, ct);
+        Cheats.Tick(deltaTime, currentTime, ct);
         Damage.Tick(deltaTime, currentTime, ct);
         FallDamage.Tick(deltaTime, currentTime, ct);
         CharacterLifecycle.Tick(deltaTime, currentTime, ct);
@@ -155,6 +159,7 @@ public class Shard : IShard
 
             Clients.Remove(player.SocketId);
             Admin.ClearPlayer(player);
+            Cheats.Forget(player);
             return true;
         }
 
