@@ -551,7 +551,7 @@ SPEC = {
             "Full `CharacterEntity.LoadMonster` path: chassis, warpaints, weapons, faction hostility, physics body and AI lifecycle.",
             "Movement/physics columns (`normal_speed`, `fast_speed`, `body_radius`, `body_mass`, `body_height`) are `-1` when the row inherits them from its chassis battleframe.",
             "Spawned mobs are kinematic physics bodies, so they are hittable; hits still need pose shape data from `Tools/CollisionGenerator` (see `Docs/SPAWNING_AND_COMBAT.md` §4).",
-            "Default NPC health is 19192 and `HandleProjectileImpact` deals 1337 damage, so an unbuffed mob takes ~15 hits.",
+            "NPC health and AI attack damage come from `dbcharacter::MonsterScaling` at the level of the zone the NPC spawns in (45 when the zone has no level band; in this build level 45 = health 27,869, damage 13,934), so every monster spawns with its database stats instead of the old flat 19,192 HP. Player weapon damage is database driven too (item `Damage Per Round` attribute 954 / weapon template `damage_per_round`, ammo distance falloff), so the hits a level-45 mob survives depend on the weapon, not on a 1337 placeholder.",
         ],
         "group_by": [
             ("Faction", "faction", "Rows per `dbcharacter::Faction.internal_name` (`-` = no faction row)."),

@@ -76,4 +76,21 @@ public abstract class ServerCommand
             return null;
         }
     }
+
+    /// <summary>
+    ///     Parses a float parameter with the invariant culture (decimal dot), so cheat
+    ///     commands like <c>dmg 0.5</c> behave the same regardless of the host locale.
+    ///     Returns <see cref="float.NaN"/> when the value cannot be parsed, so callers can
+    ///     tell "not a number" apart from a real <c>0</c>.
+    /// </summary>
+    public float ParseFloatParameter(string value)
+    {
+        if (float.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float result))
+        {
+            return result;
+        }
+
+        Logger.Warning("Invalid float format: {Value}", value);
+        return float.NaN;
+    }
 }

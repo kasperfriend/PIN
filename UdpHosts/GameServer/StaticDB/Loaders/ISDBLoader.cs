@@ -64,6 +64,7 @@ public interface ISDBLoader
     Dictionary<uint, ResourceNodeBeacon> LoadResourceNodeBeacon();
     Dictionary<KeyValuePair<uint, uint>, LevelCategoryScalars> LoadLevelCategoryScalars();
     Dictionary<uint, FrameProgressionLevel> LoadFrameProgressionLevel();
+    Dictionary<KeyValuePair<uint, uint>, LevelItemAttributes> LoadLevelItemAttributes();
     Dictionary<uint, Blueprints> LoadBlueprints();
     Dictionary<uint, List<Blueprint_Items>> LoadBlueprintItems();
     Dictionary<uint, List<BattleframeVisuals>> LoadBattleframeVisuals();

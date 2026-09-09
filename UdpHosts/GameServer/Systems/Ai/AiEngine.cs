@@ -107,6 +107,7 @@ public class AiEngine
         }
 
         var (normalSpeed, fastSpeed) = _monsterStats.GetSpeeds(npc.StaticInfo.CharacterTypeId);
+        int dbAttackDamage = _monsterStats.GetAttackDamage(npc.StaticInfo.CharacterTypeId, npc.MonsterLevel);
         var brain = new NpcBrain
         {
             EntityId = npc.EntityId,
@@ -115,6 +116,11 @@ public class AiEngine
             Brain = new AiBrain(_rules, _shard.CurrentTimeLong),
             MoveSpeed = AiSpeeds.Resolve(normalSpeed, _rules.DefaultMoveSpeed, _rules),
             ChaseSpeed = AiSpeeds.Resolve(fastSpeed, _rules.DefaultChaseSpeed, _rules),
+
+            // Attack damage comes from the monster's dbcharacter::MonsterScaling row (by the level the
+            // NPC was spawned at); the rules value is only the fallback for a monster or level the
+            // static database has no row for.
+            AttackDamage = dbAttackDamage > 0 ? dbAttackDamage : _rules.AttackDamage,
         };
 
         return _brains.TryAdd(npc.EntityId, brain);
@@ -325,7 +331,7 @@ public class AiEngine
 
     private void ResolveAttack(NpcBrain npc, CharacterEntity target)
     {
-        int damage = _rules.AttackDamage;
+        int damage = npc.AttackDamage;
         _shard.Damage?.ApplyDamage(target, damage, npc.Entity);
         _feedback?.OnAttack(npc.Entity, target, damage);
     }
@@ -491,5 +497,6 @@ public class AiEngine
         public Vector3 Home;
         public float MoveSpeed;
         public float ChaseSpeed;
+        public int AttackDamage;
     }
 }

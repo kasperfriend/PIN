@@ -35,7 +35,11 @@ public interface IAiRules
     /// <summary>Minimum delay in milliseconds between two attacks by the same NPC.</summary>
     int AttackCooldownMs { get; }
 
-    /// <summary>Flat damage applied to the target by one attack.</summary>
+    /// <summary>
+    ///     Fallback damage applied to the target by one attack when the monster has no
+    ///     <c>dbcharacter::MonsterScaling</c> damage row for its level. NPCs whose level resolves
+    ///     normally attack for the database value instead, resolved once at registration.
+    /// </summary>
     int AttackDamage { get; }
 
     /// <summary>Milliseconds an NPC keeps hunting a target it can no longer see before giving up.</summary>

@@ -115,16 +115,26 @@ chat with a `\` prefix:
 | `\revive`            | Revive from bleedout (restores 25% health)                    |
 | `\kill`              | Die instantly                                                 |
 | `\respawn`           | Force a respawn at the nearest outpost                        |
+| `\sethp`             | Reset health to the database value (item/level rule for players, `MonsterScaling` for NPCs) and fill it; `\sethp <amount>` sets max+current to `<amount>` (admin: `hp`, also targetable) |
+| `\level <1-50>`      | Set your battleframe progression level (`setlevel`); re-derives the health pool from the level curve and refreshes the client level/XP panel |
+| `\frame <name\|id>`  | Switch battleframe on the fly (`setframe`): assault, dreadnaught, biotech, engineer, recon, firecat, tigerclaw, electron, bastion, mammoth, rhino, dragonfly, recluse, nighthawk, raptor, graviton, arsenal, archangel (or a numeric frame id). Stats/visuals/health swap immediately; the physics body is rebuilt on the next respawn |
+| `\dmg <mult>`        | Outgoing damage multiplier: `1` normal, `0.5` half, `10` x10, `0` none, `-1` one-hit kill everything (weapons and abilities alike) |
+| `\killaura`          | Toggle a kill aura: every enemy within 25 m dies once per second; `\killaura <radius>` sets the radius, `\killaura off` stops it |
 
 The same commands exist on the Admin chat channel as server commands
-(`hurtme`, `healme`, `downme`, `killme`, `revive`, `respawn`, `tp`).
+(`hurtme`, `healme`, `downme`, `killme`, `revive`, `respawn`, `tp`, `hp`,
+`setlevel`, `setframe`, `dmg`, `killaura`); the admin versions can target the
+entity you are aiming at (see `\target`).
 
-Suggested smoke test:
+Suggested smoke test (pool expectations: a player at frame level 1 has the
+Health sum of their loadout — roughly 360 for the default Accord Assault
+loadout — plus `dbcharacter` level-curve contributions once progression exists;
+NPCs show their `MonsterScaling` pool. See `Docs/PLAYER_STATS_AND_HEALTH.md`):
 
-1. `\health` — should show `19192/19192`.
-2. `\hurt 5000` — health bar drops, shields stay 0.
-3. `\heal 5000` — health bar back to full.
-4. `\fall 30` — `2340` fall damage; `\health` confirms; `\heal 99999`.
+1. `\health` — should show the player's full pool (e.g. `360/360`).
+2. `\hurt 200` — health bar drops (keep the amount below the pool), shields stay 0.
+3. `\heal 200` — health bar back to full.
+4. `\fall 30` — `2340` fall damage, which already exceeds a level-1 pool: expect bleedout and a respawn (see 5) — with a bigger pool it just drops the bar; `\health` confirms; `\heal 99999`.
 5. `\fall 60` — lethal: bleedout screen, then auto respawn at an outpost.
 6. `\health` right after the respawn — must show full health again (the
    respawn vitals reset).

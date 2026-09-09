@@ -30,8 +30,8 @@ UdpHosts/GameServer/Systems/Ai/
 ├── AiVectors.cs                horizontal distance + character facing maths
 ├── IAiHostility.cs             who counts as an enemy
 ├── FactionAiHostility.cs       SDB faction table implementation
-├── IAiMonsterStats.cs          where movement speeds come from
-├── SdbAiMonsterStats.cs        reads dbcharacter::Monster
+├── IAiMonsterStats.cs          where movement speeds + per-level attack damage come from
+├── SdbAiMonsterStats.cs        reads dbcharacter::Monster + MonsterScaling (by level)
 ├── IAiAttackFeedback.cs        cosmetic hit messages
 └── HitFeedbackAttackFeedback.cs routes them through CombatSim.HitFeedback
 ```
@@ -119,13 +119,16 @@ default player faction and will not aggro.
 
 ```
 AiEngine.ResolveAttack
-  -> IShard.Damage.ApplyDamage(target, AttackDamage, npcEntity)
+  -> IShard.Damage.ApplyDamage(target, npcAttackDamage, npcEntity)
        -> shields first, then health
        -> EntityDamagedEvent
             -> CharacterLifecycleService  (bleedout / death for the player)
   -> IAiAttackFeedback.OnAttack
        -> CombatSim.HitFeedback.TookDebugHit -> TookHit to scoped clients
 ```
+
+The damage per hit is the monster's database value, resolved once when the NPC
+is registered (see [Attack damage comes from the database](#attack-damage-comes-from-the-database)).
 
 It is a hitscan, not a projectile: no `ProjectileSim` trace, no ammo, no spread.
 The victim gets the same `TookHit` message a weapon hit produces, so damage
@@ -176,7 +179,7 @@ Everything is an `IAiRules` property. `AiEngine` takes an optional instance; pas
 | `LeashRadius`        | `120`   | Metres from the spawn point before it gives up                   |
 | `HomeArrivalRadius`  | `2`     | Metres from home that counts as arrived                          |
 | `AttackCooldownMs`   | `1200`  | Delay between two attacks by the same NPC                        |
-| `AttackDamage`       | `180`   | Flat damage per attack                                           |
+| `AttackDamage`       | `180`   | Fallback damage per attack when the DB has no scaling row for the NPC's level |
 | `TargetLostTimeoutMs`| `6000`  | How long an unseen target is still hunted                        |
 | `PerceptionIntervalMs`| `200`  | Target scan / line of sight interval                             |
 | `MovementIntervalMs` | `50`    | Movement + pose broadcast interval (20 Hz)                       |
@@ -195,6 +198,45 @@ they are expressed in a different unit, so `AiSpeeds.Resolve` only trusts values
 inside `[MinTrustedSpeed, MaxTrustedSpeed]` and falls back to the configured
 defaults otherwise. That is what keeps a bad row from producing frozen or
 teleporting mobs.
+
+### Health and attack damage come from the database
+
+The `dbcharacter::Monster` row itself carries no health or damage — those live on
+the per-level curve in `dbcharacter::MonsterScaling` (level 1-80 -> health /
+damage). A monster row only exists as a type, so the level that picks the curve
+comes from where it spawns:
+
+- `CharacterEntity.LoadMonster` resolves the shard zone's level band
+  (`dbzonemetadata::ZoneRecord.level_band` -> `dbitems::LevelBand`) and takes the
+  top of the band (`SDBUtils.ResolveNpcLevel`); open ended bands (`max == 255`,
+  the "no upper bound" sentinel) resolve to their floor, and everything is capped
+  at level 80 because the scaling table stops there.
+- Zones without a band fall back to `SDBUtils.DefaultNpcLevel`. That is the
+  default player level — a fresh battleframe starts at progression level 1 and
+  PIN has no XP economy yet — so mobs in untuned zones fight on the player's
+  terms (level-1 mobs: 100 max health, 50 per hit in build `prod-1962`). The
+  zones the database never tuned are exactly the ones whose difficulty the live
+  game set through its server-side mission/spawn flow rather than zone rows
+  (the PIN test zone `12` "Nothing", Crash Down `1003`, the first story
+  missions, operations and the raid have no `level_band`; PvP maps have no PvE
+  at all). For those, `character_spawn.json` entries can carry an authored
+  `level` (1-80) that becomes the spawn's `MonsterScaling` level — the emulator
+  equivalent of that flow.
+- The scaling row then sets the NPC's `MaxHealth` (`ScalingTable.health`), and
+  `AiEngine` asks `SdbAiMonsterStats.GetAttackDamage(typeId, level)` for the
+  per-hit damage (`ScalingTable.damage`) when the NPC is registered. The rules'
+  `AttackDamage` is only the fallback for a monster or level the database has no
+  row for. Damage is used exactly as the database defines it — nothing is
+  re-scaled by the attack cooldown.
+- A per-spawn `max_health` in `character_spawn.json` still overrides the database
+  health for that one spawn (`EntityManager.SpawnZoneEntities` applies it after
+  `LoadMonster`), and a per-spawn `level` overrides the level it is looked up at.
+
+Example: a level-45 zone (Diamond Head's band is 44-45) spawns every monster
+with 27,869 max health hitting for 13,934 per attack in build `prod-1962`; a
+zone without a band resolves its NPCs at the default player level (1, see
+above) instead. In a level-40 zone (Sertao's open-world band is 39-40) the
+same monster type spawns with 21,836 health and hits for 10,918.
 
 ### Ground snapping
 

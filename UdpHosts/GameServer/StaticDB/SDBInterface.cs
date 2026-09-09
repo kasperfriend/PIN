@@ -67,6 +67,7 @@ public class SDBInterface
     private static Dictionary<uint, ResourceNodeBeacon> _resourceNodeBeacon;
     private static Dictionary<KeyValuePair<uint, uint>, LevelCategoryScalars> _levelCategoryScalars;
     private static Dictionary<uint, FrameProgressionLevel> _frameProgressionLevel;
+    private static Dictionary<KeyValuePair<uint, uint>, LevelItemAttributes> _levelItemAttributes;
     private static Dictionary<uint, Blueprints> _blueprints;
     private static Dictionary<uint, List<Blueprint_Items>> _blueprintItems;
     private static Dictionary<uint, List<BattleframeVisuals>> _battleframeVisuals;
@@ -331,6 +332,7 @@ public class SDBInterface
         _resourceNodeBeacon = loader.LoadResourceNodeBeacon();
         _levelCategoryScalars = loader.LoadLevelCategoryScalars();
         _frameProgressionLevel = loader.LoadFrameProgressionLevel();
+        _levelItemAttributes = loader.LoadLevelItemAttributes();
         _blueprints = loader.LoadBlueprints();
         _blueprintItems = loader.LoadBlueprintItems();
         _battleframeVisuals = loader.LoadBattleframeVisuals();
@@ -624,6 +626,14 @@ public class SDBInterface
     public static ResourceNodeBeacon GetResourceNodeBeacon(uint id) => _resourceNodeBeacon.GetValueOrDefault(id);
     public static LevelCategoryScalars GetLevelCategoryScalar(uint attributeCategory, uint level) => _levelCategoryScalars.GetValueOrDefault(new KeyValuePair<uint, uint>(attributeCategory, level));
     public static FrameProgressionLevel GetFrameProgressionLevel(uint level) => _frameProgressionLevel.GetValueOrDefault(level);
+
+    /// <summary>
+    ///     Returns the per-level value of an item attribute from <c>dbitems::LevelItemAttributes</c>
+    ///     (e.g. the Health curve at the battleframe's progression level), or 0 when the table
+    ///     has no row for that attribute/level pair (it only ever carries attribute 6 in build
+    ///     prod-1962).
+    /// </summary>
+    public static float GetLevelItemAttributeValue(uint attributeId, uint level) => _levelItemAttributes.TryGetValue(new KeyValuePair<uint, uint>(attributeId, level), out var row) ? row.Value : 0f;
     public static Blueprints GetBlueprint(uint id) => _blueprints.GetValueOrDefault(id);
     public static List<Blueprint_Items> GetBlueprintItems(uint blueprintId) => _blueprintItems.GetValueOrDefault(blueprintId);
     public static List<BattleframeVisuals> GetBattleframeVisuals(uint id) => _battleframeVisuals.GetValueOrDefault(id);

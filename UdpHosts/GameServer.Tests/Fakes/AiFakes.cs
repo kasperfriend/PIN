@@ -37,15 +37,28 @@ public sealed class RecordingAiAttackFeedback : IAiAttackFeedback
 /// <summary>Hands out fixed speeds instead of reading the monster table.</summary>
 public sealed class FakeAiMonsterStats : IAiMonsterStats
 {
-    public FakeAiMonsterStats(float normalSpeed = 0f, float fastSpeed = 0f)
+    public FakeAiMonsterStats(float normalSpeed = 0f, float fastSpeed = 0f, int attackDamage = 0)
     {
         NormalSpeed = normalSpeed;
         FastSpeed = fastSpeed;
+        AttackDamage = attackDamage;
     }
 
     public float NormalSpeed { get; }
 
     public float FastSpeed { get; }
 
+    /// <summary>Damage GetAttackDamage returns; 0 simulates a monster/level the DB has no row for.</summary>
+    public int AttackDamage { get; }
+
+    /// <summary>Every GetAttackDamage request, as (characterTypeId, level), for assertions.</summary>
+    public List<(uint CharacterTypeId, byte Level)> AttackDamageRequests { get; } = [];
+
     public (float NormalSpeed, float FastSpeed) GetSpeeds(uint characterTypeId) => (NormalSpeed, FastSpeed);
+
+    public int GetAttackDamage(uint characterTypeId, byte level)
+    {
+        AttackDamageRequests.Add((characterTypeId, level));
+        return AttackDamage;
+    }
 }

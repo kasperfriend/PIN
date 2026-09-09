@@ -22,6 +22,11 @@ public class StandardAiRules : IAiRules
 
     public int AttackCooldownMs { get; init; } = 1200;
 
+    /// <summary>
+    ///     Only used when the monster's <c>dbcharacter::MonsterScaling</c> row (by its level) cannot be
+    ///     resolved; see <see cref="IAiMonsterStats.GetAttackDamage"/>. Real monsters attack for the
+    ///     database value instead.
+    /// </summary>
     public int AttackDamage { get; init; } = 180;
 
     public int TargetLostTimeoutMs { get; init; } = 6000;
