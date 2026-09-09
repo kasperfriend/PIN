@@ -214,6 +214,14 @@ public partial class PhysicsEngine
         var movestate = character.MovementStateContainer.Movestate;
         var info = character.Collision;
 
+        // Entities without collision data (e.g. a monster row with neither a chassis nor a
+        // usable PosetypeId) get the fallback shape rather than a NullReferenceException.
+        if (info?.PoseTypeRecord == null)
+        {
+            _logger.Warning("GetCharacterPoseAsset: character {entityId} has no collision/pose data, using fallback shape", character.EntityId);
+            return new AssetCompoundKey(0, Vector3.Zero, 1f);
+        }
+
         var collisionId = info.PoseTypeRecord.StandingCollisionid;
         var offset = Vector3.Zero;
         var scale = character.Collision.Scale;

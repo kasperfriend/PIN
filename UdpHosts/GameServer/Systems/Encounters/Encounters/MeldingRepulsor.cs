@@ -41,10 +41,19 @@ public class MeldingRepulsor : BaseEncounter, IInteractionHandler, IDonationHand
     {
         var r = repulsorDef.Repulsor;
         _repulsor = Shard.EntityMan.SpawnDeployable(r.Type, r.Position, r.Orientation);
-        _repulsor.Encounter = new EncounterComponent { EncounterId = entityId, Instance = this, Events = EncounterComponent.Event.Signal };
+        if (_repulsor != null)
+        {
+            _repulsor.Encounter = new EncounterComponent { EncounterId = entityId, Instance = this, Events = EncounterComponent.Event.Signal };
+        }
 
         var t = repulsorDef.Terminal;
         _terminal = Shard.EntityMan.SpawnDeployable(t.Type, t.Position, t.Orientation);
+        if (_terminal == null)
+        {
+            Logger.Error("MeldingRepulsor {entityId}: failed to spawn the terminal deployable (type {type}); the encounter will not work", entityId, t.Type);
+            return;
+        }
+
         _terminal.Encounter = new EncounterComponent() { EncounterId = entityId, Instance = this, Events = EncounterComponent.Event.Interaction };
 
         shard.Abilities.DoApplyEffect(_effectOffline, _terminal, new Context(shard, _terminal) { InitTime = shard.CurrentTime });
@@ -56,15 +65,25 @@ public class MeldingRepulsor : BaseEncounter, IInteractionHandler, IDonationHand
                 Float = _maxMeldedCrystite,
             };
 
-        _melding = (MeldingEntity)Shard.Entities.Values.First(e => e is MeldingEntity meldingEntity
+        _melding = (MeldingEntity)Shard.Entities.Values.FirstOrDefault(e => e is MeldingEntity meldingEntity
             && meldingEntity.PerimiterSetName == repulsorDef.PerimiterSetName);
+        if (_melding == null)
+        {
+            Logger.Error("MeldingRepulsor {entityId}: no melding perimeter named {perimeterSetName}; the encounter will not work", entityId, repulsorDef.PerimiterSetName);
+            return;
+        }
 
         var adp = _melding.Melding_ObserverView.ActiveDataProp;
 
         _controlPointIndex = repulsorDef.MeldingPosition.ControlPointIndex;
 
         _startPosition = repulsorDef.MeldingPosition.Position;
-        _endPosition = adp.FromPoints[_controlPointIndex];
+        if (adp.FromPoints == null || adp.ToPoints == null
+            || _controlPointIndex >= adp.FromPoints.Length || _controlPointIndex >= adp.ToPoints.Length)
+        {
+            Logger.Error("MeldingRepulsor {entityId}: control point index {controlPointIndex} out of bounds for melding perimeter {perimeterSetName}; the encounter will not work", entityId, _controlPointIndex, repulsorDef.PerimiterSetName);
+            return;
+        }
 
         adp.FromPoints[_controlPointIndex] = _startPosition;
         adp.ToPoints[_controlPointIndex] = _startPosition;

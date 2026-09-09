@@ -80,6 +80,11 @@ public class WeaponSim
 
         // Ammo
         var ammo = SDBInterface.GetAmmo(weapon.AmmoId); // TODO: Handle ammo overrides
+        if (ammo == null)
+        {
+            _logger.Error("OnFireWeaponProjectile: no dbitems::Ammo row {ammoId} for weapon {weaponId}; not firing", weapon.AmmoId, activeWeaponDetails?.WeaponId);
+            return;
+        }
 
         // Ammo stat properties: stat ID from ammo points to weapon attribute to use
         float projectileSpeed = ammo.ProjectileSpeed;

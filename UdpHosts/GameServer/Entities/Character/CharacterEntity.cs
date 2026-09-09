@@ -231,9 +231,9 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     /// <summary>
     ///     The level (1..80, <c>dbcharacter::MonsterScaling</c> row key) this monster's combat stats were
     ///     resolved at: the authored <c>levelOverride</c> when one was given (see
-    ///     <see cref="LoadMonster(uint, byte)"/>), otherwise the shard zone's level band, or
+    ///     <see cref="LoadMonster(uint, byte, Monster)"/>), otherwise the shard zone's level band, or
     ///     <see cref="SDBUtils.DefaultNpcLevel"/> when the zone has none. 0 for player controlled
-    ///     characters and for NPCs that never went through <see cref="LoadMonster(uint, byte)"/>
+    ///     characters and for NPCs that never went through <see cref="LoadMonster(uint, byte, Monster)"/>
     ///     (tests, remote players).
     /// </summary>
     internal byte MonsterLevel { get; set; }
@@ -409,10 +409,17 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     ///     spawn flow the real servers used for zones the database did not tune), otherwise
     ///     the shard zone's level band, otherwise <see cref="SDBUtils.DefaultNpcLevel"/>.
     /// </summary>
-    public void LoadMonster(uint typeId, byte levelOverride = 0)
+    public void LoadMonster(uint typeId, byte levelOverride = 0, Monster monsterInfo = null)
     {
         // TODO: GetMonsterVisualOptions
-        var monsterInfo = SDBInterface.GetMonster(typeId);
+        monsterInfo ??= SDBInterface.GetMonster(typeId);
+        if (monsterInfo == null)
+        {
+            // SpawnCharacter validates the row before calling in; this is only reachable
+            // through direct LoadMonster calls with an unknown typeId.
+            throw new ArgumentException($"No dbcharacter::Monster row for typeId {typeId}", nameof(typeId));
+        }
+
         var chassisWarpaint = SDBUtils.GetChassisWarpaint(monsterInfo.ChassisId, monsterInfo.FullbodyWarpaintPaletteId, monsterInfo.ArmorWarpaintPaletteId, monsterInfo.BodysuitWarpaintPaletteId, monsterInfo.GlowWarpaintPaletteId);
 
         // TODO: Consider internalizing into the CharacterLoadout instead?
@@ -494,6 +501,35 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         });
 
         ApplyLoadout(loadout);
+
+        // ApplyLoadout only builds the collision component for chassis owners (players and
+        // chassis-wearing NPCs) — the `chassis.SdbId != 0` block is the only place Collision
+        // is assigned. Most creatures have no battleframe chassis and instead point at their
+        // pose type directly on the Monster row, so synthesize the component here; otherwise
+        // CreateKineticEntity dereferences a null Collision and every spawn of such a monster
+        // throws NullReferenceException.
+        if (Collision == null)
+        {
+            var monsterPoseType = monsterInfo.PosetypeId != 0 ? SDBInterface.GetPoseType(monsterInfo.PosetypeId) : null;
+            if (monsterPoseType != null)
+            {
+                Collision = new CharacterCollisionComponent
+                {
+                    PoseTypeRecord = monsterPoseType,
+                    Scale = monsterInfo.MinRandScale > 0f ? monsterInfo.MinRandScale : 1f,
+                };
+            }
+            else
+            {
+                // No pose data at all. Install an empty component so GetCharacterPoseAsset
+                // finds no collision ids and physics falls back to its default shape
+                // instead of throwing.
+                Log.Warning(
+                    "LoadMonster: monster {MonsterId} has no chassis and no usable PosetypeId ({PosetypeId}); using the physics fallback shape",
+                    typeId, monsterInfo.PosetypeId);
+                Collision = new CharacterCollisionComponent();
+            }
+        }
 
         // Temp hack to equip weapon
         if (monsterInfo.Weapon1Id != 0)
@@ -766,10 +802,10 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             var race = StaticInfo.Race;
             var charInfoId = StaticInfo.CharInfoId;
 
-            CharInfo charInfo;
-            Battleframe battleframeRecord;
-            PoseType poseTypeRecord;
-            List<BattleframeVisuals> battleframeVisualGroupRecords;
+            CharInfo charInfo = null;
+            Battleframe battleframeRecord = null;
+            PoseType poseTypeRecord = null;
+            List<BattleframeVisuals> battleframeVisualGroupRecords = null;
             BattleframeVisuals battleframeVisualGroupRecord = null;
             VisualRecord battleframeVisualRecord = null;
 
@@ -777,99 +813,131 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             {
                 charInfo = SDBInterface.GetCharInfo(charInfoId);
                 battleframeRecord = SDBInterface.GetBattleframe(chassis.SdbId);
-                poseTypeRecord = SDBInterface.GetPoseType(battleframeRecord.PosetypeId);
-                battleframeVisualGroupRecords = SDBInterface.GetBattleframeVisuals(battleframeRecord.VisualGroup);
 
-                // Find the appropriate visual record
-                byte retries = 3;
-                do
+                // Every later lookup hangs off the battleframe row; without it the chain is
+                // unserviceable (and would have NRE'd right here before).
+                if (battleframeRecord == null)
                 {
-                    foreach (var record in battleframeVisualGroupRecords)
+                    Log.Error("ApplyLoadout: no dbcharacter::Battleframe row for chassi {chassiId}, skipping collision setup", chassis.SdbId);
+                }
+                else
+                {
+                    poseTypeRecord = SDBInterface.GetPoseType(battleframeRecord.PosetypeId);
+                    battleframeVisualGroupRecords = SDBInterface.GetBattleframeVisuals(battleframeRecord.VisualGroup);
+
+                    // Find the appropriate visual record: try an exact race+gender match first and
+                    // relax the criteria while nothing matched yet (the loop stops as soon as a
+                    // candidate is found; the criteria ladder is what relaxes, not the pass count).
+                    // int, not byte: the counter has to survive the pass below 0 without wrapping.
+                    for (int retries = 3; battleframeVisualGroupRecord == null && retries >= 0; --retries)
                     {
-                        bool matchesRace = record.Race == race;
-                        bool matchesAnyRace = record.Race == 255;
-                        bool matchesGender = (record.Gender == 'F' && gender == 1) || (record.Gender == 'M' && gender == 0);
-                        bool matchesAnyGender = record.Gender == 'X';
-
-                        bool valid = true;
-                        switch (retries)
+                        if (battleframeVisualGroupRecords != null)
                         {
-                            case 3:
-                                // Pick exact match if found
-                                valid = matchesRace && matchesGender;
-                                break;
-                            case 2:
-                                // Otherwise, pick fallback if found
-                                valid = matchesAnyRace && matchesAnyGender;
-                                break;
-                            case 1:
-                                // Try to pick something reasonable
-                                valid = matchesRace || matchesGender;
-                                break;
-                            case 0:
-                                // Pick first result
-                                valid = true;
-                                break;
-                        }
-
-                        if (valid)
-                        {
-                            if (retries < 2)
+                            foreach (var record in battleframeVisualGroupRecords)
                             {
-                                Log.Warning("Picking uncertain Battleframe VisualRecord {recordId} of group {visualGroup} for chassi {chassiId}.", record.VisualrecId, battleframeRecord.VisualGroup, chassis.SdbId);
+                                bool matchesRace = record.Race == race;
+                                bool matchesAnyRace = record.Race == 255;
+                                bool matchesGender = (record.Gender == 'F' && gender == 1) || (record.Gender == 'M' && gender == 0);
+                                bool matchesAnyGender = record.Gender == 'X';
+
+                                bool valid = true;
+                                switch (retries)
+                                {
+                                    case 3:
+                                        // Pick exact match if found
+                                        valid = matchesRace && matchesGender;
+                                        break;
+                                    case 2:
+                                        // Otherwise, pick fallback if found
+                                        valid = matchesAnyRace && matchesAnyGender;
+                                        break;
+                                    case 1:
+                                        // Try to pick something reasonable
+                                        valid = matchesRace || matchesGender;
+                                        break;
+                                    case 0:
+                                        // Pick first result
+                                        valid = true;
+                                        break;
+                                }
+
+                                if (valid)
+                                {
+                                    if (retries < 2)
+                                    {
+                                        Log.Warning("Picking uncertain Battleframe VisualRecord {recordId} of group {visualGroup} for chassi {chassiId}.", record.VisualrecId, battleframeRecord.VisualGroup, chassis.SdbId);
+                                    }
+
+                                    Log.Debug("Selected Battleframe VisualRecord {recordId} of group {visualGroup} for chassi {chassiId} (Had Gender {genderChar}, Race {raceId} ({raceStr}))", record.VisualrecId, battleframeRecord.VisualGroup, chassis.SdbId, gender == 1 ? "F" : "M", race, (CharacterRace)race);
+
+                                    battleframeVisualGroupRecord = record;
+                                    break;
+                                }
                             }
-
-                            Log.Debug("Selected Battleframe VisualRecord {recordId} of group {visualGroup} for chassi {chassiId} (Had Gender {genderChar}, Race {raceId} ({raceStr}))", record.VisualrecId, battleframeRecord.VisualGroup, chassis.SdbId, gender == 1 ? "F" : "M", race, (CharacterRace)race);
-
-                            battleframeVisualGroupRecord = record;
-                            break;
                         }
                     }
 
-                    retries--;
+                    battleframeVisualRecord = battleframeVisualGroupRecord != null
+                        ? SDBInterface.GetVisualRecord(battleframeVisualGroupRecord.VisualrecId)
+                        : null;
                 }
-                while (battleframeVisualRecord == null && retries > 0);
-
-                battleframeVisualRecord = SDBInterface.GetVisualRecord(battleframeVisualGroupRecord.VisualrecId);
             }
-            catch
+            catch (Exception ex)
             {
-                Log.Error("Failed to get pose or visualrecord for chassi {chassiId}", chassis.SdbId);
-                throw;
+                // Degrade instead of throwing: this runs on the player login path and on every
+                // monster spawn, and an exception here used to kill the whole loadout/spawn.
+                Log.Error(ex, "Failed to get pose or visualrecord for chassi {chassiId}", chassis.SdbId);
             }
 
-            // We should have the data now since we survived
-            Log.Debug(
-                "ApplyLoadout Collision Debug | CharInfo: {id} ({name}) | RequiresRagdoll: {requiresRagdoll} | ChassisId: {chassisId} | PoseType: {poseId} | Physics: (R={radius}, H={height}, M={mass}) | VisualGroup: {visualGroup} | VisualRecord: {visualRecord} | StandingCollisionId: {standingCollisionId} | HitboxCollisionId: {hitboxCollisionId} | RagdollCollisionId: {ragdollCollisionId}",
-                charInfo.Id,
-                charInfo.Name,
-                charInfo.RequiresRagdoll,
-                chassis.SdbId,
-                poseTypeRecord.PoseId,
-                poseTypeRecord.PhysicsRadius,
-                poseTypeRecord.PhysicsHeight,
-                poseTypeRecord.PhysicsMass,
-                battleframeRecord.VisualGroup,
-                battleframeVisualRecord.Id,
-                poseTypeRecord.StandingCollisionid,
-                battleframeVisualRecord.HitboxCollisionId,
-                battleframeVisualRecord.RagdollCollisionId);
-
-            // Scale
-            // max_rand_scale, min_rand_scale
-            if (battleframeRecord.MinRandScale != battleframeRecord.MaxRandScale)
+            if (charInfo == null || battleframeRecord == null || poseTypeRecord == null
+                || battleframeVisualGroupRecord == null || battleframeVisualRecord == null)
             {
-                Log.Warning("Wtf battleframe {battleframe} has random scale: min: {min}, max: {max}", battleframeRecord.Id, battleframeRecord.MinRandScale, battleframeRecord.MaxRandScale);
+                // Collision stays unset: LoadMonster synthesizes one from the Monster row for NPCs,
+                // and PhysicsEngine.GetCharacterPoseAsset falls back to its default shape otherwise.
+                Log.Error(
+                    "ApplyLoadout: incomplete pose/visual chain for chassi {chassiId} (CharInfo: {hasCharInfo}, Battleframe: {hasBattleframe}, PoseType: {hasPoseType}, VisualGroup record: {hasVisualGroup}, VisualRecord: {hasVisualRecord}); skipping collision setup",
+                    chassis.SdbId,
+                    charInfo != null,
+                    battleframeRecord != null,
+                    poseTypeRecord != null,
+                    battleframeVisualGroupRecord != null,
+                    battleframeVisualRecord != null);
             }
-
-            Collision = new CharacterCollisionComponent
+            else
             {
-                RequiresRagdoll = charInfo.RequiresRagdoll == 1,
-                PoseTypeRecord = poseTypeRecord,
-                RagdollCollisionId = battleframeVisualRecord.RagdollCollisionId,
-                HitboxCollisionId = battleframeVisualRecord.HitboxCollisionId,
-                Scale = battleframeRecord.MinRandScale,
-            };
+                // We should have the data now since we survived
+                Log.Debug(
+                    "ApplyLoadout Collision Debug | CharInfo: {id} ({name}) | RequiresRagdoll: {requiresRagdoll} | ChassisId: {chassisId} | PoseType: {poseId} | Physics: (R={radius}, H={height}, M={mass}) | VisualGroup: {visualGroup} | VisualRecord: {visualRecord} | StandingCollisionId: {standingCollisionId} | HitboxCollisionId: {hitboxCollisionId} | RagdollCollisionId: {ragdollCollisionId}",
+                    charInfo.Id,
+                    charInfo.Name,
+                    charInfo.RequiresRagdoll,
+                    chassis.SdbId,
+                    poseTypeRecord.PoseId,
+                    poseTypeRecord.PhysicsRadius,
+                    poseTypeRecord.PhysicsHeight,
+                    poseTypeRecord.PhysicsMass,
+                    battleframeRecord.VisualGroup,
+                    battleframeVisualRecord.Id,
+                    poseTypeRecord.StandingCollisionid,
+                    battleframeVisualRecord.HitboxCollisionId,
+                    battleframeVisualRecord.RagdollCollisionId);
+
+                // Scale
+                // max_rand_scale, min_rand_scale
+                if (battleframeRecord.MinRandScale != battleframeRecord.MaxRandScale)
+                {
+                    Log.Warning("Wtf battleframe {battleframe} has random scale: min: {min}, max: {max}", battleframeRecord.Id, battleframeRecord.MinRandScale, battleframeRecord.MaxRandScale);
+                }
+
+                Collision = new CharacterCollisionComponent
+                {
+                    RequiresRagdoll = charInfo.RequiresRagdoll == 1,
+                    PoseTypeRecord = poseTypeRecord,
+                    RagdollCollisionId = battleframeVisualRecord.RagdollCollisionId,
+                    HitboxCollisionId = battleframeVisualRecord.HitboxCollisionId,
+                    Scale = battleframeRecord.MinRandScale,
+                };
+            }
         }
     }
 
@@ -1538,6 +1606,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     {
         AttachedToEntity = entity;
         AttachedTo = newValue;
+        Collision ??= new CharacterCollisionComponent();
         Collision.AttachmentPoseId = pose;
         Collision.AttachmentPoseOffset = poseOffset;
         Character_ObserverView.AttachedToProp = AttachedTo;
@@ -1548,6 +1617,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     {
         AttachedToEntity = null;
         AttachedTo = null;
+        Collision ??= new CharacterCollisionComponent();
         Collision.AttachmentPoseId = 0;
         Collision.AttachmentPoseOffset = Vector3.Zero;
         Character_ObserverView.AttachedToProp = AttachedTo;

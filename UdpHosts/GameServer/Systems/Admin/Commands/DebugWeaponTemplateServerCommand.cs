@@ -418,7 +418,7 @@ public class DebugWeaponTemplateServerCommand : ServerCommand
         foreach (var (id, value) in attributes)
         {
             var attr = SDBInterface.GetAttributeDefinition(id);
-            sb.AppendLine($"  {id} {attr.Name}: {value}");
+            sb.AppendLine($"  {id} {attr?.Name ?? "?"}: {value}");
         }
 
         if (!attributes.ContainsKey((ushort)ItemAttributeId.WeaponSpread))

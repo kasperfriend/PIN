@@ -99,6 +99,12 @@ public class Factory
         while (next != 0)
         {
             var baseCommandDef = SDBInterface.GetBaseCommandDef(next);
+            if (baseCommandDef == null)
+            {
+                _logger.Warning("Ability chain {chainId}: missing BaseCommandDef row {next}; stopping the chain there", chainId, next);
+                break;
+            }
+
             var command = LoadCommand(baseCommandDef.Id, baseCommandDef.Subtype);
             chain.Commands.Add(command);
             next = baseCommandDef.Next;
@@ -118,6 +124,12 @@ public class Factory
     public ICommand LoadCommand(uint commandId, uint typeId)
     {
         var commandTypeRec = SDBInterface.GetCommandType(typeId);
+        if (commandTypeRec == null)
+        {
+            _logger.Warning("Ability command {commandId}: missing CommandType row {typeId}; loading a no-op instead", commandId, typeId);
+            return new CustomNOOPCommand($"Unknown({typeId})", commandId);
+        }
+
         var commandType = (CommandType)commandTypeRec.Id;
 
         if (commandTypeRec.Environment == "client")

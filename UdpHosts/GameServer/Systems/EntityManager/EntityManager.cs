@@ -77,8 +77,15 @@ public class EntityManager
 
     public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null, bool canBleedout = false, Quaternion? orientation = null, byte level = 0)
     {
+        var monsterInfo = SDBInterface.GetMonster(typeId);
+        if (monsterInfo == null)
+        {
+            _logger.Error("SpawnCharacter: no dbcharacter::Monster row for typeId {typeId}, not spawning", typeId);
+            return null;
+        }
+
         var characterEntity = new CharacterEntity(_shard, _shard.GetNextGuid(), owner);
-        characterEntity.LoadMonster(typeId, level);
+        characterEntity.LoadMonster(typeId, level, monsterInfo);
         characterEntity.CanBleedout = canBleedout;
         characterEntity.SetCharacterState(CharacterStateData.CharacterStatus.Living, _shard.CurrentTime);
 
@@ -132,6 +139,12 @@ public class EntityManager
 
     public VehicleEntity SpawnVehicle(ushort typeId, Vector3 position, Quaternion orientation, CharacterEntity owner, bool autoMount = false)
     {
+        if (SDBInterface.GetVehicleInfo(typeId) == null)
+        {
+            _logger.Error("SpawnVehicle: no vcs::VehicleInfo row for typeId {typeId}, not spawning", typeId);
+            return null;
+        }
+
         var vehicleInfo = SDBUtils.GetDetailedVehicleInfo(typeId);
         var vehicleEntity = new VehicleEntity(_shard, _shard.GetNextGuid(), owner);
         vehicleEntity.Position = position;
@@ -180,6 +193,12 @@ public class EntityManager
     public DeployableEntity SpawnDeployable(uint typeId, Vector3 position, Quaternion orientation, CharacterEntity owner = null, bool useOwnerFaction = false, byte overrideFactionId = 0)
     {
         var deployableInfo = SDBInterface.GetDeployable(typeId);
+        if (deployableInfo == null)
+        {
+            _logger.Error("SpawnDeployable: no dbcharacter::Deployable row for typeId {typeId}, not spawning", typeId);
+            return null;
+        }
+
         var deployableEntity = new DeployableEntity(_shard, _shard.GetNextGuid(), typeId, 0, owner);
         var aimDirection = new Vector3(deployableInfo.AimDirection.x, deployableInfo.AimDirection.y, deployableInfo.AimDirection.z);
         deployableEntity.SetPosition(position);
@@ -312,7 +331,14 @@ public class EntityManager
     {
         if (posture == 0)
         {
-            posture = SDBInterface.GetTurret(typeId).Posture;
+            var turretInfo = SDBInterface.GetTurret(typeId);
+            if (turretInfo == null)
+            {
+                _logger.Error("SpawnTurret: no dbcharacter::Turret row for typeId {typeId}, not spawning", typeId);
+                return null;
+            }
+
+            posture = turretInfo.Posture;
         }
 
         var turretEntity = new TurretEntity(_shard, _shard.GetNextGuid(), typeId, parent, parentChildIndex, posture, gunnerPoseId, gunnerPoseOffset);
@@ -361,7 +387,19 @@ public class EntityManager
         CharacterEntity owner,
         ResourceNodeBeaconCalldownCommandDef commandDef)
     {
+        if (commandDef == null)
+        {
+            _logger.Error("SpawnThumper: no calldown command definition, not spawning");
+            return null;
+        }
+
         var beacon = SDBInterface.GetResourceNodeBeacon(commandDef.ResourceNodeBeaconId);
+        if (beacon == null)
+        {
+            _logger.Error("SpawnThumper: no dbitems::ResourceNodeBeacon row for id {beaconId}, not spawning", commandDef.ResourceNodeBeaconId);
+            return null;
+        }
+
         var thumperEntity = new ThumperEntity(_shard, _shard.GetNextGuid(), nodeType, position, owner, commandDef);
         thumperEntity.Scale = beacon.Scale;
         Add(thumperEntity.EntityId, thumperEntity);
@@ -389,7 +427,10 @@ public class EntityManager
             SpawnDeployable(395, new Vector3(170.84642f, 243.20822f, 491.71597f), new Quaternion(0f, 0f, 0.92874485f, 0.37071964f));
 
             // Thumper
-            _shard.EncounterMan.CreateThumper(20, new Vector3(158.3f, 249.3f, 491.93f), aero, SDBInterface.GetResourceNodeBeaconCalldownCommandDef(766269));
+            if (aero != null)
+            {
+                _shard.EncounterMan.CreateThumper(20, new Vector3(158.3f, 249.3f, 491.93f), aero, SDBInterface.GetResourceNodeBeaconCalldownCommandDef(766269));
+            }
 
             // Datapad
             SpawnCarryable(26, new Vector3(160.3f, 250.3f, 491.93f));
@@ -435,15 +476,17 @@ public class EntityManager
             // CharacterEntity.LoadMonster) is the spawn-context level the real game carried
             // for zones the database did not tune.
             var character = SpawnCharacter(spawn.Type, spawn.Position, orientation: orientation, level: spawn.Level);
-
-            if (spawn.MaxHealth > 0)
+            if (character != null)
             {
-                character.SetMaxHealth(spawn.MaxHealth, resetCurrent: true);
-            }
+                if (spawn.MaxHealth > 0)
+                {
+                    character.SetMaxHealth(spawn.MaxHealth, resetCurrent: true);
+                }
 
-            if (spawn.MaxShields > 0)
-            {
-                character.SetMaxShields(spawn.MaxShields, resetCurrent: true);
+                if (spawn.MaxShields > 0)
+                {
+                    character.SetMaxShields(spawn.MaxShields, resetCurrent: true);
+                }
             }
         }
 

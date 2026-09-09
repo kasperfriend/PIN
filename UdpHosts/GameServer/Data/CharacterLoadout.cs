@@ -437,6 +437,14 @@ public class CharacterLoadout
         foreach ((ushort attributeCategoryId, (float value, float perLevel)) in itemModuleScalars)
         {
             var attributeCategory = SDBInterface.GetAttributeCategory(attributeCategoryId);
+            if (attributeCategory == null)
+            {
+                // Missing dbitems::AttributeCategory row — skip the contribution rather than
+                // throwing out of the loadout build.
+                Log.Warning("Item {itemTypeId} references unknown attribute category {attributeCategoryId}; skipping its module scalar", itemTypeId, attributeCategoryId);
+                continue;
+            }
+
             if (!totalCharacterScalars.ContainsKey(attributeCategoryId))
             {
                 totalCharacterScalars.Add(attributeCategoryId, 0.0f);
@@ -456,6 +464,12 @@ public class CharacterLoadout
         foreach ((ushort attributeCategoryId, (float value, float perLevel)) in itemCharacterScalars)
         {
             var attributeCategory = SDBInterface.GetAttributeCategory(attributeCategoryId);
+            if (attributeCategory == null)
+            {
+                Log.Warning("Item {itemTypeId} references unknown attribute category {attributeCategoryId}; skipping its character scalar", itemTypeId, attributeCategoryId);
+                continue;
+            }
+
             if (!totalModuleScalars.ContainsKey(attributeCategoryId))
             {
                 totalModuleScalars.Add(attributeCategoryId, 0.0f);
