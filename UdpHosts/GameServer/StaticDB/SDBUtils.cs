@@ -15,6 +15,76 @@ public class SDBUtils
 {
     private static readonly ILogger _logger = Log.ForContext<SDBInterface>();
 
+    /// <summary>
+    ///     Highest level <c>dbcharacter::MonsterScaling</c> has a row for. Levels above it
+    ///     (an open ended level band) are capped here because there is no data beyond it.
+    /// </summary>
+    public const byte MaxMonsterLevel = 80;
+
+    /// <summary>
+    ///     Level a spawned NPC is given when its zone carries no usable level band
+    ///     (<c>dbzonemetadata::ZoneRecord.level_band</c> missing or 0). That is the case for
+    ///     exactly the zones the database never tuned: PIN's test zone (12 "Nothing") and the
+    ///     mission-instance pockets whose difficulty the real game set through its server-side
+    ///     mission flow (Crash Down, the first story missions, operations, the raid) — that
+    ///     flow never shipped in <c>clientdb.sd2</c>, so no row can answer for them.
+    /// </summary>
+    /// <remarks>
+    ///     Kept equal to the default player level (a fresh battleframe starts at level 1 —
+    ///     <see cref="GameServer.Entities.Character.CharacterEntity.FrameProgressionLevel"/>;
+    ///     there is no XP economy yet) so mobs in untuned zones fight on the player's terms.
+    ///     Spawn authors who want a different level for a specific spawn (e.g. a beefy test
+    ///     dummy) set the per-entry <c>level</c> override in
+    ///     <c>StaticDB/CustomData/character_spawn.json</c> (<see cref="Records.customdata.CharacterSpawn.Level"/>),
+    ///     mirroring how the live game's own spawn flow carried the level that the zone rows
+    ///     did not.
+    /// </remarks>
+    public static byte DefaultNpcLevel => 1;
+
+    /// <summary>
+    ///     The level <c>dbcharacter::MonsterScaling</c> stats are looked up at for a monster
+    ///     spawned in <paramref name="zoneId"/>: the top of the zone's level band (its
+    ///     intended difficulty ceiling), or <see cref="DefaultNpcLevel"/> when the zone has
+    ///     no level band. Pure band resolution lives in <see cref="ResolveNpcLevel(LevelBand)"/>.
+    /// </summary>
+    public static byte ResolveNpcLevel(uint zoneId)
+    {
+        var zone = SDBInterface.GetZoneRecord(zoneId);
+        var band = zone == null || zone.LevelBand == 0 ? null : SDBInterface.GetLevelBand(zone.LevelBand);
+        var level = ResolveNpcLevel(band);
+        return level != 0 ? level : DefaultNpcLevel;
+    }
+
+    /// <summary>
+    ///     The level a <see cref="LevelBand"/> represents: its top (<c>Max</c>), so an NPC
+    ///     spawns at the band's intended difficulty ceiling rather than somewhere in the
+    ///     middle. Bands whose <c>Max</c> is the <c>255</c> sentinel are open ended (they
+    ///     only pin a floor, e.g. <c>1-255</c> scaling bands); those resolve to their
+    ///     <c>Min</c> instead. The result is capped at <see cref="MaxMonsterLevel"/> because
+    ///     <c>dbcharacter::MonsterScaling</c> has no rows beyond it. Returns 0 for a null
+    ///     band so the caller can apply its own fallback.
+    /// </summary>
+    public static byte ResolveNpcLevel(LevelBand band)
+    {
+        if (band == null || band.Max == 0)
+        {
+            return 0;
+        }
+
+        int level = band.Max == byte.MaxValue ? band.Min : band.Max;
+        if (level < 1)
+        {
+            level = 1;
+        }
+
+        if (level > MaxMonsterLevel)
+        {
+            level = MaxMonsterLevel;
+        }
+
+        return (byte)level;
+    }
+
     public static Vector3 Vector3FromFauFau(FauFau.Util.CommmonDataTypes.Vector3 input)
     {
         return new Vector3(input.x, input.y, input.z);

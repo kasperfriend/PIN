@@ -19,7 +19,8 @@ public class AiEngineTests
         Vector3 npcPosition,
         Vector3 playerPosition,
         IAiRules rules = null,
-        FakeAiMonsterStats monsterStats = null)
+        FakeAiMonsterStats monsterStats = null,
+        byte npcLevel = 0)
     {
         var shard = new FakeShard();
         if (rules != null || monsterStats != null)
@@ -34,6 +35,7 @@ public class AiEngineTests
         }
 
         var npc = CreateLivingCharacter(shard, npcPosition);
+        npc.MonsterLevel = npcLevel;
         shard.Entities[npc.EntityId] = npc;
         Assert.True(shard.AI.Register(npc));
 
@@ -139,6 +141,38 @@ public class AiEngineTests
         Assert.Equal(99_820, player.CurrentHealth);
         Assert.Single(shard.AiAttackFeedback.Attacks);
         Assert.Equal((npc.EntityId, player.EntityId, 180), shard.AiAttackFeedback.Attacks[0]);
+    }
+
+    [Fact]
+    public void AttackingNpc_UsesDatabaseDamageForItsLevelOverTheRulesFallback()
+    {
+        // The rules value (180) must lose to the monster stat source's damage for the NPC's level.
+        var rules = new StandardAiRules { AttackDamage = 180 };
+        var stats = new FakeAiMonsterStats(attackDamage: 500);
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(10f, 0f, 0f), rules, stats, npcLevel: 37);
+
+        // Registration asked the stat source for damage at the NPC's own level.
+        var request = Assert.Single(stats.AttackDamageRequests);
+        Assert.Equal(37, request.Level);
+
+        Tick(shard, FirstTick); // Idle -> Chase
+        Tick(shard, FirstTick + Step); // Chase -> Attack, first hit lands
+        Assert.Equal(100_000 - 500, player.CurrentHealth);
+        Assert.Equal((npc.EntityId, player.EntityId, 500), Assert.Single(shard.AiAttackFeedback.Attacks));
+    }
+
+    [Fact]
+    public void AttackingNpc_FallsBackToRulesDamage_WhenTheDatabaseHasNoRowForItsLevel()
+    {
+        var rules = new StandardAiRules { AttackDamage = 76 };
+        var (shard, _, player) = CreateWorld(Vector3.Zero, new Vector3(10f, 0f, 0f), rules, npcLevel: 5);
+
+        Tick(shard, FirstTick); // Idle -> Chase
+        Tick(shard, FirstTick + Step); // first hit lands
+        Assert.Equal(100_000 - 76, player.CurrentHealth);
+        var attack = Assert.Single(shard.AiAttackFeedback.Attacks);
+        Assert.Equal(player.EntityId, attack.TargetId);
+        Assert.Equal(76, attack.Damage);
     }
 
     [Fact]

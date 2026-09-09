@@ -166,7 +166,18 @@ keyed by zone (`zone_id`):
   the spawn faces along the entity's default aim direction instead.
 - `position`'s `Z` is snapped down to the ground surface when zone collision
   data is loaded, so a placeholder `Z` of `0` spawns on the terrain.
-- `max_health` / `max_shields` are optional; `0` keeps the entity default.
+- `max_health` / `max_shields` are optional; `0` keeps the entity default. The
+  entity default itself now comes from the static database: `LoadMonster` gives
+  every NPC the `dbcharacter::MonsterScaling` health of the level the zone's
+  level band resolves to — or of the authored `level` when the entry carries
+  one, or of the default player level (1) when the zone has no band (zones
+  12/1003 are the untuned ones; see `Docs/NPC_AI.md` §"Health and attack
+  damage come from the database") — so `max_health` is an override on top of a
+  real per-level value, not on top of the old flat 19,192.
+- `level` is optional; `0` resolves the level from the zone as above, `1`-`80`
+  pins this spawn's `MonsterScaling` level directly (the emulator equivalent of
+  the live game's spawn flow, which carried the level for zones the database
+  did not tune).
 - On shard start, `EntityManager.SpawnZoneEntities(zoneId)` runs once (gated on
   `_shard.Settings.LoadZoneEntities`) and spawns every entry for the current
   zone via `CustomDBInterface.GetZoneCharacterSpawns(zoneId)`.
@@ -194,15 +205,27 @@ When a player fires:
 ```
 CombatController.FireWeaponProjectile      (client fire packet)
   -> NetworkPlayer.HandleFireWeaponProjectile
-    -> WeaponSim.OnFireWeaponProjectile     (reads weapon + ammo, computes spread)
-      -> ProjectileSim.FireProjectile       (creates an ActiveProjectile)
-        -> [each tick] SegmentRayCast       (physics)
+    -> WeaponSim.OnFireWeaponProjectile     (reads weapon + ammo + item damage, computes spread)
+      -> ProjectileSim.FireProjectile       (creates an ActiveProjectile, base damage per round)
+        -> [each tick] SegmentRayCast       (physics; distance travelled accumulates)
+          -> ammo falloff applied           (WeaponDamageMath, by distance to the impact)
           -> PhysicsEngine.HandleProjectileImpact
-            -> enqueue ProjectileHitEvent   (damage is hardcoded 1337)
+            -> enqueue ProjectileHitEvent   (the resolved damage)
               -> CombatSim.OnProjectileHit  (hostility gate)
                 -> DamageSystem.ApplyDamage (reduces health / shields)
                   -> HitFeedback.TookDebugHit (DealtHit / TookHit to clients)
 ```
+
+The per-round damage is the weapon's database value, not a constant: the weapon
+item's own `Damage Per Round` attribute (954) when it has one, else the resolved
+weapon template's `damage_per_round` — see [NPC_AI.md](NPC_AI.md) §5 for the
+stat pipeline and `Docs/STATIC_DATABASE.md` for how both are decoded. Whether a
+shot loses damage over distance is decided by the fired **ammo** row, exactly as
+the database defines it: `damage_decay = 0` means flat damage for the whole
+flight; otherwise damage stays full until `damage_decay_rangefrac` of the
+weapon's range and then tapers linearly to `min_damage_frac` × per-round damage
+at max range (e.g. PvE assault rifle ammo: full until 70% of the range, down to
+33% at the range edge).
 
 When an NPC's health reaches 0, `DamageSystem` publishes `EntityDamagedEvent`,
 which `CharacterLifecycleService` turns into a death transition
@@ -213,13 +236,16 @@ linger.
 
 `AiEngine` runs the reverse path on the shard tick. A mob acquires you by
 proximity or by being shot, walks towards you and, once you are inside its attack
-range with an unobstructed line of sight, applies flat damage through the same
-`DamageSystem` and sends the same `TookHit` feedback a weapon hit produces:
+range with an unobstructed line of sight, applies its database attack damage
+(`dbcharacter::MonsterScaling.damage`, at the level the zone band — or the
+spawn's authored `level`, or the default player level for untuned zones —
+resolved it to) through the same `DamageSystem` and sends the
+same `TookHit` feedback a weapon hit produces:
 
 ```
 AiEngine.Tick
   -> AiBrain.Decide              (Idle / Chase / Attack / Return / Dead)
-    -> DamageSystem.ApplyDamage  (shields, then health)
+    -> DamageSystem.ApplyDamage  (shields, then health; the monster's DB damage)
       -> EntityDamagedEvent      (bleedout / death for the player)
     -> HitFeedback.TookDebugHit  (TookHit to scoped clients)
 ```
@@ -258,9 +284,19 @@ Player faction defaults to `1` (Accord). So:
    produced by `Tools/CollisionGenerator/`. If it's missing, the hit is dropped.
 4. **Faction / hostility.** Friendly and Self targets are ignored; hostile and
    unknown/Neutral targets are damaged.
-5. **Damage value.** `HandleProjectileImpact` hardcodes `1337` damage. Default
-   NPC health is `19192`, so a no-buff mob dies after roughly 15 hits (fewer if
-   `max_health` is set lower on the spawn).
+5. **Damage value.** Per-hit weapon damage is database driven: the weapon item's
+   `Damage Per Round` attribute (954) — falling back to the resolved weapon
+   template's `damage_per_round` — and the ammo's distance falloff, so different
+   weapons kill at different rates (see §3 above). The only remaining flat
+   `1337` is `ProjectileSim.LegacyPlaceholderDamage`, used when a weapon row has
+   neither attribute nor template damage. NPC health is database driven too:
+   every monster spawns with the `dbcharacter::MonsterScaling` health of its
+   level (the zone's level band, or 45 on zones without one — see
+   [NPC_AI.md](NPC_AI.md) §5). Example (build `prod-1962`): the Accord Assault
+   plasma cannon deals 100 per round with no falloff, so a no-buff level-45 mob
+   (27,869 HP) dies after ~279 direct hits — a mob's health is scaled for the
+   zone while the level-45 starter weapons are not endgame items yet (fewer
+   hits when the spawn's `max_health` sets a lower value).
 
 ---
 

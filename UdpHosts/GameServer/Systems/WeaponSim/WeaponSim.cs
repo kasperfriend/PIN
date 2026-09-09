@@ -9,6 +9,7 @@ using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.Enums;
 using GameServer.StaticDB;
+using GameServer.Systems.ProjectileSim;
 using Serilog;
 
 namespace GameServer.Systems.WeaponSim;
@@ -62,6 +63,12 @@ public class WeaponSim
             range = rangeAttr;
         }
 
+        // Per-round damage comes from the database: the weapon item's own "Damage Per Round"
+        // attribute (954) when it has one, falling back to the resolved weapon template's
+        // damage_per_round (the value NPC/turret weapons fight at), and only then to the
+        // legacy flat placeholder. The ammo row then applies distance falloff at impact.
+        int roundDamage = WeaponDamageMath.ResolveRoundDamage(attrsDict, weapon.DamagePerRound, ProjectileSim.LegacyPlaceholderDamage);
+
         // Weapon Sim State
         var weaponSimState = GetOrCreateState(entity, activeWeaponDetails, time);
 
@@ -113,7 +120,7 @@ public class WeaponSim
             uint lastSpreadTime = weaponSimState.LastSpreadTime;
             PRNG.PRNG.Spread(time, weapon.SlotIndex, round, aimForward, aimRight, aimUp, spreadPct, lastSpreadDirection, lastSpreadTime, out Vector3 direction);
             uint trace = PRNG.PRNG.Trace(time, round);
-            _shard.ProjectileSim.FireProjectile(entity, trace, origin, direction, ammo, range, projectileSpeed, impactRadius, maxRadius);
+            _shard.ProjectileSim.FireProjectile(entity, trace, origin, direction, ammo, range, projectileSpeed, impactRadius, maxRadius, roundDamage);
             weaponSimState.LastSpreadDirection = direction;
             weaponSimState.LastSpreadTime = time;
         }

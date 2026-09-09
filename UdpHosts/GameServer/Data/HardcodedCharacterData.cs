@@ -12,8 +12,10 @@ public static class HardcodedCharacterData
     public static string ArmyTag = "ARMY";
     public static ulong ArmyGUID = 1u;
     public static int SelectedLoadout = 184538131;
-    public static byte Level = 45;
-    public static byte EffectiveLevel = 45;
+    // The former hardcoded player level (45, mirrored into Level/EffectiveLevel) is gone:
+    // characters carry their own per-frame progression level now
+    // (CharacterEntity.FrameProgressionLevel, starting at 1) and NPCs in band-less zones
+    // resolve to SDBUtils.DefaultNpcLevel.
     public static int MaxHealth = 19192;
     public static int GeneratedLoadoutCounter = 20001;
     public static HashSet<uint> HostileFactionIds = [2, 3, 5, 6, 7, 8, 17, 22, 42, 43, 45, 46, 47, 48];

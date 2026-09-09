@@ -443,8 +443,8 @@ public class BaseController : Base
             // Since we dont yet implement progression we just force an update here.
             if (player.CharacterEntity.Character_BaseController != null)
             {
-                player.CharacterEntity.Character_BaseController.LevelProp = HardcodedCharacterData.Level;
-                player.CharacterEntity.Character_BaseController.EffectiveLevelProp = HardcodedCharacterData.EffectiveLevel;
+                player.CharacterEntity.Character_BaseController.LevelProp = player.CharacterEntity.FrameProgressionLevel;
+                player.CharacterEntity.Character_BaseController.EffectiveLevelProp = player.CharacterEntity.FrameProgressionLevel;
             }
         }
     }

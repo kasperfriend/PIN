@@ -44,5 +44,8 @@ public struct ActiveProjectile
     public float ImpactRadius;
     public float MaxRadius;
 
+    /// <summary>Metres travelled since the muzzle, along the whole path (bounces included).</summary>
+    public float DistanceTravelled;
+
     public bool IsDrunk;
 }

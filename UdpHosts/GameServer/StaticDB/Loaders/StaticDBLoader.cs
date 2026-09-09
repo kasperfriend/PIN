@@ -1444,6 +1444,13 @@ public class StaticDBLoader : ISDBLoader
                .ToDictionary(group => group.Key, group => group.First());
     }
 
+    public Dictionary<KeyValuePair<uint, uint>, LevelItemAttributes> LoadLevelItemAttributes()
+    {
+        return LoadStaticDB<LevelItemAttributes>("dbitems::LevelItemAttributes")
+            .GroupBy(row => new KeyValuePair<uint, uint>(row.AttributeId, row.Level))
+            .ToDictionary(group => group.Key, group => group.First());
+    }
+
     public Dictionary<uint, Blueprints> LoadBlueprints()
     {
         return LoadStaticDB<Blueprints>("dbitems::Blueprints")

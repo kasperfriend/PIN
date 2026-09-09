@@ -67,10 +67,10 @@ public class EntityManager
         return _scopedPlayersByEntity.TryGetValue(entityId, out var players) && players.Contains(player);
     }
 
-    public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null, bool canBleedout = false, Quaternion? orientation = null)
+    public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null, bool canBleedout = false, Quaternion? orientation = null, byte level = 0)
     {
         var characterEntity = new CharacterEntity(_shard, _shard.GetNextGuid(), owner);
-        characterEntity.LoadMonster(typeId);
+        characterEntity.LoadMonster(typeId, level);
         characterEntity.CanBleedout = canBleedout;
         characterEntity.SetCharacterState(CharacterStateData.CharacterStatus.Living, _shard.CurrentTime);
 
@@ -423,7 +423,10 @@ public class EntityManager
             // facing from the entity's initial aim direction instead. An explicit identity
             // Quaternion is fine: identity stands the model upright facing world +Y.
             Quaternion? orientation = spawn.Orientation == default ? null : spawn.Orientation;
-            var character = SpawnCharacter(spawn.Type, spawn.Position, orientation: orientation);
+            // The per-entry `level` (0 = resolve from the zone's level band, see
+            // CharacterEntity.LoadMonster) is the spawn-context level the real game carried
+            // for zones the database did not tune.
+            var character = SpawnCharacter(spawn.Type, spawn.Position, orientation: orientation, level: spawn.Level);
 
             if (spawn.MaxHealth > 0)
             {
@@ -1321,7 +1324,7 @@ public class EntityManager
                                 ChassisID = character.CurrentLoadout.ChassisID,
                                 XpValue1 = 0,
                                 XpValue2 = 0,
-                                CurrentLevel = HardcodedCharacterData.Level,
+                                CurrentLevel = character.FrameProgressionLevel,
                                 Unk = 0,
                             },
                         ]

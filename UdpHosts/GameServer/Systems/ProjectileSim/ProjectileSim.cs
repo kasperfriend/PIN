@@ -7,15 +7,15 @@ using GameServer.Entities.Character;
 using GameServer.Enums;
 using GameServer.Physics;
 using GameServer.StaticDB.Records.dbitems;
+using GameServer.Systems.WeaponSim;
 
 namespace GameServer.Systems.ProjectileSim;
 
 public class ProjectileSim
 {
     /// <summary>
-    /// Fallback impact damage used by the legacy weapon-fire entry point until
-    /// weapon damage is resolved from item attributes (previously hardcoded in
-    /// <c>PhysicsEngine.HandleProjectileImpact</c>).
+    /// Fallback damage used when a weapon has no usable database value at all — the
+    /// legacy flat 1337 placeholder. Never the damage of a healthy weapon row.
     /// </summary>
     public const int LegacyPlaceholderDamage = 1337;
 
@@ -38,8 +38,10 @@ public class ProjectileSim
     }
 
     /// <summary>
-    /// Fires a server-simulated projectile that deals <paramref name="damage"/>
-    /// when it impacts a kinematic (entity) pose shape.
+    /// Fires a server-simulated projectile. <paramref name="damage"/> is the damage the
+    /// projectile deals at the muzzle; when the fired ammo row defines damage falloff
+    /// (<c>damage_decay</c> != 0) the actual impact damage is reduced by the distance the
+    /// projectile has travelled when it hits (see <c>WeaponDamageMath.ApplyDamageFalloff</c>).
     /// </summary>
     public void FireProjectile(CharacterEntity entity, uint trace, Vector3 origin, Vector3 direction, Ammo ammo, float range, float projectileSpeed, float impactRadius, float maxRadius, int damage)
     {
@@ -156,6 +158,9 @@ public class ProjectileSim
                 projectile.HitPosition = hit.HitPosition;
                 projectile.HitNormal = hit.Normal;
 
+                // Distance travelled up to the impact point (the segment past the hit does not count).
+                projectile.DistanceTravelled += Vector3.Distance(projectile.PreviousPosition, hit.HitPosition);
+
                 if (TryBounce(ref projectile, hit))
                 {
                     projectile.PreviousPosition = hit.HitPosition;
@@ -166,13 +171,26 @@ public class ProjectileSim
                 {
                     projectile.IsAlive = false;
                     projectile.HitsRemaining = 0;
-                    _logger.Debug("Projectile trace={Trace} impact entity={Entity} at {Pos}", projectile.TraceId, hit.HitEntityId, hit.HitPosition);
+                    _logger.Debug("Projectile trace={Trace} impact entity={Entity} at {Pos} after {Distance}m", projectile.TraceId, hit.HitEntityId, hit.HitPosition, projectile.DistanceTravelled);
                     var source = GetSourceEntity(projectile);
                     if (source != null)
                     {
-                        _shard.Physics.HandleProjectileImpact(source, projectile.TraceId, hit, projectile.DamageAmount);
+                        int impactDamage = WeaponDamageMath.ApplyDamageFalloff(
+                            projectile.DamageAmount,
+                            projectile.DistanceTravelled,
+                            projectile.Range,
+                            projectile.Ammo.DamageDecay,
+                            projectile.Ammo.DamageDecayRangefrac,
+                            projectile.Ammo.MinDamageFrac);
+                        _logger.Debug("Projectile trace={Trace} impact damage {Damage} (base {Base}, {Distance}m travelled)", projectile.TraceId, impactDamage, projectile.DamageAmount, projectile.DistanceTravelled);
+                        _shard.Physics.HandleProjectileImpact(source, projectile.TraceId, hit, impactDamage);
                     }
                 }
+            }
+            else
+            {
+                // Full segment travelled, nothing hit on the way.
+                projectile.DistanceTravelled += Vector3.Distance(projectile.PreviousPosition, projectile.CurrentPosition);
             }
 
             if (elapsedMs >= projectile.LifetimeMs)

@@ -227,6 +227,16 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public int TimePlayed { get; set; }
     public MaxVital MaxShields { get; private set; }
     public MaxVital MaxHealth { get; private set; }
+
+    /// <summary>
+    ///     The level (1..80, <c>dbcharacter::MonsterScaling</c> row key) this monster's combat stats were
+    ///     resolved at: the authored <c>levelOverride</c> when one was given (see
+    ///     <see cref="LoadMonster(uint, byte)"/>), otherwise the shard zone's level band, or
+    ///     <see cref="SDBUtils.DefaultNpcLevel"/> when the zone has none. 0 for player controlled
+    ///     characters and for NPCs that never went through <see cref="LoadMonster(uint, byte)"/>
+    ///     (tests, remote players).
+    /// </summary>
+    internal byte MonsterLevel { get; set; }
     public int CurrentHealth { get; private set; }
     public int CurrentShields { get; private set; }
     public GibVisuals GibVisualsInfo { get; set; }
@@ -327,6 +337,19 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
     public CharacterLoadout CurrentLoadout { get; set; }
 
+    /// <summary>
+    ///     Progression level of the battleframe the character is currently wearing
+    ///     (<c>dbitems::FrameProgressionLevel</c> XP model). A freshly equipped frame starts at
+    ///     level 1; there is no XP economy yet, so every frame sits at its starting level and
+    ///     the value is only replicated (Level/EffectiveLevel props), used by level-gated
+    ///     aptitude chains (<c>RequireLevelCommand</c>) and read as the level input of the
+    ///     max-health curve (<see cref="GameServer.Data.CharacterHealthMath"/>). This
+    ///     deliberately does not share a source with <see cref="GameServer.StaticDB.SDBUtils.DefaultNpcLevel"/>:
+    ///     NPC difficulty in band-less zones is anchored to the default player level constant
+    ///     so monster scaling stays put while frame levels are still static.
+    /// </summary>
+    public byte FrameProgressionLevel { get; set; } = 1;
+
     public Dictionary<StatModifierIdentifier, Dictionary<uint, ActiveStatModifier>> CurrentStatModifiers { get; set; }
     public Dictionary<StatModifierIdentifier, float> BaseStatModifiers { get; set; } = new()
     {
@@ -373,7 +396,16 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         return IsPlayerControlled ? StaticInfo.DisplayName : base.ToString();
     }
 
-    public void LoadMonster(uint typeId)
+    /// <summary>
+    ///     Loads a monster of <paramref name="typeId"/> into this entity and resolves its
+    ///     combat stats. The monster's level comes from the spawn context — exactly like the
+    ///     live game, where <c>dbcharacter::Monster</c> rows carry no level at all:
+    ///     <paramref name="levelOverride"/> when the spawner authored one (the per-entry
+    ///     <c>level</c> of <c>StaticDB/CustomData/character_spawn.json</c>, mirroring the
+    ///     spawn flow the real servers used for zones the database did not tune), otherwise
+    ///     the shard zone's level band, otherwise <see cref="SDBUtils.DefaultNpcLevel"/>.
+    /// </summary>
+    public void LoadMonster(uint typeId, byte levelOverride = 0)
     {
         // TODO: GetMonsterVisualOptions
         var monsterInfo = SDBInterface.GetMonster(typeId);
@@ -473,6 +505,29 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             {
                 Index = 2, Unk1 = 1, Unk2 = 0, Time = Shard.CurrentTime
             });
+        }
+
+        // DB-driven combat stats: the level this monster fights at is the authored
+        // levelOverride when the spawner gave one (see EntityManager.SpawnZoneEntities and
+        // the `level` field of character_spawn.json), otherwise the shard zone's level band
+        // (dbzonemetadata::ZoneRecord -> dbitems::LevelBand), otherwise
+        // SDBUtils.DefaultNpcLevel (the default player level, so mobs in untuned zones fight
+        // on the player's terms). The matching dbcharacter::MonsterScaling row supplies the
+        // max health; a per-spawn `max_health` override can still be applied on top
+        // afterwards.
+        MonsterLevel = levelOverride != 0
+            ? Math.Clamp(levelOverride, (byte)1, SDBUtils.MaxMonsterLevel)
+            : SDBUtils.ResolveNpcLevel(Shard.ZoneId);
+        var scaling = SDBInterface.GetMonsterScaling(MonsterLevel);
+        if (scaling != null)
+        {
+            SetMaxHealth((int)scaling.Health, resetCurrent: true);
+        }
+        else
+        {
+            Log.Warning(
+                "LoadMonster: no dbcharacter::MonsterScaling row for level {MonsterLevel} (monster {MonsterId}); keeping the default max health",
+                MonsterLevel, typeId);
         }
     }
 
@@ -695,6 +750,8 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             AttributeCategories1 = loadout.GetItemModuleScalars(), // TODO: Compare with capture
             AttributeCategories2 = loadout.GetItemCharacterScalars()
         });
+
+        RefreshMaxHealthFromLoadout(loadout);
 
         SelectedLoadout = loadout.LoadoutID;
         Character_BaseController?.SelectedLoadoutProp = SelectedLoadout;
@@ -927,6 +984,28 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         }
 
         return value;
+    }
+
+    /// <summary>
+    ///     Recomputes the character's health pool from the applied loadout: the sum of the
+    ///     Health attribute (6) over the equipped items plus the per-frame-level health
+    ///     curve (<c>dbitems::LevelItemAttributes</c> attribute 6 at
+    ///     <see cref="FrameProgressionLevel"/>), see <see cref="GameServer.Data.CharacterHealthMath"/>.
+    ///     The pool only changes while item attributes exist (player loadouts built by
+    ///     <see cref="GameServer.Data.CharacterLoadout"/>); NPC loadouts never carry item attributes, so
+    ///     their pool keeps coming from <c>dbcharacter::MonsterScaling</c> in
+    ///     <see cref="LoadMonster"/> and the construction-time default in between.
+    /// </summary>
+    private void RefreshMaxHealthFromLoadout(CharacterLoadout loadout)
+    {
+        if (!loadout.ItemAttributes.TryGetValue(CharacterHealthMath.HealthAttributeId, out float itemHealthSum)
+            || itemHealthSum <= 0f)
+        {
+            return;
+        }
+
+        float levelCurve = SDBInterface.GetLevelItemAttributeValue(CharacterHealthMath.HealthAttributeId, FrameProgressionLevel);
+        SetMaxHealth(CharacterHealthMath.ComputeMaxHealth(itemHealthSum, levelCurve), resetCurrent: false);
     }
 
     public void SetCharacterStats(CharacterStatsData value)
@@ -1947,7 +2026,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         HostilityInfo = new HostilityInfoData { Flags = 0 | HostilityInfoData.HostilityFlags.Faction, FactionId = 1 };
         CombatFlags = new CombatFlagsData { Value = 0, Time = Shard.CurrentTime };
         SetMaxShields(0, true);
-        SetMaxHealth(19192, true);
+        SetMaxHealth(HardcodedCharacterData.MaxHealth, true);
         GibVisualsInfo = new GibVisuals { Id = 0, Time = Shard.CurrentTime };
         ProcessDelay = new ProcessDelayData { Unk1 = 30721, Unk2 = 236 };
         Emote = new EmoteData { Id = 0, Time = 0 };
@@ -1957,19 +2036,14 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         CurrentEquipment = new EquipmentData { };
         CharacterStats = new CharacterStatsData
         {
-            ItemAttributes =
-            [
-                new() { Id = 5, Value = 156.414169f }, new() { Id = 6, Value = 1037.8347f }, new() { Id = 7, Value = 177.44128f }, new() { Id = 12, Value = 16.250000f }, new() { Id = 35, Value = 300 },
-                new() { Id = 36, Value = 250 }, new() { Id = 37, Value = 2.092090f }, new() { Id = 142, Value = 12.55f }, new() { Id = 143, Value = 1136 }, new() { Id = 144, Value = 18.433180f },
-                new() { Id = 173, Value = 10 }, new() { Id = 186, Value = 11.40f }, new() { Id = 959, Value = 1 }, new() { Id = 1050, Value = 34.5f }, new() { Id = 1051, Value = 13.824884f },
-                new() { Id = 1052, Value = 5.5f }, new() { Id = 1121, Value = 150 }, new() { Id = 1146, Value = 10.0f }, new() { Id = 1367, Value = 85 }, new() { Id = 1368, Value = 100 },
-                new() { Id = 1370, Value = 65 }, new() { Id = 1371, Value = 120 }, new() { Id = 1372, Value = 140 }, new() { Id = 1377, Value = 140.531250f }, new() { Id = 1395, Value = 75 },
-                new() { Id = 1419, Value = 32.769249f }, new() { Id = 1420, Value = 16901.744141f }, new() { Id = 1439, Value = 15279.667969f }, new() { Id = 1451, Value = 681 },
-                new() { Id = 1583, Value = 1 }, new() { Id = 1620, Value = 5049.767090f }, new() { Id = 1622, Value = 8 }, new() { Id = 1733, Value = 1.800000f }, new() { Id = 1736, Value = 60 },
-                new() { Id = 1737, Value = 5486.919434f }, new() { Id = 1746, Value = 9.320923f }, new() { Id = 1785, Value = 1.084000f }, new() { Id = 1835, Value = 5932.512207f },
-                new() { Id = 1904, Value = 4 }, new() { Id = 1905, Value = 2 }, new() { Id = 1987, Value = 8 }, new() { Id = 2034, Value = 22 }, new() { Id = 2037, Value = 9887.518555f },
-                new() { Id = 2039, Value = 9 }, new() { Id = 2042, Value = 12.252850f }
-            ],
+            // Item attributes are empty until the character's loadout is applied:
+            // ApplyLoadout replaces this whole structure with the database-computed values
+            // (CharacterLoadout.CalculateItemAttributes sums the dbitems::AttributeRange
+            // rows of the chassis and the slotted gear/ability items; the weapon items feed
+            // the separate WeaponA/WeaponB arrays). The old pre-seeded ~40-entry captured
+            // snapshot matched no loadout this server issues and only ever lived between
+            // construction and ApplyLoadout.
+            ItemAttributes = [],
             Unk1 = 0,
             WeaponA = [],
             Unk2 = 0,
@@ -2085,8 +2159,8 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             ReputationEventModifierProp = new StatModifierData { ModifierId = 0, StatValue = 0.0f },
             WalletProp = new WalletData { Beans = 999, Epoch = 1462889864 },
             LoyaltyProp = new LoyaltyData { Current = 0, Lifetime = 0, Tier = 0 },
-            LevelProp = HardcodedCharacterData.Level,
-            EffectiveLevelProp = HardcodedCharacterData.EffectiveLevel,
+            LevelProp = FrameProgressionLevel,
+            EffectiveLevelProp = FrameProgressionLevel,
             LevelResetCountProp = 0,
             OldestDeployablesProp = new OldestDeployablesField { Data = [] },
             PerkRespecsProp = 0,

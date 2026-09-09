@@ -93,7 +93,9 @@ CustomData/character_spawn.json | \npc 290 | admin "npc 290"
             SetStaticInfo   { NameLocalizationId, Race, Gender, TargetFlags.IsNPC, ... }
             SetHostilityInfo{ FactionId }            (stance vs. players)
             ApplyLoadout    (replicates visuals + battleframe energy params)
+            resolve NPC level + MaxHealth            (zone level band -> MonsterScaling.health)
        -> physics kinetic body, CharacterLifecycle.OnCharacterCreated
+            AiEngine.Register                       (attack damage from MonsterScaling.damage)
 ```
 
 - The name shown client-side resolves through `NameLocalizationId`; the server
@@ -101,14 +103,21 @@ CustomData/character_spawn.json | \npc 290 | admin "npc 290"
 - The chassis lookup (`SDBInterface.GetBattleframe`) is also what feeds the
   replicated **jetpack** `EnergyParams` (max / recharge / delay) — the only
   energy pool in the game; abilities do not consume it.
+- **Health is database driven.** `Monster` rows carry no HP of their own: the
+  server resolves the level of the zone the NPC spawns in (the zone's level band
+  from `dbzonemetadata::ZoneRecord` / `dbitems::LevelBand`, 45 when the zone has
+  none) and takes the `health` of the matching `dbcharacter::MonsterScaling`
+  row. The AI engine reads that row's `damage` for the NPC's attacks the same
+  way — see §4.5 and [NPC_AI.md](NPC_AI.md) §5.
 - On death: `DamageSystem` -> `CharacterLifecycleService` (`CharacterDiedEvent`)
   -> `NpcDeathService` (gib visuals, 10 s corpse linger by default).
 - Display names are now resolvable server-side:
   `SDBInterface.GetLocalizedString(monster.LocalizedNameId)` reads
   `dblocalization::LocalizedText`, which is what the `sdb` / `sdbinfo` /
   `spawn <kind> <name>` commands use.
-- NPC behavior strings (`behavior*`) are **not simulated yet** — spawned mobs
-  stand idle until shot; there is no chase/attack AI server-side.
+- NPC behavior strings (`behavior*`) are **not simulated yet**: every monster
+  type runs the same generic state machine (see [NPC_AI.md](NPC_AI.md)) instead
+  of its database behavior tree.
 
 ## 4. What the database actually contains (catalog)
 
@@ -2140,8 +2149,10 @@ The 1337 rows without a `localized_name_id` are mostly duplicate spawn variants,
 ### 4.5 Monster scaling table
 
 `dbcharacter::MonsterScaling` (80 rows) maps a monster level to its base
-health/damage; monsters reference a row through `scaling_table_id`
-(`dbcharacter::MonsterAttributeRange` adds per-attribute curves on top):
+health/damage. This is the table PIN now serves NPC max health and per-hit
+attack damage from (`dbcharacter::MonsterAttributeRange` adds per-attribute
+curves on top, but PIN does not read it yet — every monster of a given level
+uses the raw scaling row):
 
 | level | health | damage |
 |-------|--------|--------|
