@@ -51,6 +51,60 @@ public class ScopedStateTests
         Assert.True(state.Removed);
     }
 
+    /// <summary>
+    ///     The sights are the weapon's secondary fire mode on the wire: the live servers answer
+    ///     <c>UseScope InScope=1</c> with <c>FireMode_0 = { Mode = 1, Time = &lt;the client's event time&gt; }</c>
+    ///     and clear it again on scope out (2014-09-19 gameplay capture, GSS protocol version 883 — in that
+    ///     build the field sits behind the fifteen status-effect slot change times; it is the same field the
+    ///     2015/2016 captures show <c>SelectFireMode</c> writing). That is what the client predicts when it
+    ///     raises the sights, so a scope that is only replicated through a field the client does not predict
+    ///     leaves its own fire mode contradicted by the server and it drops the sights again a moment later.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(-1)]
+    public void UseScope_WritesTheScopedFireModeWithTheClientEventTime(int inScope)
+    {
+        var (_, character, player, controller) = CreateRuntime();
+        controller.UseScope(player, player, character.EntityId, Packet(60_001, unchecked((byte)inScope)));
+
+        Assert.Equal((byte)1, character.FireMode_0.Mode);
+        Assert.Equal(60_001u, character.FireMode_0.Time);
+        Assert.Equal(character.FireMode_0, character.Character_CombatController.FireMode_0Prop);
+        Assert.Equal(character.FireMode_0, character.Character_CombatView.FireMode_0Prop);
+
+        // The second fire mode field carries the scope as well, and raising the sights must not switch the
+        // weapon the server simulates (the underbarrel of the main weapon has different sights).
+        Assert.Equal((byte)1, character.FireMode_1.Mode);
+        Assert.Equal((byte)0, character.GetActiveFireModeIndex());
+
+        controller.UseScope(player, player, character.EntityId, Packet(60_002, 0));
+        Assert.Equal((byte)0, character.FireMode_0.Mode);
+        Assert.Equal((byte)0, character.FireMode_1.Mode);
+    }
+
+    /// <summary>
+    ///     Scoping out hands the replicated fire mode back to the mode the player selected: a character that
+    ///     switched to the underbarrel keeps firing the underbarrel once it stops aiming.
+    /// </summary>
+    [Fact]
+    public void ScopeOut_KeepsTheFireModeThePlayerSelected()
+    {
+        var (_, character, player, controller) = CreateRuntime();
+        controller.SelectFireMode(player, player, character.EntityId, Packet(60_002, 1));
+        Assert.Equal((byte)1, character.GetActiveFireModeIndex());
+
+        controller.UseScope(player, player, character.EntityId, Packet(60_003, 1));
+        Assert.Equal((byte)1, character.FireMode_0.Mode);
+        Assert.Equal(102u, character.ScopeStatusEffectId); // The underbarrel's sights, not the main weapon's.
+
+        controller.UseScope(player, player, character.EntityId, Packet(60_004, 0));
+        Assert.Equal((byte)0, character.FireMode_1.Mode); // No longer scoped.
+        Assert.Equal((byte)1, character.FireMode_0.Mode); // Still the underbarrel.
+        Assert.Equal((byte)1, character.GetActiveFireModeIndex());
+        Assert.Equal(0u, character.ScopeStatusEffectId);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
