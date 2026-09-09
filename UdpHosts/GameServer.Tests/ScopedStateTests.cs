@@ -205,8 +205,7 @@ public class ScopedStateTests
     [Fact]
     public void UseScope_SendsTheCombatLogConfirmationRowTheCaptureDocuments()
     {
-        var (_, character, player, controller) = CreateRuntime();
-        player.AttachRealChannels();
+        var (_, character, player, controller) = CreateRuntime(withOwnerChannel: true);
 
         controller.UseScope(player, player, character.EntityId, Packet(60_001, 1));
         player.FlushAttachedChannels();
@@ -219,8 +218,7 @@ public class ScopedStateTests
     [Fact]
     public void UseScopeOut_EchoesTheRemoveRowStampedWithServerTime()
     {
-        var (_, character, player, controller) = CreateRuntime();
-        player.AttachRealChannels();
+        var (_, character, player, controller) = CreateRuntime(withOwnerChannel: true);
 
         controller.UseScope(player, player, character.EntityId, Packet(60_001, 1));
         controller.UseScope(player, player, character.EntityId, Packet(60_100, 0));
@@ -233,8 +231,7 @@ public class ScopedStateTests
     [Fact]
     public void ChainAppliedEffect_IsAttributedToTheStatusFxSystem()
     {
-        var (shard, character, player, _) = CreateRuntime();
-        player.AttachRealChannels();
+        var (shard, character, player, _) = CreateRuntime(withOwnerChannel: true);
         ((FakeAptitudeFactory)shard.Abilities.Factory).Effects[9001] = ScopeEffect(9001);
 
         Assert.True(shard.Abilities.DoApplyEffect(9001, character, new Context(shard, character) { InitTime = 60_042 }));
@@ -275,7 +272,7 @@ public class ScopedStateTests
         return false;
     }
 
-    private static (FakeShard Shard, CharacterEntity Character, FakeNetworkPlayer Player, ScopeController Controller) CreateRuntime(ulong time = 60_000)
+    private static (FakeShard Shard, CharacterEntity Character, FakeNetworkPlayer Player, ScopeController Controller) CreateRuntime(ulong time = 60_000, bool withOwnerChannel = false)
     {
         var shard = new FakeShard { CurrentTimeLong = time };
         var factory = new FakeAptitudeFactory(shard);
@@ -298,6 +295,15 @@ public class ScopedStateTests
         typeof(CharacterEntity).GetField("_weaponDetailsCache", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(character, weapons);
 
         var player = new FakeNetworkPlayer(shard) { CharacterEntity = character };
+        if (withOwnerChannel)
+        {
+            // Owner-bound traffic (controller updates, combat log rows) is only sent to a linked,
+            // player-controlled character, and sending needs real channels: FlushViewChangesToPlayer
+            // indexes NetChannels directly, so the link and the channels always come together.
+            player.AttachRealChannels();
+            character.Player = player;
+        }
+
         var controller = new ScopeController();
         controller.Init(player, player, shard, shard.Logger);
         return (shard, character, player, controller);

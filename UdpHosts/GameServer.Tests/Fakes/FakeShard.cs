@@ -238,10 +238,18 @@ public sealed class FakeNetworkPlayer : INetworkPlayer
     }
 
     /// <summary>
-    ///     Drains the attached channels' outgoing queues into <see cref="SentPackets" />.
+    ///     Drains the attached channels' outgoing queues into <see cref="SentPackets" />, mirroring
+    ///     <c>NetworkClient.NetworkTick</c>: GSS channels queue their chunks on the player
+    ///     (<c>Channel.Send</c>), not on themselves, so those are drained first — one entry per chunk,
+    ///     without the production datagram batching — and then each channel flushes its own queue.
     /// </summary>
     public void FlushAttachedChannels()
     {
+        while (SequencedMessages.TryDequeue(out var chunk))
+        {
+            Send(chunk);
+        }
+
         foreach (var channel in NetChannels.Values)
         {
             channel.Process(CancellationToken.None);
