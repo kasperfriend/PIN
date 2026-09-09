@@ -105,7 +105,11 @@ public sealed class FakeShard : IShard
 
     public ulong GetNextGuid(byte type = 0)
     {
-        return ++_nextGuid;
+        // Step by 0x100, like the real GuidService: the low byte of an entity id is the type/controller
+        // nibble and is overwritten when an entity builds its AeroEntityId, so ids that differ only there
+        // would be indistinguishable on the wire (and to anything comparing replicated entity ids).
+        _nextGuid += 0x100;
+        return _nextGuid | type;
     }
 
     public void Run(CancellationToken ct)

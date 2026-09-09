@@ -1280,6 +1280,20 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         Character_BaseController?.AuthorizedTerminalProp = AuthorizedTerminal;
     }
 
+    /// <summary>
+    ///     Whether a status effect's initiator is somebody other than this character. The owner-private
+    ///     <c>LocalEffectsController</c> slots only ever carry foreign-initiated effects on live (every
+    ///     entry of the 2016 capture does), because self-applied effects are the ones the client predicts
+    ///     itself and holds its own copy of.
+    /// </summary>
+    private bool IsForeignInitiator(EntityId initiator)
+    {
+        // Compare the entity id itself, not the whole backing value: the low byte of an EntityId is the
+        // controller id, which differs between an entity's own AeroEntityId and the same entity seen from
+        // another controller's field.
+        return initiator.Backing != 0 && initiator.Id != AeroEntityId.Id;
+    }
+
     public override void SetStatusEffect(byte index, ushort time, StatusEffectData data)
     {
         Logger.Debug("Character.SetStatusEffect Index {Index}, Time {Time}, Id {Id}", index, time, data.Id);
@@ -1299,12 +1313,17 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         Character_CombatView.GetType().GetProperty($"StatusEffectsChangeTime_{index}Prop").SetValue(Character_CombatView, time, null);
         Character_CombatView.GetType().GetProperty($"StatusEffects_{index}Prop").SetValue(Character_CombatView, data, null);
 
-        // LocalEffectsController: owner-private effect slots used by the client to reconcile its
-        // locally predicted ability effects (e.g. Charge). The client predicts the effect at key
-        // press and keeps a copy here; if the server never writes the replicated effect into this
-        // controller, the predicted copy stays bound and effects like the camera aim lock are never
-        // torn down when the server removes the effect.
-        if (Character_LocalEffectsController != null)
+        // LocalEffectsController: owner-private effect slots the client uses to reconcile effects that
+        // originate somewhere *else*. Every entry in the 2016 capture carries a foreign initiator; the
+        // live server never writes an entry for an effect the character applied to itself.
+        //
+        // That distinction is load bearing for ADS. The scope effect is predicted locally by the client
+        // (it raises the sights the moment RMB goes down) and is self-initiated. Writing it here as well
+        // gives the client a *second*, server-owned instance of the same aim effect next to its own
+        // prediction; the client resolves the conflict by dropping the sights and telling us about it
+        // with a self-initiated UseScope InScope=0 roughly a second into the hold - exactly the flicker
+        // the field logs show, with no server-side removal anywhere in between.
+        if (Character_LocalEffectsController != null && IsForeignInitiator(data.Initiator))
         {
             Character_LocalEffectsController.GetType().GetProperty($"LocalStatusEffects_{index}Prop").SetValue(
                 Character_LocalEffectsController,
@@ -1341,11 +1360,17 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         Character_CombatView.GetType().GetProperty($"StatusEffectsChangeTime_{index}Prop").SetValue(Character_CombatView, time, null);
         Character_CombatView.GetType().GetProperty($"StatusEffects_{index}Prop").SetValue(Character_CombatView, null, null);
 
-        // LocalEffectsController: mirror the clear so the client's locally predicted copy is torn
-        // down too, matching SetStatusEffect.
+        // LocalEffectsController: mirror the clear so the client's copy is torn down too, matching
+        // SetStatusEffect - but only for a slot that actually holds one. Self-applied effects are not
+        // written there (see SetStatusEffect), and clearing a slot the client never received would
+        // invalidate a locally predicted effect the server has no business touching.
         if (Character_LocalEffectsController != null)
         {
-            Character_LocalEffectsController.GetType().GetProperty($"LocalStatusEffects_{index}Prop").SetValue(Character_LocalEffectsController, null, null);
+            var slot = Character_LocalEffectsController.GetType().GetProperty($"LocalStatusEffects_{index}Prop");
+            if (slot.GetValue(Character_LocalEffectsController) != null)
+            {
+                slot.SetValue(Character_LocalEffectsController, null, null);
+            }
         }
     }
 
