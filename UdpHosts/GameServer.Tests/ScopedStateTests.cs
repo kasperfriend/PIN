@@ -44,7 +44,9 @@ public class ScopedStateTests
         Assert.Same(state, Assert.Single(character.GetActiveEffects().Where(effect => effect != null)));
         Assert.Equal(60_001u, state.Time);
         Assert.Equal(60_001u, character.Character_CombatController.StatusEffects_0Prop.Value.Time);
-        Assert.Equal(60_001u, character.Character_LocalEffectsController.LocalStatusEffects_0Prop.Value.Time);
+        // Self-applied effects are not mirrored into the owner-private local effects slots (live never
+        // does, and the duplicate would fight the client's own prediction of the sights).
+        Assert.Null(character.Character_LocalEffectsController.LocalStatusEffects_0Prop);
 
         controller.UseScope(player, player, character.EntityId, Packet(62_001, 0));
         AssertUnscoped(character);
@@ -239,6 +241,31 @@ public class ScopedStateTests
 
         // Not the weapon's scope effect, so the row is attributed to the status effect system.
         Assert.True(CountPacketsContaining(player, StatusFxRowBytes(source: 0x06, logType: 0x0B, effectId: 9001, time: 60_042u)) >= 2);
+    }
+
+    /// <summary>
+    ///     The owner-private local effects slots exist for effects that come from somewhere else (that is
+    ///     all the 2016 capture ever writes there). A self-applied effect - the scope effect above all -
+    ///     is predicted by the client itself, and a server-owned duplicate makes it discard its own
+    ///     prediction and drop the sights mid-hold. Foreign-initiated effects must still be mirrored.
+    /// </summary>
+    [Fact]
+    public void ForeignInitiatedEffect_IsMirroredIntoTheLocalEffectsSlots()
+    {
+        var (shard, character, _, _) = CreateRuntime();
+        ((FakeAptitudeFactory)shard.Abilities.Factory).Effects[9002] = ScopeEffect(9002);
+        var initiator = FakeCharacterFactory.Create(shard);
+        shard.EntityMan.Add(initiator.EntityId, initiator);
+
+        Assert.True(shard.Abilities.DoApplyEffect(9002, character, new Context(shard, initiator) { InitTime = 60_042 }));
+
+        var slot = character.Character_LocalEffectsController.LocalStatusEffects_0Prop;
+        Assert.NotNull(slot);
+        Assert.Equal(9002u, slot.Value.Effect);
+        Assert.Equal(initiator.AeroEntityId.Backing, slot.Value.Entity.Backing);
+
+        shard.Abilities.DoRemoveEffect(character, 9002);
+        Assert.Null(character.Character_LocalEffectsController.LocalStatusEffects_0Prop);
     }
 
     private static byte[] StatusFxRowBytes(byte source, byte logType, uint effectId, uint time)

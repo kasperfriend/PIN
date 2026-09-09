@@ -224,11 +224,21 @@ things to try if the sights still drop in game, in this order:
    of the concatenated rows (10 bytes per statusfx row). The live server batches rows ~150 ms
    after the fact and also carries the public log on the ObserverView route; both refinements
    are unverified niceties, not sent yet.
-2. **Local-effects controller.** The 2016 capture writes `LocalEffectsController` entries
-   only for effects on *other* entities (always a foreign entity id, never the player's own).
-   PIN mirrors every status effect into the owner's local-effects controller, self-applied
-   ones included. If the client binds its locally predicted effects to those entries, the
-   extra entry for the scope effect is a second, unconfirmed instance of the aim effect.
+2. ~~**Local-effects controller.**~~ **Addressed.** The 2016 capture writes
+   `LocalEffectsController` entries only for effects whose initiator is *another* entity
+   (always a foreign entity id, never the player's own). PIN mirrored every status effect
+   into the owner's local-effects controller, self-applied ones included — so the scope
+   effect, which the client predicts itself the instant RMB goes down and is self-initiated,
+   arrived a second time as a server-owned instance of the same aim effect. The client
+   resolves that conflict by discarding its prediction and lowering the sights, then reports
+   it with a `UseScope InScope=0` the player never sent, ~1 s into the hold. That is exactly
+   the signature of the latest field log: scope in at 14:10:41, self-initiated scope out at
+   14:10:42, repeatedly, with no `[Effect] 1313 duration ... ended` and no
+   `[Scope] ... removed externally` in between — the server never took the effect away.
+   `CharacterEntity.SetStatusEffect` now writes a local-effects slot only when the status
+   effect's initiator is a different entity, and the clear only touches slots that actually
+   hold one, so a purely predicted effect is never invalidated by a slot the client never
+   received.
 
 Both are client-observable, so the in-game checks at the end remain the arbiter.
 
@@ -303,7 +313,8 @@ dotnet test UdpHosts/GameServer.Tests/GameServer.Tests.csproj -c Release
   reverse-order cleanup, slot reuse, update-created effects and optional payload inheritance.
 - `ScopedStateTests`: real `UseScope`/weapon/fire-mode handlers, a sustained scope effect,
   replicated controller fields, scope-out, death/external cleanup, stale packets and zero
-  timestamps at clock wrap.
+  timestamps at clock wrap, the combat log confirmation rows, and the local-effects slots
+  (self-applied effects stay out of them, foreign-initiated ones are mirrored and cleared).
 - Existing `PermissionAndGliderProfileCommandTests`, `CombatFlagsCommandTests`,
   `RequirementServerCommandTests`, `RegisterMovementEffectCommandTests`,
   `ProximityAbilityRetriggerTests` and `ChannelReliableTests` cover the related components.
