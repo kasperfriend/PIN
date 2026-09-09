@@ -111,15 +111,31 @@ registration, and replicating client-only effect 723 server-side pollutes the sh
 effect slots.
 
 So when `ForcePush` sends a launch it also marks the character as
-**launch-pending** (`MarkServerLaunchPending`): it seeds the movement state nibble to
-glider (`0x7000`) and opens a window that runs to push time + 550 ms (a server-side wait
-for the client's first post-impulse pose) + 1500 ms handoff margin. While the window is open:
+**launch-pending** (`MarkServerLaunchPending`): a waiting marker plus gate grace that runs
+to push time + 550 ms (a server-side wait for the client's first post-impulse pose) +
+1500 ms handoff margin. While the window is open:
 
 - `AirborneDuration` counts the character as airborne;
 - `RequireMovestate` answers gliding/falling/… from the *pending launch*, not the stale
-  ground pose;
-- the seeded glider movement state also serves anything else that reads the container
-  directly (movement-effect registrations, collision shape selection).
+  ground pose.
+
+The server deliberately does **not** seed the movement state nibble to glider (`0x7000`)
+at push time. The client has not applied the impulse yet, so pretending the character is
+gliding server-side would contradict the only client-facing evidence. The gate grace reads
+the pending marker instead; anything that reads the reported movement state directly keeps
+the client's actual pre-launch pose until the client reports the launch.
+
+The most important use of the marker is **holding the authoring pose confirm**. The client
+receives the `ForcedMovement` Type 5 impulse asynchronously; its first post-push
+`MovementInput` can still be grounded because the impulse has not taken effect yet.
+`MovementRelay` must not confirm that grounded pose back over `UnreliableGss` in the same
+tick, or the client treats the grounded pose as authoritative and drops the pending launch
+— the observed `[Glider] Launch handoff ... MoveState=4096 AirTime=32767 Airborne=False
+VelocityZ=0` failure. While a launch is pending *and* the forced window is active *and* the
+reported pose is still grounded, the authoring client's `ConfirmedPoseUpdate` is held back;
+remote clients still get `CurrentPoseUpdate` and every client still gets `JumpActioned`.
+Confirmation resumes as soon as the client reports airborne, or at the end of the forced
+window if it never left the pad.
 
 The window is provisional and self-limiting — it never grants permanent gliding. A
 `MovementInput` closes it as soon as the pose can answer the question the window exists
@@ -134,12 +150,17 @@ server gate was at fault; falling/glider with negative air time means the launch
 the chain must stay up (regression-test the gates if it does not).
 
 Type 5 is a one-frame velocity impulse on the shared epoch-ms clock: `Time1 = now+19`,
-`Time2 = now+20`, matching upstream PIN and the live client. A previous 50–550 ms hold was
-a misdiagnosis — field logs then showed `Launch handoff ... MoveState=4096 Airborne=False
-VelocityZ=0` (animation played, the player never left the pad). The `[Glider] ForcePush`
-log includes target, strength, velocity and the window; it records what the server sent and
-does not prove the client acted on it. Do not mask a failed launch by disabling fall damage
-or granting gliding permanently.
+`Time2 = now+20` and `ShortTime = CurrentShortTime`, matching upstream PIN and the live
+client (the 2016 capture's pad launches carry `Unk1=0`, `HaveUnk2=0`, a 12-byte velocity
+vector and a `ShortTime` that tracks the current 16-bit clock, not the low half of
+`Time1`). A previous 50–550 ms hold was a misdiagnosis — field logs then showed
+`Launch handoff ... MoveState=4096 Airborne=False VelocityZ=0` (animation played, the
+player never left the pad). Stamping the packet with `Time1 = now-25` (an earlier attempt
+at a rewind-friendly impulse) has the same effect: the `ShortTime` also gets the old low
+16 bits and the client drops the packet as stale, so it never leaves the pad. The
+`[Glider] ForcePush` log includes target, strength, velocity and the window; it records
+what the server sent and does not prove the client acted on it. Do not mask a failed
+launch by disabling fall damage or granting gliding permanently.
 
 ## ADS state
 
@@ -294,7 +315,10 @@ Use one continuous log covering scope-in/launch through scope-out/landing:
    changes and `[Effect]` expiry ages. New effects must have a fresh lifetime at each handoff;
    profile 18 must remain active after the 9495-to-3417 transition. Confirm actual airborne/
    gliding movement, not just a wing animation.
-4. The `[Glider] Launch handoff` line after each push tells which side failed: airborne /
+4. The `[Glider] Held authoring pose confirm` line is expected at most once while the
+   client is between receiving the impulse and reporting the launch; it shows the server is
+   not telling the client its grounded pose is authoritative during that window. The
+   `[Glider] Launch handoff` line after each push tells which side failed: airborne /
    negative air time means the launch reached the client and the chain must survive it
    (regression); a standing / positive air time handoff while still on the pad means the
    client never started the forced movement, and the retrigger cadence (was ~2 s) plus the

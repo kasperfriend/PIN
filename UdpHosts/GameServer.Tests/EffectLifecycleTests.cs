@@ -170,8 +170,10 @@ public class EffectLifecycleTests
         Assert.True(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider_hud]);
         Assert.Equal(18u, character.GliderProfileId);
 
-        // The client's first movement input after the push arrives and reports a grounded pose: the window
-        // closes and the reported pose is the truth again, so the handoff unwinds exactly like a landing.
+        // The client's movement input after the forced window reports a grounded pose: the window closes and
+        // the reported pose is the truth again (while the forced window is still active, MovementRelay holds
+        // the grounded authoring confirm instead of closing the window), so the handoff unwinds exactly like a
+        // landing.
         character.ClearServerLaunchPending();
         character.IsAirborne = false;
         character.MovementStateContainer.MovementStateValue = 0x1000;
