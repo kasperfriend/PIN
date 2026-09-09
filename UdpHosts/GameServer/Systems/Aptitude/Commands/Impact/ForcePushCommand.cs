@@ -68,7 +68,7 @@ public class ForcePushCommand : Command, ICommand
             // latency, and a 500 ms hold window failed the same way. The live proximity-fired pads
             // stamp Time1 = send time, Time2 = Time1+1, ShortTime = Time1_low16; we stamp 25 ms in
             // the past so the rewind is strictly forward even with clock jitter between server and
-            // client (transit + ~1.6 m / ~0.8 m/s of catch-up are invisible in game).
+            // client (~0.8 m / ~0.8 m/s of catch-up are invisible in game).
             uint now = context.Shard.CurrentTime;
             uint impulseAt = unchecked(now - 25);
             var player = character.Player;
