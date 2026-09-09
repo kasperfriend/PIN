@@ -51,19 +51,6 @@ public class Channel
     /// </summary>
     private DateTime _splitDeadline;
 
-    /// <summary>
-    ///     Caches the Aero marker attributes for a message type. Every send on this channel used to
-    ///     re-run <c>GetCustomAttributes</c> (an attribute array allocation plus a type scan) per call,
-    ///     and view-change sends happen for every dirty view of every scoped entity on every update
-    ///     flush. The CLR guarantees the static fields of a closed generic type are initialized once,
-    ///     so the lookup is paid once per message type and reads are free afterwards.
-    /// </summary>
-    private static class AeroAttributes<T>
-    {
-        public static readonly AeroMessageIdAttribute? MessageId = typeof(T).GetCustomAttribute<AeroMessageIdAttribute>(false);
-        public static readonly AeroAttribute? Aero = typeof(T).GetCustomAttribute<AeroAttribute>(false);
-    }
-
     private Channel(ChannelType channelType, bool isSequenced, bool isReliable,  bool isGSS, INetworkClient networkClient, ILogger logger, GssVersion gssProtocolVersion, MatrixVersion matrixProtocolVersion)
     {
         Type = channelType;
@@ -627,5 +614,24 @@ public class Channel
     {
         InSplitMode = false;
         _incomingSplitMessagePackets.Clear();
+    }
+
+    /// <summary>
+    ///     Caches the Aero marker attributes for a message type. Every send on this channel used to
+    ///     re-run <c>GetCustomAttributes</c> (an attribute array allocation plus a type scan) per call,
+    ///     and view-change sends happen for every dirty view of every scoped entity on every update
+    ///     flush. The CLR guarantees the static fields of a closed generic type are initialized once,
+    ///     so the lookup is paid once per message type and reads are free afterwards.
+    /// </summary>
+    private static class AeroAttributes<T>
+    {
+        // FirstOrDefault over GetCustomAttributes, NOT GetCustomAttribute<T>: several Aero message
+        // types carry one [AeroMessageId] per view route (PublicCombatLog has one for BaseController
+        // and one for ObserverView), and the singular lookup throws AmbiguousMatchException on those,
+        // which took the send path down with a TypeInitializationException. First-wins is exactly
+        // what the previous per-call lookup did.
+        public static readonly AeroMessageIdAttribute? MessageId = typeof(T).GetCustomAttributes(typeof(AeroMessageIdAttribute), false).FirstOrDefault() as AeroMessageIdAttribute;
+
+        public static readonly AeroAttribute? Aero = typeof(T).GetCustomAttributes(typeof(AeroAttribute), false).FirstOrDefault() as AeroAttribute;
     }
 }

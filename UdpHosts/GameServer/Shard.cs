@@ -153,64 +153,6 @@ public class Shard : IShard
         DropSilentClients();
     }
 
-    /// <summary>
-    ///     Retires clients whose receive path has been silent past the timeout. Nothing else removes a
-    ///     client that vanished without a <c>CloseConnection</c> (crash, network drop, alt-F4): it stays
-    ///     in the client map and scoped to every entity it can see, so pose broadcasts and view flushes
-    ///     keep allocating and sending to a ghost forever. <see cref="NetworkClient.NetLastActive" />
-    ///     cannot detect this because it is also refreshed by *sends*;
-    ///     <see cref="NetworkClient.NetLastReceive" /> tracks receives only. A connected client always
-    ///     talks (movement, acks, time sync), so a full minute of one-way silence means it is gone.
-    /// </summary>
-    private void DropSilentClients()
-    {
-        var now = DateTime.Now;
-        if (now - _lastClientSweep < ClientSweepInterval)
-        {
-            return;
-        }
-
-        _lastClientSweep = now;
-
-        foreach (var client in Clients.Values)
-        {
-            // Test fakes and any other INetworkPlayer that is not the real network client have no
-            // receive path to check. ConcurrentDictionary enumeration tolerates the removal below.
-            if (client is not NetworkClient networkClient || networkClient.NetChannels == null)
-            {
-                continue;
-            }
-
-            if (networkClient.NetClientStatus is ClientStatus.Disconnecting or ClientStatus.Aborted)
-            {
-                continue;
-            }
-
-            if (now - networkClient.NetLastReceive <= ClientReceiveTimeout)
-            {
-                continue;
-            }
-
-            Logger.Information(
-                "Client {SocketId} went silent for {Seconds:F0}s (last receive {LastReceive}); disconnecting it",
-                client.SocketId,
-                ClientReceiveTimeout.TotalSeconds,
-                networkClient.NetLastReceive);
-
-            try
-            {
-                networkClient.NetChannels[ChannelType.Control].SendMessage(new CloseConnection { Unk = [0, 0, 0, 0] });
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning(ex, "Could not send CloseConnection to silent client {SocketId}", client.SocketId);
-            }
-
-            networkClient.NetClientStatus = ClientStatus.Disconnecting;
-            MigrateOut(client);
-        }
-    }
-
     public bool Tick(double deltaTime, ulong currentTime, CancellationToken ct)
     {
         CurrentTimeLong = currentTime;
@@ -281,6 +223,37 @@ public class Shard : IShard
         return deltaTime >= _networkTickIntervalMs;
     }
 
+    /// <summary>
+    ///     Waits until the stopwatch reaches <paramref name="targetTotalMs" />. Coarse
+    ///     <see cref="Thread.Sleep(int)" /> while a comfortable margin remains (cheap, and safe to
+    ///     overshoot — every consumer of the loop is gate- or accumulator-driven, so a late iteration
+    ///     just fires the gates a little later), then a <see cref="SpinWait" /> for the last couple of
+    ///     milliseconds so the cadence stays tight without busy-spinning the whole interval.
+    /// </summary>
+    private static void WaitForNextTick(Stopwatch stopwatch, double targetTotalMs, CancellationToken ct)
+    {
+        var spinner = new SpinWait();
+
+        while (!ct.IsCancellationRequested)
+        {
+            var remaining = targetTotalMs - stopwatch.Elapsed.TotalMilliseconds;
+            if (remaining <= 0)
+            {
+                return;
+            }
+
+            if (remaining > 2.0)
+            {
+                Thread.Sleep((int)(remaining - 1.5));
+                spinner.Reset();
+            }
+            else
+            {
+                spinner.SpinOnce();
+            }
+        }
+    }
+
     private void RunThread(CancellationToken ct)
     {
         _startTime = (long)DateTime.Now.UnixTimestamp();
@@ -332,33 +305,60 @@ public class Shard : IShard
     }
 
     /// <summary>
-    ///     Waits until the stopwatch reaches <paramref name="targetTotalMs" />. Coarse
-    ///     <see cref="Thread.Sleep(int)" /> while a comfortable margin remains (cheap, and safe to
-    ///     overshoot — every consumer of the loop is gate- or accumulator-driven, so a late iteration
-    ///     just fires the gates a little later), then a <see cref="SpinWait" /> for the last couple of
-    ///     milliseconds so the cadence stays tight without busy-spinning the whole interval.
+    ///     Retires clients whose receive path has been silent past the timeout. Nothing else removes a
+    ///     client that vanished without a <c>CloseConnection</c> (crash, network drop, alt-F4): it stays
+    ///     in the client map and scoped to every entity it can see, so pose broadcasts and view flushes
+    ///     keep allocating and sending to a ghost forever. <see cref="NetworkClient.NetLastActive" />
+    ///     cannot detect this because it is also refreshed by *sends*;
+    ///     <see cref="NetworkClient.NetLastReceive" /> tracks receives only. A connected client always
+    ///     talks (movement, acks, time sync), so a full minute of one-way silence means it is gone.
     /// </summary>
-    private static void WaitForNextTick(Stopwatch stopwatch, double targetTotalMs, CancellationToken ct)
+    private void DropSilentClients()
     {
-        var spinner = new SpinWait();
-
-        while (!ct.IsCancellationRequested)
+        var now = DateTime.Now;
+        if (now - _lastClientSweep < ClientSweepInterval)
         {
-            var remaining = targetTotalMs - stopwatch.Elapsed.TotalMilliseconds;
-            if (remaining <= 0)
+            return;
+        }
+
+        _lastClientSweep = now;
+
+        foreach (var client in Clients.Values)
+        {
+            // Test fakes and any other INetworkPlayer that is not the real network client have no
+            // receive path to check. ConcurrentDictionary enumeration tolerates the removal below.
+            if (client is not NetworkClient networkClient || networkClient.NetChannels == null)
             {
-                return;
+                continue;
             }
 
-            if (remaining > 2.0)
+            if (networkClient.NetClientStatus is ClientStatus.Disconnecting or ClientStatus.Aborted)
             {
-                Thread.Sleep((int)(remaining - 1.5));
-                spinner.Reset();
+                continue;
             }
-            else
+
+            if (now - networkClient.NetLastReceive <= ClientReceiveTimeout)
             {
-                spinner.SpinOnce();
+                continue;
             }
+
+            Logger.Information(
+                "Client {SocketId} went silent for {Seconds:F0}s (last receive {LastReceive}); disconnecting it",
+                client.SocketId,
+                ClientReceiveTimeout.TotalSeconds,
+                networkClient.NetLastReceive);
+
+            try
+            {
+                networkClient.NetChannels[ChannelType.Control].SendMessage(new CloseConnection { Unk = [0, 0, 0, 0] });
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(ex, "Could not send CloseConnection to silent client {SocketId}", client.SocketId);
+            }
+
+            networkClient.NetClientStatus = ClientStatus.Disconnecting;
+            MigrateOut(client);
         }
     }
 }
