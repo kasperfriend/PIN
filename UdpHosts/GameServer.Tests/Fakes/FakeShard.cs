@@ -16,6 +16,7 @@ using GameServer.Systems.Ai;
 using GameServer.Systems.Aptitude;
 using GameServer.Systems.CharacterLifecycle;
 using GameServer.Systems.Chat;
+using GameServer.Systems.Cheats;
 using GameServer.Systems.Combat;
 using GameServer.Systems.CombatLog;
 using GameServer.Systems.Encounters;
@@ -45,7 +46,7 @@ public sealed class FakeShard : IShard
         FallDamage = new FallDamageSystem(this, Damage, new StandardFallDamageRules());
         AI = new AiEngine(this, EventBus, new StandardAiRules(), new AlwaysHostileAiHostility(), AiAttackFeedback, new FakeAiMonsterStats());
         CombatLog = new CombatLogSink();
-        Cheats = new GameServer.Systems.Cheats.CheatService(this);
+        Cheats = new CheatService(this);
     }
 
     public EventBus EventBus { get; } = new();
@@ -98,7 +99,7 @@ public sealed class FakeShard : IShard
 
     public AdminService Admin { get; } = null;
 
-    public GameServer.Systems.Cheats.CheatService Cheats { get; }
+    public CheatService Cheats { get; }
 
     public CombatSim Combat { get; } = null;
 
