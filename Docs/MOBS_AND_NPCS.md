@@ -95,7 +95,7 @@ CustomData/character_spawn.json | \npc 290 | admin "npc 290"
             ApplyLoadout    (replicates visuals + battleframe energy params)
             resolve NPC level + MaxHealth            (zone level band -> MonsterScaling.health)
        -> physics kinetic body, CharacterLifecycle.OnCharacterCreated
-            AiEngine.Register                       (attack damage from MonsterScaling.damage)
+            AiEngine.Register                       (swing damage = a tenth of MonsterScaling.damage)
 ```
 
 - The name shown client-side resolves through `NameLocalizationId`; the server
@@ -2149,10 +2149,15 @@ The 1337 rows without a `localized_name_id` are mostly duplicate spawn variants,
 ### 4.5 Monster scaling table
 
 `dbcharacter::MonsterScaling` (80 rows) maps a monster level to its base
-health/damage. This is the table PIN now serves NPC max health and per-hit
-attack damage from (`dbcharacter::MonsterAttributeRange` adds per-attribute
-curves on top, but PIN does not read it yet — every monster of a given level
-uses the raw scaling row):
+health/damage. This is the table PIN serves NPC max health from, and the damage
+column is what its attacks are built on — but note what that column is: it is
+`round(health / 2)` on every one of the 80 rows, i.e. the level's damage *rating*
+(what a monster of that level is worth), not the damage of one hit. `AiEngine`
+therefore spends `StandardAiRules.AttackDamageFraction` (a tenth) of it per swing
+through `AiAttackDamage.Resolve` — level 45 is 13,934 in the table and 1,393 per
+attack in game (`dbcharacter::MonsterAttributeRange` adds per-attribute curves on
+top, but PIN does not read it yet — every monster of a given level uses the raw
+scaling row):
 
 | level | health | damage |
 |-------|--------|--------|

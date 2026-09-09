@@ -14,14 +14,20 @@ namespace GameServer.Systems.Ai;
 
 /// <summary>
 ///     Server side NPC AI. Tracks every spawned mob, gives it a target, walks it around
-///     and lets it shoot back. Replaces the previous no-op <c>AIEngine</c> stub and is
-///     ticked from <c>Shard.Tick</c> alongside the other systems.
+///     and lets it swing at whatever it can actually reach. Replaces the previous no-op
+///     <c>AIEngine</c> stub and is ticked from <c>Shard.Tick</c> alongside the other systems.
 /// </summary>
 /// <remarks>
 ///     The decision making lives in <see cref="AiBrain" />, which knows nothing about
 ///     entities. This class is the boring part: target selection, line of sight, applying
 ///     movement to the entity and physics body, broadcasting the pose to clients and
 ///     routing damage through <c>IShard.Damage</c>.
+///     <para>
+///     Attacks are melee: the engine walks the mob to its target and then applies the damage
+///     directly, with no projectile and no ranged phase (see <c>Docs/NPC_AI.md</c> §3), so
+///     acquiring a target only puts the mob on the way to it - the reach and height gates that
+///     decide whether anything actually lands live in <see cref="AiBrain" />.
+///     </para>
 /// </remarks>
 public class AiEngine
 {
@@ -107,7 +113,7 @@ public class AiEngine
         }
 
         var (normalSpeed, fastSpeed) = _monsterStats.GetSpeeds(npc.StaticInfo.CharacterTypeId);
-        int dbAttackDamage = _monsterStats.GetAttackDamage(npc.StaticInfo.CharacterTypeId, npc.MonsterLevel);
+        int dbDamageRating = _monsterStats.GetAttackDamage(npc.StaticInfo.CharacterTypeId, npc.MonsterLevel);
         var brain = new NpcBrain
         {
             EntityId = npc.EntityId,
@@ -117,10 +123,10 @@ public class AiEngine
             MoveSpeed = AiSpeeds.Resolve(normalSpeed, _rules.DefaultMoveSpeed, _rules),
             ChaseSpeed = AiSpeeds.Resolve(fastSpeed, _rules.DefaultChaseSpeed, _rules),
 
-            // Attack damage comes from the monster's dbcharacter::MonsterScaling row (by the level the
-            // NPC was spawned at); the rules value is only the fallback for a monster or level the
-            // static database has no row for.
-            AttackDamage = dbAttackDamage > 0 ? dbAttackDamage : _rules.AttackDamage,
+            // One swing commits a fraction of the monster's dbcharacter::MonsterScaling damage rating
+            // for the level the NPC was spawned at; the rules value is only the fallback for a monster
+            // or level the static database has no row for. See AiAttackDamage.
+            AttackDamage = AiAttackDamage.Resolve(dbDamageRating, _rules.AttackDamage, _rules.AttackDamageFraction),
         };
 
         return _brains.TryAdd(npc.EntityId, brain);
@@ -236,6 +242,11 @@ public class AiEngine
         }
 
         float distanceToTarget = target != null ? AiVectors.HorizontalDistance(entity.Position, target.Position) : float.MaxValue;
+
+        // Chasing is planned on the flat plane (the mob walks, it does not fly), an attack is
+        // measured straight-line: a player on the rock above the mob is 3 m away, not 0.3 m.
+        float attackDistance = target != null ? AiVectors.Distance(entity.Position, target.Position) : float.MaxValue;
+        float heightDelta = target != null ? AiVectors.HeightDelta(entity.Position, target.Position) : 0f;
         bool visible = targetAlive && HasLineOfSight(entity, target);
 
         var perception = new AiPerception(
@@ -243,6 +254,8 @@ public class AiEngine
             targetAlive,
             visible,
             distanceToTarget,
+            attackDistance,
+            heightDelta,
             AiVectors.HorizontalDistance(entity.Position, npc.Home),
             currentTime);
 
@@ -282,6 +295,7 @@ public class AiEngine
 
         ulong bestId = 0;
         float bestDistance = float.MaxValue;
+        float bestHeightDelta = 0f;
 
         foreach (var client in _shard.Clients.Values)
         {
@@ -302,14 +316,29 @@ public class AiEngine
                 continue;
             }
 
+            // A player directly above or below the mob is inside a flat radius but outside the
+            // volume an NPC can actually fight in - and with no pathfinding the mob would stand
+            // under them forever. Zones the designers wanted vertical about (a mob guarding the
+            // ramp below a platform) set a bigger band; 0 turns the test off entirely.
+            float heightDelta = AiVectors.HeightDelta(origin, candidate.Position);
+            if (_rules.MaxAcquisitionHeightDelta > 0f && heightDelta > _rules.MaxAcquisitionHeightDelta)
+            {
+                continue;
+            }
+
             bestDistance = distance;
+            bestHeightDelta = heightDelta;
             bestId = candidate.EntityId;
         }
 
         if (bestId != 0)
         {
             npc.TargetId = bestId;
-            _logger.Debug("{Name} acquired target {TargetId} at {Distance:F1}m", npc.Entity, bestId, bestDistance);
+
+            // The height difference belongs in this line: "acquired a target 40 m away that is
+            // 8 m above me" is the signature of a mob about to chase something it can never
+            // reach, which is exactly what the attack volume gate in the brain refuses to hit.
+            _logger.Debug("{Name} acquired target {TargetId} at {Distance:F1}m, {HeightDelta:F1}m of height between them", npc.Entity, bestId, bestDistance, bestHeightDelta);
         }
     }
 

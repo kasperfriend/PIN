@@ -115,9 +115,13 @@ public class AiBrain
             // standing behind cover every TargetLostTimeoutMs instead of ever giving up.
             AiBrainState.Idle when engaged && perception.TargetVisible && perception.DistanceToTarget <= _rules.AggroRadius
                 => AiBrainState.Chase,
-            AiBrainState.Chase when perception.TargetVisible && perception.DistanceToTarget <= _rules.AttackRange
+            // An attack is measured over the straight-line distance, so a target standing on the
+            // ledge above the NPC is not "in range" because it is over its head, and it is measured
+            // against a melee reach: as long as PIN has no NPC projectiles, a monster that cannot
+            // walk up to you cannot hit you either.
+            AiBrainState.Chase when perception.TargetVisible && InAttackVolume(perception)
                 => AiBrainState.Attack,
-            AiBrainState.Attack when !perception.TargetVisible || perception.DistanceToTarget > _rules.AttackRangeExit
+            AiBrainState.Attack when !perception.TargetVisible || perception.AttackDistance > _rules.AttackRangeExit || TooHighOrLow(perception)
                 => AiBrainState.Chase,
             AiBrainState.Return when perception.DistanceToHome <= _rules.HomeArrivalRadius
                 => AiBrainState.Idle,
@@ -136,12 +140,28 @@ public class AiBrain
         bool faceTarget = engaged && State is AiBrainState.Chase or AiBrainState.Attack;
 
         bool attack = false;
-        if (State == AiBrainState.Attack && engaged && perception.TargetVisible && now >= NextAttackAt)
+        if (State == AiBrainState.Attack && engaged && perception.TargetVisible && InAttackVolume(perception) && now >= NextAttackAt)
         {
             NextAttackAt = now + (ulong)_rules.AttackCooldownMs;
             attack = true;
         }
 
         return new AiDecision(State, movement, faceTarget, attack);
+    }
+
+    /// <summary>
+    ///     Whether the target is inside the volume one attack covers: within reach measured
+    ///     straight-line, and not so far above or below the NPC that the swing would have to go
+    ///     through the floor it is standing on.
+    /// </summary>
+    private bool InAttackVolume(in AiPerception perception)
+    {
+        return perception.AttackDistance <= _rules.AttackRange && !TooHighOrLow(perception);
+    }
+
+    /// <summary>Whether the height difference to the target is more than an attack may span.</summary>
+    private bool TooHighOrLow(in AiPerception perception)
+    {
+        return perception.HeightDeltaToTarget > _rules.MaxAttackHeightDelta;
     }
 }

@@ -8,7 +8,9 @@ namespace GameServer.Tests;
 ///     The pure half of player weapon damage: which database value a shot's per-round
 ///     damage comes from (<c>dbitems::AttributeRange</c> attribute 954 "Damage Per Round"
 ///     of the weapon item, falling back to the resolved weapon template
-///     <c>damage_per_round</c>) and how the fired ammo row's falloff
+///     <c>damage_per_round</c>), how that value grows with the wielder's progression level
+///     (the curve the database itself uses for the per-item-level variants of a weapon family)
+///     and how the fired ammo row's falloff
 ///     (<c>damage_decay</c> / <c>damage_decay_rangefrac</c> / <c>min_damage_frac</c>)
 ///     reduces it with the distance travelled.
 /// </summary>
@@ -63,6 +65,80 @@ public class WeaponDamageMathTests
     public void RoundDamage_IgnoresANegativeTemplateValue()
     {
         Assert.Equal(Fallback, WeaponDamageMath.ResolveRoundDamage(null, templateDamagePerRound: -10, Fallback));
+    }
+
+    // --- Growing with the wielder's level ---------------------------------
+
+    [Theory]
+    [InlineData(0, 1f)]     // an entity with no progression level at all (NPCs) fights at its rows' values
+    [InlineData(1, 1f)]     // a fresh frame: exactly the value the item row carries
+    [InlineData(2, 1.1f)]
+    [InlineData(3, 1.205f)]
+    [InlineData(4, 1.315f)]
+    [InlineData(10, 2.103f)]
+    [InlineData(20, 4.054f)]
+    [InlineData(45, 16.114f)]
+    public void LevelScale_MatchesTheDatabaseItemLevelChain(int level, float expected)
+    {
+        // The live game ships one item per level of a weapon family (autogen group 10020 for the
+        // Accord Assault rifle: 11, 12.1, 13.255, 14.468 ...). The growth is not a flat 10% compound:
+        // the per-level *step* grows by 5% each level, whose sum is 2 x 1.05^(level-1) - 1.
+        Assert.Equal(expected, WeaponDamageMath.DamageLevelScale(level), 3);
+    }
+
+    [Fact]
+    public void LevelScale_ReproducesTheAuthoredValuesOfEveryLevelOfAWeaponFamily()
+    {
+        // The plasma cannon family (group 10003) is authored as 100 at item level 1, 210.27 at 10,
+        // 405.39 at 20; the R36's family reads 39 at 1. Same curve for all of them.
+        Assert.Equal(100, WeaponDamageMath.RoundDamage(100f * WeaponDamageMath.DamageLevelScale(1)));
+        Assert.Equal(210, WeaponDamageMath.RoundDamage(100f * WeaponDamageMath.DamageLevelScale(10)));
+        Assert.Equal(405, WeaponDamageMath.RoundDamage(100f * WeaponDamageMath.DamageLevelScale(20)));
+        Assert.Equal(39, WeaponDamageMath.RoundDamage(39f * WeaponDamageMath.DamageLevelScale(1)));
+    }
+
+    [Fact]
+    public void LevelScale_KeepsGrowingToTheLastFrameLevel()
+    {
+        // dbitems::FrameProgressionLevel ends at 50; the same curve is what the item chains use
+        // beyond it (they run to item level 65 for high quality gear), so nothing flattens here.
+        Assert.Equal(20.843f, WeaponDamageMath.DamageLevelScale(50), 3);
+        Assert.True(WeaponDamageMath.DamageLevelScale(51) > WeaponDamageMath.DamageLevelScale(50));
+    }
+
+    [Fact]
+    public void RoundDamage_ScalesTheWeaponItemsDamageWithTheWieldersLevel()
+    {
+        // The reported bug: 60 damage per shot at level 1 and at level 45 alike.
+        var attributes = new Dictionary<ushort, float> { { 954, 60f } };
+
+        Assert.Equal(60, WeaponDamageMath.ResolveRoundDamage(attributes, templateDamagePerRound: 0, Fallback, progressionLevel: 1));
+        Assert.Equal(967, WeaponDamageMath.ResolveRoundDamage(attributes, templateDamagePerRound: 0, Fallback, progressionLevel: 45));
+    }
+
+    [Fact]
+    public void RoundDamage_ScalesTheTemplateFallbackTheSameWay()
+    {
+        // A weapon whose item row has no 954 at all still fights at its template value, and that
+        // value grows with the wielder's level too (an NPC stays at 1, so NPC shots are unchanged).
+        Assert.Equal(46, WeaponDamageMath.ResolveRoundDamage(null, templateDamagePerRound: 46, Fallback));
+        Assert.Equal(97, WeaponDamageMath.ResolveRoundDamage(null, templateDamagePerRound: 46, Fallback, progressionLevel: 10));
+        Assert.Equal(741, WeaponDamageMath.ResolveRoundDamage(null, templateDamagePerRound: 46, Fallback, progressionLevel: 45));
+    }
+
+    [Fact]
+    public void RoundDamage_LeavesTheLegacyPlaceholderUnscaled()
+    {
+        // 1337 is not a database number, so it must not silently become a level-45 number.
+        Assert.Equal(Fallback, WeaponDamageMath.ResolveRoundDamage(null, templateDamagePerRound: 0, Fallback, progressionLevel: 45));
+    }
+
+    [Fact]
+    public void RoundDamage_AtLevel1_IsTheItemRowValueAlone()
+    {
+        var attributes = new Dictionary<ushort, float> { { 954, 11f } };
+
+        Assert.Equal(11, WeaponDamageMath.ResolveRoundDamage(attributes, templateDamagePerRound: 0, Fallback, progressionLevel: 1));
     }
 
     // --- Ammo falloff -----------------------------------------------------

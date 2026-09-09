@@ -19,9 +19,30 @@ public class AiBrainTests
         TargetLostTimeoutMs = 3000,
     };
 
+    /// <summary>The shipped melee tuning, for the tests that are about reach.</summary>
+    private static StandardAiRules MeleeRules => new()
+    {
+        AggroRadius = 55f,
+        AttackRange = 3.5f,
+        AttackRangeExit = 5f,
+        MaxAttackHeightDelta = 2.5f,
+        StandoffRange = 2f,
+        LeashRadius = 120f,
+        HomeArrivalRadius = 2f,
+        AttackCooldownMs = 1000,
+        TargetLostTimeoutMs = 3000,
+    };
+
     /// <summary>A perception where the target is alive and clearly visible.</summary>
     private static AiPerception Seen(float distanceToTarget, float distanceToHome, ulong now)
         => new(TargetId, true, true, distanceToTarget, distanceToHome, now);
+
+    /// <summary>
+    ///     A perception that separates the flat distance from the straight-line one: what a target
+    ///     standing above (or below) the NPC looks like.
+    /// </summary>
+    private static AiPerception SeenAt(float flatDistance, float attackDistance, float heightDelta, float distanceToHome, ulong now)
+        => new(TargetId, true, true, flatDistance, attackDistance, heightDelta, distanceToHome, now);
 
     /// <summary>A perception where the target is alive but hidden behind something.</summary>
     private static AiPerception Hidden(float distanceToTarget, float distanceToHome, ulong now)
@@ -256,5 +277,84 @@ public class AiBrainTests
         Assert.Equal(AiMovementIntent.None, decision.Movement);
         Assert.False(decision.Attack);
         Assert.False(brain.WantsTarget);
+    }
+
+    // --- Melee reach (PIN has no NPC projectiles) -------------------------
+
+    [Fact]
+    public void Chase_TargetFartherThanMeleeReach_NeverAttacks()
+    {
+        // Regression: the shipped attack range used to be 45 m, so a mob opened fire across the
+        // whole aggro band even though an attack here is a direct hitscan with nothing to dodge.
+        var brain = new AiBrain(MeleeRules, 0);
+
+        brain.Decide(SeenAt(19.2f, 19.2f, 0f, 0f, 100)); // Idle -> Chase
+
+        var decision = brain.Decide(SeenAt(19.2f, 19.2f, 0f, 0f, 200));
+
+        Assert.Equal(AiBrainState.Chase, decision.State);
+        Assert.False(decision.Attack);
+        Assert.Equal(AiMovementIntent.TowardTarget, decision.Movement);
+    }
+
+    [Fact]
+    public void Chase_TargetStraightAbove_NeverAttacks()
+    {
+        // A player standing on the platform over the mob's head is within a hair of it horizontally
+        // and 8 m away in the only distance a swing is measured over.
+        var brain = new AiBrain(MeleeRules, 0);
+
+        brain.Decide(SeenAt(0.5f, 8f, 8f, 0f, 100));
+        var decision = brain.Decide(SeenAt(0.5f, 8f, 8f, 0f, 200));
+
+        Assert.Equal(AiBrainState.Chase, decision.State);
+        Assert.False(decision.Attack);
+        Assert.True(decision.FaceTarget, "the mob may still glare up at you");
+    }
+
+    [Fact]
+    public void Chase_TargetAboveALowCrate_StillAttacks()
+    {
+        // The height band is not a "feet must be level" rule: someone on a crate, or mid jump, is
+        // still in reach, and so is a mob that is standing slightly below you on a slope.
+        var brain = new AiBrain(MeleeRules, 0);
+
+        brain.Decide(SeenAt(1.2f, 1.6f, 1.1f, 0f, 100));
+        var decision = brain.Decide(SeenAt(1.2f, 1.6f, 1.1f, 0f, 200));
+
+        Assert.Equal(AiBrainState.Attack, decision.State);
+        Assert.True(decision.Attack);
+    }
+
+    [Fact]
+    public void Attack_TargetGainsHeight_FallsBackToChase()
+    {
+        var brain = new AiBrain(MeleeRules, 0);
+
+        brain.Decide(SeenAt(1.5f, 1.5f, 0f, 0f, 100));
+        var attacking = brain.Decide(SeenAt(1.5f, 1.5f, 0f, 0f, 200));
+        Assert.True(attacking.Attack);
+
+        var jumped = brain.Decide(SeenAt(1.5f, 9f, 9f, 0f, 300));
+
+        Assert.Equal(AiBrainState.Chase, jumped.State);
+        Assert.False(jumped.Attack);
+    }
+
+    [Fact]
+    public void Attack_HopsBackInAndOutOfReach_DoesNotRefireEveryTick()
+    {
+        // The cooldown is armed by the attack that landed, so a target that steps out of reach and
+        // back in a moment later must not be hit again for free.
+        var brain = new AiBrain(MeleeRules, 0);
+
+        brain.Decide(SeenAt(1.5f, 1.5f, 0f, 0f, 100));
+        Assert.True(brain.Decide(SeenAt(1.5f, 1.5f, 0f, 0f, 200)).Attack);   // first swing, next at 1200
+        Assert.Equal(AiBrainState.Chase, brain.Decide(SeenAt(6f, 6f, 0f, 0f, 300)).State);
+
+        var backInRange = brain.Decide(SeenAt(1.5f, 1.5f, 0f, 0f, 400));
+
+        Assert.Equal(AiBrainState.Attack, backInRange.State);
+        Assert.False(backInRange.Attack);
     }
 }

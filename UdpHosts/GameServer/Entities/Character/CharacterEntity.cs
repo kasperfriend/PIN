@@ -341,9 +341,13 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     ///     Progression level of the battleframe the character is currently wearing
     ///     (<c>dbitems::FrameProgressionLevel</c> XP model). A freshly equipped frame starts at
     ///     level 1; there is no XP economy yet, so every frame sits at its starting level and
-    ///     the value is only replicated (Level/EffectiveLevel props), used by level-gated
-    ///     aptitude chains (<c>RequireLevelCommand</c>) and read as the level input of the
-    ///     max-health curve (<see cref="GameServer.Data.CharacterHealthMath"/>). This
+    ///     the value is replicated (Level/EffectiveLevel props), used by level-gated
+    ///     aptitude chains (<c>RequireLevelCommand</c>), read as the level input of the
+    ///     max-health curve (<see cref="GameServer.Data.CharacterHealthMath"/>) and as the level
+    ///     that grows per-round weapon damage
+    ///     (<see cref="GameServer.Systems.WeaponSim.WeaponDamageMath.DamageLevelScale"/>), which
+    ///     is the curve the database itself uses for the per-level variants of a weapon family.
+    ///     This
     ///     deliberately does not share a source with <see cref="GameServer.StaticDB.SDBUtils.DefaultNpcLevel"/>:
     ///     NPC difficulty in band-less zones is anchored to the default player level constant
     ///     so monster scaling stays put while frame levels are still static.

@@ -13,12 +13,17 @@
 |-------------|------------------|------------------------|
 | Stat sheet (`CharacterStats.ItemAttributes`) | Sum of `dbitems::AttributeRange.base` over the chassis item, the gear (torso/head/arms/legs/reactor/OS/medical/aux) and the slotted abilities; the weapon *items* are summed separately into `WeaponA`/`WeaponB` (weapon item + its weapon-slot default-ability module) | `CharacterLoadout.CalculateItemAttributes` builds the aggregate; `ApplyLoadout` replicates it as `CharacterStats`. `dbitems::CharCreateLoadoutSlots` provides the default PvE loadout per battleframe (verified: Accord Assault = primary 86742, secondary 87741, HKM 88491, backpack 75877, …) |
 | Player max-health pool | Loadout Health sum (attribute 6, same rows as the stat sheet) + `dbitems::LevelItemAttributes` attribute 6 at the frame's progression level | `RefreshMaxHealthFromLoadout` in `ApplyLoadout`: `MaxHealth = item Health sum + LevelCurve(frame level) × 3` (see §4). NPCs never go through this — their pool comes from `dbcharacter::MonsterScaling` (§5) |
-| Weapon per-round damage | `dbitems::AttributeRange` attribute **954** of the weapon *item* — its `dbitems::AttributeDefinition` display name is literally "Damage Per Round" | `WeaponSim.OnFireWeaponProjectile`; fallback = the resolved `WeaponTemplates.damage_per_round` (template + `WeaponTemplateModifiers` + weapon-slot module deltas, the value NPC/turret weapons fight at); `ProjectileSim.LegacyPlaceholderDamage` (1337) only for rows with neither |
+| Weapon per-round damage | `dbitems::AttributeRange` attribute **954** of the weapon *item* — its `dbitems::AttributeDefinition` display name is literally "Damage Per Round" | `WeaponSim.OnFireWeaponProjectile`; fallback = the resolved `WeaponTemplates.damage_per_round` (template + `WeaponTemplateModifiers` + weapon-slot module deltas, the value NPC/turret weapons fight at); `ProjectileSim.LegacyPlaceholderDamage` (1337) only for rows with neither. Both are then scaled by the frame's progression level through `WeaponDamageMath.DamageLevelScale` (`2 × 1.05^(level-1) − 1`, level 1 = ×1), the curve that reproduces the database's own per-level damage steps for a weapon family (see §3) |
 | Weapon distance falloff | The fired `dbitems::Ammo` row: `damage_decay`, `damage_decay_rangefrac`, `min_damage_frac` | `ProjectileSim` tracks metres travelled and applies `WeaponDamageMath.ApplyDamageFalloff` at impact (decay 0 = flat; otherwise full damage until `damage_decay_rangefrac` of the weapon `range`, linear taper to `min_damage_frac` × per-round at max range) |
 | Jetpack energy | `dbitems::Battleframe.base_energy` / `energy_recharge_delay_ms` / `energy_recharge_per_sec`; attribute 35 (Jet Energy) is replicated through the stat sheet for the client's own model | `UpdateEnergyParamsFromBattleframe` on every loadout apply, falling back to the construction defaults when the frame row is 0 (in build prod-1962 every playable frame row has `base_energy`/`energy_recharge_per_sec` = 0 and `energy_recharge_delay_ms` = 250, so the served params stay Max 1000 / Delay 250 / Recharge 156) |
-| Player level | — | `CharacterEntity.FrameProgressionLevel`, starts at 1 (battleframe progression level; no XP economy yet, see §3) |
+| Player level | — | `CharacterEntity.FrameProgressionLevel`, starts at 1 (battleframe progression level; no XP economy yet, see §3). It is the health-curve index *and* the weapon-damage scale of §3 |
 
 ### Example weapon damage values (build prod-1962, all from real rows)
+
+The **Attribute 954** column is the level-1 preset item's value, which is what a
+level-1 frame fires for; every other level multiplies it by the curve in §3
+(a level-45 Accord Assault is 1,611 out of the plasma cannon and 177 out of the
+rifle).
 
 | Weapon item | Frame | Attribute 954 | Ammo | Falloff |
 |---|---|---|---|---|
@@ -31,7 +36,15 @@
 The template `damage_per_round` of the same weapons is *not* the player's damage:
 it is the generic recipe row (e.g. template 12121 for the R36 carries a 1-damage
 stub, while every real R36 item carries 954 = 39). NPCs have no item attribute
-ranges, which is why their projectiles fight at the template value.
+ranges, which is why a weapon resolved through that fallback is the value their
+template row carries. Note that the level scale reads the *shooter's* frame
+progression level, and `LoadMonster` deliberately does not set one (a monster's
+level lives in `MonsterLevel` and drives its `MonsterScaling` health and damage
+rating instead), so an NPC or deployable that ever fires through `WeaponSim`
+fires at the template value as written — level-1-equivalent. Monster difficulty is
+tuned through `dbcharacter::MonsterScaling`, and it is already a curve over the
+zone's level band (`Docs/NPC_AI.md` §5); scaling their stub template rows on top
+of that would double-count the same growth.
 
 ---
 
@@ -63,8 +76,51 @@ Characters replicate `Level`/`EffectiveLevel` and the frame-XP panel
 which is the progression level of the battleframe being worn (`dbitems::FrameProgressionLevel`
 is the per-level XP/perk/emissive table, 50 rows, levels 1–50). A freshly equipped frame
 starts at level 1; PIN has no XP economy yet, so every frame sits at 1 and the
-value is only consumed by level-gated aptitude chains (`RequireLevelCommand`,
-`LoadRegisterFromLevelCommand`) and the client UI.
+value is consumed by level-gated aptitude chains (`RequireLevelCommand`,
+`LoadRegisterFromLevelCommand`), the client UI, and the weapon damage scale below.
+
+### The same level scales weapon damage
+
+The database stores attribute 954 (Damage Per Round) **once per item**, and
+`dbitems::AttributeRange.per_level` is 0 for every one of the 954 rows in this
+build — the item rows are not self-scaling. What does grow per level is the
+*item id*: a weapon family (`dbitems::RootItem.autogen_group_id`) has one preset
+item per level, each with its own 954 row — the Accord Assault's AR family 10020
+runs 11, 12.1, 13.255, 14.4677, 15.7411 … 44.5929 for levels 1-20, its Plasma
+Cannon family 10003 runs 100, 110, 120.5, 131.525 … 405.39 over the same span.
+Every one of those is exactly `level1 × (2 × 1.05^(level-1) − 1)`, i.e. each
+level multiplies the *step* by 1.05, and that closed form is what the server now
+applies to whatever weapon the firing entity resolved, at the shooter's own level
+— which is how a level-1 preset item carried by a level-45 frame (the case in
+this build: progression does not swap items out) still hits like a level-45
+weapon:
+
+> **damage per round = `RoundDamage( source × (2 × 1.05^(level-1) − 1) )`** — half
+> away from zero, and level 1 multiplies by exactly 1, so a fresh frame's shots
+> keep the number they have today.
+
+| Frame level | scale | Plasma Cannon (100 base) | Assault Rifle (11 base) |
+|---|---|---|---|
+| 1  | ×1.000   | 100  | 11  |
+| 4  | ×1.315   | 132  | 14  |
+| 10 | ×2.103   | 210  | 23  |
+| 20 | ×4.054   | 405  | 45  |
+| 45 | ×16.114  | 1,611 | 177 |
+| 50 | ×20.843  | 2,084 | 229 |
+
+Verified against the real rows: that closed form reproduces **every** per-level
+preset row of both families, levels 1-20 of `dbitems::AttributeRange` attribute
+954, to float precision (11 / 12.1 / 13.255 / 14.4677 … 44.5929; 100 / 110 /
+120.5 / 131.525 … 405.3901) — so the level-15 plasma cannon the game would hand
+a level-15 player and a level-1 plasma cannon scaled to 15 agree, and the levels
+past the last preset row (the database has none beyond 20 for these two families)
+continue the same curve. `WeaponDamageMathTests` asserts that reproduction.
+
+Note what the curve does *not* do: it does not touch the 1337 placeholder (a
+stand-in, not a DB value, and already absurd at any level); it does not touch
+ability/Aptitude damage, which the database delivers through register chains the
+server replays verbatim; and it does not touch NPC damage, which comes from
+`dbcharacter::MonsterScaling` at the *zone's* level instead.
 
 For reference: `dbitems::Battleframe.min_progression_level`/`max_progression_level`
 are not a usable source for this — of the 1,676 rows in build prod-1962, 1,648
@@ -78,9 +134,9 @@ NPC difficulty deliberately does **not** read `FrameProgressionLevel`: NPCs are
 leveled by their zone's band (designed content) or by `SDBUtils.DefaultNpcLevel`,
 which stays a separate constant equal to the default player level so mobs in
 untuned zones (12 "Nothing", Crash Down 1003, the mission pockets the live game
-tuned server-side) fight on a fresh player's terms — level 1, 100 HP / 50
-damage per hit, with an authored `character_spawn.json` `level` available per
-spawn (see `Docs/NPC_AI.md` §5).
+tuned server-side) fight on a fresh player's terms — level 1, 100 HP, 5 damage a
+swing (a tenth of that level's 50-point damage rating), with an authored
+`character_spawn.json` `level` available per spawn (see `Docs/NPC_AI.md` §5).
 
 ---
 
@@ -115,7 +171,10 @@ Consequences of the rule, as chosen:
 - A fresh frame at progression level 1 has **no curve** (it is 0 below level 4),
   so its pool is exactly its item sum (≈ 360 for the default loadout). That is
   the authentic level-1 state, and NPCs in zones without a level band now fight
-  on those same terms (level 1, 100 HP / 50 damage per hit). Banded zones above
+  on those same terms (level 1, 100 HP, 5 damage a swing). Those mobs are also
+  level-1 *damage* wise, which is the other half of why a fresh frame survives its
+  starting zone: the mob curve is a rating of what a fight at that level should be
+  worth, spent a tenth at a time (see `Docs/NPC_AI.md` §5). Banded zones above
   level ~12 are still meant for geared players — in the real game you reached
   them after the leveling flow, which does not exist here yet.
 - `HardcodedCharacterData.MaxHealth` (19192) is no longer the player pool: it
@@ -137,6 +196,6 @@ Consequences of the rule, as chosen:
 |---|---|
 | Is the replicated player stat sheet DB-correct? | Yes — it is the sum of the equipped items' `AttributeRange` rows (default loadouts come from `CharCreateLoadoutSlots`); the stale captured constructor seed was removed |
 | Is player max health DB-derived? | Yes — item Health sum + `LevelItemAttributes` curve at the frame's progression level, × the one documented pool-scale constant (§4); NPCs keep their `MonsterScaling` pool |
-| Do player weapons deal DB damage? | Yes — item attribute 954 "Damage Per Round", with template fallback and ammo-defined distance falloff |
-| Is player level DB-driven? | Partially — frame progression level (1 until XP exists) is now the replicated level and the health-curve input; NPC difficulty keeps its own anchor |
+| Do player weapons deal DB damage? | Yes — item attribute 954 "Damage Per Round" at the shooter's progression level (the curve the per-level preset rows encode), with template fallback and ammo-defined distance falloff |
+| Is player level DB-driven? | Partially — frame progression level (1 until XP exists) is now the replicated level, the health-curve index and the weapon-damage scale; NPC difficulty keeps its own anchor |
 | What would still need a capture? | The ×3 pool-scale constant (§4) and the module-scalar replication (`ApplyLoadout` TODO) |

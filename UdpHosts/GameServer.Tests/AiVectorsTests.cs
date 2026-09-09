@@ -23,6 +23,34 @@ public class AiVectorsTests
         Assert.Equal(0f, AiVectors.HorizontalDistance(point, point), 5);
     }
 
+    [Fact]
+    public void Distance_CountsTheHeightDifference()
+    {
+        // The 3-4-5 on the ground plus 12 m of height: the distance an attack is measured over,
+        // which is what makes "the mob hit me from the floor below" impossible.
+        Assert.Equal(13f, AiVectors.Distance(new Vector3(0f, 0f, 0f), new Vector3(3f, 4f, 12f)), 3);
+        Assert.Equal(13f, AiVectors.Distance(new Vector3(3f, 4f, 12f), new Vector3(0f, 0f, 0f)), 3);
+    }
+
+    [Fact]
+    public void Distance_OnFlatGround_IsTheHorizontalDistance()
+    {
+        var a = new Vector3(-2f, 5f, 400f);
+        var b = new Vector3(4f, 5f, 400f);
+
+        Assert.Equal(AiVectors.HorizontalDistance(a, b), AiVectors.Distance(a, b), 4);
+    }
+
+    [Theory]
+    [InlineData(0f, 4f, 4f)]      // target above
+    [InlineData(4f, 0f, 4f)]      // target below: same answer, the band is not directional
+    [InlineData(-3f, -1f, 2f)]
+    [InlineData(402.5f, 400f, 2.5f)] // the log's "player at Z 402, mob at Z 400" case
+    public void HeightDelta_IsTheAbsoluteVerticalGap(float fromZ, float toZ, float expected)
+    {
+        Assert.Equal(expected, AiVectors.HeightDelta(new Vector3(1f, 2f, fromZ), new Vector3(9f, 8f, toZ)), 3);
+    }
+
     [Theory]
     [InlineData(1f, 0f)]
     [InlineData(-1f, 0f)]

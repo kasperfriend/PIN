@@ -219,7 +219,13 @@ CombatController.FireWeaponProjectile      (client fire packet)
 The per-round damage is the weapon's database value, not a constant: the weapon
 item's own `Damage Per Round` attribute (954) when it has one, else the resolved
 weapon template's `damage_per_round` — see [NPC_AI.md](NPC_AI.md) §5 for the
-stat pipeline and `Docs/STATIC_DATABASE.md` for how both are decoded. Whether a
+stat pipeline and `Docs/STATIC_DATABASE.md` for how both are decoded. That value
+is the weapon's damage *at its item level*, and the shooter's battleframe
+progression level grows it the same way the database grows its own per-item-level
+weapon variants: `x (2 * 1.05^(level-1) - 1)` (`WeaponDamageMath.DamageLevelScale`,
+1.0 at level 1, 2.10 at 10, 16.11 at 45) — see
+[PLAYER_STATS_AND_HEALTH.md](PLAYER_STATS_AND_HEALTH.md) §3 for why the emulator
+scales the value instead of swapping in the level-matched item row. Whether a
 shot loses damage over distance is decided by the fired **ammo** row, exactly as
 the database defines it: `damage_decay = 0` means flat damage for the whole
 flight; otherwise damage stays full until `damage_decay_rangefrac` of the
@@ -232,23 +238,45 @@ which `CharacterLifecycleService` turns into a death transition
 (`CharacterDiedEvent`). `NpcDeathService` then applies gib visuals and a corpse
 linger.
 
-### The other direction: NPCs shooting you
+### The other direction: NPCs hitting you
 
 `AiEngine` runs the reverse path on the shard tick. A mob acquires you by
-proximity or by being shot, walks towards you and, once you are inside its attack
-range with an unobstructed line of sight, applies its database attack damage
-(`dbcharacter::MonsterScaling.damage`, at the level the zone band — or the
-spawn's authored `level`, or the default player level for untuned zones —
-resolved it to) through the same `DamageSystem` and sends the
-same `TookHit` feedback a weapon hit produces:
+proximity or by being shot, walks towards you and, once you are inside its
+**melee** reach with an unobstructed line of sight, applies its attack damage
+through the same `DamageSystem` and sends the same `TookHit` feedback a weapon
+hit produces:
 
 ```
 AiEngine.Tick
   -> AiBrain.Decide              (Idle / Chase / Attack / Return / Dead)
-    -> DamageSystem.ApplyDamage  (shields, then health; the monster's DB damage)
+       attack gate: straight-line distance <= AttackRange (3.5 m)
+                    and height difference <= MaxAttackHeightDelta (2.5 m)
+    -> DamageSystem.ApplyDamage  (shields, then health; AttackDamageFraction of the
+                                   monster's dbcharacter::MonsterScaling damage rating)
       -> EntityDamagedEvent      (bleedout / death for the player)
     -> HitFeedback.TookDebugHit  (TookHit to scoped clients)
 ```
+
+Two things about that gate matter in play:
+
+* **Melee only, on purpose.** An attack is a direct damage call — there is no NPC
+  projectile yet — so a monster has to reach you to hurt you. The old 45 m attack
+  range meant a mob opened up the moment it noticed you, from the far side of the
+  aggro band, with nothing to dodge.
+* **Reach is measured in 3D.** Chasing is planned on the flat plane (a mob walks,
+  it does not fly), but an attack is not: standing on the crate or the balcony
+  above a mob keeps you out of a swing that would otherwise travel straight up
+  through the floor you are standing on. The acquisition band
+  (`MaxAcquisitionHeightDelta`, 12 m) is deliberately wider than the attack band,
+  so a mob still notices you up there and comes looking for a way up; there is no
+  pathfinding, so until you come down it can only stand under you.
+
+Damage per hit is a **fraction** (a tenth by default) of the monster's
+`dbcharacter::MonsterScaling.damage` rating for its level, where the level comes
+from the zone band — or the spawn's authored `level`, or the default player level
+for untuned zones. The rating column is a balance figure (it is exactly half of
+that level's health rating on all 80 rows), not a per-swing amount; see
+[NPC_AI.md](NPC_AI.md) §5.
 
 Attacks are hitscan, so there is nothing to dodge. Full details, the tunables and
 the `\ai` commands are in [NPC_AI.md](NPC_AI.md).
@@ -286,17 +314,21 @@ Player faction defaults to `1` (Accord). So:
    unknown/Neutral targets are damaged.
 5. **Damage value.** Per-hit weapon damage is database driven: the weapon item's
    `Damage Per Round` attribute (954) — falling back to the resolved weapon
-   template's `damage_per_round` — and the ammo's distance falloff, so different
-   weapons kill at different rates (see §3 above). The only remaining flat
-   `1337` is `ProjectileSim.LegacyPlaceholderDamage`, used when a weapon row has
-   neither attribute nor template damage. NPC health is database driven too:
-   every monster spawns with the `dbcharacter::MonsterScaling` health of its
-   level (the zone's level band, or 45 on zones without one — see
-   [NPC_AI.md](NPC_AI.md) §5). Example (build `prod-1962`): the Accord Assault
-   plasma cannon deals 100 per round with no falloff, so a no-buff level-45 mob
-   (27,869 HP) dies after ~279 direct hits — a mob's health is scaled for the
-   zone while the level-45 starter weapons are not endgame items yet (fewer
-   hits when the spawn's `max_health` sets a lower value).
+   template's `damage_per_round` — scaled by the shooter's battleframe progression
+   level with the database's own per-item-level curve, and then reduced by the
+   ammo's distance falloff, so different weapons kill at different rates (see §3
+   above). The only remaining flat `1337` is
+   `ProjectileSim.LegacyPlaceholderDamage`, used when a weapon row has neither
+   attribute nor template damage (and it is deliberately not level scaled).
+   NPC health is database driven too: every monster spawns with the
+   `dbcharacter::MonsterScaling` health of its level (the zone's level band, or
+   the default player level on zones without one — see
+   [NPC_AI.md](NPC_AI.md) §5). Examples (build `prod-1962`): the Accord Assault
+   plasma cannon deals 100 per round at item level 1 with no falloff, so a
+   no-buff level-45 mob (27,869 HP) dies after ~279 direct hits from a level-1
+   frame and after ~18 from a level-45 one (100 x 16.11 = 1,611 per round); the
+   starter rifle's 11 becomes 177 (157 hits). Fewer still when the spawn's
+   `max_health` sets a lower value.
 
 ---
 

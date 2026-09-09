@@ -4,9 +4,10 @@ namespace GameServer.Systems.Ai;
 
 /// <summary>
 ///     Reads the combat stats of a monster out of the tables in <c>clientdb.sd2</c>: the movement
-///     speeds from its <c>dbcharacter::Monster</c> row, and the per-hit attack damage from the
+///     speeds from its <c>dbcharacter::Monster</c> row, and the attack damage rating from the
 ///     <c>dbcharacter::MonsterScaling</c> row of the level the NPC was spawned at (the damage curve
-///     is the database's definition of how hard a monster of that level hits).
+///     is the database's definition of how much damage a monster of that level is worth; what one
+///     swing commits of it is <see cref="AiAttackDamage.Resolve"/>).
 /// </summary>
 public class SdbAiMonsterStats : IAiMonsterStats
 {

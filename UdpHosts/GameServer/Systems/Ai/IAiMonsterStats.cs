@@ -13,10 +13,12 @@ public interface IAiMonsterStats
     (float NormalSpeed, float FastSpeed) GetSpeeds(uint characterTypeId);
 
     /// <summary>
-    ///     The attack damage a monster of <paramref name="level"/> deals per hit, straight from the
-    ///     <c>damage</c> column of its <c>dbcharacter::MonsterScaling</c> row. 0 when the monster row
-    ///     or the scaling row for that level is missing, which tells the caller to fall back to its
-    ///     configured default damage.
+    ///     The monster's <c>dbcharacter::MonsterScaling</c> damage <b>rating</b> for
+    ///     <paramref name="level"/>, straight from that row's <c>damage</c> column. This is the
+    ///     level's damage budget (half of the level's health rating on every row of the table), not
+    ///     what one swing is worth - <see cref="AiAttackDamage.Resolve"/> turns it into a per-hit
+    ///     number. Returns 0 when the monster row or the scaling row for that level is missing,
+    ///     which tells the caller to fall back to its configured default damage.
     /// </summary>
     int GetAttackDamage(uint characterTypeId, byte level);
 }
