@@ -139,6 +139,10 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     ///     so <c>AirborneDuration</c> and <c>RequireMovestate</c> would read the pre-launch pose - the client
     ///     cannot report a post-launch pose before the forced window has played - and expire the chain
     ///     250-500 ms into the launch (as observed in the field logs).
+    ///     This is a *waiting marker*, not a claim that the client is already gliding: the server never seeds
+    ///     the movement state nibble at push time. It also drives <c>MovementRelay</c>, which must not confirm
+    ///     the client's still-grounded pose back to the authoring client while the launch is pending, or the
+    ///     client treats that grounded pose as authoritative and drops the impulse it has not applied yet.
     ///     <see cref="ServerLaunchPendingSinceTime" /> is the push time, <see cref="ServerLaunchPendingUntilTime" />
     ///     the deadline (push + 550 ms forced window + 1500 ms handoff margin). The window ends at the deadline
     ///     on its own, or earlier when a <c>MovementInput</c> arrives that reports the character airborne
