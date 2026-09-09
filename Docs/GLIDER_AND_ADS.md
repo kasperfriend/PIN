@@ -112,8 +112,8 @@ effect slots.
 
 So when `ForcePush` sends a launch it also marks the character as
 **launch-pending** (`MarkServerLaunchPending`): it seeds the movement state nibble to
-glider (`0x7000`) and opens a window that runs to push time + 550 ms (the forced movement
-it commanded) + 1500 ms handoff margin. While the window is open:
+glider (`0x7000`) and opens a window that runs to push time + 550 ms (a server-side wait
+for the client's first post-impulse pose) + 1500 ms handoff margin. While the window is open:
 
 - `AirborneDuration` counts the character as airborne;
 - `RequireMovestate` answers gliding/falling/… from the *pending launch*, not the stale
@@ -133,26 +133,100 @@ air time on the first post-push input means the launch itself failed client-side
 server gate was at fault; falling/glider with negative air time means the launch worked and
 the chain must stay up (regression-test the gates if it does not).
 
-The existing `ForcedMovement` type-5 launch window is still 50 ms ahead through 550 ms
-ahead. Both endpoints and the packet's short time now use one clock snapshot, and the
-`[Glider] ForcePush` log includes target, strength, velocity and the window. This records
-what the server sent; it does not prove the client acted on it. Do not mask a failed launch
-by disabling fall damage or granting gliding permanently.
+Type 5 is a one-frame velocity impulse on the shared epoch-ms clock: `Time1 = now+19`,
+`Time2 = now+20`, matching upstream PIN and the live client. A previous 50–550 ms hold was
+a misdiagnosis — field logs then showed `Launch handoff ... MoveState=4096 Airborne=False
+VelocityZ=0` (animation played, the player never left the pad). The `[Glider] ForcePush`
+log includes target, strength, velocity and the window; it records what the server sent and
+does not prove the client acted on it. Do not mask a failed launch by disabling fall damage
+or granting gliding permanently.
 
 ## ADS state
 
-PIN's existing protocol mapping is:
+Protocol mapping, confirmed against captures of the live game (see
+[What the live servers send on the wire](#what-the-live-servers-send-on-the-wire)):
 
 | State | Field / path |
 |---|---|
-| Main vs. underbarrel fire mode | `FireMode_0`, from `SelectFireMode` |
-| Scoped mode | `FireMode_1`, from `UseScope` |
+| Active fire mode of the weapon in the character's hands | `FireMode_0` — written by `SelectFireMode` **and** by `UseScope` (the sights are the weapon's secondary fire mode) |
+| Scoped mirror | `FireMode_1` — written by `UseScope` only, so it is the unambiguous "is scoped" flag for the aptitude side |
+| Main vs. underbarrel weapon the server simulates | the mode the player selected with `SelectFireMode`, remembered separately (`CharacterEntity._selectedFireMode`) |
 | Scope effect | `dbitems::WeaponScope.Statusfx` via the active weapon details |
 
-`SetScopedState` now owns both the scoped mode and the effect. Scope-out, weapon/fire-mode
+`SetScopedState` owns both halves: the fire mode *and* the effect. Scope-out, weapon/fire-mode
 switches, loadout changes, death and external effect removal cannot leave one half active.
 Repeated scope-in requests do not stack/restart the effect, and stale `UseScope` messages
-are ignored with a wrap-aware timestamp comparison. Scoping in never selects the underbarrel.
+are ignored with a wrap-aware timestamp comparison. Scoping in never selects the underbarrel:
+the replicated `FireMode_0` carries the sights, but the weapon the server simulates keeps
+following the player's own `SelectFireMode` selection, and scoping out hands the field back
+to that selection.
+
+### What the live servers send on the wire
+
+`themeldingwars/Documentation` ships three packet captures of the real game
+(`Captures/*.pcapng.gz`). Decoding them is mechanical:
+
+* UDP payload → 4-byte game socket header → datagrams of `[2-byte header: channel, resend,
+  split, length]`; GSS channels are `[2-byte sequence][1-byte typecode][7-byte entity id]
+  [1-byte message id][body]`.
+* View/controller **update** (message id 1) bodies are `[field index][value]…`, with
+  `index + 128` meaning "clear that field". Field indices are the declaration order of the
+  Aero class, and **the field list changed between protocol versions** — see below.
+* Keyframes (message id 4) are `[8-byte player id][nullables bitfields][every field]`, so a
+  keyframe pins the layout of the build the capture was taken with.
+
+| Capture | GSS version | CombatController layout (from its keyframe) |
+|---|---|---|
+| 2014-09-19 (build 1802) | 883 (`V45`) | 32 change times, 32 status effects, **15** stat multipliers, `FireMode_0` = 79, `FireMode_1` = 80 |
+| 2015-05-02 (build 1869) | 17122 (`V63`) | same with **16** multipliers, `FireMode_0` = 80, `FireMode_1` = 81 |
+| 2016-11-15 | 19551 (`V74`, prod-1962 — what PIN targets) | same with **17** multipliers, `FireMode_0` = 81, `FireMode_1` = 82 |
+
+Only the 2014 capture contains a player using the sights (19 `UseScope` messages, alternating
+`InScope=1`/`0`). The server's answer to `UseScope InScope=1` at client time `T`, about
+120 ms later:
+
+```
+CombatController update: FireMode_0 = { Mode = 1, Time = T }        <- field 79 in that build
+CombatController update: StatusEffects_5 = { Id = <scope statusfx>, Stack = 1,
+                                             Initiator = <the player>, Time = T,
+                                             MoreDataFlag = 0 }, change time = T & 0xFFFF
+PublicCombatLog:         [SourceType = Weapon, StatusFxApplied, <scope statusfx>, T]
+```
+
+and on `UseScope InScope=0`, ~12 ms later: the status effect slot is cleared and the fire mode
+is rewritten as `{ Mode = 0, Time = T }`. `FireMode_1` is **never** written in any of the
+captures; `SelectFireMode` (which the 2015 and 2016 players used instead of `UseScope`) writes
+`FireMode_0` = 80 / 81 in those builds — the very same field.
+
+That is why the scope is now replicated into `FireMode_0`: the client raises the sights by
+putting its weapon into its secondary fire mode and predicting that change, and the server has
+to confirm **that** field. PIN used to answer with `FireMode_1` only, which left the client's
+own predicted fire mode contradicted by the server — it dropped the sights again about a
+second later and sent `UseScope InScope=0` by itself, which is exactly what the field logs of
+the "ADS still not working" report show (scope in, then a self-initiated scope-out 0.7–1.0 s
+later, over and over, with no server-side removal in between).
+
+### Divergences that are still open
+
+These are differences from the live captures that are *not* implemented yet. They are the next
+things to try if the sights still drop in game, in this order:
+
+1. **Combat log rows.** The live server sends `PublicCombatLog` (and `PrivateCombatLog`)
+   rows for every status effect it applies to or removes from a character — the scope effect
+   included — with `SourceType` `StatusFx_Apply`/`StatusFx_Remove`, the effect id and the same
+   event time it writes into the status effect slot. PIN sends none. Aero already carries the
+   message (`AeroMessages.GSS.Character.Event.PublicCombatLog`, `CombatLogMessage`,
+   `CombatLogRow` type 11/12), so this is a contained change: queue rows in
+   `SetStatusEffect`/`ClearStatusEffect` and flush them batched (the live server batches them
+   ~150 ms after the fact). The client-side `RequireServerConfirmed` requirement (command type
+   113) in the scope effect's duration chain is the reason to suspect this matters.
+2. **Local-effects controller.** The 2016 capture writes `LocalEffectsController` entries
+   only for effects on *other* entities (always a foreign entity id, never the player's own).
+   PIN mirrors every status effect into the owner's local-effects controller, self-applied
+   ones included. If the client binds its locally predicted effects to those entries, the
+   extra entry for the scope effect is a second, unconfirmed instance of the aim effect.
+
+Both are client-observable, so the in-game checks at the end remain the arbiter.
 
 The server continues to replicate effect slots on the combat controller/view and the
 owner's local-effects controller, retaining the client event time for direct ADS application.
@@ -188,9 +262,12 @@ Use one continuous log covering scope-in/launch through scope-out/landing:
 1. **ADS:** on a rifle and a second weapon, hold aim for at least three seconds without
    releasing it, then release. Repeat, and switch weapons/fire modes once while scoped.
    Check that the aim pose holds, zoom clears on release/switch, and sprint restrictions clear.
-   The log should show `FireMode_1=1` with effect 102/1313 while held, and mode/effect zero
-   after scope-out or a switch. There should be no unexpected `[Effect] ... duration ... ended`
-   or `[Scope] ... removed externally` during a hold.
+   The log should show `FireMode_0=1 FireMode_1=1` with effect 102/1313 while held, and both
+   fire modes (and the effect) at zero after scope-out or a switch. There should be no
+   unexpected `[Effect] ... duration ... ended` or `[Scope] ... removed externally` during a
+   hold, and — the actual regression — no `UseScope InScope=0` that you did not cause: a
+   scope-out that arrives while you are still holding the button means the client still
+   disagrees with the replicated state.
 2. If the pose snaps back while the log still shows an active scoped state, include whether
    the client emitted `UseScope InScope=0` **before you released the button**. Capture the
    client-side diagnostic log or inbound controller updates too if available. This separates

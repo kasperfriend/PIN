@@ -59,21 +59,21 @@ public class ForcePushCommand : Command, ICommand
             var velocity = new Vector3(character.Velocity[0], character.Velocity[1], character.Velocity[2]);
             velocity.Z += strength;
 
-            // The client holds the forced movement (and its velocity) for the [Time1, Time2] window on the
-            // shared epoch clock (time-synced against Shard.CurrentTime). A window must be real for the
-            // client to apply anything at all: a 1 ms window expires before, or while, the packet is in
-            // flight, which is exactly why effects like the glider pad launch played their animation but
-            // never moved the player. Start 50 ms out so the push survives latency/jitter and keep it for
-            // 500 ms, matching the launch effect's own 500 ms restrict_movement duration.
+            // Type 5 is a one-frame velocity impulse, not a held trajectory. Time1/Time2 are the shared
+            // epoch-ms clock (time-synced against Shard.CurrentTime); the live client and upstream PIN
+            // both fire it as now+19 / now+20. A previous attempt stretched that to a 500 ms hold so the
+            // packet would "survive latency" — field logs then showed the client never left the pad
+            // (`Launch handoff ... MoveState=4096 Airborne=False VelocityZ=0`) while the wing animation
+            // still played. The 1 ms window is the impulse itself; widening it is what stopped the launch.
             uint time = context.Shard.CurrentTime;
             var player = character.Player;
 
             // The aptitude gates that keep the launch effects alive (AirborneDuration, RequireMovestate
             // gliding/falling) read the character's *reported* pose, but no post-launch pose can exist until
-            // the forced-movement window below has played. Without a provisional window the server tore its
-            // own launch down on the first duration ticks (see Docs/GLIDER_AND_ADS.md). Seed the movement
+            // the client has applied this impulse. Without a provisional window the server tore its own
+            // launch down on the first duration ticks (see Docs/GLIDER_AND_ADS.md). Seed the movement
             // state nibble so movestate reads agree with the pending window, and open the window until 1.5 s
-            // after the forced movement ends. MovementRelay closes the window again as soon as the client's
+            // after the server-side wait. MovementRelay closes the window again as soon as the client's
             // poses say the launch is over, so a client that never leaves the ground still ends the launch
             // normally.
             character.MovementStateContainer.MovementStateValue =
@@ -84,17 +84,18 @@ public class ForcePushCommand : Command, ICommand
                 Data = new AeroMessages.GSS.ForcedMovementData
                 {
                     Type = 5,
+                    Unk1 = 0,
                     HaveUnk2 = 0,
                     Params5 = new AeroMessages.GSS.ForcedMovementType5Params
                     {
                         Velocity = velocity,
-                        Time1 = unchecked(time + 50),
-                        Time2 = unchecked(time + 550),
+                        Time1 = unchecked(time + 19),
+                        Time2 = unchecked(time + 20),
                         Unk2 = 0
                     }
                 },
 
-                ShortTime = unchecked((ushort)time),
+                ShortTime = context.Shard.CurrentShortTime,
             };
             Logger.Debug("[Glider] ForcePush {CommandId} Target={Target} Strength={Strength} Velocity={Velocity} Start={StartTime} End={EndTime}",
                 Params.Id, character.EntityId, strength, velocity, message.Data.Params5.Time1, message.Data.Params5.Time2);

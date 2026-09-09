@@ -4,9 +4,10 @@ namespace GameServer.Systems.Aptitude.Commands.Requirement;
 
 /// <summary>
 ///     <c>aptfs::RequireAimModeCommandDef</c> (command type 130): true while the character of the activation
-///     is aiming down sights. On PIN the scoped state lives in <c>FireMode_1</c> (driven by <c>UseScope</c>,
-///     mode 1 = scoped, 0 = hip fire); <c>FireMode_0</c> carries the selected main/underbarrel fire mode and
-///     must not be confused with it.
+///     is aiming down sights. The scope is read from <c>FireMode_1</c>: both replicated fire mode fields carry
+///     the scoped state while the sights are up, but <c>FireMode_0</c> is also the field the player's own
+///     fire mode selection arrives on (<c>SelectFireMode</c>), so only <c>FireMode_1</c> answers "scoped"
+///     without ambiguity (mode 1 = scoped, 0 = hip fire).
 /// </summary>
 public class RequireAimModeCommand : Command, ICommand
 {

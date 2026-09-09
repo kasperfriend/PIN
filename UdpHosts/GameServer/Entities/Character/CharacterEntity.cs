@@ -51,6 +51,13 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     /// </summary>
     private uint _scopeStatusFx;
 
+    /// <summary>
+    ///     The fire mode the player selected with <c>SelectFireMode</c> (main weapon vs. underbarrel). The
+    ///     replicated <see cref="FireMode_0" /> also carries the scoped state, so the weapon the server
+    ///     simulates has to follow the selection the client made, not the sights.
+    /// </summary>
+    private byte _selectedFireMode;
+
     public CharacterEntity(IShard shard, ulong eid, CharacterEntity owner = null)
         : base(shard, eid, owner)
     {
@@ -113,7 +120,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public bool IsServerLaunchPending => ServerLaunchPendingUntilTime != 0
         && unchecked((int)(ServerLaunchPendingUntilTime - Shard.CurrentTime)) > 0;
 
-    /// <summary>True while the forced movement the server commanded (push + 550 ms) may still be playing.</summary>
+    /// <summary>True during the server-side wait (push + 550 ms) for the client's first post-impulse pose.</summary>
     public bool IsServerLaunchForcedWindowActive => IsServerLaunchPending
         && unchecked((int)(ServerLaunchPendingUntilTime - 1500 - Shard.CurrentTime)) > 0;
 
@@ -985,6 +992,22 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
     public void SetFireMode(byte index, FireModeData value)
     {
+        if (index == 0)
+        {
+            // The fire mode the player selected (main weapon vs. underbarrel). Remembered on its own
+            // because the scoped state shares the replicated FireMode_0 field, see SetScopedFireMode.
+            _selectedFireMode = value.Mode;
+        }
+
+        WriteFireMode(index, value);
+    }
+
+    /// <summary>
+    ///     Writes a fire mode to the character, the owner's combat controller and everyone's combat view
+    ///     without touching the remembered <c>SelectFireMode</c> selection.
+    /// </summary>
+    private void WriteFireMode(byte index, FireModeData value)
+    {
         switch (index)
         {
             case 0:
@@ -1086,10 +1109,39 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
         Character_CombatController?.WeaponIndexProp = value;
     }
+
+    /// <summary>
+    /// Writes the scoped (aiming down sights) state into the replicated fire mode fields.
+    /// <para>
+    /// <c>FireMode_0</c> is the weapon's active fire mode on the wire, and it is the field the live servers
+    /// answer <c>UseScope</c> with: captures of the real game (2014-09-19 gameplay capture, GSS protocol
+    /// version 883) show the server replying to <c>UseScope InScope=1</c> with the fire mode that sits
+    /// directly behind the status effect slots — <c>{ Mode = 1, Time = &lt;the client's UseScope time&gt; }</c>
+    /// — followed by the weapon's scope status effect, and with <c>{ Mode = 0, Time = ... }</c> on scope out.
+    /// It never writes the second fire mode field. Aiming is the weapon's secondary fire mode to the client,
+    /// so the replication has to carry it there as well; PIN used to write only <c>FireMode_1</c>, which left
+    /// the client's own predicted fire mode contradicted by the server and made it drop the sights again.
+    /// </para>
+    /// <para>
+    /// <c>FireMode_1</c> is written as well: it is the field PIN has carried the scope in so far, the state
+    /// the aptitude side (<c>RequireAimMode</c>, the scope effect's lifetime) reads, and it costs nothing to
+    /// keep both in step.
+    /// </para>
+    /// </summary>
+    private void SetScopedFireMode(bool scoped, uint time)
+    {
+        // Scoping out hands the replicated fire mode back to the mode the player had selected: with the
+        // sights down the weapon is in its secondary fire mode, and a weapon that is switched to the
+        // underbarrel stays on the underbarrel when the player stops aiming.
+        var mode = (byte)(scoped ? 1 : _selectedFireMode);
+        WriteFireMode(0, new FireModeData { Mode = mode, Time = time });
+        WriteFireMode(1, new FireModeData { Mode = (byte)(scoped ? 1 : 0), Time = time });
+    }
+
     /// <summary>
     /// Updates both halves of ADS: the replicated scoped fire mode and the weapon's scope effect. Clearing
-    /// just the effect on a weapon switch used to leave FireMode_1 scoped, even though the aim pose and its
-    /// modifiers had already been removed. All callers, not only UseScope, must update both together.
+    /// just the effect on a weapon switch used to leave the character scoped, even though the aim pose and
+    /// its modifiers had already been removed. All callers, not only UseScope, must update both together.
     /// </summary>
     /// <param name="scoped">True when aiming down sights.</param>
     /// <param name="time">Client event time, or null for a server-initiated change. Zero is a valid clock value.</param>
@@ -1099,7 +1151,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         scoped &= IsAlive;
         uint effectId = scoped ? GetActiveWeaponDetails()?.ScopeStatusFx ?? 0u : 0u;
 
-        SetFireMode(1, new FireModeData { Mode = (byte)(scoped ? 1 : 0), Time = eventTime });
+        SetScopedFireMode(scoped, eventTime);
 
         if (effectId == _scopeStatusFx && (effectId == 0 || ActiveEffects.Any(state => state?.Effect.Id == effectId)))
         {
@@ -1126,13 +1178,12 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         }
         else
         {
-            SetFireMode(1, new FireModeData { Mode = 0, Time = eventTime });
+            SetScopedFireMode(false, eventTime);
             Logger.Warning("[Scope] Could not apply scope effect {EffectId}; cleared scoped fire mode", effectId);
         }
     }
 
     internal uint ScopeStatusEffectId => _scopeStatusFx;
-
 
     /// <summary>
     ///     Set or clear the scope bubble of the character: the replicated state (a layer plus a second, not yet
@@ -1233,7 +1284,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         if (debugEffectId == _scopeStatusFx && _scopeStatusFx != 0)
         {
             _scopeStatusFx = 0;
-            SetFireMode(1, new FireModeData { Mode = 0, Time = Shard.CurrentTime });
+            SetScopedFireMode(false, Shard.CurrentTime);
             Logger.Debug("[Scope] Scope effect {EffectId} removed externally; cleared scoped fire mode", debugEffectId);
         }
 
@@ -1780,13 +1831,15 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             : main;
     }
 
-    // FireMode_0 is the selected fire mode (main weapon vs. underbarrel / alt weapon), driven by SelectFireMode.
-    // FireMode_1 is the scope (ADS) state, driven by UseScope. Scoping in must NOT switch the active weapon,
-    // otherwise the server starts simulating the underbarrel weapon while the client is still aiming down the
-    // sights of the main weapon (the gun snaps back to hip fire while the zoom stays applied).
+    // The weapon the server simulates follows the fire mode the player selected with SelectFireMode
+    // (main weapon vs. underbarrel / alt weapon). The replicated FireMode_0 field carries that selection
+    // *and* the scoped state — the live server answers UseScope with the same field — so the scoped state
+    // must not be what selects the underbarrel: the server would start simulating the underbarrel weapon
+    // while the client is still aiming down the sights of the main weapon (the gun snaps back to hip fire
+    // while the zoom stays applied).
     private bool IsAltFireMode()
     {
-        return FireMode_0.Mode != 0;
+        return _selectedFireMode != 0;
     }
 
     private void RebuildWeaponDetailsCache(CharacterLoadout loadout)
@@ -1870,6 +1923,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         };
 
         EffectsFlags = 0;
+        _selectedFireMode = 0;
         FireMode_0 = new FireModeData { Mode = 0, Time = Shard.CurrentTime };
         FireMode_1 = new FireModeData { Mode = 0, Time = Shard.CurrentTime };
         WeaponIndex = new WeaponIndexData { Index = 0, Unk1 = 1, Unk2 = 0, Time = Shard.CurrentTime };
