@@ -7,7 +7,6 @@ namespace GameServer.Systems.Aptitude.Commands.Register;
 public class RegisterRandomCommand : Command, ICommand
 {
     private RegisterRandomCommandDef Params;
-    private Random rng = new();
 
     public RegisterRandomCommand(RegisterRandomCommandDef par)
         : base(par)
@@ -19,7 +18,10 @@ public class RegisterRandomCommand : Command, ICommand
     {
         float prevValue = context.Register;
 
-        float rand = rng.NextSingle();
+        // Command instances are shared through the chain cache and can execute on the
+        // packet thread and the shard thread at the same time: Random.Shared is the
+        // thread-safe source, an instance field Random is not.
+        float rand = Random.Shared.NextSingle();
         float range = Params.MaxValue - Params.MinValue;
         float randValue = Params.MinValue + (range * rand);
         context.Register = AbilitySystem.RegistryOp(prevValue, randValue, (Operand)Params.Regop);

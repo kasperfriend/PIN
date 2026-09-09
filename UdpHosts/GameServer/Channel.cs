@@ -3,6 +3,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using Aero.Gen;
 using Aero.Gen.Attributes;
@@ -201,7 +202,7 @@ public class Channel
     public bool SendChanges<TViewOrController>(TViewOrController view, ulong entityId)
         where TViewOrController : class, IAeroViewInterface
     {
-        if (typeof(TViewOrController).GetCustomAttributes(typeof(AeroMessageIdAttribute), false).FirstOrDefault() is not AeroMessageIdAttribute)
+        if (AeroAttributes<TViewOrController>.MessageId is null)
         {
             throw new ArgumentException($"The passed Aero class is required to be annotated with {nameof(AeroMessageIdAttribute)} (Type: {typeof(TViewOrController).FullName})");
         }
@@ -229,7 +230,7 @@ public class Channel
     public bool SendChanges<TViewOrController>(TViewOrController view, ulong entityId, Memory<byte> packetMemory)
         where TViewOrController : class, IAeroViewInterface
     {
-        if (typeof(TViewOrController).GetCustomAttributes(typeof(AeroMessageIdAttribute), false).FirstOrDefault() is not AeroMessageIdAttribute)
+        if (AeroAttributes<TViewOrController>.MessageId is null)
         {
             throw new ArgumentException($"The passed Aero class is required to be annotated with {nameof(AeroMessageIdAttribute)} (Type: {typeof(TViewOrController).FullName})");
         }
@@ -268,12 +269,12 @@ public class Channel
     public bool SendViewKeyframe<TView>(TView view, ulong entityId)
         where TView : class, IAero
     {
-        if (typeof(TView).GetCustomAttributes(typeof(AeroMessageIdAttribute), false).FirstOrDefault() is not AeroMessageIdAttribute)
+        if (AeroAttributes<TView>.MessageId is null)
         {
             throw new ArgumentException($"The passed Aero view is required to be annotated with {nameof(AeroMessageIdAttribute)} (Type: {typeof(TView).FullName})");
         }
 
-        if (typeof(TView).GetCustomAttributes(typeof(AeroAttribute), false).FirstOrDefault() is not AeroAttribute aeroAttr)
+        if (AeroAttributes<TView>.Aero is not AeroAttribute aeroAttr)
         {
             throw new ArgumentException($"The passed Aero view is required to be annotated with {nameof(AeroAttribute)} (Type: {typeof(TView).FullName})");
         }
@@ -305,12 +306,12 @@ public class Channel
     public bool SendViewScopeOut<TView>(TView view, ulong entityId)
         where TView : class, IAero
     {
-        if (typeof(TView).GetCustomAttributes(typeof(AeroMessageIdAttribute), false).FirstOrDefault() is not AeroMessageIdAttribute)
+        if (AeroAttributes<TView>.MessageId is null)
         {
             throw new ArgumentException($"The passed Aero view is required to be annotated with {nameof(AeroMessageIdAttribute)} (Type: {typeof(TView).FullName})");
         }
 
-        if (typeof(TView).GetCustomAttributes(typeof(AeroAttribute), false).FirstOrDefault() is not AeroAttribute aeroAttr)
+        if (AeroAttributes<TView>.Aero is not AeroAttribute aeroAttr)
         {
             throw new ArgumentException($"The passed Aero view is required to be annotated with {nameof(AeroAttribute)} (Type: {typeof(TView).FullName})");
         }
@@ -343,12 +344,12 @@ public class Channel
     public bool SendControllerKeyframe<TController>(TController controller, ulong entityId, ulong playerId)
         where TController : class, IAero
     {
-        if (typeof(TController).GetCustomAttributes(typeof(AeroMessageIdAttribute), false).FirstOrDefault() is not AeroMessageIdAttribute)
+        if (AeroAttributes<TController>.MessageId is null)
         {
             throw new ArgumentException($"The passed Aero controller is required to be annotated with {nameof(AeroMessageIdAttribute)} (Type: {typeof(TController).FullName})");
         }
 
-        if (typeof(TController).GetCustomAttributes(typeof(AeroAttribute), false).FirstOrDefault() is not AeroAttribute aeroAttr)
+        if (AeroAttributes<TController>.Aero is not AeroAttribute aeroAttr)
         {
             throw new ArgumentException($"The passed Aero controller is required to be annotated with {nameof(AeroAttribute)} (Type: {typeof(TController).FullName})");
         }
@@ -384,12 +385,12 @@ public class Channel
     public bool SendControllerRemove<TController>(TController controller, ulong entityId, ulong playerId)
         where TController : class, IAero
     {
-        if (typeof(TController).GetCustomAttributes(typeof(AeroMessageIdAttribute), false).FirstOrDefault() is not AeroMessageIdAttribute)
+        if (AeroAttributes<TController>.MessageId is null)
         {
             throw new ArgumentException($"The passed Aero controller is required to be annotated with {nameof(AeroMessageIdAttribute)} (Type: {typeof(TController).FullName})");
         }
 
-        if (typeof(TController).GetCustomAttributes(typeof(AeroAttribute), false).FirstOrDefault() is not AeroAttribute aeroAttr)
+        if (AeroAttributes<TController>.Aero is not AeroAttribute aeroAttr)
         {
             throw new ArgumentException($"The passed Aero controller is required to be annotated with {nameof(AeroAttribute)} (Type: {typeof(TController).FullName})");
         }
@@ -422,12 +423,12 @@ public class Channel
     public bool SendMessage<TNormal>(TNormal message, ulong entityId = 0)
         where TNormal : class, IAero
     {
-        if (typeof(TNormal).GetCustomAttributes(typeof(AeroMessageIdAttribute), false).FirstOrDefault() is not AeroMessageIdAttribute aeroMessageIdAttribute)
+        if (AeroAttributes<TNormal>.MessageId is not AeroMessageIdAttribute aeroMessageIdAttribute)
         {
             throw new ArgumentException($"The passed package is required to be annotated with {nameof(AeroMessageIdAttribute)} (Type: {typeof(TNormal).FullName})");
         }
 
-        if (typeof(TNormal).GetCustomAttributes(typeof(AeroAttribute), false).FirstOrDefault() is not AeroAttribute aeroAttr)
+        if (AeroAttributes<TNormal>.Aero is not AeroAttribute aeroAttr)
         {
             throw new ArgumentException($"The passed Aero controller is required to be annotated with {nameof(AeroAttribute)} (Type: {typeof(TNormal).FullName})");
         }
@@ -613,5 +614,24 @@ public class Channel
     {
         InSplitMode = false;
         _incomingSplitMessagePackets.Clear();
+    }
+
+    /// <summary>
+    ///     Caches the Aero marker attributes for a message type. Every send on this channel used to
+    ///     re-run <c>GetCustomAttributes</c> (an attribute array allocation plus a type scan) per call,
+    ///     and view-change sends happen for every dirty view of every scoped entity on every update
+    ///     flush. The CLR guarantees the static fields of a closed generic type are initialized once,
+    ///     so the lookup is paid once per message type and reads are free afterwards.
+    /// </summary>
+    private static class AeroAttributes<T>
+    {
+        // FirstOrDefault over GetCustomAttributes, NOT GetCustomAttribute<T>: several Aero message
+        // types carry one [AeroMessageId] per view route (PublicCombatLog has one for BaseController
+        // and one for ObserverView), and the singular lookup throws AmbiguousMatchException on those,
+        // which took the send path down with a TypeInitializationException. First-wins is exactly
+        // what the previous per-call lookup did.
+        public static readonly AeroMessageIdAttribute? MessageId = typeof(T).GetCustomAttributes(typeof(AeroMessageIdAttribute), false).FirstOrDefault() as AeroMessageIdAttribute;
+
+        public static readonly AeroAttribute? Aero = typeof(T).GetCustomAttributes(typeof(AeroAttribute), false).FirstOrDefault() as AeroAttribute;
     }
 }

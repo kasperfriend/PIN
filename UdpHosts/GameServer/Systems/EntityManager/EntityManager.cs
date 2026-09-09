@@ -35,6 +35,14 @@ namespace GameServer.Systems.EntityManager;
 public class EntityManager
 {
     private const byte _serverId = 31;
+
+    /// <summary>
+    ///     How many queued scope-ins one 20 ms gate may send. One per gate (the old behaviour) paces a
+    ///     zone's worth of keyframes far too slowly for a login in a populated area; a batch bounds the
+    ///     reliable-channel burst while still finishing a typical login's scope-ins in well under a second.
+    /// </summary>
+    private const int MaxScopeInsPerTick = 16;
+
     private readonly IShard _shard;
     private readonly ILogger _logger;
     private readonly ulong _updateFlushIntervalMs = 5;
@@ -493,13 +501,17 @@ public class EntityManager
             }
         }
 
-        // Process queued scope-ins
+        // Process queued scope-ins. A scope-in sends the entity's keyframes over the reliable channel,
+        // so the queue is paced — but one entity per gate made a login in a populated area stream its
+        // surrounding entities in at 50 per second, seconds of visible pop-in. A small batch keeps the
+        // same pacing while making the surrounding world appear promptly.
         if (!_queuedScopeIn.IsEmpty && currentTime > _lastScopeIn + _scopeInIntervalMs)
         {
-            bool ok = _queuedScopeIn.TryDequeue(out ScopeInRequest request);
-            if (ok)
+            var processed = 0;
+            while (processed < MaxScopeInsPerTick && _queuedScopeIn.TryDequeue(out var request))
             {
                 ScopeIn(request.Player, request.Entity);
+                processed++;
             }
 
             _lastScopeIn = currentTime;
@@ -532,7 +544,9 @@ public class EntityManager
         if (currentTime > _lastScopeCheck + _scopeCheckIntervalMs)
         {
             _lastScopeCheck = currentTime;
-            var players = _shard.Clients.Values.Where((client) => client.CanReceiveGSS);
+            // Materialize the player snapshot once: players is otherwise a lazy Where over the
+            // client map that gets re-enumerated (and re-filtered) for every entity below.
+            var players = _shard.Clients.Values.Where((client) => client.CanReceiveGSS).ToArray();
             var entities = _shard.Entities.Values;
 
             foreach (var entity in entities)
@@ -546,6 +560,7 @@ public class EntityManager
                 }
 
                 float distanceThreshold = entity.GetScopeRange();
+                float distanceThresholdSq = distanceThreshold * distanceThreshold;
                 var entityPosition = entity.Position;
                 foreach (var player in players)
                 {
@@ -576,8 +591,9 @@ public class EntityManager
                     else
                     {
                         var playerPosition = player.CharacterEntity.Position;
-                        float distance = Vector3.Distance(entityPosition, playerPosition);
-                        shouldBeScoped = distance <= distanceThreshold;
+                        // DistanceSquared avoids a square root per entity x player pair in this
+                        // O(entities x players) scan; both sides of the comparison are squared.
+                        shouldBeScoped = Vector3.DistanceSquared(entityPosition, playerPosition) <= distanceThresholdSq;
                     }
 
                     // Resolve shouldBeScoped

@@ -42,12 +42,21 @@ public class NetworkClient : INetworkClient
         RemoteEndpoint = endPoint;
         NetClientStatus = ClientStatus.Unknown;
         NetLastActive = DateTime.Now;
+        NetLastReceive = DateTime.Now;
     }
 
     public ClientStatus NetClientStatus { get; internal set; }
     public uint SocketId { get; }
     public IPEndPoint RemoteEndpoint { get; }
     public DateTime NetLastActive { get; private set; }
+
+    /// <summary>
+    ///     Last time a datagram arrived from this client — the receive-only counterpart of
+    ///     <see cref="NetLastActive" />, which sends keep refreshing too. This is what makes a dead
+    ///     client detectable: a vanished peer goes silent on the receive path while the server happily
+    ///     keeps sending to it.
+    /// </summary>
+    public DateTime NetLastReceive { get; private set; }
     public ImmutableDictionary<ChannelType, Channel> NetChannels { get; private set; }
     public IShard AssignedShard { get; private set; }
     public ConcurrentQueue<Memory<byte>> SequencedMessages { get; private set; }
@@ -73,6 +82,8 @@ public class NetworkClient : INetworkClient
 
     public void HandlePacket(ReadOnlyMemory<byte> data, Packet packet)
     {
+        NetLastReceive = DateTime.Now;
+
         if (NetClientStatus == ClientStatus.Connecting)
         {
             NetClientStatus = ClientStatus.Connected; // the connection must have been established in order to receive a packet, so we must now be connected
@@ -207,8 +218,8 @@ public class NetworkClient : INetworkClient
     {
         var typecode = packet.Read<byte>();
         Span<byte> entity = stackalloc byte[8];
-        packet.Read(7).ToArray().CopyTo(entity);
-        var entityId = BitConverter.ToUInt64(entity) << 8;
+        packet.Read(7).Span.CopyTo(entity);
+        var entityId = BinaryPrimitives.ReadUInt64LittleEndian(entity) << 8;
         var messageId = packet.Read<byte>();
 
         WireIds.ResolveGssRoute(AssignedShard.Settings.GssProtocolVersion, typecode, out var ns, out var viewOrdinal);

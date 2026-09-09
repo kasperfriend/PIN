@@ -137,6 +137,14 @@ public class AdminService
     private (string commandName, string[] parameters) ParseCommand(string input)
     {
         var parts = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        // An empty (or all-whitespace) command line would otherwise make parts[0] throw an
+        // IndexOutOfRangeException through the caller's network tick.
+        if (parts.Length == 0)
+        {
+            return (string.Empty, []);
+        }
+
         var commandName = parts[0];
         var parameters = parts.Skip(1).ToArray();
 

@@ -86,37 +86,48 @@ internal class GameServer : PacketServer
     /// </summary>
     private static ulong GenerateServerId()
     {
+        // The low two bytes are reserved for the shard flags ORed on top of the id, so only
+        // bytes 2..7 are randomized. Clear the buffer first: stackalloc memory is not zeroed,
+        // and reading the uninitialized bytes back would leak whatever was on the stack into
+        // the server id.
         Span<byte> ranSpan = stackalloc byte[8];
-        new Random().NextBytes(ranSpan.Slice(2, 6));
+        ranSpan.Clear();
+        Random.Shared.NextBytes(ranSpan.Slice(2, 6));
         return BinaryPrimitives.ReadUInt64LittleEndian(ranSpan);
     }
 
     private INetworkClient RetrieveClient(Packet packet)
     {
         var socketId = Utils.SimpleFixEndianness(packet.Read<uint>());
-        INetworkClient client;
 
-        if (!_clientMap.ContainsKey(socketId))
+        if (_clientMap.TryGetValue(socketId, out var existing))
         {
-            var newClient = new NetworkPlayer(packet.RemoteEndpoint, socketId, Logger);
-
-            if (!_isReady)
-            {
-                var rejected = new NetworkClient(packet.RemoteEndpoint, socketId, Logger);
-                rejected.NetClientStatus = ClientStatus.Aborted;
-                Logger.Information("Rejected connection from {Endpoint} — server not ready.", packet.RemoteEndpoint);
-                return rejected;
-            }
-
-            client = _clientMap.AddOrUpdate(socketId, newClient, (_, nc) => nc);
-            _shard.MigrateIn((INetworkPlayer)client);
-        }
-        else
-        {
-            client = _clientMap[socketId];
+            return existing;
         }
 
-        return client;
+        if (!_isReady)
+        {
+            var rejected = new NetworkClient(packet.RemoteEndpoint, socketId, Logger);
+            rejected.NetClientStatus = ClientStatus.Aborted;
+            Logger.Information("Rejected connection from {Endpoint} — server not ready.", packet.RemoteEndpoint);
+            return rejected;
+        }
+
+        var newClient = new NetworkPlayer(packet.RemoteEndpoint, socketId, Logger);
+
+        // TryAdd instead of AddOrUpdate: only the thread that actually inserted the player
+        // migrates it into the shard, so a racing pair of first packets can neither run
+        // MigrateIn twice nor migrate the winner's client from the loser's thread. A lost
+        // race simply falls through to reading the winner's entry below.
+        if (_clientMap.TryAdd(socketId, newClient))
+        {
+            _shard.MigrateIn(newClient);
+            return newClient;
+        }
+
+        // Lost the insert race: serve whoever won it. (TryGetValue rather than the indexer
+        // because even the winner can already have been removed again by a disconnect.)
+        return _clientMap.TryGetValue(socketId, out var winner) ? winner : newClient;
     }
 
     private async Task ListenGrpcAsync(CancellationToken ct)
@@ -127,9 +138,14 @@ internal class GameServer : PacketServer
             {
                 await GRPCService.ListenAsync(_clientMap, ct);
             }
-            catch (Exception)
+            catch (OperationCanceledException)
             {
-                Logger.ForContext(typeof(GRPCService)).Error("Failed to establish GRPC stream, retrying in 30 seconds");
+                // Shutdown requested through the token; stop retrying.
+                break;
+            }
+            catch (Exception ex)
+            {
+                Logger.ForContext(typeof(GRPCService)).Error(ex, "Failed to establish GRPC stream, retrying in 30 seconds");
                 await Task.Delay(TimeSpan.FromSeconds(30), ct);
             }
         }

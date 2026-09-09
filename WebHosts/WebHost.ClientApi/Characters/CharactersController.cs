@@ -41,7 +41,7 @@ public class CharactersController : ControllerBase
         return data;
     }
 
-    [Route("api/v3/characters/{characterId}/inventories/bag")]
+    [Route("api/v3/characters/{characterId:ulong}/inventories/bag")]
     [HttpGet]
     [Produces("application/json")]
     public object InventoriesBag(string characterId)
@@ -106,7 +106,7 @@ public class CharactersController : ControllerBase
         return bag;
     }
 
-    [Route("api/v3/characters/{characterId}/inventories/gear/items")]
+    [Route("api/v3/characters/{characterId:ulong}/inventories/gear/items")]
     [HttpGet]
     [Produces("application/json")]
     public object InventoriesGearItems(string characterId)

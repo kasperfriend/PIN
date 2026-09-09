@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using GameServer.StaticDB;
 using GameServer.StaticDB.Records.customdata;
@@ -32,6 +33,12 @@ public class Factory
     private readonly IShard _shard;
     private readonly ILogger _logger;
     private readonly HashSet<uint> _reportedPlaceholders = [];
+
+    // Chains are immutable once loaded (commands only carry their immutable SDB parameter
+    // record; every execution keeps its mutable state in the Context), so every activation
+    // used to rebuild its whole command list from the static DB. Proximity effects and
+    // NPC/deployable abilities activate continuously, so cache the built chains by id.
+    private readonly ConcurrentDictionary<uint, Chain> _chainCache = new();
 
     public Factory(IShard shard)
     {
@@ -77,6 +84,11 @@ public class Factory
 
     public virtual Chain LoadChain(uint chainId)
     {
+        if (_chainCache.TryGetValue(chainId, out var cached))
+        {
+            return cached;
+        }
+
         var chain = new Chain
         {
             Id = chainId,
@@ -97,7 +109,9 @@ public class Factory
             _logger.Debug("Loaded empty chain {chainId}", chainId);
         }
 
-        return chain;
+        // GetOrStore rather than an unconditional write so a concurrent activation that
+        // built the same chain keeps a single shared instance.
+        return _chainCache.GetOrAdd(chainId, chain);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("StyleCop.CSharp.LayoutRules", "SA1515:Single-line comment should be preceded by blank line", Justification = "Disregard here so we don't create unneccessary grouping")]

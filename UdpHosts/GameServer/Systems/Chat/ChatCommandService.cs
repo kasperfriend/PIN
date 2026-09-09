@@ -56,6 +56,15 @@ public class ChatCommandService
     private (string commandName, string[] parameters) ParseCommand(string input)
     {
         var parts = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        // A chat message of just "\" (or "\" followed by spaces) reaches here as an empty
+        // command line: Split with RemoveEmptyEntries yields no parts, and parts[0] would
+        // throw an IndexOutOfRangeException through the client's network tick.
+        if (parts.Length == 0)
+        {
+            return (string.Empty, []);
+        }
+
         var commandName = parts[0];
         var parameters = parts.Skip(1).ToArray();
 

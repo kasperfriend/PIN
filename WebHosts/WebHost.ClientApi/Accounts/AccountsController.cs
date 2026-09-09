@@ -99,7 +99,7 @@ public class AccountsController : ControllerBase
         return characterTitles;
     }
 
-    [Route("api/v3/characters/{characterId}/garage_slots")]
+    [Route("api/v3/characters/{characterId:ulong}/garage_slots")]
     [HttpGet]
     [Produces("application/json")]
     public object GarageSlots(string characterId)

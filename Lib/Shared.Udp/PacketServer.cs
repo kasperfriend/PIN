@@ -29,6 +29,24 @@ public abstract class PacketServer : IPacketSender
         Logger = logger.ForContext<PacketServer>();
         ListenEndpoint = new IPEndPoint(IPAddress.Any, port);
         ServerSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows surfaces the ICMP port-unreachable of a peer that vanished as a WSAECONNRESET
+            // error on this socket's next SendTo/ReceiveFrom — every send to a dead client would
+            // throw (and log) until something notices the client is gone. Linux never had this
+            // behaviour, so it stays Windows-only. Best effort: if the ioctl is unavailable the
+            // send thread's existing error handling copes.
+            const int SIO_UDP_CONNRESET = -1744830452;
+            try
+            {
+                ServerSocket.IOControl(SIO_UDP_CONNRESET, BitConverter.GetBytes(0), null);
+            }
+            catch (Exception ex) when (ex is SocketException or PlatformNotSupportedException or InvalidOperationException)
+            {
+                Logger.Debug(ex, "Could not disable SIO_UDP_CONNRESET on the UDP socket");
+            }
+        }
     }
 
     public bool IsRunning { get; private set; }
@@ -100,7 +118,19 @@ public abstract class PacketServer : IPacketSender
             Packet? p;
             while ((p = await IncomingPackets.ReceiveAsync(ct)) != null)
             {
-                HandlePacket(p.Value, ct);
+                // This thread is an async void worker: an exception escaping it does not skip a
+                // packet, it tears down the whole process while the socket keeps "running" for
+                // every client. A single malformed or racing packet must not take the server down,
+                // so keep processing the queue and report what broke instead (the same policy the
+                // shard thread follows).
+                try
+                {
+                    HandlePacket(p.Value, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    Logger.Error(ex, "Failed to process a packet from {RemoteEndpoint}", p.Value.RemoteEndpoint);
+                }
             }
         }
         catch (OperationCanceledException)
@@ -195,7 +225,10 @@ public abstract class PacketServer : IPacketSender
                 Packet? packet;
                 while ((packet = await OutgoingPackets.ReceiveAsync(ct)) != null)
                 {
-                    _ = ServerSocket.SendTo(packet.Value.PacketData.ToArray(), packet.Value.PacketData.Length, SocketFlags.None, packet.Value.RemoteEndpoint);
+                    // SendTo has a ReadOnlySpan<byte> overload: sending the packet's span directly
+                    // avoids a full-sized copy (and the GC pressure of one array per datagram) on
+                    // this hottest of send paths.
+                    _ = ServerSocket.SendTo(packet.Value.PacketData.Span, SocketFlags.None, packet.Value.RemoteEndpoint);
                 }
             }
             catch (OperationCanceledException)

@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Numerics;
 using System.Threading;
+using System.Threading.Tasks;
 using AeroMessages.GSS;
 using AeroMessages.GSS.Character;
 using AeroMessages.GSS.Character.Controller;
@@ -48,105 +49,13 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         Preferences = new PlayerPreferences();
     }
 
-    public async void Login(ulong characterId)
+    public void Login(ulong characterId)
     {
-        PlayerId = 0x4658281c142e9f00ul;
-        var guid = characterId & 0xffffffffffffff00;
-        CharacterId = guid;
-
-        // Don't crash if they are already logged in
-        AssignedShard.Entities.TryGetValue(CharacterId, out var existing);
-        if (existing != null)
-        {
-            Logger.Warning("Closing login because entity with this id is already zoned in");
-            var resp = new AeroMessages.Control.CloseConnection { Unk = [0, 0, 0, 0] };
-            NetChannels[ChannelType.Control].SendMessage(resp);
-            return;
-        }
-
-        // Begin setting up player character
-        CharacterEntity = new CharacterEntity(AssignedShard, guid);
-
-        // Try to get remote character data
-        CharacterAndBattleframeVisuals remoteData = null;
-        try
-        {
-            remoteData = await GRPCService.GetCharacterAndBattleframeVisualsAsync((long)characterId);
-        }
-        catch (Exception ex)
-        {
-            Logger.ForContext(typeof(GRPCService))
-                  .Warning(ex, "Could not get character over GRPC, will use fallback. Is WebHostManager running?");
-        }
-
-        // Load inventory so we get loadouts
-        Inventory = new CharacterInventory(AssignedShard, this, CharacterEntity);
-        Inventory.LoadHardcodedInventory();
-
-        // Use remote data or fallback to setup character
-        bool useRemoteData = true;
-        int loadoutId;
-        if (remoteData != null && useRemoteData)
-        {
-            CharacterEntity.LoadRemote(remoteData);
-
-            // Todo: load inventory from db so we can use those loadouts
-            loadoutId = Inventory.GetLoadoutIdForChassis(remoteData.CharacterInfo.CurrentBattleframeSDBId);
-
-            if (loadoutId == 0)
-            {
-                Logger.Warning(
-                    "No loadout for battleframe {Battleframe}, falling back to {Fallback}",
-                    remoteData.CharacterInfo.CurrentBattleframeSDBId,
-                    HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
-                loadoutId = Inventory.GetLoadoutIdForChassis(HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
-            }
-        }
-        else
-        {
-            CharacterEntity.Load(HardcodedCharacterData.FallbackData);
-            loadoutId = Inventory.GetLoadoutIdForChassis(HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
-        }
-
-        var loadoutRefData = Inventory.GetLoadoutReferenceData(loadoutId);
-        var loadout = new CharacterLoadout(loadoutRefData);
-        AssignedShard.Admin.ApplyEquipmentOverrides(this, loadout);
-        CharacterEntity.ApplyLoadout(loadout);
-
-        // Collision data should have been initialized now, create physics representation
-        AssignedShard.Physics.CreateKineticEntity(CharacterEntity);
-
-        CharacterEntity.SetControllingPlayer(this);
-        CharacterEntity.CanBleedout = true;
-        AssignedShard.CharacterLifecycle.OnCharacterCreated(CharacterEntity);
-        CharacterEntity.SetCharacterState(CharacterStateData.CharacterStatus.Spawning, AssignedShard.CurrentTime);
-        Status = IPlayer.PlayerStatus.LoggedIn;
-
-        // WelcomeToTheMatrix
-        var wel = new WelcomeToTheMatrix { PlayerID = PlayerId, Unk1 = [], Unk2 = [] };
-        NetChannels[ChannelType.Matrix].SendMessage(wel);
-
-        // The entries in the character selection screen double as a zone picker:
-        // the zone id is encoded in the low 16 bits of the character guid. Honour
-        // that regardless of where the character data came from, otherwise picking
-        // an entry would no longer take you to the matching zone.
-        var zoneId = (uint)(characterId & 0x000000000000ffff);
-        var zone = DataUtils.GetZone(zoneId);
-        uint outpostId;
-
-        if (remoteData != null && remoteData.CharacterInfo.LastZoneId == zoneId)
-        {
-            // Returning to the zone we logged out in, so drop in where we left off.
-            outpostId = FindClosestAvailableOutpost(zone, remoteData.CharacterInfo.LastOutpostId);
-        }
-        else
-        {
-            outpostId = zone.DefaultOutpostId;
-        }
-
-        Logger.Information("Zone {zoneId} Outpost {outpostId}", zoneId, outpostId);
-
-        EnterZone(zone, outpostId);
+        // Login awaits the character service, so it runs across continuations. Fire the
+        // async half as a task instead of `async void`: an exception after the first await
+        // used to escape into the thread pool and take the whole server process down, and
+        // LoginAsync keeps that failure on this connection.
+        _ = LoginAsync(characterId);
     }
 
     public void EnterZoneAck()
@@ -292,7 +201,14 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
             return zone.DefaultOutpostId;
         }
 
-        var targetOutpost = outposts[targetOutpostId];
+        // The target comes from persisted character data (LastOutpostId), so it can name an
+        // outpost this zone no longer has: indexing the map directly would throw a
+        // KeyNotFoundException straight through Login's continuations. Fall back to the
+        // default outpost instead.
+        if (!outposts.TryGetValue(targetOutpostId, out var targetOutpost))
+        {
+            return zone.DefaultOutpostId;
+        }
 
         if (!targetOutpost.IsCapturedByHostiles)
         {
@@ -371,5 +287,127 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         NetChannels[ChannelType.Matrix].SendMessage(msg);
 
         Status = IPlayer.PlayerStatus.Loading;
+    }
+
+    private async Task LoginAsync(ulong characterId)
+    {
+        try
+        {
+            await LoginCore(characterId);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Login for character {CharacterId} failed; closing the connection", characterId);
+
+            try
+            {
+                NetChannels[ChannelType.Control].SendMessage(new AeroMessages.Control.CloseConnection { Unk = [0, 0, 0, 0] });
+            }
+            catch (Exception sendEx)
+            {
+                Logger.Warning(sendEx, "Could not send CloseConnection after a failed login");
+            }
+        }
+    }
+
+    private async Task LoginCore(ulong characterId)
+    {
+        PlayerId = 0x4658281c142e9f00ul;
+        var guid = characterId & 0xffffffffffffff00;
+        CharacterId = guid;
+
+        // Don't crash if they are already logged in
+        AssignedShard.Entities.TryGetValue(CharacterId, out var existing);
+        if (existing != null)
+        {
+            Logger.Warning("Closing login because entity with this id is already zoned in");
+            var resp = new AeroMessages.Control.CloseConnection { Unk = [0, 0, 0, 0] };
+            NetChannels[ChannelType.Control].SendMessage(resp);
+            return;
+        }
+
+        // Begin setting up player character
+        CharacterEntity = new CharacterEntity(AssignedShard, guid);
+
+        // Try to get remote character data
+        CharacterAndBattleframeVisuals remoteData = null;
+        try
+        {
+            remoteData = await GRPCService.GetCharacterAndBattleframeVisualsAsync((long)characterId);
+        }
+        catch (Exception ex)
+        {
+            Logger.ForContext(typeof(GRPCService))
+                  .Warning(ex, "Could not get character over GRPC, will use fallback. Is WebHostManager running?");
+        }
+
+        // Load inventory so we get loadouts
+        Inventory = new CharacterInventory(AssignedShard, this, CharacterEntity);
+        Inventory.LoadHardcodedInventory();
+
+        // Use remote data or fallback to setup character
+        bool useRemoteData = true;
+        int loadoutId;
+        if (remoteData != null && useRemoteData)
+        {
+            CharacterEntity.LoadRemote(remoteData);
+
+            // Todo: load inventory from db so we can use those loadouts
+            loadoutId = Inventory.GetLoadoutIdForChassis(remoteData.CharacterInfo.CurrentBattleframeSDBId);
+
+            if (loadoutId == 0)
+            {
+                Logger.Warning(
+                    "No loadout for battleframe {Battleframe}, falling back to {Fallback}",
+                    remoteData.CharacterInfo.CurrentBattleframeSDBId,
+                    HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
+                loadoutId = Inventory.GetLoadoutIdForChassis(HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
+            }
+        }
+        else
+        {
+            CharacterEntity.Load(HardcodedCharacterData.FallbackData);
+            loadoutId = Inventory.GetLoadoutIdForChassis(HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
+        }
+
+        var loadoutRefData = Inventory.GetLoadoutReferenceData(loadoutId);
+        var loadout = new CharacterLoadout(loadoutRefData);
+        AssignedShard.Admin.ApplyEquipmentOverrides(this, loadout);
+        CharacterEntity.ApplyLoadout(loadout);
+
+        // Collision data should have been initialized now, create physics representation
+        AssignedShard.Physics.CreateKineticEntity(CharacterEntity);
+
+        CharacterEntity.SetControllingPlayer(this);
+        CharacterEntity.CanBleedout = true;
+        AssignedShard.CharacterLifecycle.OnCharacterCreated(CharacterEntity);
+        CharacterEntity.SetCharacterState(CharacterStateData.CharacterStatus.Spawning, AssignedShard.CurrentTime);
+        Status = IPlayer.PlayerStatus.LoggedIn;
+
+        // WelcomeToTheMatrix
+        var wel = new WelcomeToTheMatrix { PlayerID = PlayerId, Unk1 = [], Unk2 = [] };
+        NetChannels[ChannelType.Matrix].SendMessage(wel);
+
+        // The entries in the character selection screen double as a zone picker:
+        // the zone id is encoded in the low 16 bits of the character guid. Honour
+        // that regardless of where the character data came from, otherwise picking
+        // an entry would no longer take you to the matching zone.
+        var zoneId = (uint)(characterId & 0x000000000000ffff);
+        var zone = DataUtils.GetZone(zoneId);
+        uint outpostId;
+
+        if (remoteData != null && remoteData.CharacterInfo.LastZoneId == zoneId)
+        {
+            // Returning to the zone we logged out in, so drop in where we left off.
+            outpostId = FindClosestAvailableOutpost(zone, remoteData.CharacterInfo.LastOutpostId);
+        }
+        else
+        {
+            outpostId = zone.DefaultOutpostId;
+        }
+
+        Logger.Information("Zone {zoneId} Outpost {outpostId}", zoneId, outpostId);
+
+        EnterZone(zone, outpostId);
     }
 }
