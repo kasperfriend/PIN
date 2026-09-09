@@ -113,7 +113,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public bool IsServerLaunchPending => ServerLaunchPendingUntilTime != 0
         && unchecked((int)(ServerLaunchPendingUntilTime - Shard.CurrentTime)) > 0;
 
-    /// <summary>True while the forced movement the server commanded (push + 550 ms) may still be playing.</summary>
+    /// <summary>True during the server-side wait (push + 550 ms) for the client's first post-impulse pose.</summary>
     public bool IsServerLaunchForcedWindowActive => IsServerLaunchPending
         && unchecked((int)(ServerLaunchPendingUntilTime - 1500 - Shard.CurrentTime)) > 0;
 

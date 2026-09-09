@@ -112,8 +112,8 @@ effect slots.
 
 So when `ForcePush` sends a launch it also marks the character as
 **launch-pending** (`MarkServerLaunchPending`): it seeds the movement state nibble to
-glider (`0x7000`) and opens a window that runs to push time + 550 ms (the forced movement
-it commanded) + 1500 ms handoff margin. While the window is open:
+glider (`0x7000`) and opens a window that runs to push time + 550 ms (a server-side wait
+for the client's first post-impulse pose) + 1500 ms handoff margin. While the window is open:
 
 - `AirborneDuration` counts the character as airborne;
 - `RequireMovestate` answers gliding/falling/… from the *pending launch*, not the stale
@@ -133,11 +133,13 @@ air time on the first post-push input means the launch itself failed client-side
 server gate was at fault; falling/glider with negative air time means the launch worked and
 the chain must stay up (regression-test the gates if it does not).
 
-The existing `ForcedMovement` type-5 launch window is still 50 ms ahead through 550 ms
-ahead. Both endpoints and the packet's short time now use one clock snapshot, and the
-`[Glider] ForcePush` log includes target, strength, velocity and the window. This records
-what the server sent; it does not prove the client acted on it. Do not mask a failed launch
-by disabling fall damage or granting gliding permanently.
+Type 5 is a one-frame velocity impulse on the shared epoch-ms clock: `Time1 = now+19`,
+`Time2 = now+20`, matching upstream PIN and the live client. A previous 50–550 ms hold was
+a misdiagnosis — field logs then showed `Launch handoff ... MoveState=4096 Airborne=False
+VelocityZ=0` (animation played, the player never left the pad). The `[Glider] ForcePush`
+log includes target, strength, velocity and the window; it records what the server sent and
+does not prove the client acted on it. Do not mask a failed launch by disabling fall damage
+or granting gliding permanently.
 
 ## ADS state
 
