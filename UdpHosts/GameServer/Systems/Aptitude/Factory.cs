@@ -255,8 +255,8 @@ public class Factory
                 return new DeployableSpawnCommand(CustomDBInterface.GetDeployableSpawnCommandDef(commandId));
             // case CommandType.NPCDroidModeChange:
             //     return new NPCDroidModeChangeCommand(CustomDBInterface.GetNPCDroidModeChangeCommandDef(commandId));
-            // case CommandType.BattleFrameDuration:
-            //     return new BattleFrameDurationCommand(SDBInterface.GetBattleFrameDurationCommandDef(commandId));
+            case CommandType.BattleFrameDuration:
+                return new BattleFrameDurationCommand(SDBInterface.GetBattleFrameDurationCommandDef(commandId));
             // case CommandType.ShootingDuration:
             //     return new ShootingDurationCommand(SDBInterface.GetShootingDurationCommandDef(commandId));
             // case CommandType.RequireWeaponTemplate:

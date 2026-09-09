@@ -255,7 +255,18 @@ public class AbilitySystem
                 break;
             }
 
-            if (activeEffect is { Removed: false } && activeEffect.Effect.DurationChain != null
+            // Weapon scope status effects are client-owned state: UseScope(false) (or a weapon/death
+            // transition) is the lifetime event. Their data also carries a BattleFrameDuration/character
+            // state chain, but evaluating that chain on the server can expire the replicated effect while
+            // FireMode_1 is still scoped. The client then correctly plays the replicated removal as an
+            // aim-animation blend back to hip fire, which is the long-standing ADS symptom. Keep the
+            // effect alive while the character's scoped mode says it is active; normal explicit scope-out
+            // still reaches DoRemoveEffect through SetScopedState.
+            bool isActiveScope = entity is CharacterEntity scopedCharacter
+                && scopedCharacter.ScopeStatusEffectId == activeEffect?.Effect.Id
+                && scopedCharacter.FireMode_1.Mode != 0;
+
+            if (activeEffect is { Removed: false } && !isActiveScope && activeEffect.Effect.DurationChain != null
                 && currentTime > activeEffect.LastUpdateTime + activeEffect.Effect.UpdateFrequency)
             {
                 var context = activeEffect.Context;
