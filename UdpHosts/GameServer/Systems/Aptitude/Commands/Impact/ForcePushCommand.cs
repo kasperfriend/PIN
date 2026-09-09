@@ -59,18 +59,18 @@ public class ForcePushCommand : Command, ICommand
             var velocity = new Vector3(character.Velocity[0], character.Velocity[1], character.Velocity[2]);
             velocity.Z += strength;
 
-            // Type 5 is a one-frame velocity impulse, not a held trajectory. Live wire truth
-            // (2016 captures, two (0,0,33) pad launches): the client rewinds to the stamped time,
-            // REPLACES its velocity with the message vector, and re-simulates ballistically to now
-            // (201 ms rewind -> +6.0 m / 26.6 m/s; 251 ms -> +7.2 m / 24.7 m/s, both exact). The
-            // stamps MUST therefore be past/present: a future Time1 is never applied (the client
-            // cannot rewind into the future), which is why now+19/now+20 never launched on any
-            // latency, and a 500 ms hold window failed the same way. The live proximity-fired pads
-            // stamp Time1 = send time, Time2 = Time1+1, ShortTime = Time1_low16; we stamp 25 ms in
-            // the past so the rewind is strictly forward even with clock jitter between server and
-            // client (~0.8 m / ~0.8 m/s of catch-up are invisible in game).
+            // Type 5 is a one-frame velocity impulse, not a held trajectory. The client applies the
+            // packet while it is still fresh: the packet's own `ShortTime` is what marks it current
+            // (it must be the 16-bit clock now, not the low half of the impulse time), and the
+            // impulse itself is stamped a short hop ahead (`Time1 = now+19`). A previous 50-550 ms
+            // hold and a now-25 ms rewind both produced the same field result: `ForcePush` fired
+            // while the client stayed standing, then `[Glider] Launch handoff ... MoveState=4096
+            // AirTime=32767 Airborne=False VelocityZ=0` and the pad retriggered. Upstream PIN and
+            // the live client send exactly `Time1 = now+19`, `Time2 = now+20` and
+            // `ShortTime = CurrentShortTime`, like the teleport/respawn `ForcedMovement` packets
+            // elsewhere in this codebase.
             uint now = context.Shard.CurrentTime;
-            uint impulseAt = unchecked(now - 25);
+            uint impulseAt = unchecked(now + 19);
             var player = character.Player;
 
             // The aptitude gates that keep the launch effects alive (AirborneDuration, RequireMovestate
@@ -100,10 +100,10 @@ public class ForcePushCommand : Command, ICommand
                     }
                 },
 
-                ShortTime = unchecked((ushort)impulseAt),
+                ShortTime = context.Shard.CurrentShortTime,
             };
-            Logger.Debug("[Glider] ForcePush {CommandId} Target={Target} Strength={Strength} Velocity={Velocity} Start={StartTime} End={EndTime}",
-                Params.Id, character.EntityId, strength, velocity, message.Data.Params5.Time1, message.Data.Params5.Time2);
+            Logger.Debug("[Glider] ForcePush {CommandId} Target={Target} Strength={Strength} Velocity={Velocity} Start={StartTime} End={EndTime} Short={ShortTime}",
+                Params.Id, character.EntityId, strength, velocity, message.Data.Params5.Time1, message.Data.Params5.Time2, message.ShortTime);
             player.NetChannels[ChannelType.ReliableGss].SendMessage(message, character.EntityId);
         }
 

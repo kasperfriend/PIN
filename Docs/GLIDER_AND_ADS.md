@@ -134,12 +134,17 @@ server gate was at fault; falling/glider with negative air time means the launch
 the chain must stay up (regression-test the gates if it does not).
 
 Type 5 is a one-frame velocity impulse on the shared epoch-ms clock: `Time1 = now+19`,
-`Time2 = now+20`, matching upstream PIN and the live client. A previous 50–550 ms hold was
-a misdiagnosis — field logs then showed `Launch handoff ... MoveState=4096 Airborne=False
-VelocityZ=0` (animation played, the player never left the pad). The `[Glider] ForcePush`
-log includes target, strength, velocity and the window; it records what the server sent and
-does not prove the client acted on it. Do not mask a failed launch by disabling fall damage
-or granting gliding permanently.
+`Time2 = now+20` and `ShortTime = CurrentShortTime`, matching upstream PIN and the live
+client (the 2016 capture's pad launches carry `Unk1=0`, `HaveUnk2=0`, a 12-byte velocity
+vector and a `ShortTime` that tracks the current 16-bit clock, not the low half of
+`Time1`). A previous 50–550 ms hold was a misdiagnosis — field logs then showed
+`Launch handoff ... MoveState=4096 Airborne=False VelocityZ=0` (animation played, the
+player never left the pad). Stamping the packet with `Time1 = now-25` (an earlier attempt
+at a rewind-friendly impulse) has the same effect: the `ShortTime` also gets the old low
+16 bits and the client drops the packet as stale, so it never leaves the pad. The
+`[Glider] ForcePush` log includes target, strength, velocity and the window; it records
+what the server sent and does not prove the client acted on it. Do not mask a failed
+launch by disabling fall damage or granting gliding permanently.
 
 ## ADS state
 
