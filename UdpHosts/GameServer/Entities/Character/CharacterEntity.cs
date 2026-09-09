@@ -1109,6 +1109,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
         Character_CombatController?.WeaponIndexProp = value;
     }
+
     /// <summary>
     /// Writes the scoped (aiming down sights) state into the replicated fire mode fields.
     /// <para>
@@ -1183,7 +1184,6 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     }
 
     internal uint ScopeStatusEffectId => _scopeStatusFx;
-
 
     /// <summary>
     ///     Set or clear the scope bubble of the character: the replicated state (a layer plus a second, not yet
