@@ -179,6 +179,10 @@ public class CharacterAppearanceTests
                 HairColor = new WebIdValueColor { Id = 77193, Value = new WebColor { Color = 1917780001 } },
                 FacialHairColor = new WebIdValueColor { Id = 77193, Value = new WebColor { Color = 1917780001 } },
                 Hair = new WebIdValueColorId { Id = 10113 },
+
+                // LoadRemote reads these too; the capture carries id 0 for both.
+                Glider = new WebId { Id = 0 },
+                Vehicle = new WebId { Id = 0 },
             },
             BattleframeVisuals = new PlayerBattleframeVisuals
             {
