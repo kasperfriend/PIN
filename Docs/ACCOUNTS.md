@@ -184,25 +184,62 @@ The client's account creation form posts to `POST /api/v2/accounts`:
 ```json
 {
   "email": "player@example.com",
-  "confirm_email": "player@example.com",
   "password": "hunter2",
-  "confirm_password": "hunter2",
   "birthday": "1990-01-01",
   "country": "US",
   "email_optin": false,
-  "referral_key": ""
+  "referral_key": "",
+  "steam_session_ticket": null,
+  "steam_user_id": null,
+  "steam_cdkey": null
 }
 ```
 
-On success the account is stored and immediately playable; on failure the
-client shows the localized message for the returned error code. Validation
-rules (mirroring the original service):
+> **The client sends no `confirm_email` / `confirm_password`** — it checks its
+> two confirmation boxes in its own UI and posts the email/password pair only
+> (the request shape the reference implementation the client was reverse
+> engineered against stores: RIN.WebAPI's `CreateAccountReq`). Those two fields
+> are *optional* here: when a caller does send them they are validated against
+> their partner field, but a missing one is never an error. Requiring them used
+> to reject every creation with `ERR_EMAIL_MISMATCH` (HTTP 500) before an
+> account was stored, which left the client frozen in its post-create login
+> loop.
 
-* email required, must match `confirm_email` (`ERR_EMAIL_MISMATCH`)
-* password required, must match `confirm_password` (`ERR_PASSWORD_MISMATCH`)
-* email must be unused (`ERR_ACCOUNT_EXISTS`)
+The endpoint is served by **both** hosts the client may post it to: the ClientApi
+host (`https://localhost:44302`, where the rest of the client API lives) and the
+catch-all host (`https://localhost:44399`), which is what the WebHostManager's
+operator capability response advertises as the client's **WebAccounts** service.
+That matters: the catch-all answers every request it does not implement with an
+empty `200`, so before it served this endpoint a creation form posted there was
+read by the client as "account created" — and the login that follows failed with
+`ERR_INCORRECT_USERPASS` because no account had been stored.
+
+On success the account is stored (`200` with the empty object `{}` the original
+service returned) and is immediately playable; on failure the client shows the
+localized message for the returned error code. Validation rules (mirroring the
+original service):
+
+* email required (`ERR_NO_EMAIL`), must be unused (`ERR_ACCOUNT_EXISTS`), must
+  not contain whitespace and must be at most 254 characters (`ERR_UNKNOWN`)
+* password required (`ERR_PASSWORD_MISMATCH`)
+* `confirm_email` / `confirm_password` are checked against their partner field
+  only when they are actually sent (`ERR_EMAIL_MISMATCH` /
+  `ERR_PASSWORD_MISMATCH`); emails are compared trimmed and ASCII-folded,
+  passwords verbatim
+
+`birthday`, `country`, `email_optin` and `referral_key` are stored as given; the
+Steam fields of a Steam-linked creation are accepted and ignored (PIN has no
+Steam backend).
 
 ### With curl (for a headless server)
+
+```sh
+curl -k -X POST https://localhost:44302/api/v2/accounts \
+  -H "Content-Type: application/json" \
+  -d '{"email":"player@example.com","password":"hunter2"}'
+```
+
+The confirmation fields are accepted here too, so this still works:
 
 ```sh
 curl -k -X POST https://localhost:44302/api/v2/accounts \
@@ -339,6 +376,11 @@ succeeded.
 * Creation and login must use the same email spelling (case does not matter,
   surrounding spaces are trimmed on creation).
 * The account must appear in `accounts.json` after creation.
+* The WebHostManager console logs every created account (`Created account
+  <id> (<email>)`) and every rejection with its error code
+  (`Rejected an account creation request: <code>`). Those lines are
+  `Information`, so raise the Serilog `MinimumLevel` above its default
+  `Warning` to see them.
 
 **Character list is empty / shows the admin's characters**
 

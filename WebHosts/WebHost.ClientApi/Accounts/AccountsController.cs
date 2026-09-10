@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Shared.Common.Accounts;
-using Shared.Common.Characters;
+using Shared.Web;
 using WebHost.ClientApi.Accounts.Models;
 using WebHost.ClientApi.Characters.Models;
 
@@ -22,51 +23,25 @@ public class AccountsController : ControllerBase
 
     /// <summary>
     /// Create a new account. The client's account creation form POSTs the
-    /// email/password pair (with confirmations) here; the account is stored with
-    /// the Red5 uid/secret derived from the credentials, so the client can log in
-    /// with them immediately. Failures return the original client error codes
+    /// email/password pair here; the account is stored with the Red5 uid/secret
+    /// derived from the credentials, so the client can log in with them
+    /// immediately. Failures return the original client error codes
     /// (<c>ERR_ACCOUNT_EXISTS</c>, <c>ERR_EMAIL_MISMATCH</c>, ...) with HTTP 500.
     /// </summary>
+    /// <remarks>
+    /// The shipped client sends no <c>confirm_email</c>/<c>confirm_password</c>
+    /// (it validates its own confirmation boxes), so a missing confirmation is
+    /// not a mismatch — see <see cref="AccountCreation"/>. The body is read by
+    /// <see cref="Shared.Web.AccountCreationEndpoint"/> so that no framework
+    /// error (a 415 for a content type the client picked, say) can leave the
+    /// client waiting for an answer it cannot parse; a successful creation
+    /// answers with the empty object the original service returned.
+    /// </remarks>
     [Route("api/v2/accounts")]
     [HttpPost]
-    public IActionResult CreateAccount([FromBody] CreateAccountPost post)
+    public async Task<IActionResult> CreateAccount()
     {
-        if (post == null)
-        {
-            return Error(AccountErrors.ErrUnknown, "No account data received");
-        }
-
-        if (!string.Equals(AccountStore.NormalizeEmail(post.Email), AccountStore.NormalizeEmail(post.ConfirmEmail), StringComparison.Ordinal))
-        {
-            return Error(AccountErrors.ErrEmailMismatch, "The email addresses do not match");
-        }
-
-        if (string.IsNullOrEmpty(post.Password) || !string.Equals(post.Password, post.ConfirmPassword, StringComparison.Ordinal))
-        {
-            return Error(AccountErrors.ErrPasswordMismatch, "The passwords do not match");
-        }
-
-        if (!AccountStore.Default.TryCreate(
-                post.Email,
-                post.Password,
-                post.Country,
-                post.Birthday,
-                post.EmailOptIn,
-                post.ReferralKey,
-                out var account,
-                out var errorCode,
-                out var errorMessage))
-        {
-            return Error(errorCode, errorMessage);
-        }
-
-        // Give the fresh account its own zone-picker entries, the same way the
-        // first-run seed does for the admin account.
-        CharacterStore.EnsureSeededForAccount(account.AccountId);
-
-        _logger.LogInformation("Created account {AccountId} ({Email})", account.AccountId, account.Email);
-
-        return Ok(new { error = false });
+        return await AccountCreationEndpoint.HandleAsync(Request, _logger);
     }
 
     /// <summary>
