@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Common.Accounts;
+using Shared.Common.Characters;
 using WebHost.ClientApi.Accounts;
+using WebHost.ClientApi.Accounts.Models;
 using WebHost.ClientApi.Characters.Models;
 
 namespace WebHost.ClientApi.Characters;
@@ -171,24 +174,108 @@ public class CharactersController : ControllerBase
         return temp;
     }
 
+    /// <summary>
+    /// Character name check for the creation form. Mirrors the original
+    /// service's rules (length bounds, letters/digits/spaces only, no leading
+    /// digit, name not taken) and reports each violated rule with the original
+    /// client error codes in <c>reason</c>.
+    /// </summary>
     [Route("api/v1/characters/validate_name")]
     [HttpPost]
     [Produces("application/json")]
     public object ValidateCharacterName([FromBody] CharacterName characterName)
     {
-        if (string.IsNullOrEmpty(characterName.Name) || characterName.Name.Length < 4)
-        {
-            return new { valid = false };
-        }
-        
-        return new { valid = true };
+        // Real characters reserve their names across all accounts; the built-in
+        // zone-picker seed entries do not.
+        var takenNames = CharacterStore.GetAll()
+                                       .Where(c => !CharacterCreation.IsZoneSeedEntry(c))
+                                       .Select(c => c.Name);
+
+        var reasons = CharacterCreation.ValidateName(characterName?.Name, takenNames);
+
+        return new ValidateNameResponse
+               {
+                   Name = characterName?.Name,
+                   Valid = reasons.Count == 0,
+                   Code = reasons.Count == 0 ? string.Empty : AccountErrors.ErrNameInvalid,
+                   Reason = reasons
+               };
     }
 
+    /// <summary>
+    /// Character creation (<c>POST api/v1/characters</c>). The request carries
+    /// the name, starting battleframe and the head/voice/color choices of the
+    /// creation screen; the created character takes over the account's
+    /// zone-picker slot for the spawn zone (New Eden) and shows up in the
+    /// character list the client re-fetches afterwards. The account is taken
+    /// from the request's X-Red5-Signature, exactly like the original service.
+    /// </summary>
     [Route("api/v1/characters")]
     [HttpPost]
     [Produces("application/json")]
-    public object CreateCharacter([FromBody] CharacterCreate characterCreateData)
+    public IActionResult CreateCharacter([FromBody] CharacterCreate characterCreateData)
     {
-        return new { };
+        if (characterCreateData == null)
+        {
+            return Error(AccountErrors.ErrUnknown, "No character data received");
+        }
+
+        var account = HttpContext.TryGetRed5Account();
+        if (account == null)
+        {
+            return Error(AccountErrors.ErrIncorrectUserPass, "Login failed, check your username and password");
+        }
+
+        var gender = string.Equals(characterCreateData.Gender, "female", StringComparison.OrdinalIgnoreCase) ? 1u : 0u;
+
+        if (!CharacterStore.TryCreateCharacter(
+                account.AccountId,
+                characterCreateData.Name,
+                gender,
+                (uint)characterCreateData.StartClassId,
+                (uint)characterCreateData.Head,
+                (uint)characterCreateData.VoiceSet,
+                (uint)characterCreateData.SkinColorId,
+                (uint)characterCreateData.EyeColorId,
+                (uint)characterCreateData.HairColorId,
+                (uint)characterCreateData.HeadAccessoryA,
+                out var character,
+                out var errorCode,
+                out var errorMessage))
+        {
+            return Error(errorCode, errorMessage);
+        }
+
+        return Ok(new CreateCharacterResponse
+                  {
+                      AccountId = (long)account.AccountId,
+                      CharacterGuid = (long)character.CharacterGuid,
+                      CreatedAt = character.CreatedAt,
+                      UpdatedAt = character.CreatedAt,
+                      HeadAccAId = characterCreateData.HeadAccessoryA,
+                      HeadAccBId = 0,
+                      HeadMainId = characterCreateData.Head,
+                      IsActive = true,
+                      IsDev = characterCreateData.IsDev,
+                      LastSeenAt = character.LastSeenAt,
+                      MaxFrameLevel = character.MaxFrameLevel,
+                      Name = character.Name,
+                      NeedsNameChange = false,
+                      PoolId = 0,
+                      Race = 0,
+                      TimePlayedSecs = 0,
+                      TitleId = 0,
+                      UniqueName = character.Name.ToUpperInvariant(),
+                      Gender = gender == 1 ? "female" : "male"
+                  });
+    }
+
+    private ObjectResult Error(string code, string message)
+    {
+        var result = new ObjectResult(new ApiError { Code = code, Message = message })
+                     {
+                         StatusCode = 500
+                     };
+        return result;
     }
 }

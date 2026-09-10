@@ -53,7 +53,10 @@ curl -k -X POST https://localhost:44302/api/v2/accounts \
 
 Characters belong to accounts: each account gets its own copy of the
 zone-picker entries in `characters.json`, and the selection screen shows only
-the logged-in account's characters.
+the logged-in account's characters. Character creation works too — the client's
+creation form creates a real, persisted character for the logged-in account
+(starting in New Eden), with the original name rules and error codes. See
+[`Docs/ACCOUNTS.md`](Docs/ACCOUNTS.md) §7-§8 for both.
 
 The store location is configurable:
 

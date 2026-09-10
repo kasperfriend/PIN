@@ -327,7 +327,13 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
 
     private async Task LoginCore(ulong characterId)
     {
-        PlayerId = 0x4658281c142e9f00ul;
+        // Every controller keyframe addressed to a client carries its player id,
+        // so simultaneous players must not share one: with the old hardcoded
+        // value, the second client would attribute the first player's view state
+        // to itself. Derive a stable, unique id from the character guid (the
+        // captured constant keeps the id in the shape the original service
+        // assigned).
+        PlayerId = 0x4658281c142e9f00ul ^ (characterId & 0xffffffffffffff00);
         var guid = characterId & 0xffffffffffffff00;
         CharacterId = guid;
 

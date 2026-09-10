@@ -22,6 +22,15 @@ public class CharacterRecord
     /// <summary>Owning account (<see cref="AccountStore.AdminAccountId"/> for legacy records).</summary>
     public ulong AccountId { get; set; } = AccountStore.AdminAccountId;
 
+    /// <summary>
+    /// True when the player created this character through the account system's
+    /// character creation (as opposed to the built-in zone-picker seed entries,
+    /// which exist so the selection screen doubles as a zone picker). Seed
+    /// entries in a slot can be replaced by a created character; custom ones
+    /// cannot.
+    /// </summary>
+    public bool IsCustom { get; set; }
+
     public string Name { get; set; } = string.Empty;
 
     /// <summary>Position in the character selection list. Lower sorts first.</summary>

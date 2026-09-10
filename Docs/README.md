@@ -3,7 +3,7 @@
 PIN is split into two areas:
 - [UdpHosts](#udphosts)
 - [WebHosts](#webhosts)
-- [Accounts & Login](ACCOUNTS.md) — `accounts.json`, the admin account, Red5 signature login and account creation
+- [Accounts & Login](ACCOUNTS.md) — `accounts.json`, the admin account, Red5 signature login, account and character creation, multiplayer notes
 - [Characters & Battleframes](CHARACTERS_AND_BATTLEFRAMES.md) — `characters.json` configuration
 - [Spawning & Combat](SPAWNING_AND_COMBAT.md) — NPC spawning and combat flow
 - [Static Database](STATIC_DATABASE.md) — the `clientdb.sd2` format, what PIN loads from it, and the in-game `spawn` / `sdb` / `sdbinfo` commands

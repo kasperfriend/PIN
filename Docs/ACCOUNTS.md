@@ -35,9 +35,10 @@ Implementation:
 * `Lib/Shared.Common/Accounts/AccountStore.cs` — the `accounts.json` store
 * `Lib/Shared.Common/Accounts/AccountRecord.cs` — a stored account
 * `Lib/Shared.Common/Characters/CharacterResolver.cs` — per-account character resolution
+* `Lib/Shared.Common/Characters/CharacterCreation.cs` — character creation and name rules
 * `WebHosts/WebHost.ClientApi/Accounts/AccountsController.cs` — login / create / status
 * `WebHosts/WebHost.ClientApi/Characters/CharactersRepository.cs` — per-account character list
-* Tests: `UdpHosts/GameServer.Tests/Red5AuthTests.cs`, `AccountStoreTests.cs`, `CharacterStoreTests.cs`
+* Tests: `UdpHosts/GameServer.Tests/Red5AuthTests.cs`, `AccountStoreTests.cs`, `CharacterStoreTests.cs`, `CharacterCreationTests.cs`
 
 ---
 
@@ -230,7 +231,60 @@ curl -k -X POST https://localhost:44302/api/v2/accounts \
 
 ---
 
-## 7. Configuration Reference
+## 7. Creating characters
+
+The client's character creation form works: after logging in, "create character"
+posts to `POST api/v1/characters` with the name, starting battleframe
+(`start_class_id`) and the head/voice/color choices. The created character:
+
+* belongs to the logged-in account (identified through the same verified
+  `X-Red5-Signature` as the login),
+* starts at battleframe progression level 1 with the chosen chassis,
+* **takes over the account's zone-picker slot for the spawn zone (New Eden)**:
+  the seed entry named "New Eden" is replaced by your named character — the
+  other 37 zone entries stay as zone teleports. A second creation while a custom
+  character already owns that slot fails with the original
+  `ERR_DUPLICATE_CHARACTER` error,
+* appears in the character list the client re-fetches right after creation.
+
+Name rules (`POST api/v1/characters/validate_name`, reported with the original
+client error codes): 4–40 characters, ASCII letters/digits/spaces only, must not
+start with a digit, and must not be taken by another character (names are
+reserved **across accounts**; the built-in zone entries do not reserve their
+zone names).
+
+Known limitation: the creation form's color *choices* are stored as the correct
+SDB item ids, but the ARGB color *values* the avatar renders with stay at the
+default template's until appearance editing (NewYou) is served from the static
+database — the created character may look slightly more "default" than the
+preview until then.
+
+---
+
+## 8. Playing with more than one person
+
+The GameServer is built for several simultaneous players (each connection is its
+own `NetworkPlayer` with its own zone, entities are scoped per player, movement
+and chat are relayed between them), and the account system removes what used to
+block it in practice:
+
+* Before accounts, every login shared the same built-in character guids — two
+  players picking the same zone entry collided on the same character id and the
+  second connection was closed. Each account now owns its own characters with
+  distinct guid ranges, so two players can be online in the **same zone at the
+  same time** as two separate entities.
+* Each player's `PlayerId` (used to address controller keyframes to a client) is
+  now derived from their character guid instead of the one hardcoded value that
+  every player used to share.
+* Two characters of the **same** account still cannot be online simultaneously
+  (the duplicate-login guard closes the second connection — standard MMO
+  behaviour).
+* PvP remains unimplemented (see the README's limitations); co-op play,
+  NPC combat and chat work per the shard's existing systems.
+
+---
+
+## 9. Configuration Reference
 
 `WebHosts/WebHostManager/config/appsettings.json`:
 
@@ -254,7 +308,7 @@ succeeded.
 
 ---
 
-## 8. Troubleshooting
+## 10. Troubleshooting
 
 **Login always fails with `ERR_INCORRECT_USERPASS`**
 
@@ -284,7 +338,7 @@ succeeded.
 
 ---
 
-## 9. Security Notes
+## 11. Security Notes
 
 PIN is a local/LAN game-server emulator:
 

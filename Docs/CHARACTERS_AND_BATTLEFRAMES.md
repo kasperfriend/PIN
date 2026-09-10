@@ -187,6 +187,7 @@ File is `List<CharacterRecord>` indented JSON. Minimal valid entry:
 |-------|------|-------------|
 | `CharacterGuid` | ulong | Unique id, encodes ZoneId in low 16 bits. Admin: `0x99aabbccddee0000 + zoneId`, other accounts: `0xaa00000000000000 \| (accountId << 16) + zoneId` |
 | `AccountId` | ulong | Owning account; defaults to the built-in admin account when absent (legacy files) |
+| `IsCustom` | bool | True for characters created through the account system's character creation; seed entries are replaceable by created characters, custom ones are not |
 | `Name` | string | Shown in selection screen |
 | `SortOrder` | int | Lower = earlier in list |
 | `ZoneId` | derived | `CharacterGuid & 0xffff`, not stored, read-only |

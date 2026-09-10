@@ -32,6 +32,13 @@ public static class CharacterStore
     /// </summary>
     public const ulong GeneratedAccountGuidPrefixBase = 0xaa00000000000000;
 
+    /// <summary>
+    /// Zone a newly created character spawns in and gets its guid slot for:
+    /// New Eden, the open world every new character of the original game started
+    /// its life in reach of.
+    /// </summary>
+    public const uint DefaultSpawnZoneId = 448;
+
     private static readonly object SaveLock = new();
 
     private static readonly ConcurrentDictionary<ulong, CharacterRecord> Characters = new();
@@ -163,6 +170,109 @@ public static class CharacterStore
     public static ulong GuidPrefixForAccount(ulong accountId)
     {
         return accountId == AccountStore.AdminAccountId ? GuidPrefix : GeneratedAccountGuidPrefixBase | (accountId << 16);
+    }
+
+    /// <summary>Whether <paramref name="name"/> is one of the built-in zone-picker seed names.</summary>
+    public static bool IsSeedZoneName(string name)
+    {
+        foreach (var (seedName, _) in SeedZones)
+        {
+            if (string.Equals(seedName, name, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Create a character for an account through the client's character creation
+    /// flow (<c>POST api/v1/characters</c>).
+    ///
+    /// The new character takes over the account's zone-picker slot for the spawn
+    /// zone (<see cref="DefaultSpawnZoneId"/>): the guid keeps the
+    /// prefix+zoneId scheme the GameServer resolves spawns by, and the selection
+    /// list stays coherent (the seed entry is replaced by the named character).
+    /// Only untouched seed entries can be replaced — a character that already
+    /// exists in that slot blocks the creation with
+    /// <see cref="AccountErrors.ErrDuplicateCharacter"/>.
+    /// </summary>
+    public static bool TryCreateCharacter(
+        ulong accountId,
+        string name,
+        uint gender,
+        uint battleframeSdbId,
+        uint head,
+        uint voiceSet,
+        uint skinColorItemId,
+        uint eyeColorItemId,
+        uint hairColorItemId,
+        uint headAccessoryA,
+        out CharacterRecord character,
+        out string errorCode,
+        out string errorMessage)
+    {
+        character = null;
+        errorCode = null;
+        errorMessage = null;
+
+        Init();
+        EnsureSeededForAccount(accountId);
+
+        // Names are reserved by real characters across all accounts (the seed
+        // zone entries do not reserve their zone names).
+        var takenNames = Characters.Values
+                                   .Where(c => !CharacterCreation.IsZoneSeedEntry(c))
+                                   .Select(c => c.Name)
+                                   .ToList();
+
+        var reasons = CharacterCreation.ValidateName(name, takenNames);
+        if (reasons.Count > 0)
+        {
+            errorCode = AccountErrors.ErrNameInvalid;
+            errorMessage = "That name is not available";
+            return false;
+        }
+
+        var guid = GuidPrefixForAccount(accountId) + DefaultSpawnZoneId;
+        Characters.TryGetValue(guid, out var existingSlot);
+
+        if (!CharacterCreation.TryClaimSlot(existingSlot, out errorCode))
+        {
+            errorMessage = $"This account already has a character for the zone {DefaultSpawnZoneId}";
+            return false;
+        }
+
+        // A request without a usable start class keeps the default frame, so the
+        // record is never built with an unknown chassis.
+        if (battleframeSdbId == 0)
+        {
+            battleframeSdbId = DefaultCharacterTemplate.FrameSdbId;
+        }
+
+        // Keep the replaced seed's position in the selection list; a missing slot
+        // (should not happen after seeding) sorts to the front.
+        var sortOrder = existingSlot?.SortOrder ?? -1;
+
+        character = CharacterCreation.Create(
+            accountId,
+            guid,
+            sortOrder,
+            name,
+            gender,
+            battleframeSdbId,
+            head,
+            voiceSet,
+            skinColorItemId,
+            eyeColorItemId,
+            hairColorItemId,
+            headAccessoryA);
+
+        Characters[guid] = character;
+        Save();
+
+        return true;
     }
 
     /// <summary>
