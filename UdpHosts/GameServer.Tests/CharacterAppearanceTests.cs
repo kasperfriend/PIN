@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using GameServer.Data;
 using GameServer.Entities.Character;
+using GameServer.StaticDB;
 using GameServer.Tests.Fakes;
 using GrpcGameServerAPIClient;
 using Shared.Common.Characters;
@@ -76,9 +78,9 @@ public class CharacterAppearanceTests
         var shard = new FakeShard();
         var character = new CharacterEntity(shard, shard.GetNextGuid(0));
 
-        var loadout = new GameServer.Data.CharacterLoadout
+        var loadout = new CharacterLoadout
         {
-            ChassisWarpaint = new GameServer.StaticDB.ChassisWarpaintResult
+            ChassisWarpaint = new ChassisWarpaintResult
             {
                 Gradients = [],
                 Colors = [1, 2, 3, 4, 5, 6, 7],
@@ -104,9 +106,9 @@ public class CharacterAppearanceTests
         var chosenWarpaint = new uint[] { 4216738474, 0, 4216717312, 418250752, 1525350400, 4162844703, 4162844703 };
         character.SetChassisWarpaint(chosenWarpaint);
 
-        var loadout = new GameServer.Data.CharacterLoadout
+        var loadout = new CharacterLoadout
         {
-            ChassisWarpaint = new GameServer.StaticDB.ChassisWarpaintResult
+            ChassisWarpaint = new ChassisWarpaintResult
             {
                 Gradients = [],
                 Colors = [1, 2, 3, 4, 5, 6, 7],
@@ -132,9 +134,9 @@ public class CharacterAppearanceTests
         var shard = new FakeShard();
         var character = new CharacterEntity(shard, shard.GetNextGuid(0));
 
-        var loadout = new GameServer.Data.CharacterLoadout
+        var loadout = new CharacterLoadout
         {
-            ChassisWarpaint = new GameServer.StaticDB.ChassisWarpaintResult
+            ChassisWarpaint = new ChassisWarpaintResult
             {
                 Gradients = [],
                 Colors = [1, 2, 3, 4, 5, 6, 7],
@@ -200,9 +202,9 @@ public class CharacterAppearanceTests
             character.StaticInfo.Visuals.Colors.ToArray());
 
         // The chosen warpaint sticks and is worn on the chassis of any loadout.
-        var loadout = new GameServer.Data.CharacterLoadout
+        var loadout = new CharacterLoadout
         {
-            ChassisWarpaint = new GameServer.StaticDB.ChassisWarpaintResult
+            ChassisWarpaint = new ChassisWarpaintResult
             {
                 Gradients = [],
                 Colors = [1, 2, 3, 4, 5, 6, 7],
