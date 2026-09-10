@@ -253,11 +253,27 @@ start with a digit, and must not be taken by another character (names are
 reserved **across accounts**; the built-in zone entries do not reserve their
 zone names).
 
-Known limitation: the creation form's color *choices* are stored as the correct
-SDB item ids, but the ARGB color *values* the avatar renders with stay at the
-default template's until appearance editing (NewYou) is served from the static
-database — the created character may look slightly more "default" than the
-preview until then.
+### Appearance — get what you select
+
+The in-game character is rendered from the same record values the selection
+screen preview uses, so what you pick is what you play as:
+
+* **Battleframe armor**: the record's `Visuals.Warpaint` (the 7 packed
+  light-dark colors, slots in order armor1-3 / bodysuit1-2 / glow1-2) is worn
+  on the chassis in-game instead of the chassis' default SDB warpaint — a
+  purple preview spawns as a purple battleframe, not the grey standard armor.
+* **Hair**: the hair and facial-hair meshes are worn as the leading head
+  accessories both on the selection screen and in-game (the original service's
+  data model: `hair == head_accessories[0]`), and the body colors (skin, lip,
+  eye, hair, facial hair) flow through unchanged.
+* Switching battleframes in-game keeps your warpaint — it belongs to the
+  character, not the chassis.
+
+Known remaining limitations: the creation form's color *choices* are stored as
+the correct SDB item ids, but the ARGB color *values* the avatar renders with
+stay at the default template's until appearance editing (NewYou) is served from
+the static database; warpaint *patterns* and decals from the record are not yet
+applied in-game (colors only, which is what the default entries carry anyway).
 
 ---
 

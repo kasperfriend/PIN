@@ -90,12 +90,16 @@ public class CharacterCreationTests
         Assert.Equal(CharacterStore.DefaultSpawnZoneId, (uint)(character.CharacterGuid & 0xffff));
         Assert.Equal(CharacterStore.DefaultSpawnZoneId, character.LastZoneId);
 
-        // The visual item ids come from the creation form.
+        // The visual item ids come from the creation form...
         Assert.Equal(10026u, character.Visuals.Head);
         Assert.Equal(1033u, character.Visuals.VoiceSet);
         Assert.Equal(118969u, character.Visuals.SkinColorId);
         Assert.Equal(118980u, character.Visuals.EyeColorId);
         Assert.Equal(77193u, character.Visuals.HairColorId);
+
+        // ...and the head accessory A is worn as the hair mesh, so the selection
+        // screen and the in-game character show the same hair.
+        Assert.Equal(10117u, character.Visuals.Hair);
         Assert.Equal(new[] { 10117u }, character.Visuals.HeadAccessories);
     }
 

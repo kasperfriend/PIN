@@ -209,6 +209,20 @@ File is `List<CharacterRecord>` indented JSON. Minimal valid entry:
 
 ### 4.1 `Visuals` (`CharacterVisualsRecord`)
 
+Appearance is served to both surfaces that render the character — the web
+character list (selection screen) and the GameServer (via gRPC) — from the same
+record, so the preview and the in-game character are identical ("get what you
+select"):
+
+* `Warpaint` (7 packed light-dark colors, slots in order armor1-3 / bodysuit1-2
+  / glow1-2) is worn on the battleframe chassis in-game instead of the chassis'
+  default SDB warpaint.
+* `Hair` / `FacialHair` are worn as the leading head accessories on both
+  surfaces (`CharacterAppearance.HeadAccessoryMeshes`); the body colors flow
+  through unchanged.
+* Warpaint patterns and decals are served to the selection screen but not yet
+  applied in-game.
+
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
 | `Head` | uint | 10026 | Head mesh SDB |

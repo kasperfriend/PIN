@@ -64,7 +64,7 @@ public class CharactersRepository : ICharactersRepository
                                  LipColor = Colored(visuals.LipColorId, visuals.LipColor),
                                  HairColor = Colored(visuals.HairColorId, visuals.HairColor),
                                  FacialHairColor = Colored(visuals.FacialHairColorId, visuals.FacialHairColor),
-                                 HeadAccessories = visuals.HeadAccessories
+                                 HeadAccessories = CharacterAppearance.HeadAccessoryMeshes(visuals)
                                                           .Select(id => Colored(id, visuals.HeadAccessoryColor))
                                                           .ToList(),
                                  Ornaments = visuals.Ornaments

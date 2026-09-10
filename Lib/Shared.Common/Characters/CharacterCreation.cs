@@ -122,6 +122,11 @@ public static class CharacterCreation
         {
             Head = head,
             VoiceSet = voiceSet,
+            // The creation form's head accessory A is the hair mesh (the original
+            // service's data carries hair == head_accessories[0]); wearing it in
+            // both fields is what keeps the selection screen and the in-game
+            // character identical.
+            Hair = headAccessoryA,
             SkinColorId = skinColorItemId,
             EyeColorId = eyeColorItemId,
             HairColorId = hairColorItemId,
