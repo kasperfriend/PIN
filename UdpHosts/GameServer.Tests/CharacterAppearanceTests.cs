@@ -9,6 +9,7 @@ using GameServer.Tests.Fakes;
 using GrpcGameServerAPIClient;
 using Shared.Common.Characters;
 using Xunit;
+using BasicCharacterInfo = GrpcGameServerAPIClient.BasicCharacterInfo;
 
 namespace GameServer.Tests;
 
