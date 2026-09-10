@@ -48,8 +48,12 @@ New accounts can be created from the client's account creation form
 ```sh
 curl -k -X POST https://localhost:44302/api/v2/accounts \
   -H "Content-Type: application/json" \
-  -d '{"email":"player@example.com","confirm_email":"player@example.com","password":"hunter2","confirm_password":"hunter2"}'
+  -d '{"email":"player@example.com","password":"hunter2"}'
 ```
+
+The client posts the email/password pair only — it validates its own
+confirmation boxes, so `confirm_email`/`confirm_password` are optional (they are
+checked when a caller does send them).
 
 Characters belong to accounts: each account gets its own copy of the
 zone-picker entries in `characters.json`, and the selection screen shows only
