@@ -1,7 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Shared.Common.Accounts;
+using Shared.Common.Characters;
 using WebHost.ClientApi.Accounts.Models;
 using WebHost.ClientApi.Characters.Models;
 
@@ -10,45 +13,136 @@ namespace WebHost.ClientApi.Accounts;
 [ApiController]
 public class AccountsController : ControllerBase
 {
-    private static ConcurrentDictionary<uint, GarageSlots> _garageSlots;
+    private readonly ILogger<AccountsController> _logger;
 
-    [Route("api/v2/accounts")]
-    [HttpPost]
-    public object CreateAccount([FromBody] CreateAccountPost post)
+    public AccountsController(ILogger<AccountsController> logger)
     {
-        return new { error = false };
+        _logger = logger;
     }
 
+    /// <summary>
+    /// Create a new account. The client's account creation form POSTs the
+    /// email/password pair (with confirmations) here; the account is stored with
+    /// the Red5 uid/secret derived from the credentials, so the client can log in
+    /// with them immediately. Failures return the original client error codes
+    /// (<c>ERR_ACCOUNT_EXISTS</c>, <c>ERR_EMAIL_MISMATCH</c>, ...) with HTTP 500.
+    /// </summary>
+    [Route("api/v2/accounts")]
+    [HttpPost]
+    public IActionResult CreateAccount([FromBody] CreateAccountPost post)
+    {
+        if (post == null)
+        {
+            return Error(AccountErrors.ErrUnknown, "No account data received");
+        }
+
+        if (!string.Equals(AccountStore.NormalizeEmail(post.Email), AccountStore.NormalizeEmail(post.ConfirmEmail), StringComparison.Ordinal))
+        {
+            return Error(AccountErrors.ErrEmailMismatch, "The email addresses do not match");
+        }
+
+        if (string.IsNullOrEmpty(post.Password) || !string.Equals(post.Password, post.ConfirmPassword, StringComparison.Ordinal))
+        {
+            return Error(AccountErrors.ErrPasswordMismatch, "The passwords do not match");
+        }
+
+        if (!AccountStore.Default.TryCreate(
+                post.Email,
+                post.Password,
+                post.Country,
+                post.Birthday,
+                post.EmailOptIn,
+                post.ReferralKey,
+                out var account,
+                out var errorCode,
+                out var errorMessage))
+        {
+            return Error(errorCode, errorMessage);
+        }
+
+        // Give the fresh account its own zone-picker entries, the same way the
+        // first-run seed does for the admin account.
+        CharacterStore.EnsureSeededForAccount(account.AccountId);
+
+        _logger.LogInformation("Created account {AccountId} ({Email})", account.AccountId, account.Email);
+
+        return Ok(new { error = false });
+    }
+
+    /// <summary>
+    /// Login check. The client never sends the password: it signs the request
+    /// with a secret derived from email + password (the Red5 signature scheme).
+    /// The account is looked up by the uid in the signature and the signature is
+    /// verified against the stored secret — a wrong password means a wrong
+    /// signature, so this returns the original <c>ERR_INCORRECT_USERPASS</c>
+    /// error instead of letting everyone in.
+    /// </summary>
     [Route("api/v2/accounts/login")]
     [HttpPost]
-    public AccountStatus Login()
+    public IActionResult Login()
     {
-        return new AccountStatus
-               {
-                   AccountId = 0x1122334455667788,
-                   CanLogin = true,
-                   IsDev = false,
-                   SteamAuthPrompt = false,
-                   SkipPrecursor = false,
-                   CaisStatus = new CaisStatus { Duration = 0, ExpiresAt = 0, State = "disabled" },
-                   CharacterLimit = 40,
-                   IsVip = true,
-                   VipExpiration = 0,
-                   CreatedAt = new DateTimeOffset(DateTime.Now).ToUnixTimeSeconds()
-               };
+        var header = Request.Headers.TryGetValue(Red5Auth.SignatureHeaderName, out var values) && values.Count > 0
+                         ? values[0]
+                         : null;
+
+        var account = AccountStore.Default.VerifyLogin(header);
+        if (account == null)
+        {
+            // Same response for unknown account and bad password, so the
+            // error does not leak which of the two was wrong.
+            _logger.LogInformation("Rejected a login (unknown account or wrong password)");
+            return Error(AccountErrors.ErrIncorrectUserPass, "Login failed, check your username and password");
+        }
+
+        AccountStore.Default.RecordLogin(account);
+
+        _logger.LogInformation("Account {AccountId} ({Email}) logged in", account.AccountId, account.Email);
+
+        return Ok(new AccountStatus
+                  {
+                      AccountId = account.AccountId,
+                      CanLogin = true,
+                      IsDev = account.IsDev,
+                      SteamAuthPrompt = false,
+                      SkipPrecursor = false,
+                      CaisStatus = new CaisStatus { Duration = 0, ExpiresAt = 0, State = "disabled" },
+                      CharacterLimit = account.CharacterLimit,
+                      IsVip = true,
+                      VipExpiration = 0,
+                      CreatedAt = new DateTimeOffset(account.CreatedAt).ToUnixTimeSeconds(),
+                      Events = LoginEvents.FixedEvents()
+                  });
     }
 
     [Route("api/v2/accounts/current/status")]
     [HttpGet]
     public object CurrentStatus()
     {
-        return new CurrentStatus { IsActive = true, CanLogin = true, IsDev = false, IsBanned = false };
+        var account = HttpContext.TryGetRed5Account();
+
+        if (account == null)
+        {
+            // Unauthenticated callers (tools, probes) keep seeing the generic
+            // pre-login status the endpoint always returned.
+            return new CurrentStatus { IsActive = true, CanLogin = true, IsDev = false, IsBanned = false };
+        }
+
+        return new CurrentStatus { IsActive = true, CanLogin = true, IsDev = account.IsDev, IsBanned = false };
     }
 
     [Route("api/v2/accounts/change_language")]
     [HttpPost]
-    public void ChangeLanguage()
+    public void ChangeLanguage([FromBody] ChangeLanguageRequest request)
     {
+        if (!string.IsNullOrEmpty(request?.Language) && request.Language.Length == 2)
+        {
+            var account = HttpContext.TryGetRed5Account();
+            if (account != null)
+            {
+                AccountStore.Default.UpdateLanguage(account.AccountId, request.Language.ToLowerInvariant());
+            }
+        }
+
         Ok();
     }
 
@@ -70,6 +164,7 @@ public class AccountsController : ControllerBase
                };
     }
 
+    // Temporary location
     [Route("api/v3/characters/{characterId}/titles")]
     [HttpGet]
     public object CharacterTitles(string characterId)
@@ -109,7 +204,7 @@ public class AccountsController : ControllerBase
             return new { };
         }
 
-        _garageSlots = new ConcurrentDictionary<uint, GarageSlots>();
+        var garageSlots = new ConcurrentDictionary<uint, GarageSlots>();
 
         var craftingStation = new GarageSlots
                               {
@@ -128,7 +223,7 @@ public class AccountsController : ControllerBase
                                   Unlocked = true,
                                   ExpiresInSecs = 0
                               };
-        _garageSlots.AddOrUpdate(craftingStation.Id, craftingStation, (k, nc) => nc);
+        garageSlots.AddOrUpdate(craftingStation.Id, craftingStation, (k, nc) => nc);
 
         var firecat = new GarageSlots
                       {
@@ -150,9 +245,9 @@ public class AccountsController : ControllerBase
                           Unlocked = true,
                           ExpiresInSecs = 0
                       };
-        _garageSlots.AddOrUpdate(firecat.Id, firecat, (k, nc) => nc);
+        garageSlots.AddOrUpdate(firecat.Id, firecat, (k, nc) => nc);
 
-        return _garageSlots.Values;
+        return garageSlots.Values;
     }
 
     [Route("api/v3/characters/{characterId}/garage_slots/{frameId}/perks")]
@@ -195,5 +290,14 @@ public class AccountsController : ControllerBase
          */
 
         Ok();
+    }
+
+    private ObjectResult Error(string code, string message)
+    {
+        var result = new ObjectResult(new ApiError { Code = code, Message = message })
+                     {
+                         StatusCode = 500
+                     };
+        return result;
     }
 }

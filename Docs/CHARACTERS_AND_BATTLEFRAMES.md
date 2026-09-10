@@ -1,6 +1,8 @@
 # Characters & Battleframes — `characters.json` Guide
 
 > This document is the single source of truth for the `characters.json` system introduced in the current build. It replaces the old hardcoded character blobs that caused the selection screen and in-game avatar to diverge.
+>
+> Characters belong to accounts since the account system landed — see [`ACCOUNTS.md`](ACCOUNTS.md). Records without an `AccountId` (files from before) deserialize as the built-in admin account's.
 
 ---
 
@@ -9,7 +11,8 @@
 `characters.json` is a **process-wide, file-backed store** of player characters:
 
 * Both **WebHostManager** (REST `ClientApi` → character selection screen) and **GameServer** (via gRPC `GameServerAPI`) read from the **same file**, so the character you pick is the character you spawn as.
-* On first run the store is **seeded** with 38 entries — one per zone — from `CharacterStore.SeedZones`.
+* Every account owns its own entries: the selection screen shows only the logged-in account's characters, and each account gets its own copy of the seed list on first login (see [`ACCOUNTS.md`](ACCOUNTS.md) §6).
+* On first run the store is **seeded** with 38 entries — one per zone — from `CharacterStore.SeedZones`, owned by the built-in admin account.
 * When you switch battleframes in-game (`SelectLoadout`), the GameServer calls `SaveCurrentBattleframeAsync` → gRPC `SaveCurrentBattleframe` → `CharacterStore.UpdateCurrentBattleframe`, which updates the JSON and the selection screen instantly.
 * When you log out / teleport, `SaveGameSessionData` persists `LastZoneId`, `LastOutpostId`, `TimePlayed`, `LastSeenAt`.
 
@@ -71,12 +74,14 @@ Firefall__GameServerApi__Port=5201
 ## 3. GUID Scheme
 
 ```csharp
-public const ulong GuidPrefix = 0x99aabbccddee0000;
-guid = GuidPrefix + zoneId   // zoneId fits in low 16 bits
+public const ulong GuidPrefix = 0x99aabbccddee0000;                 // admin account (legacy)
+public const ulong GeneratedAccountGuidPrefixBase = 0xaa00000000000000;
+guid = GuidPrefixForAccount(accountId) + zoneId   // zoneId fits in low 16 bits
 ```
 
 * `CharacterGuid` encodes the zone: `ZoneId = CharacterGuid & 0xffff`.
-* `CharacterStore.Get(guid)` first tries exact match, then falls back to `GuidPrefix + (guid & 0xffff)` because GameServer's session packet overwrites the low byte of the guid. Always resolve via zone when possible.
+* The admin account keeps the legacy prefix `0x99aabbccddee0000` so existing files stay valid; every other account gets `GeneratedAccountGuidPrefixBase | (accountId << 16)` as its prefix, which keeps each account's guids in its own range while the zone stays in the low 16 bits.
+* Resolution of a (possibly low-byte-clobbered) guid lives in `CharacterResolver`: exact guid → unique clobbered match → account bits + the zone id from the command payload → legacy admin zone fallback. A zone-only lookup would be ambiguous once two accounts own the same zone.
 
 Seeded zones (`CharacterStore.SeedZones`):
 
@@ -180,7 +185,9 @@ File is `List<CharacterRecord>` indented JSON. Minimal valid entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `CharacterGuid` | ulong | Unique id, encodes ZoneId in low 16 bits. `0x99aabbccddee0000 + zoneId` |
+| `CharacterGuid` | ulong | Unique id, encodes ZoneId in low 16 bits. Admin: `0x99aabbccddee0000 + zoneId`, other accounts: `0xaa00000000000000 \| (accountId << 16) + zoneId` |
+| `AccountId` | ulong | Owning account; defaults to the built-in admin account when absent (legacy files) |
+| `IsCustom` | bool | True for characters created through the account system's character creation; seed entries are replaceable by created characters, custom ones are not |
 | `Name` | string | Shown in selection screen |
 | `SortOrder` | int | Lower = earlier in list |
 | `ZoneId` | derived | `CharacterGuid & 0xffff`, not stored, read-only |
@@ -201,6 +208,20 @@ File is `List<CharacterRecord>` indented JSON. Minimal valid entry:
 | `Visuals` | object | Appearance (§4.1) |
 
 ### 4.1 `Visuals` (`CharacterVisualsRecord`)
+
+Appearance is served to both surfaces that render the character — the web
+character list (selection screen) and the GameServer (via gRPC) — from the same
+record, so the preview and the in-game character are identical ("get what you
+select"):
+
+* `Warpaint` (7 packed light-dark colors, slots in order armor1-3 / bodysuit1-2
+  / glow1-2) is worn on the battleframe chassis in-game instead of the chassis'
+  default SDB warpaint.
+* `Hair` / `FacialHair` are worn as the leading head accessories on both
+  surfaces (`CharacterAppearance.HeadAccessoryMeshes`); the body colors flow
+  through unchanged.
+* Warpaint patterns and decals are served to the selection screen but not yet
+  applied in-game.
 
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Shared.Common.Accounts;
 
 namespace Shared.Common.Characters;
 
@@ -9,10 +10,26 @@ namespace Shared.Common.Characters;
 /// This is the single record that both the web character list (selection screen)
 /// and the GameServer (via GRPC) read from, so the character you pick is the
 /// character you spawn as.
+///
+/// Characters belong to an account (<see cref="AccountId"/>); the character
+/// selection screen shows only the logged-in account's entries. Records from
+/// before the account system default to the seeded admin account.
 /// </summary>
 public class CharacterRecord
 {
     public ulong CharacterGuid { get; set; }
+
+    /// <summary>Owning account (<see cref="AccountStore.AdminAccountId"/> for legacy records).</summary>
+    public ulong AccountId { get; set; } = AccountStore.AdminAccountId;
+
+    /// <summary>
+    /// True when the player created this character through the account system's
+    /// character creation (as opposed to the built-in zone-picker seed entries,
+    /// which exist so the selection screen doubles as a zone picker). Seed
+    /// entries in a slot can be replaced by a created character; custom ones
+    /// cannot.
+    /// </summary>
+    public bool IsCustom { get; set; }
 
     public string Name { get; set; } = string.Empty;
 

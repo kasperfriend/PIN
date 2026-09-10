@@ -1,6 +1,7 @@
 [
   {
     "CharacterGuid": 11068046444225741608,
+    "AccountId": 26294422,
     "Name": "New Eden - Raptor",
     "SortOrder": 0,
     "Gender": 1,
@@ -35,15 +36,26 @@
       "LipColor": 4294903873,
       "HairColor": 1917780001,
       "FacialHairColor": 1917780001,
-      "HeadAccessories": [10117],
+      "HeadAccessories": [
+        10117
+      ],
       "HeadAccessoryColor": 1211031763,
       "Ornaments": [],
       "WarpaintId": 143225,
-      "Warpaint": [4216738474, 0, 4216717312, 418250752, 1525350400, 4162844703, 4162844703]
+      "Warpaint": [
+        4216738474,
+        0,
+        4216717312,
+        418250752,
+        1525350400,
+        4162844703,
+        4162844703
+      ]
     }
   },
   {
     "CharacterGuid": 11068046444225742590,
+    "AccountId": 26294422,
     "Name": "Sertao - Mammoth",
     "SortOrder": 1,
     "Gender": 0,
@@ -78,11 +90,21 @@
       "LipColor": 4294903873,
       "HairColor": 1917780001,
       "FacialHairColor": 1917780001,
-      "HeadAccessories": [10117],
+      "HeadAccessories": [
+        10117
+      ],
       "HeadAccessoryColor": 1211031763,
       "Ornaments": [],
       "WarpaintId": 143225,
-      "Warpaint": [4216738474, 0, 4216717312, 418250752, 1525350400, 4162844703, 4162844703]
+      "Warpaint": [
+        4216738474,
+        0,
+        4216717312,
+        418250752,
+        1525350400,
+        4162844703,
+        4162844703
+      ]
     }
   }
 ]

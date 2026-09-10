@@ -338,6 +338,23 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public CharacterLoadout CurrentLoadout { get; set; }
 
     /// <summary>
+    ///     The character's own battleframe warpaint — the 7 packed light-dark armor colors the
+    ///     character selection screen paints the preview with — or null to wear the chassis'
+    ///     default SDB warpaint. Set from the web character record on login, so the in-game
+    ///     battleframe looks identical to the one you selected ("get what you select").
+    /// </summary>
+    private uint[] chassisWarpaintOverride;
+
+    /// <summary>
+    ///     Set the warpaint colors the worn chassis is replicated with. Pass an empty or null
+    ///     array to go back to the chassis' default SDB warpaint.
+    /// </summary>
+    public void SetChassisWarpaint(uint[] warpaint)
+    {
+        chassisWarpaintOverride = warpaint is { Length: > 0 } ? warpaint : null;
+    }
+
+    /// <summary>
     ///     Progression level of the battleframe the character is currently wearing
     ///     (<c>dbitems::FrameProgressionLevel</c> XP model). A freshly equipped frame starts at
     ///     level 1; there is no XP economy yet, so every frame sits at its starting level and
@@ -606,6 +623,15 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
                 FacialHairColor = remoteData.CharacterVisuals.FacialHairColor.Value.Color
             }
         });
+
+        // The battleframe warpaint is what the character selection screen paints the
+        // armor preview with; wearing it in-game is what makes the battleframe you
+        // spawn as identical to the one you selected. Without it the chassis falls
+        // back to its default SDB warpaint (the standard grey-ish armor).
+        if (remoteData.BattleframeVisuals != null && remoteData.BattleframeVisuals.Warpaint.Count > 0)
+        {
+            SetChassisWarpaint(remoteData.BattleframeVisuals.Warpaint.ToArray());
+        }
     }
 
     public void Load(BasicCharacterData data)
@@ -679,6 +705,34 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         Character_BaseController?.EnergyParamsProp = EnergyParams;
     }
 
+    /// <summary>
+    ///     The visuals the worn chassis is replicated with: the character's own warpaint colors
+    ///     when the record carries them (this is exactly the data the selection screen paints the
+    ///     armor preview with — the 7 packed light-dark colors and nothing else), otherwise the
+    ///     chassis' default SDB warpaint (colors + palettes). Keeping the override free of
+    ///     palettes mirrors the select screen, whose client renders from the colors alone.
+    /// </summary>
+    private VisualsBlock GetChassisVisualsForLoadout(CharacterLoadout loadout)
+    {
+        if (chassisWarpaintOverride == null)
+        {
+            return loadout.GetChassisVisuals();
+        }
+
+        return new VisualsBlock
+        {
+            Decals = [],
+            Gradients = [],
+            Colors = chassisWarpaintOverride,
+            Palettes = [],
+            Patterns = [],
+            OrnamentGroupIds = [],
+            CziMapAssetIds = [],
+            MorphWeights = [],
+            Overlays = []
+        };
+    }
+
     public void ApplyLoadout(CharacterLoadout loadout)
     {
         SetScopedState(false);
@@ -707,7 +761,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             Flags = 0,
             Unk2 = 0,
             Modules = loadout.GetChassisModules(),
-            Visuals = loadout.GetChassisVisuals()
+            Visuals = GetChassisVisualsForLoadout(loadout)
         };
         var backpack = new SlottedItem
         {

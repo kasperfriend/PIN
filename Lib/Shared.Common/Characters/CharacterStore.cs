@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Shared.Common.Accounts;
 
 namespace Shared.Common.Characters;
 
@@ -22,6 +23,21 @@ public static class CharacterStore
 {
     /// <summary>Guid prefix used for the built-in seeded characters.</summary>
     public const ulong GuidPrefix = 0x99aabbccddee0000;
+
+    /// <summary>
+    /// Base of the guid prefix for characters of accounts created through the
+    /// account system: <c>0xaa</c> marker | account id (bits 16..47) | zone id in
+    /// the low 16 bits. Distinct from the admin account's legacy
+    /// <see cref="GuidPrefix"/> so existing characters.json guids stay valid.
+    /// </summary>
+    public const ulong GeneratedAccountGuidPrefixBase = 0xaa00000000000000;
+
+    /// <summary>
+    /// Zone a newly created character spawns in and gets its guid slot for:
+    /// New Eden, the open world every new character of the original game started
+    /// its life in reach of.
+    /// </summary>
+    public const uint DefaultSpawnZoneId = 448;
 
     private static readonly object SaveLock = new();
 
@@ -130,28 +146,176 @@ public static class CharacterStore
     public static IReadOnlyList<CharacterRecord> GetAll()
     {
         Init();
-        return Characters.Values.OrderBy(c => c.SortOrder).ToList();
+        return Characters.Values.OrderBy(c => c.SortOrder).ThenBy(c => c.AccountId).ToList();
+    }
+
+    /// <summary>
+    /// Get the characters of one account, ordered the way the selection screen
+    /// expects. Seeds the account's zone-picker entries on first sight (covers
+    /// accounts added by hand-editing accounts.json).
+    /// </summary>
+    public static IReadOnlyList<CharacterRecord> GetAll(ulong accountId)
+    {
+        Init();
+        EnsureSeededForAccount(accountId);
+        return Characters.Values.Where(c => c.AccountId == accountId).OrderBy(c => c.SortOrder).ToList();
+    }
+
+    /// <summary>
+    /// Guid prefix for a character belonging to <paramref name="accountId"/>: the
+    /// legacy <see cref="GuidPrefix"/> for the admin account (keeping existing
+    /// files valid), <see cref="GeneratedAccountGuidPrefixBase"/> plus the account
+    /// id for everyone else.
+    /// </summary>
+    public static ulong GuidPrefixForAccount(ulong accountId)
+    {
+        return accountId == AccountStore.AdminAccountId ? GuidPrefix : GeneratedAccountGuidPrefixBase | (accountId << 16);
+    }
+
+    /// <summary>Whether <paramref name="name"/> is one of the built-in zone-picker seed names.</summary>
+    public static bool IsSeedZoneName(string name)
+    {
+        foreach (var (seedName, _) in SeedZones)
+        {
+            if (string.Equals(seedName, name, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Create a character for an account through the client's character creation
+    /// flow (<c>POST api/v1/characters</c>).
+    ///
+    /// The new character takes over the account's zone-picker slot for the spawn
+    /// zone (<see cref="DefaultSpawnZoneId"/>): the guid keeps the
+    /// prefix+zoneId scheme the GameServer resolves spawns by, and the selection
+    /// list stays coherent (the seed entry is replaced by the named character).
+    /// Only untouched seed entries can be replaced — a character that already
+    /// exists in that slot blocks the creation with
+    /// <see cref="AccountErrors.ErrDuplicateCharacter"/>.
+    /// </summary>
+    public static bool TryCreateCharacter(
+        ulong accountId,
+        string name,
+        uint gender,
+        uint battleframeSdbId,
+        uint head,
+        uint voiceSet,
+        uint skinColorItemId,
+        uint eyeColorItemId,
+        uint hairColorItemId,
+        uint headAccessoryA,
+        out CharacterRecord character,
+        out string errorCode,
+        out string errorMessage)
+    {
+        character = null;
+        errorCode = null;
+        errorMessage = null;
+
+        Init();
+        EnsureSeededForAccount(accountId);
+
+        // Names are reserved by real characters across all accounts (the seed
+        // zone entries do not reserve their zone names).
+        var takenNames = Characters.Values
+                                   .Where(c => !CharacterCreation.IsZoneSeedEntry(c))
+                                   .Select(c => c.Name)
+                                   .ToList();
+
+        var reasons = CharacterCreation.ValidateName(name, takenNames);
+        if (reasons.Count > 0)
+        {
+            errorCode = AccountErrors.ErrNameInvalid;
+            errorMessage = "That name is not available";
+            return false;
+        }
+
+        var guid = GuidPrefixForAccount(accountId) + DefaultSpawnZoneId;
+        Characters.TryGetValue(guid, out var existingSlot);
+
+        if (!CharacterCreation.TryClaimSlot(existingSlot, out errorCode))
+        {
+            errorMessage = $"This account already has a character for the zone {DefaultSpawnZoneId}";
+            return false;
+        }
+
+        // A request without a usable start class keeps the default frame, so the
+        // record is never built with an unknown chassis.
+        if (battleframeSdbId == 0)
+        {
+            battleframeSdbId = DefaultCharacterTemplate.FrameSdbId;
+        }
+
+        // Keep the replaced seed's position in the selection list; a missing slot
+        // (should not happen after seeding) sorts to the front.
+        var sortOrder = existingSlot?.SortOrder ?? -1;
+
+        character = CharacterCreation.Create(
+            accountId,
+            guid,
+            sortOrder,
+            name,
+            gender,
+            battleframeSdbId,
+            head,
+            voiceSet,
+            skinColorItemId,
+            eyeColorItemId,
+            hairColorItemId,
+            headAccessoryA);
+
+        Characters[guid] = character;
+        Save();
+
+        return true;
+    }
+
+    /// <summary>
+    /// Make sure an account owns its zone-picker entries. Every account gets its
+    /// own copy of the seed list (with its own guid prefix), so the selection
+    /// screen keeps working as a zone picker no matter which account is logged in.
+    /// </summary>
+    public static void EnsureSeededForAccount(ulong accountId)
+    {
+        Init();
+
+        if (Characters.Values.Any(c => c.AccountId == accountId))
+        {
+            return;
+        }
+
+        lock (SaveLock)
+        {
+            if (Characters.Values.Any(c => c.AccountId == accountId))
+            {
+                return;
+            }
+
+            foreach (var character in BuildZoneSeed(accountId, GuidPrefixForAccount(accountId)))
+            {
+                Characters[character.CharacterGuid] = character;
+            }
+
+            Save();
+        }
     }
 
     /// <summary>Look up a single character, or null when it is not known.</summary>
     /// <remarks>
-    /// Note we deliberately do NOT mask off the low byte of the guid here. The
-    /// seeded guids encode the zone id in the low 16 bits, and many zone ids share
-    /// a high byte (25 of them fall in 0x0400), so masking would collapse them all
-    /// onto one record and hand back the wrong character.
+    /// The guid the client sends may have its low byte overwritten and is not
+    /// unique per zone once several accounts exist, so the exact rules live in
+    /// <see cref="CharacterResolver"/> (exact guid, then low-byte-clobbered
+    /// match, then the admin account's entry for the zone encoded in the guid).
     /// </remarks>
     public static CharacterRecord Get(ulong characterGuid)
     {
         Init();
-
-        if (Characters.TryGetValue(characterGuid, out var exact))
-        {
-            return exact;
-        }
-
-        // Fall back to matching on the zone id encoded in the low 16 bits.
-        var byZone = GuidPrefix + (characterGuid & 0xffff);
-        return Characters.TryGetValue(byZone, out var zoneMatch) ? zoneMatch : null;
+        return CharacterResolver.Find(Characters.Values, characterGuid);
     }
 
     /// <summary>Insert or replace a character and persist the store.</summary>
@@ -169,8 +333,10 @@ public static class CharacterStore
     /// and the selection screen both reflect it.
     /// </summary>
     /// <remarks>
-    /// As with session data, the guid the GameServer sends has its low byte
-    /// overwritten, so resolve via the zone id where we can.
+    /// The guid the GameServer sends may have its low byte overwritten, but the
+    /// command carries the real zone id separately; both go through
+    /// <see cref="CharacterResolver"/>, which prefers the guid and falls back to
+    /// the account bits of the guid plus the exact zone id.
     /// </remarks>
     public static void UpdateCurrentBattleframe(ulong characterGuid, uint zoneId, uint battleframeSdbId)
     {
@@ -181,9 +347,7 @@ public static class CharacterStore
 
         Init();
 
-        var character = Characters.TryGetValue(GuidPrefix + zoneId, out var byZone)
-                            ? byZone
-                            : Get(characterGuid);
+        var character = CharacterResolver.Find(Characters.Values, characterGuid, zoneId);
 
         if (character == null || character.CurrentBattleframeSDBId == battleframeSdbId)
         {
@@ -196,17 +360,15 @@ public static class CharacterStore
 
     /// <summary>Persist where the player logged out and how long they played.</summary>
     /// <remarks>
-    /// The guid the GameServer sends with session data has its low byte overwritten,
-    /// which destroys part of the encoded zone id. The command carries the real zone
-    /// id separately though, so prefer resolving the character from that.
+    /// Same resolution strategy as <see cref="UpdateCurrentBattleframe"/>: the
+    /// guid first, then the account bits of the guid plus the exact zone id from
+    /// the command payload.
     /// </remarks>
     public static void UpdateSessionData(ulong characterGuid, uint zoneId, uint outpostId, uint timePlayed)
     {
         Init();
 
-        var character = Characters.TryGetValue(GuidPrefix + zoneId, out var byZone)
-                            ? byZone
-                            : Get(characterGuid);
+        var character = CharacterResolver.Find(Characters.Values, characterGuid, zoneId);
 
         if (character == null)
         {
@@ -218,6 +380,32 @@ public static class CharacterStore
         character.TimePlayed = timePlayed;
         character.LastSeenAt = DateTime.UtcNow;
         Save();
+    }
+
+    /// <summary>
+    /// Create the built-in entries for one account. Each one is a zone you can
+    /// load into, which is how PIN has always used the selection screen. Pure
+    /// function so the seeding can be unit tested.
+    /// </summary>
+    public static IReadOnlyList<CharacterRecord> BuildZoneSeed(ulong accountId, ulong guidPrefix)
+    {
+        var seed = new List<CharacterRecord>(SeedZones.Length);
+
+        for (var i = 0; i < SeedZones.Length; i++)
+        {
+            var (name, zoneId) = SeedZones[i];
+            seed.Add(new CharacterRecord
+                     {
+                         AccountId = accountId,
+                         CharacterGuid = guidPrefix + (ulong)zoneId,
+                         Name = name,
+                         SortOrder = i,
+                         LastZoneId = (uint)zoneId,
+                         LastSeenAt = DateTime.UtcNow - TimeSpan.FromDays(365)
+                     });
+        }
+
+        return seed;
     }
 
     /// <summary>Write the store back to disk.</summary>
@@ -259,23 +447,15 @@ public static class CharacterStore
     }
 
     /// <summary>
-    /// Create the built-in entries. Each one is a zone you can load into, which is
-    /// how PIN has always used the selection screen.
+    /// First-run seed: the zone entries belong to the built-in admin account,
+    /// which is also what records from before the account system deserialize as
+    /// (see <see cref="CharacterRecord.AccountId"/>).
     /// </summary>
     private static void Seed()
     {
-        for (var i = 0; i < SeedZones.Length; i++)
+        foreach (var character in BuildZoneSeed(AccountStore.AdminAccountId, GuidPrefix))
         {
-            var (name, zoneId) = SeedZones[i];
-            var guid = GuidPrefix + (ulong)zoneId;
-            Characters[guid] = new CharacterRecord
-            {
-                CharacterGuid = guid,
-                Name = name,
-                SortOrder = i,
-                LastZoneId = (uint)zoneId,
-                LastSeenAt = DateTime.UtcNow - TimeSpan.FromDays(365)
-            };
+            Characters[character.CharacterGuid] = character;
         }
     }
 }

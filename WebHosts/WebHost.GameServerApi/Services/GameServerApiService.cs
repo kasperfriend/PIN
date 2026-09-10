@@ -177,7 +177,7 @@ public class GameServerApiService : GameServerAPI.GameServerAPIBase
             }
         };
 
-        foreach (var accessory in visuals.HeadAccessories)
+        foreach (var accessory in CharacterAppearance.HeadAccessoryMeshes(visuals))
         {
             result.CharacterVisuals.HeadAccessories.Add(Colored(accessory, visuals.HeadAccessoryColor));
         }
