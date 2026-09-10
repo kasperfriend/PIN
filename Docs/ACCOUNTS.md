@@ -212,7 +212,34 @@ operator capability response advertises as the client's **WebAccounts** service.
 That matters: the catch-all answers every request it does not implement with an
 empty `200`, so before it served this endpoint a creation form posted there was
 read by the client as "account created" — and the login that follows failed with
-`ERR_INCORRECT_USERPASS` because no account had been stored.
+`ERR_INCORRECT_USERPASS` because no account had been stored. For the same reason
+the catch-all host serves a creation for **any** POST whose path ends in
+`accounts` (`AccountCreation.IsCreationPath`) rather than only the literal
+`api/v2/accounts`: which prefix the client addresses that service with cannot be
+pinned down from the server side, and the empty `200` it would otherwise answer
+with is the one reply the client cannot recover from.
+
+The body is read by hand (`Shared.Web.AccountCreationEndpoint`), never by
+`[FromBody]` model binding, so no content type the client picks can make the
+framework answer `415`/`400` with a body the client cannot parse. JSON is read
+first and a `application/x-www-form-urlencoded` body
+(`email=...&password=...`) second; `email_optin` binds whether it arrives as a
+boolean, a string or a number. Whatever the request looks like the answer is
+JSON — `{}` on success, `{"code": ..., "message": ...}` with HTTP 500 on
+failure — and an unexpected exception inside the endpoint is caught and
+answered the same way, so the client is never left waiting.
+
+Every attempt is logged at **`Warning`**, the level the WebHostManager shows by
+default, with the request it arrived with and its outcome:
+
+```
+[.. WRN] Account creation request POST /api/v2/accounts on localhost:44302 (application/json, 178 characters): {"email":"player@example.com","password": "***",...}
+[.. WRN] Created account 26294423 (player@example.com)
+[.. WRN] Rejected the account creation request: ERR_ACCOUNT_EXISTS (An account with this email already exists)
+```
+
+Passwords are redacted from those lines by `AccountCreation.RedactForLog` — PIN
+stores no plaintext password and does not log one either.
 
 On success the account is stored (`200` with the empty object `{}` the original
 service returned) and is immediately playable; on failure the client shows the
@@ -376,11 +403,42 @@ succeeded.
 * Creation and login must use the same email spelling (case does not matter,
   surrounding spaces are trimmed on creation).
 * The account must appear in `accounts.json` after creation.
-* The WebHostManager console logs every created account (`Created account
-  <id> (<email>)`) and every rejection with its error code
-  (`Rejected an account creation request: <code>`). Those lines are
-  `Information`, so raise the Serilog `MinimumLevel` above its default
-  `Warning` to see them.
+* The WebHostManager console logs the whole flow at `Warning` — its default
+  level, so nothing has to be reconfigured to see it:
+  * `Account store <path> holds <n> account(s): <emails>` on start — which file
+    is in play, and whether the account is in it.
+  * `Account creation request POST <path> on <host> (<content type>, <n>
+    characters): <body>` for every creation the server is handed, with the
+    password redacted.
+  * `Created account <id> (<email>)` or `Rejected the account creation request:
+    <code> (<message>)`.
+  * `Rejected a login: <reason> (uid <uid>)`, where the reason is
+    `UnknownAccount` (no account with that email is stored — the creation never
+    landed), `SignatureMismatch` (the account exists, the password is wrong),
+    `MalformedSignature` or `MissingSignature`.
+
+**The client freezes when I press "Create"**
+
+The client shows nothing for a creation it cannot make sense of, so a frozen
+creation form is always a question about what the server answered — read the
+`Warning` lines above:
+
+* **No `Account creation request` line at all** — the client never reached a
+  running host: check that WebHostManager is the build you just compiled (the
+  `Account store <path> ...` line on start names the folder it is running
+  from), that the client's `firefall.ini` still points at it
+  (`OperatorHost = "localhost:4400"`), and that the capability response
+  (`GET https://localhost:44300/check`) advertises hosts that are listening.
+* **`Catch-all host swallowed POST <path> ...`** — the client posted its
+  creation to a path whose last segment is not `accounts`; that line carries the
+  body it sent, which is what the endpoint needs to be taught next.
+* **`Rejected the account creation request: <code>`** — the client shows the
+  localized message for that code; `ERR_UNKNOWN` with `No account data received`
+  means the body carried neither JSON nor form fields the endpoint recognized
+  (the logged body shows what it actually was).
+* **`Created account ...` followed by `Rejected a login: UnknownAccount`** — the
+  account was stored and then not found again, which means two different store
+  files are in play (see the `Account store <path>` line of each start).
 
 **Character list is empty / shows the admin's characters**
 

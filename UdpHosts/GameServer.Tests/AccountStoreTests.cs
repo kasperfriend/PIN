@@ -83,6 +83,43 @@ public class AccountStoreTests : IDisposable
     }
 
     [Fact]
+    public void TryVerifyLogin_ReportsWhyALoginWasRejected()
+    {
+        var store = FreshStore();
+        var admin = store.Get(AccountStore.AdminAccountId);
+
+        var secret = Red5Auth.GenerateSecret(AccountStore.AdminEmail, AccountStore.AdminPassword);
+        var headerData = $"ver=2&tc=1610833076&nonce=3e691feb538a38a2&uid={Uri.EscapeDataString(admin.Uid)}&host=clientapi&path=%2Fapi%2Fv2%2Faccounts%2Flogin&hbody=da39a3ee5e6b4b0d3255bfef95601890afd80709&cid=0";
+
+        // A correct login names the account and reports no failure.
+        Assert.True(store.TryVerifyLogin($"Red5 {Red5Auth.GenerateToken(secret, headerData)} {headerData}", out var account, out var failure));
+        Assert.Equal(LoginFailure.None, failure);
+        Assert.Equal(admin.AccountId, account.AccountId);
+
+        // No header at all.
+        Assert.False(store.TryVerifyLogin(null, out account, out failure));
+        Assert.Null(account);
+        Assert.Equal(LoginFailure.MissingSignature, failure);
+
+        // A header that is not a signature.
+        Assert.False(store.TryVerifyLogin("garbage", out account, out failure));
+        Assert.Equal(LoginFailure.MalformedSignature, failure);
+
+        // A signature of an account that was never created — the failure a
+        // creation that never landed produces on the login that follows it.
+        var unknownData = headerData.Replace(Uri.EscapeDataString(admin.Uid), Uri.EscapeDataString(Red5Auth.GenerateUserId("nobody@example.com")));
+        Assert.False(store.TryVerifyLogin($"Red5 {Red5Auth.GenerateToken(secret, unknownData)} {unknownData}", out account, out failure));
+        Assert.Null(account);
+        Assert.Equal(LoginFailure.UnknownAccount, failure);
+
+        // The account exists, the password does not.
+        var wrongSecret = Red5Auth.GenerateSecret(AccountStore.AdminEmail, "not-the-password");
+        Assert.False(store.TryVerifyLogin($"Red5 {Red5Auth.GenerateToken(wrongSecret, headerData)} {headerData}", out account, out failure));
+        Assert.Null(account);
+        Assert.Equal(LoginFailure.SignatureMismatch, failure);
+    }
+
+    [Fact]
     public void TryCreate_StoresAccountAndPersistsIt()
     {
         var store = FreshStore();

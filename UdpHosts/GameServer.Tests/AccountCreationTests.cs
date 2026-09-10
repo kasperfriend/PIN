@@ -157,6 +157,109 @@ public class AccountCreationTests : IDisposable
     }
 
     [Fact]
+    public void Parse_ReadsAFormUrlEncodedBody()
+    {
+        // The client is believed to post JSON, but a form body is read rather
+        // than rejected: the only way to find out what it really posts is to
+        // accept both and read the log of what arrived.
+        var request = AccountCreation.Parse("email=player%40example.com&password=hunter%262&country=US&birthday=1990-01-01&email_optin=true&referral_key=");
+
+        Assert.NotNull(request);
+        Assert.Equal("player@example.com", request.Email);
+        Assert.Equal("hunter&2", request.Password);
+        Assert.Equal("US", request.Country);
+        Assert.Equal("1990-01-01", request.Birthday);
+        Assert.True(request.EmailOptIn);
+        Assert.Equal(string.Empty, request.ReferralKey);
+    }
+
+    [Fact]
+    public void Parse_PrefersJsonForABodyThatCouldBeBoth()
+    {
+        // A JSON body whose password contains '=' and '&' must not be read as a
+        // form body (JSON is tried first, and a form body needs an email or a
+        // password field to be taken seriously at all).
+        var request = AccountCreation.Parse("{\"email\":\"player@example.com\",\"password\":\"a=b&c=d\"}");
+
+        Assert.NotNull(request);
+        Assert.Equal("player@example.com", request.Email);
+        Assert.Equal("a=b&c=d", request.Password);
+    }
+
+    [Fact]
+    public void Parse_AcceptsEmailOptInSentAsAStringOrNumber()
+    {
+        // JsonNumberHandling.AllowReadingFromString only widens numbers, so a
+        // stringified flag needs the lenient boolean converter — without it the
+        // whole deserialization failed and the creation was rejected.
+        var fromString = AccountCreation.Parse("{\"email\":\"player@example.com\",\"password\":\"hunter2\",\"email_optin\":\"true\"}");
+        Assert.NotNull(fromString);
+        Assert.True(fromString.EmailOptIn);
+
+        var fromNumber = AccountCreation.Parse("{\"email\":\"player@example.com\",\"password\":\"hunter2\",\"email_optin\":1}");
+        Assert.NotNull(fromNumber);
+        Assert.True(fromNumber.EmailOptIn);
+
+        var falseString = AccountCreation.Parse("{\"email\":\"player@example.com\",\"password\":\"hunter2\",\"email_optin\":\"false\"}");
+        Assert.NotNull(falseString);
+        Assert.False(falseString.EmailOptIn);
+    }
+
+    [Fact]
+    public void ParseForm_IgnoresBodiesWithoutAccountFields()
+    {
+        Assert.Null(AccountCreation.ParseForm(null));
+        Assert.Null(AccountCreation.ParseForm(string.Empty));
+        Assert.Null(AccountCreation.ParseForm("no equals sign here"));
+        Assert.Null(AccountCreation.ParseForm("some=thing&other=thing"));
+    }
+
+    [Fact]
+    public void IsCreationPath_MatchesWhateverPrefixTheClientAddressesTheServiceWith()
+    {
+        Assert.True(AccountCreation.IsCreationPath("/api/v2/accounts"));
+        Assert.True(AccountCreation.IsCreationPath("/clientapi/api/v2/accounts"));
+        Assert.True(AccountCreation.IsCreationPath("/webaccounts/accounts"));
+        Assert.True(AccountCreation.IsCreationPath("api/v2/accounts"));
+        Assert.True(AccountCreation.IsCreationPath("/accounts"));
+        Assert.True(AccountCreation.IsCreationPath("/api/v2/accounts/"));
+
+        // Sub-paths of the collection are other endpoints, not creations.
+        Assert.False(AccountCreation.IsCreationPath("/api/v2/accounts/login"));
+        Assert.False(AccountCreation.IsCreationPath("/api/v2/accounts/current/status"));
+        Assert.False(AccountCreation.IsCreationPath("/api/v2/characters"));
+        Assert.False(AccountCreation.IsCreationPath("/"));
+        Assert.False(AccountCreation.IsCreationPath(string.Empty));
+        Assert.False(AccountCreation.IsCreationPath(null));
+    }
+
+    [Fact]
+    public void RedactForLog_HidesThePasswordOfBothBodyShapes()
+    {
+        const string JsonBody = "{\"email\":\"player@example.com\",\"password\":\"hunter2\",\"confirm_password\":\"hunter2\"}";
+        const string FormBody = "email=player%40example.com&password=hunter2&confirm_password=hunter2";
+
+        var json = AccountCreation.RedactForLog(JsonBody);
+        Assert.DoesNotContain("hunter2", json);
+        Assert.Contains("player@example.com", json);
+
+        var form = AccountCreation.RedactForLog(FormBody);
+        Assert.DoesNotContain("hunter2", form);
+        Assert.Contains("email=player%40example.com", form);
+
+        Assert.Equal(string.Empty, AccountCreation.RedactForLog(null));
+    }
+
+    [Fact]
+    public void RedactForLog_TruncatesALongBody()
+    {
+        var redacted = AccountCreation.RedactForLog(new string('x', 10000));
+
+        Assert.EndsWith("... (truncated)", redacted);
+        Assert.True(redacted.Length < 10000);
+    }
+
+    [Fact]
     public void ClientShapedCreation_ThenClientLogin_Verifies()
     {
         var store = FreshStore();

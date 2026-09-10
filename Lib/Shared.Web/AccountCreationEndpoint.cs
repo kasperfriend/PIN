@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -25,6 +26,13 @@ namespace Shared.Web;
 ///     object <c>{}</c> the original service returned on success, or
 ///     <c>{"code": ..., "message": ...}</c> with HTTP 500 for one of the client's
 ///     own error codes.
+///
+///     Every request is logged at <c>Warning</c> — the level the WebHostManager
+///     shows by default — with the password-redacted body it arrived with. A
+///     creation the server never answers, or answers with an error the client
+///     cannot show, is otherwise indistinguishable in the log from a creation
+///     the client never sent, and the client sits on its creation form in both
+///     cases.
 /// </summary>
 public static class AccountCreationEndpoint
 {
@@ -33,20 +41,45 @@ public static class AccountCreationEndpoint
     /// <param name="logger">Logger of the serving controller.</param>
     public static async Task<IActionResult> HandleAsync(HttpRequest request, ILogger logger)
     {
-        var body = await ReadBodyAsync(request);
-
-        if (!AccountCreation.TryCreate(AccountCreation.Parse(body), out var account, out var errorCode, out var errorMessage))
+        try
         {
-            logger.LogInformation("Rejected an account creation request: {Code} ({Message})", errorCode, errorMessage);
-            return Error(errorCode, errorMessage);
+            var body = await ReadBodyAsync(request);
+
+            logger.LogWarning(
+                "Account creation request {Method} {Path} on {Host} ({ContentType}, {Length} characters): {Body}",
+                request.Method,
+                request.Path,
+                request.Host.Value,
+                string.IsNullOrEmpty(request.ContentType) ? "(no content type)" : request.ContentType,
+                body?.Length ?? 0,
+                AccountCreation.RedactForLog(body));
+
+            if (!AccountCreation.TryCreate(AccountCreation.Parse(body), out var account, out var errorCode, out var errorMessage))
+            {
+                logger.LogWarning("Rejected the account creation request: {Code} ({Message})", errorCode, errorMessage);
+                return Error(errorCode, errorMessage);
+            }
+
+            logger.LogWarning("Created account {AccountId} ({Email})", account.AccountId, account.Email);
+
+            return new OkObjectResult(new { });
         }
-
-        logger.LogInformation("Created account {AccountId} ({Email})", account.AccountId, account.Email);
-
-        return new OkObjectResult(new { });
+        catch (Exception ex)
+        {
+            // The client waits for an answer it can parse; an exception escaping
+            // here would answer with an empty 500 (or nothing at all) and leave
+            // it frozen on the creation form.
+            logger.LogError(ex, "An account creation request failed unexpectedly");
+            return Error(AccountErrors.ErrUnknown, "The account could not be created");
+        }
     }
 
-    private static async Task<string> ReadBodyAsync(HttpRequest request)
+    /// <summary>
+    /// Read the raw request body, leaving the stream rewound so the rest of the
+    /// pipeline (the 404 logger, for one) can read it too.
+    /// </summary>
+    /// <param name="request">The request to read.</param>
+    public static async Task<string> ReadBodyAsync(HttpRequest request)
     {
         // The 404 logging middleware already enables buffering; doing it here
         // too keeps the endpoint independent of the host's pipeline.

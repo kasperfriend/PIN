@@ -60,12 +60,16 @@ public class AccountsController : ControllerBase
                          ? values[0]
                          : null;
 
-        var account = AccountStore.Default.VerifyLogin(header);
-        if (account == null)
+        if (!AccountStore.Default.TryVerifyLogin(header, out var account, out var failure))
         {
             // Same response for unknown account and bad password, so the
-            // error does not leak which of the two was wrong.
-            _logger.LogInformation("Rejected a login (unknown account or wrong password)");
+            // error does not leak which of the two was wrong. The log carries
+            // the difference (and at Warning, the level the WebHostManager
+            // shows by default): UnknownAccount means no account with that
+            // email is stored — a creation that never landed — while
+            // SignatureMismatch means the account exists and the password is
+            // wrong.
+            _logger.LogWarning("Rejected a login: {Reason} (uid {Uid})", failure, SignedUid(header));
             return Error(AccountErrors.ErrIncorrectUserPass, "Login failed, check your username and password");
         }
 
@@ -274,5 +278,11 @@ public class AccountsController : ControllerBase
                          StatusCode = 500
                      };
         return result;
+    }
+
+    /// <summary>The account uid a request was signed for, for the rejection log.</summary>
+    private static string SignedUid(string header)
+    {
+        return Red5Signature.TryParse(header, out var signature) ? signature.Uid : "(none)";
     }
 }
