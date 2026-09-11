@@ -104,7 +104,11 @@ public class CharactersRepository : ICharactersRepository
                               new() { SlotTypeId = 129, SdbId = 129067, ItemGuid = 5068916056568386557 }
                           },
                    ExpiresIn = 0,
-                   Race = "chosen",
+
+                   // Race 0 is human. "chosen" was an old placeholder, but the
+                   // client treats this field as a race discriminator while it
+                   // rebuilds the selection screen after character creation.
+                   Race = record.Race == 0 ? "human" : "chosen",
                    Migrations = new List<int>()
                };
     }

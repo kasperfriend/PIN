@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Shared.Common.Accounts;
 using Shared.Common.Characters;
 using WebHost.ClientApi.Accounts;
@@ -14,10 +15,12 @@ namespace WebHost.ClientApi.Characters;
 public class CharactersController : ControllerBase
 {
     private readonly ICharactersRepository _charactersRepository;
+    private readonly ILogger<CharactersController> _logger;
 
-    public CharactersController(ICharactersRepository charactersRepository)
+    public CharactersController(ICharactersRepository charactersRepository, ILogger<CharactersController> logger)
     {
         _charactersRepository = charactersRepository;
+        _logger = logger;
     }
 
     /// <summary>
@@ -258,19 +261,32 @@ public class CharactersController : ControllerBase
             return Error(errorCode, errorMessage);
         }
 
+        _logger.LogWarning(
+            "Created character {CharacterGuid} ({Name}) for account {AccountId}: frame {FrameId}, gender {Gender}; the client will now refresh api/v2/characters/list",
+            character.CharacterGuid,
+            character.Name,
+            account.AccountId,
+            character.CurrentBattleframeSDBId,
+            gender == 1 ? "female" : "male");
+
+        // Keep this response byte-for-byte compatible with the service the
+        // client was built against. In particular, account_id and
+        // character_guid intentionally remain zero: the original creation
+        // endpoint did not fill them in and the client obtains the real guid
+        // from the character-list refresh. Returning PIN's unsigned 0xaa...
+        // guid here as a signed long produced a negative id, which the client
+        // tried to use during the transition and could crash before rendering
+        // the refreshed character.
         return Ok(new CreateCharacterResponse
                   {
-                      AccountId = (long)account.AccountId,
-                      CharacterGuid = (long)character.CharacterGuid,
                       CreatedAt = character.CreatedAt,
                       UpdatedAt = character.CreatedAt,
                       HeadAccAId = characterCreateData.HeadAccessoryA,
-                      HeadAccBId = 0,
+                      HeadAccBId = characterCreateData.HeadAccessoryB,
                       HeadMainId = characterCreateData.Head,
                       IsActive = true,
                       IsDev = characterCreateData.IsDev,
-                      LastSeenAt = character.LastSeenAt,
-                      MaxFrameLevel = character.MaxFrameLevel,
+                      MaxFrameLevel = 0,
                       Name = character.Name,
                       NeedsNameChange = false,
                       PoolId = 0,
@@ -278,6 +294,7 @@ public class CharactersController : ControllerBase
                       TimePlayedSecs = 0,
                       TitleId = 0,
                       UniqueName = character.Name.ToUpperInvariant(),
+                      VoiceSetId = characterCreateData.VoiceSet,
                       Gender = gender == 1 ? "female" : "male"
                   });
     }

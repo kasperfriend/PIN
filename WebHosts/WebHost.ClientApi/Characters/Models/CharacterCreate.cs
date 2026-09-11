@@ -8,6 +8,7 @@ public class CharacterCreate
     public int EyeColorId { get; set; }
     public int SkinColorId { get; set; }
     public int HeadAccessoryA { get; set; }
+    public int HeadAccessoryB { get; set; }
     public int HairColorId { get; set; }
     public int Head { get; set; }
     public string Gender { get; set; }

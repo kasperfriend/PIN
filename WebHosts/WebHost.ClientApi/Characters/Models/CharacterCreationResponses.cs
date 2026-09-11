@@ -35,9 +35,11 @@ public class CreateCharacterResponse
 
     public DateTime CreatedAt { get; set; }
 
+    public DateTime DeletedAt { get; set; }
+
     public DateTime UpdatedAt { get; set; }
 
-    // The original service used mixed-case names for these three (kept
+    // The original service used mixed-case names for these fields (kept
     // byte-identical via JsonPropertyName; the snake_case policy would mangle
     // them into head_acc_aid / head_main_id).
     [JsonPropertyName("head_accAId")]
@@ -74,6 +76,11 @@ public class CreateCharacterResponse
     public int TitleId { get; set; }
 
     public string UniqueName { get; set; }
+
+    [JsonPropertyName("voice_setId")]
+    public int VoiceSetId { get; set; }
+
+    public string Xdata { get; set; }
 
     public string Gender { get; set; }
 }
