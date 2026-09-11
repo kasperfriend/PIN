@@ -14,18 +14,17 @@ public static class Serializer
 {
     public static unsafe void WriteFixed(byte* destination, byte[] source)
     {
-        for (var i = 0; i < source.Length; i++)
+        // Block copy rather than a per-byte loop; the sizes are small but this sits on the
+        // matrix handshake paths where every byte still lands in a datagram.
+        fixed (byte* sourcePtr = source)
         {
-            *(destination + i) = source[i];
+            Buffer.MemoryCopy(sourcePtr, destination, source.Length, source.Length);
         }
     }
 
     public static unsafe void WriteFixed(byte* destination, Span<byte> source)
     {
-        for (var i = 0; i < source.Length; i++)
-        {
-            *(destination + i) = source[i];
-        }
+        source.CopyTo(new Span<byte>(destination, source.Length));
     }
 
     public static Memory<byte> WritePrimitive<T>(T value)
@@ -190,10 +189,15 @@ public static class Serializer
                 BinaryPrimitives.WriteUInt16LittleEndian(span, (ushort)h);
                 break;
             case float f:
-                span = MemoryMarshal.Cast<float, byte>(new[] { f }).ToArray();
+                // The old code allocated an array for the value, view-cast it, and copied it out
+                // again — two allocations and a full copy per float. BinaryPrimitives writes the
+                // same little-endian bit pattern in one step.
+                span = new byte[4];
+                BinaryPrimitives.WriteSingleLittleEndian(span, f);
                 break;
             case double d:
-                span = MemoryMarshal.Cast<double, byte>(new[] { d }).ToArray();
+                span = new byte[8];
+                BinaryPrimitives.WriteDoubleLittleEndian(span, d);
                 break;
             default:
                 throw new Exception();

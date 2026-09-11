@@ -43,7 +43,108 @@ public static class Deserializer
 
     public static T Read<T>(ref ReadOnlyMemory<byte> data)
     {
-        return (T)Read(ref data, typeof(T));
+        var type = typeof(T);
+
+        // The packet header and GSS dispatch code read a handful of small primitives (and one
+        // byte-sized enum) per incoming packet. The general object-based path pays for that with
+        // a boxed return value, an Enum.ToObject reflection hop for enums, and a type attribute
+        // scan per read. The typeof comparisons below are compile-time constant once T is closed,
+        // so a call site like packet.Read<ushort>() compiles to a BinaryPrimitives load and an
+        // offset advance. The encodings match ReadPrimitive exactly: explicit little-endian
+        // integers, a single byte for char, and the raw bit pattern for float/double/Half.
+        // Anything else (and sbyte/bool, which ReadPrimitive never supported either) keeps
+        // falling through to the general path, throwing where it threw before.
+        if (type == typeof(byte))
+        {
+            var value = data.Span[0];
+            data = data[1..];
+            return Unsafe.As<byte, T>(ref value);
+        }
+
+        if (type == typeof(char))
+        {
+            // One wire byte, decoded with Encoding.ASCII's replacement rule like the general path.
+            var value = (char)(data.Span[0] <= 0x7F ? data.Span[0] : (byte)'?');
+            data = data[1..];
+            return Unsafe.As<char, T>(ref value);
+        }
+
+        if (type == typeof(ushort))
+        {
+            var value = BinaryPrimitives.ReadUInt16LittleEndian(data[..2].Span);
+            data = data[2..];
+            return Unsafe.As<ushort, T>(ref value);
+        }
+
+        if (type == typeof(short))
+        {
+            var value = BinaryPrimitives.ReadInt16LittleEndian(data[..2].Span);
+            data = data[2..];
+            return Unsafe.As<short, T>(ref value);
+        }
+
+        if (type == typeof(Half))
+        {
+            var value = (Half)BinaryPrimitives.ReadUInt16LittleEndian(data[..2].Span);
+            data = data[2..];
+            return Unsafe.As<Half, T>(ref value);
+        }
+
+        if (type == typeof(uint))
+        {
+            var value = BinaryPrimitives.ReadUInt32LittleEndian(data[..4].Span);
+            data = data[4..];
+            return Unsafe.As<uint, T>(ref value);
+        }
+
+        if (type == typeof(int))
+        {
+            var value = BinaryPrimitives.ReadInt32LittleEndian(data[..4].Span);
+            data = data[4..];
+            return Unsafe.As<int, T>(ref value);
+        }
+
+        if (type == typeof(float))
+        {
+            var value = BinaryPrimitives.ReadSingleLittleEndian(data[..4].Span);
+            data = data[4..];
+            return Unsafe.As<float, T>(ref value);
+        }
+
+        if (type == typeof(ulong))
+        {
+            var value = BinaryPrimitives.ReadUInt64LittleEndian(data[..8].Span);
+            data = data[8..];
+            return Unsafe.As<ulong, T>(ref value);
+        }
+
+        if (type == typeof(long))
+        {
+            var value = BinaryPrimitives.ReadInt64LittleEndian(data[..8].Span);
+            data = data[8..];
+            return Unsafe.As<long, T>(ref value);
+        }
+
+        if (type == typeof(double))
+        {
+            var value = BinaryPrimitives.ReadDoubleLittleEndian(data[..8].Span);
+            data = data[8..];
+            return Unsafe.As<double, T>(ref value);
+        }
+
+        if (type.IsEnum)
+        {
+            // An enum on the wire is just its underlying integer, and every enum's size is its
+            // underlying type's size, so the value can be copied straight over the local. The
+            // previous path boxed the underlying read and went through Enum.ToObject for it.
+            var size = Unsafe.SizeOf<T>();
+            var value = default(T);
+            data[..size].Span.CopyTo(MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref value), size));
+            data = data[size..];
+            return value;
+        }
+
+        return (T)Read(ref data, type);
     }
 
     public static object ReadPrimitive(ref ReadOnlyMemory<byte> data, Type type)
@@ -61,7 +162,10 @@ public static class Deserializer
         {
             span = data[..1].Span;
             data = data[1..];
-            return Encoding.ASCII.GetChars(span.ToArray())[0];
+
+            // Same mapping Encoding.ASCII.GetChars(span.ToArray())[0] performed (byte values above
+            // ASCII are the replacement character), without the array copy and char[] per read.
+            return span[0] <= 0x7F ? (char)span[0] : '?';
         }
 
         if (typeof(short) == type)
@@ -132,6 +236,16 @@ public static class Deserializer
 
     private static unsafe object Read(ref ReadOnlyMemory<byte> data, Type type, IEnumerable<Attribute> attributes = null)
     {
+        // Wire primitives carry no serializer metadata of their own: LengthPrefixed, Length,
+        // Padding and ExistsPrefix live on the *fields* being read and reach this method through
+        // the explicit attributes parameter. With no field attributes in play (list elements,
+        // the underlying type of an enum, the header reads), fetching the value type's own
+        // attributes — and then scanning the result four times — was pure per-packet cost.
+        if (attributes is null && (type.IsPrimitive || type == typeof(Half)))
+        {
+            return ReadPrimitive(ref data, type);
+        }
+
         attributes = attributes?.ToList() ?? type.GetCustomAttributes();
 
         var prefixLength = attributes.FirstOrDefault(a => a is LengthPrefixedAttribute) as LengthPrefixedAttribute;

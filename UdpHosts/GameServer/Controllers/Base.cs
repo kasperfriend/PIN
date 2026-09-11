@@ -16,8 +16,16 @@ public abstract class Base
     private static readonly ProtocolRoute TurretRoute = new(GssTables.Ns.Turret, GssTables.Kind.Command, typeof(GssTurretCommand));
     private static readonly ProtocolRoute RootRoute = new(GssTables.Ns.Root, GssTables.Kind.Message, typeof(GssMessage));
 
-    private Dictionary<byte, MethodInfo>? _dispatch;
+    private Dictionary<byte, PacketHandler>? _dispatch;
     private GssVersion _dispatchVersion;
+
+    /// <summary>
+    ///     The uniform shape of every <see cref="MessageIDAttribute" />-annotated controller method.
+    ///     Handlers used to be run through <c>MethodInfo.Invoke</c>, which boxes the entity id and
+    ///     allocates an argument array on every incoming game message; they are now compiled into
+    ///     delegates once per dispatch-table build.
+    /// </summary>
+    internal delegate void PacketHandler(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet);
 
     protected Base()
     {
@@ -43,11 +51,14 @@ public abstract class Base
     {
         var version = client.AssignedShard.Settings.GssProtocolVersion;
 
-        if (!GetDispatchTable(version).TryGetValue(msgId, out var method))
+        if (!GetDispatchTable(version).TryGetValue(msgId, out var handler))
         {
-            logger.Warning("Unhandled message {TypecodeName}::{MessageName} (tc-{Typecode} mid-{MessageId}) from Entity 0x{EntityId:X8}", TypecodeName, GetUnhandledMessageLookup(version, msgId), GetTypecode(version), msgId, entityId);
+            // Resolving the message name and typecode walks the GSS tables; as call-site arguments
+            // they were previously evaluated for every unhandled message even with Warning logging
+            // off (clients in the field send unhandled ids routinely).
             if (logger.IsEnabled(Serilog.Events.LogEventLevel.Warning))
             {
+                logger.Warning("Unhandled message {TypecodeName}::{MessageName} (tc-{Typecode} mid-{MessageId}) from Entity 0x{EntityId:X8}", TypecodeName, GetUnhandledMessageLookup(version, msgId), GetTypecode(version), msgId, entityId);
                 logger.Warning(">  {PacketData}", BitConverter.ToString(packet.Peek(packet.BytesRemaining).ToArray()).Replace("-", " "));
             }
 
@@ -56,15 +67,15 @@ public abstract class Base
 
         try
         {
-            _ = method.Invoke(this, [client, player, entityId, packet]);
+            handler(client, player, entityId, packet);
         }
-        catch (TargetInvocationException e)
+        catch (Exception e)
         {
-            if (e.InnerException != null)
-            {
-                logger.Error("HandlePacket Caught {ExceptionMessage}", e.InnerException.Message);
-                logger.Error("{StackTrace}", e.InnerException.StackTrace);
-            }
+            // Compiled delegates deliver the handler's exception directly instead of wrapped in a
+            // TargetInvocationException, so the catch widens from that type. The isolation stays:
+            // one throwing handler logs and lets the rest of the packet stream through.
+            logger.Error("HandlePacket Caught {ExceptionMessage}", e.Message);
+            logger.Error("{StackTrace}", e.StackTrace);
         }
     }
 
@@ -101,14 +112,14 @@ public abstract class Base
             : GssTables.GetNamespaceTypecode(version, Namespace);
     }
 
-    private Dictionary<byte, MethodInfo> GetDispatchTable(GssVersion version)
+    private Dictionary<byte, PacketHandler> GetDispatchTable(GssVersion version)
     {
         if (_dispatch != null && _dispatchVersion == version)
         {
             return _dispatch;
         }
 
-        var table = new Dictionary<byte, MethodInfo>();
+        var table = new Dictionary<byte, PacketHandler>();
         var route = GetProtocolRoute(Namespace);
 
         if (route != null)
@@ -126,7 +137,7 @@ public abstract class Base
 
                 if (wireId != 0)
                 {
-                    table[wireId] = method;
+                    table[wireId] = CreateHandler(method);
                 }
             }
         }
@@ -134,6 +145,25 @@ public abstract class Base
         _dispatch = table;
         _dispatchVersion = version;
         return table;
+    }
+
+    /// <summary>
+    ///     Compiles a handler method into a <see cref="PacketHandler" /> delegate. A method that no
+    ///     longer matches the uniform handler signature keeps the old reflection-based invocation
+    ///     instead of being dropped, so adding one cannot silently change dispatch behavior.
+    /// </summary>
+    private PacketHandler CreateHandler(MethodInfo method)
+    {
+        var parameters = method.GetParameters();
+
+        if (!method.IsStatic && method.ReturnType == typeof(void) && parameters.Length == 4 &&
+            parameters[0].ParameterType == typeof(INetworkClient) && parameters[1].ParameterType == typeof(IPlayer) &&
+            parameters[2].ParameterType == typeof(ulong) && parameters[3].ParameterType == typeof(GamePacket))
+        {
+            return (PacketHandler)Delegate.CreateDelegate(typeof(PacketHandler), this, method);
+        }
+
+        return (client, player, entityId, packet) => _ = method.Invoke(this, [client, player, entityId, packet]);
     }
 
     private string GetUnhandledMessageLookup(GssVersion version, byte messageId)

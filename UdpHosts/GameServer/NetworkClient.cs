@@ -82,7 +82,11 @@ public class NetworkClient : INetworkClient
 
     public void HandlePacket(ReadOnlyMemory<byte> data, Packet packet)
     {
-        NetLastReceive = DateTime.Now;
+        // One clock read per datagram: the stamps are only ever compared against each other and
+        // against a same-source reading in Shard.DropSilentClients, so sharing a single value is
+        // exact, and DateTime.Now is expensive enough that two calls on this path were worth it.
+        var now = DateTime.Now;
+        NetLastReceive = now;
 
         if (NetClientStatus == ClientStatus.Connecting)
         {
@@ -122,7 +126,7 @@ public class NetworkClient : INetworkClient
             index += header.Length;
         }
 
-        NetLastActive = DateTime.Now;
+        NetLastActive = now;
     }
 
     public virtual void NetworkTick(double deltaTime, ulong currentTime, CancellationToken ct)
@@ -203,15 +207,24 @@ public class NetworkClient : INetworkClient
     {
         if (received != null)
         {
-            Logger.Verbose("<-- {Channel} Ack for {SeqNum} on {ForChannel} after {ElapsedTime}ms.", ChannelType.Control, forSequenceNumber, forChannel, (DateTime.Now - received.Value).TotalMilliseconds);
+            // Serilog only skips the *format* of a message the level refuses — the arguments at
+            // the call site are evaluated either way. This one performs a clock read per ack, so
+            // it has to sit behind the level check itself.
+            if (Logger.IsEnabled(Serilog.Events.LogEventLevel.Verbose))
+            {
+                Logger.Verbose("<-- {Channel} Ack for {SeqNum} on {ForChannel} after {ElapsedTime}ms.", ChannelType.Control, forSequenceNumber, forChannel, (DateTime.Now - received.Value).TotalMilliseconds);
+            }
         }
         else
         {
             Logger.Verbose("<-- {Channel} Ack for {SeqNum} on {ForChannel}.", ChannelType.Control, forSequenceNumber, forChannel);
         }
 
-        var forNum = Utils.SimpleFixEndianness(forSequenceNumber);
-        var nextNum = Utils.SimpleFixEndianness(unchecked((ushort)(forSequenceNumber + 1)));
+        // The message stores the sequence numbers already byte-swapped (the serializer writes
+        // them little-endian, the wire wants big-endian). ReverseEndianness is the same swap
+        // Utils.SimpleFixEndianness performed, minus the generic copy round-trip.
+        var forNum = unchecked((ushort)BinaryPrimitives.ReverseEndianness(forSequenceNumber));
+        var nextNum = unchecked((ushort)BinaryPrimitives.ReverseEndianness((ushort)(forSequenceNumber + 1)));
 
         if (forChannel == ChannelType.Matrix)
         {
@@ -382,7 +395,10 @@ public class NetworkClient : INetworkClient
 
         var t = new Memory<byte>(new byte[_socketIdSize + packet.Length]);
         packet.CopyTo(t[_socketIdSize..]);
-        Serializer.WriteStruct(Utils.SimpleFixEndianness(SocketId)).CopyTo(t);
+
+        // The socket id goes out big-endian; the old form swapped the value and let WriteStruct
+        // copy the raw little-endian bytes, allocating an array and boxing the uint on the way.
+        BinaryPrimitives.WriteUInt32BigEndian(t.Span, SocketId);
 
         Sender.SendAsync(t, RemoteEndpoint);
     }
@@ -401,10 +417,11 @@ public class NetworkClient : INetworkClient
 
         NetLastActive = DateTime.Now;
 
-        var socketIdBytes = Serializer.WriteStruct(Utils.SimpleFixEndianness(SocketId));
+        Span<byte> socketIdBytes = stackalloc byte[_socketIdSize];
+        BinaryPrimitives.WriteUInt32BigEndian(socketIdBytes, SocketId);
 
         var datagram = new Memory<byte>(new byte[_maxDatagramPayload]);
-        socketIdBytes.CopyTo(datagram);
+        socketIdBytes.CopyTo(datagram.Span);
         var currentSize = _socketIdSize;
 
         foreach (var packet in _outgoingBatch)
@@ -414,7 +431,7 @@ public class NetworkClient : INetworkClient
                 Sender.SendAsync(datagram[..currentSize], RemoteEndpoint);
 
                 datagram = new Memory<byte>(new byte[_maxDatagramPayload]);
-                socketIdBytes.CopyTo(datagram);
+                socketIdBytes.CopyTo(datagram.Span);
                 currentSize = _socketIdSize;
             }
 
