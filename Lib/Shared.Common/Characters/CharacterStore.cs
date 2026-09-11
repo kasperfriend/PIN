@@ -371,17 +371,6 @@ public static class CharacterStore
         return true;
     }
 
-    /// <summary>Sort position for a character in a new slot: behind the account's existing entries.</summary>
-    private static int NextSortOrder(ulong accountId)
-    {
-        var highest = Characters.Values
-                                .Where(c => c.AccountId == accountId)
-                                .Select(c => (int?)c.SortOrder)
-                                .Max();
-
-        return (highest ?? -1) + 1;
-    }
-
     /// <summary>
     /// Created characters used to inherit the admin Raptor warpaint
     /// (the colors <see cref="DefaultCharacterTemplate.Warpaint"/>
@@ -597,5 +586,16 @@ public static class CharacterStore
         {
             Characters[character.CharacterGuid] = character;
         }
+    }
+
+    /// <summary>Sort position for a character in a new slot: behind the account's existing entries.</summary>
+    private static int NextSortOrder(ulong accountId)
+    {
+        var highest = Characters.Values
+                                .Where(c => c.AccountId == accountId)
+                                .Select(c => (int?)c.SortOrder)
+                                .Max();
+
+        return (highest ?? -1) + 1;
     }
 }
