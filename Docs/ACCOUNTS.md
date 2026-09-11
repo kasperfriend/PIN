@@ -89,9 +89,22 @@ Firefall__Accounts__AccountStorePath=/opt/pin/accounts.json
 * A wrong email or password returns the original
   `{"code": "ERR_INCORRECT_USERPASS", ...}` error (HTTP 500), which the client
   displays as its usual "check your username and password" message.
-* **Steam auto-login**: when the client skips the login screen via Steam it has
-  no PIN credentials to sign with, so the login is rejected and the client falls
-  back to the login form — enter account credentials there.
+* **Steam auto-login**: a Steam-launched client signs its requests with an
+  opaque **Steam session ticket** instead of derived credentials (the uid in
+  the signature is a ~234-byte blob, not the 28-character uid of an email).
+  PIN provisions an account for that ticket automatically on first sight —
+  keyed to the Steam account embedded in it, so the same Steam user keeps
+  their characters across sessions — and logs it at `Warning`:
+
+  ```
+  [.. WRN] Provisioned account 26294423 (steam-76561198143720022@pin.local) for the
+           client's opaque login ticket (Steam account 76561198143720022): ...
+  ```
+
+  A `TicketAuth` account has no password (the ticket's signature can only be
+  verified with a Steam backend, which PIN does not have: the ticket *is* the
+  credential). Typed logins of named accounts work exactly as before — they
+  are what `admin`/`admin` and `POST api/v2/accounts` accounts are for.
 
 ### The Red5 signature scheme (authentic behaviour)
 
@@ -152,6 +165,7 @@ A JSON list of accounts (written by `AccountStore`, sorted by id):
 | `PasswordHash` | string | `base64(16 salt bytes + 32 PBKDF2-HMACSHA256 bytes)` of the password, for direct verification |
 | `IsDev` | bool | Reports `is_dev` to the client |
 | `IsAdmin` | bool | Marks the built-in seeded account (also the fallback for unauthenticated API calls) |
+| `TicketAuth` | bool | The account was provisioned from an opaque client login ticket (a Steam session ticket) instead of email + password; its signatures are not verified (see §3) |
 | `CharacterLimit` | int | Character slots reported on login (the zone-picker seed needs all 40) |
 | `Language` | string | UI language chosen via `api/v2/accounts/change_language` |
 | `Country` / `Birthday` / `EmailOptIn` / `ReferralKey` | mixed | Values from the account creation form |
@@ -415,7 +429,14 @@ succeeded.
   * `Rejected a login: <reason> (uid <uid>)`, where the reason is
     `UnknownAccount` (no account with that email is stored — the creation never
     landed), `SignatureMismatch` (the account exists, the password is wrong),
-    `MalformedSignature` or `MissingSignature`.
+    `MalformedSignature` or `MissingSignature`. A uid that is an opaque client
+    ticket is summarized (`FAAAAG2yUnc70KSp... (234 bytes, Steam account
+    76561198143720022)`) instead of dumped in full, and is provisioned for
+    rather than rejected (see §3), so a `UnknownAccount` next to one means the
+    provisioning was not reached — check for the `Provisioned account` line.
+  * `Provisioned account <id> (<email>) for the client's opaque login ticket`
+    or `Accepted the client's opaque login ticket ... for account <id>` — the
+    Steam-launch flow working as intended.
 
 **The client freezes when I press "Create"**
 
@@ -423,6 +444,12 @@ The client shows nothing for a creation it cannot make sense of, so a frozen
 creation form is always a question about what the server answered — read the
 `Warning` lines above:
 
+* **`Rejected a login: UnknownAccount (uid FAAAA...)` and no creation request
+  at all** — the login the client sends *before* creating anything was signed
+  with an opaque ticket and rejected by a PIN older than the ticket support:
+  the client's flow dies on that rejection and never sends the creation. With
+  the current PIN this login provisions (or reuses) a `steam-...@pin.local`
+  account and the flow proceeds — see §3.
 * **No `Account creation request` line at all** — the client never reached a
   running host: check that WebHostManager is the build you just compiled (the
   `Account store <path> ...` line on start names the folder it is running

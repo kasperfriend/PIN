@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Serilog;
@@ -44,6 +45,18 @@ public sealed class AccountStore
     private const int PasswordIterations = 10000;
     private const int MaxEmailLength = 254;
 
+    /// <summary>
+    /// A signature uid that base64-decodes to at least this many bytes is not a
+    /// derived credential hash (the <see cref="Red5Auth.GenerateUserId"/> uid is
+    /// 20 bytes decoded) but an opaque ticket the client produced — the Steam
+    /// session ticket a Steam-launched client signs its login and account
+    /// creation with (~234 bytes observed). See <see cref="ProvisionTicketAccount"/>.
+    /// </summary>
+    private const int OpaqueTicketMinBytes = 64;
+
+    /// <summary>The universe/base dword of a SteamID64 (see <see cref="SteamIdMarker"/>).</summary>
+    private const ulong SteamId64Base = 0x0110000100000000UL;
+
     /// <summary>created_at reported for the seeded admin (unix 1358612495, from the original service's example).</summary>
     private static readonly DateTime AdminCreatedAt = new(2013, 1, 17, 18, 21, 35, DateTimeKind.Utc);
 
@@ -54,6 +67,15 @@ public sealed class AccountStore
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
+
+    /// <summary>
+    /// Little-endian <c>0x01100001</c>, the high dword of every SteamID64
+    /// (<c>0x0110000100000000 | accountId</c>). The ticket embeds
+    /// <c>accountId</c> directly in front of this marker (twice, in the
+    /// capture this was decoded from), which is what makes a provisioned
+    /// account stable across sessions although the ticket itself is per session.
+    /// </summary>
+    private static readonly byte[] SteamIdMarker = { 0x01, 0x00, 0x10, 0x01 };
 
     private static AccountStore defaultStore;
 
@@ -165,6 +187,124 @@ public sealed class AccountStore
         return new string(trimmed);
     }
 
+    /// <summary>
+    /// Whether a signature uid is an opaque client login ticket rather than a
+    /// derived credential uid: base64 that decodes to
+    /// <see cref="OpaqueTicketMinBytes"/> bytes or more (the uid
+    /// <see cref="Red5Auth.GenerateUserId"/> derives from an email is always
+    /// 28 characters / 20 bytes).
+    /// </summary>
+    public static bool IsOpaqueTicketUid(string uid)
+    {
+        return TryDecodeOpaqueTicket(uid, out _);
+    }
+
+    /// <summary>
+    /// The Steam account a ticket uid was issued for, when one is embedded:
+    /// the ticket carries <c>accountId</c> in front of the SteamID64 marker
+    /// (<see cref="SteamIdMarker"/>), which is what the provisioned account is
+    /// keyed to — stable across sessions although the ticket is per session.
+    /// </summary>
+    public static bool TryGetSteamAccountId(string uid, out ulong steamAccountId)
+    {
+        steamAccountId = 0;
+
+        if (!TryDecodeOpaqueTicket(uid, out var ticket))
+        {
+            return false;
+        }
+
+        for (var index = sizeof(uint); index <= ticket.Length - SteamIdMarker.Length; index++)
+        {
+            if (!StartsWithMarker(ticket, index))
+            {
+                continue;
+            }
+
+            var accountId = BitConverter.ToUInt32(ticket, index - sizeof(uint));
+            if (accountId != 0)
+            {
+                steamAccountId = SteamId64Base | accountId;
+                return true;
+            }
+        }
+
+        return false;
+
+        bool StartsWithMarker(byte[] data, int offset)
+        {
+            for (var i = 0; i < SteamIdMarker.Length; i++)
+            {
+                if (data[offset + i] != SteamIdMarker[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// A signature uid for the login-rejection log: derived uids are shown in
+    /// full, a ticket is summarized (they are ~300 characters of noise) with
+    /// the Steam account it was issued for when one is embedded.
+    /// </summary>
+    public static string DescribeUid(string uid)
+    {
+        if (string.IsNullOrEmpty(uid))
+        {
+            return "(none)";
+        }
+
+        if (!TryDecodeOpaqueTicket(uid, out var ticket))
+        {
+            return uid;
+        }
+
+        var steamAccount = TryGetSteamAccountId(uid, out var steamAccountId) ? $", Steam account {steamAccountId}" : string.Empty;
+        return $"{uid.Substring(0, Math.Min(16, uid.Length))}... ({ticket.Length} bytes{steamAccount})";
+    }
+
+    private static bool TryDecodeOpaqueTicket(string uid, out byte[] ticket)
+    {
+        ticket = null;
+
+        if (string.IsNullOrEmpty(uid) || uid.Length < OpaqueTicketMinBytes / 3 * 4)
+        {
+            // 4 base64 characters per 3 bytes; anything shorter than the
+            // minimum ticket can never reach the byte threshold.
+            return false;
+        }
+
+        try
+        {
+            ticket = Convert.FromBase64String(uid);
+        }
+        catch (FormatException)
+        {
+            // The signature parser URL-decodes the uid, so an unencoded '+'
+            // arrives as a space and URL-safe alphabet chars can appear from
+            // hand-crafted callers. Recover what is recoverable.
+            foreach (var candidate in new[] { uid.Replace(' ', '+'), uid.Replace('-', '+').Replace('_', '/'), uid.Replace('-', '+').Replace('_', '/').Replace(' ', '+') })
+            {
+                try
+                {
+                    ticket = Convert.FromBase64String(candidate);
+                    break;
+                }
+                catch (FormatException)
+                {
+                    // Try the next repair.
+                }
+            }
+
+            return ticket?.Length >= OpaqueTicketMinBytes;
+        }
+
+        return ticket.Length >= OpaqueTicketMinBytes;
+    }
+
     private static AccountStore CreateDefault(string storePath)
     {
         lock (DefaultLock)
@@ -232,6 +372,20 @@ public sealed class AccountStore
     /// error for every failure, so this is what makes a rejected login
     /// diagnosable from the server log.
     /// </summary>
+    /// <remarks>
+    /// A signature whose uid is an opaque ticket (see
+    /// <see cref="IsOpaqueTicketUid"/>) never reaches
+    /// <see cref="LoginFailure.UnknownAccount"/>: the account for it is
+    /// provisioned on first sight (<see cref="ProvisionTicketAccount"/>) and
+    /// reused afterwards, because a Steam-launched client signs the login that
+    /// precedes its account creation with a session ticket — rejecting it
+    /// there stops the whole flow dead, and the creation POST this client is
+    /// about to send never arrives (observed as the client freezing on its
+    /// account creation form with no creation request in the log). For a
+    /// ticket account the signature itself is not verified: the ticket secret
+    /// is only computable with a Steam backend, which a local emulator does
+    /// not have, so the uid — a per-session blob — is the credential.
+    /// </remarks>
     public bool TryVerifyLogin(string signatureHeader, out AccountRecord account, out LoginFailure failure)
     {
         account = null;
@@ -248,11 +402,19 @@ public sealed class AccountStore
             return false;
         }
 
-        account = GetByUid(signature.Uid);
+        account = GetByUid(signature.Uid) ?? (IsOpaqueTicketUid(signature.Uid) ? ProvisionTicketAccount(signature.Uid) : null);
         if (account == null)
         {
             failure = LoginFailure.UnknownAccount;
             return false;
+        }
+
+        if (account.TicketAuth)
+        {
+            // Signed with a session ticket we cannot recompute the secret of;
+            // the ticket itself (the uid) is what identified the account.
+            failure = LoginFailure.None;
+            return true;
         }
 
         if (!Red5Auth.Verify(account.Secret, signatureHeader))
@@ -394,6 +556,74 @@ public sealed class AccountStore
                 // Persistence is best effort; never take a server down over it.
                 Log.Warning(ex, "Failed to persist the account store at {StorePath}", storePath);
             }
+        }
+    }
+
+    /// <summary>
+    /// Create — or return the existing — account for an opaque client login
+    /// ticket (the Steam session ticket a Steam-launched client signs its
+    /// requests with). The account is keyed to the Steam account embedded in
+    /// the ticket (email <c>steam-&lt;id&gt;@pin.local</c>) so the same player
+    /// keeps their characters across sessions, with a fallback key of the
+    /// ticket's own hash when no Steam account is embedded. The ticket uid is
+    /// stored on the account, so lookups by uid hit it for the rest of the
+    /// session; <see cref="AccountRecord.TicketAuth"/> marks it as one whose
+    /// signatures cannot be verified.
+    /// </summary>
+    private AccountRecord ProvisionTicketAccount(string uid)
+    {
+        var keyedBySteamAccount = TryGetSteamAccountId(uid, out var steamAccountId);
+        var email = keyedBySteamAccount ? $"steam-{steamAccountId}@pin.local" : $"ticket-{TicketHash(uid)}@pin.local";
+
+        lock (writeLock)
+        {
+            var existing = GetByEmail(email);
+            if (existing != null)
+            {
+                // A new session means a new ticket: keep the account pointed
+                // at the uid it is actually addressed by now.
+                if (!string.Equals(existing.Uid, uid, StringComparison.Ordinal))
+                {
+                    existing.Uid = uid;
+                    Save();
+                }
+
+                Log.Information(
+                    "Accepted the client's opaque login ticket (Steam account {SteamAccount}) for account {AccountId} ({Email})",
+                    keyedBySteamAccount ? steamAccountId.ToString() : "(not embedded)",
+                    existing.AccountId,
+                    existing.Email);
+
+                return existing;
+            }
+
+            var account = new AccountRecord
+            {
+                AccountId = NextAccountId(),
+                Email = email,
+                Uid = uid,
+                Secret = Red5Auth.GenerateSecret(email, Convert.ToBase64String(RandomNumberGenerator.GetBytes(PasswordSaltLength * 2))),
+                TicketAuth = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            accounts[account.AccountId] = account;
+            Save();
+
+            Log.Warning(
+                "Provisioned account {AccountId} ({Email}) for the client's opaque login ticket (Steam account {SteamAccount}): " +
+                "a Steam-launched client signs with a session ticket instead of derived credentials, so there is no password to check. " +
+                "Create named accounts with POST api/v2/accounts and log in with them from a non-Steam client if you want more than this",
+                account.AccountId,
+                account.Email,
+                keyedBySteamAccount ? steamAccountId.ToString() : "(not embedded)");
+
+            return account;
+        }
+
+        static string TicketHash(string value)
+        {
+            return Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
         }
     }
 

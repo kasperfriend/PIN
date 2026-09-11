@@ -29,7 +29,7 @@ https://user-images.githubusercontent.com/920861/134824107-03e9f99c-b420-47c7-b7
 11. Start Firefall
 12. Login to the server:
     - Enter the email and password of a PIN account — the first run seeds the built-in **`admin` / `admin`** account — or create a new account (see [Account system](#account-system))
-    - If Steam auto login skips the login screen, the login is rejected and the client falls back to the login form; enter account credentials there
+    - A **Steam-launched client** signs with an opaque Steam session ticket instead of typed credentials: PIN then provisions a `steam-<steamid>@pin.local` account for that Steam user automatically (stable across sessions, no password) and the login continues (see [Accounts & Login](Docs/ACCOUNTS.md))
 13. Load into the game by pressing the "Enter World" button
 
 ### Account system
@@ -41,6 +41,15 @@ the original game did: the client signs every request with a secret derived
 from email + password (the Red5 signature scheme), and the server checks that
 signature against the stored account — a wrong password is a wrong signature,
 so it fails with the client's usual `ERR_INCORRECT_USERPASS` error.
+
+A **Steam-launched client** does not sign with typed credentials at all: its
+login and account-creation flow opens with a request signed by an opaque Steam
+session ticket (which embeds the SteamID64). PIN provisions an account for it
+on first sight (`steam-<steamid>@pin.local`, reused for that Steam user
+forever after, signatures not verified — the ticket is the credential), which
+is also what un-freezes the client's "Create" button: the flow it starts with
+that button is a ticket login, and a PIN that rejected it stopped the whole
+creation before the form was ever sent.
 
 New accounts can be created from the client's account creation form
 (`POST api/v2/accounts`) or any HTTP client:
