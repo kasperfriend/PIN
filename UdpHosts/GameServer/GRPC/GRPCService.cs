@@ -76,14 +76,15 @@ public static class GRPCService
         {
             _logger.Warning(ex, "Failed to send GRPC command {Subtype}", command.SubtypeCase);
         }
-        catch (InvalidOperationException ex)
-        {
-            _logger.Warning(ex, "Failed to send GRPC command {Subtype}", command.SubtypeCase);
-        }
         catch (ObjectDisposedException ex)
         {
             // The listen loop can tear the stream down between the null check above and this write.
+            // (Must precede the InvalidOperationException clause: ObjectDisposedException derives from it.)
             _logger.Warning(ex, "Failed to send GRPC command {Subtype}, stream was closed", command.SubtypeCase);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.Warning(ex, "Failed to send GRPC command {Subtype}", command.SubtypeCase);
         }
     }
 
