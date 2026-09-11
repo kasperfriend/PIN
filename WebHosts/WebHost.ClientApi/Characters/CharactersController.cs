@@ -93,6 +93,13 @@ public class CharactersController : ControllerBase
         visualLoadout.ApplyTo(character);
         CharacterStore.Upsert(character);
 
+        // Persisting is only half of it: if the character is zoned in right
+        // now, the GameServer has to re-skin the live entity. The GameServerApi
+        // host (same process) turns this into the GRPC
+        // CharacterVisualsUpdated event the GameServer applies in-game;
+        // without it the new look would only show up at the next login.
+        CharacterEvents.NotifyVisualsUpdated(character);
+
         Log.Information(
             "Saved the New You appearance of character {Name} ({CharacterGuid}, loadout {LoadoutIdx}): " +
             "head={Head} eyes={Eyes} hair={Hair} facialHair={FacialHair} skin={SkinId} eye={EyeId} " +

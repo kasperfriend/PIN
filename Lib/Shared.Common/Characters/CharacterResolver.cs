@@ -32,6 +32,20 @@ public static class CharacterResolver
     private const ulong ZoneMask = 0xffff;
 
     /// <summary>
+    /// The guid form the GameServer recognizes a connected player by: the
+    /// stored guid with the byte the client overwrites set to <c>0xFE</c>.
+    ///
+    /// The GameServer hands its clients exactly this form of the guid and keeps
+    /// the character's guid with that byte masked off, so an event that refers
+    /// to a character has to carry this value — the GameServer's live match is
+    /// <c>CharacterId + 0xFE == event.CharacterGuid</c>.
+    /// </summary>
+    public static ulong GameServerEventGuid(ulong characterGuid)
+    {
+        return (characterGuid & LowByteMask) + 0xFE;
+    }
+
+    /// <summary>
     /// Resolve a character by guid alone. Used on the login path, where the
     /// client sends the guid it picked from the character list.
     /// </summary>

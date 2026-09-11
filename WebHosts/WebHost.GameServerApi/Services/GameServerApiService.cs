@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Threading.Tasks;
 using Google.Protobuf.WellKnownTypes;
@@ -21,10 +22,17 @@ public class GameServerApiService : GameServerAPI.GameServerAPIBase
 {
     private readonly ILogger<GameServerApiService> _logger;
 
+    // The live GameServer command streams. Events (like a New You appearance
+    // update) are pushed down every stream a GameServer currently holds open,
+    // so each shard re-skins the character it has zoned in. The service is
+    // registered as a singleton by AddGrpc, so instance state is process-wide.
+    private readonly ConcurrentDictionary<IServerStreamWriter<Event>, byte> _connectedStreams = new();
+
     public GameServerApiService(ILogger<GameServerApiService> logger)
     {
         _logger = logger;
         CharacterStore.Init();
+        CharacterEvents.VisualsUpdated += OnCharacterVisualsUpdated;
     }
 
     public override Task<CharacterAndBattleframeVisuals> GetCharacterAndBattleframeVisuals(CharacterID request, ServerCallContext context)
@@ -65,6 +73,7 @@ public class GameServerApiService : GameServerAPI.GameServerAPIBase
         IServerStreamWriter<Event> responseStream,
         ServerCallContext context)
     {
+        _connectedStreams[responseStream] = 0;
         _logger.LogInformation("GameServer connected to command stream");
 
         try
@@ -120,8 +129,83 @@ public class GameServerApiService : GameServerAPI.GameServerAPIBase
         {
             // Normal shutdown.
         }
+        finally
+        {
+            // The stream is gone for good (completion, peer disconnect or
+            // cancellation); stop sending events into it.
+            _connectedStreams.TryRemove(responseStream, out _);
+        }
 
         _logger.LogInformation("GameServer disconnected from command stream");
+    }
+
+    /// <summary>
+    /// The New You terminal's save landed in the CharacterStore (same process,
+    /// same in-memory copy): push a <c>CharacterVisualsUpdated</c> event down
+    /// every connected GameServer so the character re-skins in-game instead of
+    /// only wearing the new look from the next login on.
+    /// </summary>
+    private void OnCharacterVisualsUpdated(CharacterRecord updated)
+    {
+        if (updated == null)
+        {
+            return;
+        }
+
+        // Re-read the record: the payload must be the fully persisted state,
+        // not a reference into whatever the caller is still mutating.
+        var character = CharacterStore.Get(updated.CharacterGuid);
+        if (character == null)
+        {
+            _logger.LogWarning("Visuals update for unknown character {CharacterGuid}; nothing to broadcast", updated.CharacterGuid);
+            return;
+        }
+
+        var evt = new Event
+                  {
+                      CharacterVisualsUpdated = new CharacterVisualsUpdated
+                                                {
+                                                    CharacterGuid = CharacterResolver.GameServerEventGuid(character.CharacterGuid),
+                                                    CharacterAndBattleframeVisuals = Map(character)
+                                                }
+                  };
+
+        BroadcastEvent(evt);
+    }
+
+    /// <summary>
+    /// Write <paramref name="evt"/> to every GameServer stream that is
+    /// currently connected. A dead stream is reported, never fatal: one
+    /// flapping shard must not swallow the update for the others.
+    /// </summary>
+    private void BroadcastEvent(Event evt)
+    {
+        if (_connectedStreams.IsEmpty)
+        {
+            _logger.LogDebug("No GameServer stream connected; dropping {Subtype}", evt.SubtypeCase);
+            return;
+        }
+
+        _logger.LogInformation("Broadcasting {Subtype} to {Count} GameServer stream(s)", evt.SubtypeCase, _connectedStreams.Count);
+
+        foreach (var stream in _connectedStreams.Keys)
+        {
+            // Fire and forget: the event handler must not block on a slow or
+            // dead stream, and write failures are logged inside.
+            _ = WriteEventAsync(stream, evt);
+        }
+    }
+
+    private async Task WriteEventAsync(IServerStreamWriter<Event> stream, Event evt)
+    {
+        try
+        {
+            await stream.WriteAsync(evt);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not write {Subtype} to a GameServer stream", evt.SubtypeCase);
+        }
     }
 
     private static CharacterAndBattleframeVisuals Map(CharacterRecord character)

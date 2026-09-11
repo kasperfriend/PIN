@@ -632,6 +632,48 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         {
             SetChassisWarpaint(remoteData.BattleframeVisuals.Warpaint.ToArray());
         }
+
+        // An in-game appearance update (the New You terminal's save, pushed as the
+        // GRPC CharacterVisualsUpdated event) arrives on an entity that already
+        // wears a loadout: the chassis' replicated visuals are only rebuilt by
+        // ApplyLoadout, so refresh them here or the worn armor keeps its old
+        // colors. The login path has no loadout yet (it applies one right after
+        // this returns), so it is unaffected.
+        RefreshChassisVisuals();
+    }
+
+    /// <summary>
+    ///     Re-derive the visuals of the chassis currently equipped (the
+    ///     character's own warpaint colors when the record carries them,
+    ///     otherwise the chassis' default SDB warpaint) and re-replicate the
+    ///     equipment, so a mid-game appearance update changes the armor the
+    ///     character wears without re-running the whole loadout (which would
+    ///     also rebuild the collision and re-derive stats and health).
+    /// </summary>
+    private void RefreshChassisVisuals()
+    {
+        if (CurrentLoadout == null || CurrentEquipment.Chassis.SdbId == 0)
+        {
+            return;
+        }
+
+        SetCurrentEquipment(new EquipmentData
+        {
+            Chassis = new SlottedItem
+                      {
+                          SdbId = CurrentEquipment.Chassis.SdbId,
+                          SlotIndex = CurrentEquipment.Chassis.SlotIndex,
+                          Flags = CurrentEquipment.Chassis.Flags,
+                          Unk2 = CurrentEquipment.Chassis.Unk2,
+                          Modules = CurrentEquipment.Chassis.Modules,
+                          Visuals = GetChassisVisualsForLoadout(CurrentLoadout)
+                      },
+            Backpack = CurrentEquipment.Backpack,
+            PrimaryWeapon = CurrentEquipment.PrimaryWeapon,
+            SecondaryWeapon = CurrentEquipment.SecondaryWeapon,
+            EndUnk1 = CurrentEquipment.EndUnk1,
+            EndUnk2 = CurrentEquipment.EndUnk2
+        });
     }
 
     public void Load(BasicCharacterData data)
