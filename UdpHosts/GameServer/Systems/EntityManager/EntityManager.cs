@@ -688,10 +688,15 @@ public class EntityManager
         {
             if (entity is CharacterEntity characterEntity)
             {
+                DetachCharacter(characterEntity);
                 _shard.CharacterLifecycle.OnCharacterRemoved(characterEntity);
             }
 
             _shard.AI?.Unregister(guid);
+
+            // Spread state is per character and dies with it (guarded like the AI unregister:
+            // minimal test shards run without a WeaponSim).
+            _shard.WeaponSim?.Forget(guid);
 
             // Physics may be null in minimal shards that never create bodies.
             if (_shard.Physics != null && _shard.Physics.HasEntity(entity))
@@ -704,6 +709,52 @@ public class EntityManager
             _ = _scopedPlayersByEntity.TryRemove(guid, out _);
             _ = _lifetimeByEntity.TryRemove(guid, out _);
         }
+    }
+
+    /// <summary>
+    ///     Drops every scoped-players entry of a player that left the shard. <c>MigrateOut</c> removes the
+    ///     player's own character entity, but the player also sits in the scoped set of every entity it had
+    ///     in view — and the scope check that prunes those sets only looks at players still in the client
+    ///     map, so a departed player is never removed by it. Without this sweep the player is strongly
+    ///     referenced (and keeps being sent view updates) by every entity it could see, for the rest of the
+    ///     shard's life.
+    /// </summary>
+    public void ForgetPlayer(INetworkPlayer player)
+    {
+        // Values snapshots the dictionary (ConcurrentDictionary), so this tolerates entities
+        // being added or removed while the sweep runs.
+        foreach (var scopedPlayers in _scopedPlayersByEntity.Values)
+        {
+            scopedPlayers.Remove(player);
+        }
+    }
+
+    /// <summary>
+    ///     Frees the seat a character occupies before the character is removed. The client asks to exit an
+    ///     attachment itself (<c>ExitAttachmentRequest</c>), but nothing detached a character that was
+    ///     removed while still seated (a disconnect mid-ride, a zone-out): the vehicle kept the seat
+    ///     occupied by a ghost, counted it as taken, and — through the seat — kept the character and its
+    ///     whole player graph alive.
+    /// </summary>
+    private static void DetachCharacter(CharacterEntity character)
+    {
+        if (character.AttachedToEntity is VehicleEntity vehicle)
+        {
+            vehicle.RemoveOccupant(character);
+        }
+        else if (character.AttachedToEntity is TurretEntity turret)
+        {
+            if (turret.Parent is VehicleEntity parentVehicle)
+            {
+                parentVehicle.RemoveOccupant(character);
+            }
+            else
+            {
+                turret.SetControllingPlayer(null);
+            }
+        }
+
+        character.ClearAttachedTo();
     }
 
     public void KeyframeRequest(INetworkClient client, IPlayer player, IEntity entity, byte typecode, uint clientChecksum)

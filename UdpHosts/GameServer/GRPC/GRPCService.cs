@@ -80,60 +80,77 @@ public static class GRPCService
         {
             _logger.Warning(ex, "Failed to send GRPC command {Subtype}", command.SubtypeCase);
         }
+        catch (ObjectDisposedException ex)
+        {
+            // The listen loop can tear the stream down between the null check above and this write.
+            _logger.Warning(ex, "Failed to send GRPC command {Subtype}, stream was closed", command.SubtypeCase);
+        }
     }
 
     public static async Task ListenAsync(ConcurrentDictionary<uint, INetworkPlayer> clientMap, CancellationToken ct)
     {
         _stream = _client.Stream(cancellationToken: ct);
 
-        await foreach (var evt in _stream.ResponseStream.ReadAllAsync(ct))
+        try
         {
-            _logger.Information("{Event}", evt);
-            switch (evt.SubtypeCase)
+            await foreach (var evt in _stream.ResponseStream.ReadAllAsync(ct))
             {
-                case Event.SubtypeOneofCase.ArmyApplicationApproved:
-                    ArmyEventHandler.HandleEvent(evt.ArmyApplicationApproved, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.ArmyApplicationReceived:
-                    ArmyEventHandler.HandleEvent(evt.ArmyApplicationReceived, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.ArmyApplicationRejected:
-                    ArmyEventHandler.HandleEvent(evt.ArmyApplicationRejected, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.ArmyApplicationsUpdated:
-                    ArmyEventHandler.HandleEvent(evt.ArmyApplicationsUpdated, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.ArmyIdChanged:
-                    ArmyEventHandler.HandleEvent(evt.ArmyIdChanged, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.ArmyInfoUpdated:
-                    ArmyEventHandler.HandleEvent(evt.ArmyInfoUpdated, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.ArmyInviteApproved:
-                    ArmyEventHandler.HandleEvent(evt.ArmyInviteApproved, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.ArmyInviteReceived:
-                    ArmyEventHandler.HandleEvent(evt.ArmyInviteReceived, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.ArmyInviteRejected:
-                    ArmyEventHandler.HandleEvent(evt.ArmyInviteRejected, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.ArmyMembersUpdated:
-                    ArmyEventHandler.HandleEvent(evt.ArmyMembersUpdated, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.ArmyRanksUpdated:
-                    ArmyEventHandler.HandleEvent(evt.ArmyRanksUpdated, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.ArmyTagUpdated:
-                    ArmyEventHandler.HandleEvent(evt.ArmyTagUpdated, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.CharacterVisualsUpdated:
-                    CharacterEventHandler.HandleEvent(evt.CharacterVisualsUpdated, clientMap);
-                    break;
-                case Event.SubtypeOneofCase.None:
-                default:
-                    break;
+                _logger.Information("{Event}", evt);
+                switch (evt.SubtypeCase)
+                {
+                    case Event.SubtypeOneofCase.ArmyApplicationApproved:
+                        ArmyEventHandler.HandleEvent(evt.ArmyApplicationApproved, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.ArmyApplicationReceived:
+                        ArmyEventHandler.HandleEvent(evt.ArmyApplicationReceived, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.ArmyApplicationRejected:
+                        ArmyEventHandler.HandleEvent(evt.ArmyApplicationRejected, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.ArmyApplicationsUpdated:
+                        ArmyEventHandler.HandleEvent(evt.ArmyApplicationsUpdated, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.ArmyIdChanged:
+                        ArmyEventHandler.HandleEvent(evt.ArmyIdChanged, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.ArmyInfoUpdated:
+                        ArmyEventHandler.HandleEvent(evt.ArmyInfoUpdated, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.ArmyInviteApproved:
+                        ArmyEventHandler.HandleEvent(evt.ArmyInviteApproved, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.ArmyInviteReceived:
+                        ArmyEventHandler.HandleEvent(evt.ArmyInviteReceived, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.ArmyInviteRejected:
+                        ArmyEventHandler.HandleEvent(evt.ArmyInviteRejected, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.ArmyMembersUpdated:
+                        ArmyEventHandler.HandleEvent(evt.ArmyMembersUpdated, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.ArmyRanksUpdated:
+                        ArmyEventHandler.HandleEvent(evt.ArmyRanksUpdated, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.ArmyTagUpdated:
+                        ArmyEventHandler.HandleEvent(evt.ArmyTagUpdated, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.CharacterVisualsUpdated:
+                        CharacterEventHandler.HandleEvent(evt.CharacterVisualsUpdated, clientMap);
+                        break;
+                    case Event.SubtypeOneofCase.None:
+                    default:
+                        break;
+                }
             }
+        }
+        finally
+        {
+            // The retry loop in GameServer creates a fresh call on the next round; the failed one held
+            // its gRPC resources until finalization if it was simply abandoned. Null the field first so a
+            // racing SendCommandAsync sees "no stream" instead of writing into the disposed call.
+            var stream = _stream;
+            _stream = null;
+            stream?.Dispose();
         }
     }
 }

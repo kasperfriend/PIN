@@ -108,7 +108,16 @@ public class NetworkClient : INetworkClient
             var gamePacket = new GamePacket(header, data.Slice(index + headerSize, header.Length - headerSize), packet.Received);
 
             // Logger.Verbose("-> {0} = R:{1} S:{2} L:{3}", header.Channel, header.ResendCount, header.IsSplit, header.Length);
-            NetChannels[header.Channel].HandlePacket(gamePacket);
+            if (!NetChannels.TryGetValue(header.Channel, out var channel))
+            {
+                // A channel byte that matches no known channel means the datagram framing is broken;
+                // parsing on would only produce more garbage. Dropping the rest of the datagram beats
+                // throwing out of the packet loop (which used to log a full stack trace per packet).
+                Logger.Verbose("Dropping datagram with unknown channel {Channel}", header.Channel);
+                break;
+            }
+
+            channel.HandlePacket(gamePacket);
 
             index += header.Length;
         }
@@ -228,7 +237,11 @@ public class NetworkClient : INetworkClient
         if (connection == null)
         {
             Logger.Verbose("---> No controller for GSS typecode; Typecode = {Typecode} (ns-{Ns} view-{ViewOrdinal}) Entity = 0x{EntityId:X16} MsgID = {MessageId}!", typecode, ns, viewOrdinal, entityId, messageId);
-            Logger.Warning(">  {PacketData}", BitConverter.ToString(packet.PacketData.ToArray()).Replace("-", " "));
+            if (Logger.IsEnabled(Serilog.Events.LogEventLevel.Warning))
+            {
+                Logger.Warning(">  {PacketData}", BitConverter.ToString(packet.PacketData.ToArray()).Replace("-", " "));
+            }
+
             return;
         }
 
@@ -244,7 +257,11 @@ public class NetworkClient : INetworkClient
         if (ordinal < 0)
         {
             Logger.Warning("---> Unrecognized Matrix Packet (mid-{MessageId}) on protocol {Version}!!!", wireId, AssignedShard.Settings.MatrixProtocolVersion);
-            Logger.Warning(">  {PacketData}", BitConverter.ToString(packet.PacketData.ToArray()).Replace("-", " "));
+            if (Logger.IsEnabled(Serilog.Events.LogEventLevel.Warning))
+            {
+                Logger.Warning(">  {PacketData}", BitConverter.ToString(packet.PacketData.ToArray()).Replace("-", " "));
+            }
+
             return;
         }
 
@@ -267,10 +284,17 @@ public class NetworkClient : INetworkClient
                 break;
             case MatrixMessage.KeyframeRequest:
                 var query = packet.Unpack<KeyframeRequest>();
-                Logger.Verbose("KeyframeRequest with {EntityRequests} entity requests and {RefRequests} ref requests. Total scoped for player: {ScopedEntitiesForPlayer}",
-                    query.EntityRequests?.Length ?? 0,
-                    query.RefRequests?.Length ?? 0,
-                    AssignedShard.EntityMan.GetNumberOfScopedEntities(Player));
+                // Guarded: GetNumberOfScopedEntities scans the scoped set of every entity in the zone,
+                // and log arguments are evaluated even when the Verbose level is off — this fires once
+                // per requested entity during the scope-in burst of a login.
+                if (Logger.IsEnabled(Serilog.Events.LogEventLevel.Verbose))
+                {
+                    Logger.Verbose("KeyframeRequest with {EntityRequests} entity requests and {RefRequests} ref requests. Total scoped for player: {ScopedEntitiesForPlayer}",
+                        query.EntityRequests?.Length ?? 0,
+                        query.RefRequests?.Length ?? 0,
+                        AssignedShard.EntityMan.GetNumberOfScopedEntities(Player));
+                }
+
                 foreach (var request in query.EntityRequests)
                 {
                     byte typecode = (byte)(request.Entity & 0x00000000000000FFul);
@@ -339,7 +363,11 @@ public class NetworkClient : INetworkClient
                 break;
             default:
                 Logger.Warning("---> Unrecognized Control Packet {Message} ({MessageId:X2})!!!", messageId, (byte)messageId);
-                Logger.Warning(">  {PacketData}", BitConverter.ToString(packet.PacketData.ToArray()).Replace("-", " "));
+                if (Logger.IsEnabled(Serilog.Events.LogEventLevel.Warning))
+                {
+                    Logger.Warning(">  {PacketData}", BitConverter.ToString(packet.PacketData.ToArray()).Replace("-", " "));
+                }
+
                 break;
         }
     }

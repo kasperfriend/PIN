@@ -60,6 +60,15 @@ public class Shard : IShard
     private double _lastNetTick;
     private DateTime _lastClientSweep = DateTime.MinValue;
 
+    /// <summary>
+    ///     Raised on the thread that called <see cref="MigrateOut" /> once a player has fully left the
+    ///     shard. The socket owner (GameServer) uses it to drop its socket id mapping: that map is the one
+    ///     reference to the player the shard does not control, and a leaked entry pins the whole player
+    ///     object graph for the lifetime of the process — and serves packets for a reused socket id to the
+    ///     dead player instead of a fresh connection.
+    /// </summary>
+    public event Action<INetworkPlayer> PlayerMigratedOut;
+
     public Shard(double gameTickRate, ulong instanceId, GameServerSettings settings, IPacketSender sender, Serilog.ILogger logger)
     {
         InstanceId = instanceId;
@@ -186,8 +195,16 @@ public class Shard : IShard
                 EntityMan.Remove(player.CharacterId);
             }
 
+            // The entity removal above scopes the player's own character out of *other* clients' views,
+            // but the player itself still sits in the scoped set of every entity it could see, and in the
+            // participant set of every live encounter. Both are strong references that nothing else prunes
+            // (the scope check only looks at players still in the client map), so drop them here.
+            EntityMan.ForgetPlayer(player);
+            EncounterMan.ForgetPlayer(player);
             Admin.ClearPlayer(player);
             Cheats.Forget(player);
+
+            PlayerMigratedOut?.Invoke(player);
             return true;
         }
 

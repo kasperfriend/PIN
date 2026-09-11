@@ -46,7 +46,11 @@ public abstract class Base
         if (!GetDispatchTable(version).TryGetValue(msgId, out var method))
         {
             logger.Warning("Unhandled message {TypecodeName}::{MessageName} (tc-{Typecode} mid-{MessageId}) from Entity 0x{EntityId:X8}", TypecodeName, GetUnhandledMessageLookup(version, msgId), GetTypecode(version), msgId, entityId);
-            logger.Warning(">  {PacketData}", BitConverter.ToString(packet.Peek(packet.BytesRemaining).ToArray()).Replace("-", " "));
+            if (logger.IsEnabled(Serilog.Events.LogEventLevel.Warning))
+            {
+                logger.Warning(">  {PacketData}", BitConverter.ToString(packet.Peek(packet.BytesRemaining).ToArray()).Replace("-", " "));
+            }
+
             return;
         }
 
@@ -67,7 +71,10 @@ public abstract class Base
     protected void LogMissingImplementation<TController>(string endpointName, ulong entityId, GamePacket packet, ILogger logger)
     {
         logger.Warning("Unimplemented Endpoint was called by entity 0x{EntityId:X8}: {ControllerFullName}.{Endpoint}", entityId, typeof(TController).FullName, endpointName);
-        logger.Warning(">  {PacketData}", BitConverter.ToString(packet.PacketData.ToArray()).Replace("-", " "));
+        if (logger.IsEnabled(Serilog.Events.LogEventLevel.Warning))
+        {
+            logger.Warning(">  {PacketData}", BitConverter.ToString(packet.PacketData.ToArray()).Replace("-", " "));
+        }
     }
 
     private static ProtocolRoute? GetProtocolRoute(int ns)
