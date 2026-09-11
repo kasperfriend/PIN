@@ -340,6 +340,18 @@ posts to `POST api/v1/characters` with the name, starting battleframe
   characters get their own guids (`slot` bits 48..55), so an account can hold as
   many characters as its limit — not just one. Creating past the account's
   character limit fails with the original `ERR_DUPLICATE_CHARACTER` error,
+* **wears its chosen chassis' own stock armor colors**: the record's
+  `Visuals.Warpaint` is stamped at creation with the 7 colors the chassis
+  ships with in the static database (the same lookup the GameServer uses in
+  game, precomputed into `ChassisDefaultWarpaints`), so the new character
+  looks like that frame out of the box — not like the admin account's
+  hardcoded purple Raptor. (Earlier builds left the warpaint empty or copied
+  the admin's paint, and the client renders either as its built-in purple
+  default avatar, which is how new characters used to "duplicate" the admin's
+  look. Existing stores are refreshed automatically at boot: created
+  characters carrying the inherited purple or an empty warpaint are
+  re-painted with their chassis' stock colors, and a Warning log line says how
+  many were fixed.)
 * appears in the character list the client re-fetches right after creation.
 
 Name rules (`POST api/v1/characters/validate_name`, reported with the original

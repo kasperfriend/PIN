@@ -218,7 +218,18 @@ select"):
 
 * `Warpaint` (7 packed light-dark colors, slots in order armor1-3 / bodysuit1-2
   / glow1-2) is worn on the battleframe chassis in-game instead of the chassis'
-  default SDB warpaint.
+  default SDB warpaint. **A created character is stamped at creation with the
+  stock colors of the chassis it was created with**
+  (`ChassisDefaultWarpaints`, generated from the SDB by
+  `Tools/SdbDump/chassis_warpaints.py`) — the client falls back to its
+  built-in purple default avatar whenever a record carries no colors, so an
+  empty warpaint would make the new character look like the admin account's
+  hardcoded Raptor paint. A chassis with no resolvable SDB default palette
+  keeps an empty warpaint (the GameServer wears its default SDB colors for it).
+  Stores written before that change are refreshed at boot
+  (`CharacterStore.RefreshInheritedWarpaints`): created characters still
+  carrying the inherited admin purple or an empty warpaint get their chassis'
+  stock colors instead.
 * `Hair` / `FacialHair` are worn as the leading head accessories on both
   surfaces (`CharacterAppearance.HeadAccessoryMeshes`); the body colors flow
   through unchanged.

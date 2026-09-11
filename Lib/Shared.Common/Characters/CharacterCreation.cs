@@ -104,7 +104,11 @@ public static class CharacterCreation
     /// Build the record for a newly created character. The visual color ids come
     /// from the creation request; the ARGB color values themselves stay at the
     /// default template's until appearance editing (NewYou) is served from the
-    /// static database.
+    /// static database. The armor colors (warpaint) come from the chosen
+    /// chassis' own stock colors in the static database — never from the admin
+    /// account's hardcoded Raptor paint, and never empty, because an empty
+    /// warpaint makes the client fall back to that same purple default avatar
+    /// (which is how created characters used to look like the admin's).
     /// </summary>
     public static CharacterRecord Create(
         ulong accountId,
@@ -133,10 +137,13 @@ public static class CharacterCreation
             EyeColorId = eyeColorItemId,
             HairColorId = hairColorItemId,
             HeadAccessories = headAccessoryA != 0 ? [headAccessoryA] : [],
-            // Empty warpaint so the GameServer wears the chosen chassis' own
-            // default SDB colors instead of the admin account's purple Raptor.
+            // The frame's own stock armor colors (see ChassisDefaultWarpaints):
+            // a chassis without a resolvable default palette keeps an empty
+            // warpaint, and the GameServer wears its default SDB colors for it.
             WarpaintId = 0,
-            Warpaint = []
+            Warpaint = ChassisDefaultWarpaints.TryGet(battleframeSdbId, out var chassisWarpaint)
+                ? [.. chassisWarpaint]
+                : []
         };
 
         return new CharacterRecord

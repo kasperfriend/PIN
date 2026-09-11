@@ -164,15 +164,17 @@ public static class CharacterStore
             // tool). Never touches created characters, the admin's own entries
             // or anything hand-added with a non-seed name.
             // Created characters used to inherit the admin Raptor warpaint
-            // (CharacterVisualsRecord defaults). Strip that copy so they wear
-            // the chassis they actually created with.
-            var strippedWarpaint = StripInheritedAdminWarpaint(Characters.Values);
-            if (strippedWarpaint.Count > 0)
+            // (CharacterVisualsRecord defaults), and newer created characters
+            // have an empty warpaint that the client renders with the same
+            // purple default avatar: refresh both so they wear the chassis
+            // they actually created with.
+            var refreshedWarpaint = RefreshInheritedWarpaints(Characters.Values);
+            if (refreshedWarpaint.Count > 0)
             {
                 SaveUnsafe();
                 Log.Warning(
-                    "Cleared inherited admin Raptor warpaint from {Count} created character(s) in {StorePath}: new characters wear their chassis' own default colors",
-                    strippedWarpaint.Count,
+                    "Refreshed the armor colors of {Count} created character(s) in {StorePath}: they now wear their chassis' own default colors instead of the inherited admin purple Raptor look",
+                    refreshedWarpaint.Count,
                     _storePath);
             }
 
@@ -374,14 +376,20 @@ public static class CharacterStore
     /// <summary>
     /// Created characters used to inherit the admin Raptor warpaint
     /// (the colors <see cref="DefaultCharacterTemplate.Warpaint"/>
-    /// used to stamp on every <see cref="CharacterVisualsRecord"/>). Clears
-    /// that copy so they wear the chassis they actually created with. Admin
-    /// zone-picker seeds and characters that already have a different paint
-    /// job are left alone.
+    /// used to stamp on every <see cref="CharacterVisualsRecord"/>), and
+    /// characters created after that copy was stripped were saved with an
+    /// empty warpaint. Both cases look like the admin's purple to the client
+    /// (which falls back to its built-in default avatar for a missing paint
+    /// job), so both are refreshed here to the armor colors of the chassis
+    /// the character actually was created with
+    /// (<see cref="ChassisDefaultWarpaints"/>). A chassis the table does not
+    /// know is left with an empty warpaint, so the GameServer still wears its
+    /// default SDB colors. Admin zone-picker seeds and characters that already
+    /// have a different (custom) paint job are left alone.
     /// </summary>
-    public static IReadOnlyList<CharacterRecord> StripInheritedAdminWarpaint(IEnumerable<CharacterRecord> characters)
+    public static IReadOnlyList<CharacterRecord> RefreshInheritedWarpaints(IEnumerable<CharacterRecord> characters)
     {
-        var stripped = new List<CharacterRecord>();
+        var refreshed = new List<CharacterRecord>();
         var admin = DefaultCharacterTemplate.Warpaint;
         foreach (var character in characters)
         {
@@ -391,32 +399,43 @@ public static class CharacterStore
             }
 
             var paint = character.Visuals?.Warpaint;
-            if (paint == null || paint.Count != admin.Length)
+            if (paint == null)
             {
                 continue;
             }
 
-            var matches = true;
-            for (var i = 0; i < admin.Length; i++)
+            // The old inherited look: the admin's own purple Raptor paint.
+            var isInheritedAdmin = paint.Count == admin.Length;
+            for (var i = 0; i < admin.Length && isInheritedAdmin; i++)
             {
                 if (paint[i] != admin[i])
                 {
-                    matches = false;
-                    break;
+                    isInheritedAdmin = false;
                 }
             }
 
-            if (!matches)
+            // The newer look: a warpaint that was never saved.
+            var isMissing = paint.Count == 0;
+            if (!isInheritedAdmin && !isMissing)
             {
+                continue;
+            }
+
+            var hasChassisDefault = ChassisDefaultWarpaints.TryGet(character.CurrentBattleframeSDBId, out var chassisWarpaint);
+            if (isMissing && !hasChassisDefault)
+            {
+                // No stock palette to stamp and nothing to clear: an empty
+                // warpaint on a chassis the table does not know is the record's
+                // final state, not something to re-report on every boot.
                 continue;
             }
 
             character.Visuals.WarpaintId = 0;
-            character.Visuals.Warpaint = [];
-            stripped.Add(character);
+            character.Visuals.Warpaint = hasChassisDefault ? [.. chassisWarpaint] : [];
+            refreshed.Add(character);
         }
 
-        return stripped;
+        return refreshed;
     }
 
     /// <summary>

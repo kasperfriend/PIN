@@ -134,25 +134,60 @@ public class CharacterStoreTests
     }
 
     [Fact]
-    public void StripInheritedAdminWarpaint_ClearsTheCopiedRaptorLookFromCreatedCharacters()
+    public void RefreshInheritedWarpaints_RepaintsCreatedCharactersWithTheirChassisDefault()
     {
+        // A created character that still wears the copied admin purple Raptor
+        // paint (store written before creation stopped copying the admin look):
+        // it gets its own chassis' stock colors (the Dreadnaught's).
         var created = CharacterCreation.Create(26294423UL, CharacterStore.CharacterGuidForSlot(26294423UL, 0), 0, "Dread", 0, 75772, 0, 0, 0, 0, 0, 0);
-        // Simulate a store written before creation stopped copying the admin look.
         created.Visuals.WarpaintId = DefaultCharacterTemplate.WarpaintId;
         created.Visuals.Warpaint = [.. DefaultCharacterTemplate.Warpaint];
 
+        // A created character saved after the copy was stripped: its warpaint
+        // was never written, so it is empty and looks purple to the client.
+        var createdEmpty = CharacterCreation.Create(26294425UL, CharacterStore.CharacterGuidForSlot(26294425UL, 0), 0, "Biotech", 0, 75774, 0, 0, 0, 0, 0, 0);
+        createdEmpty.Visuals.Warpaint = [];
+
+        // A created character whose chassis has no stock palette in the table:
+        // the purple must be cleared, even though there is nothing to stamp.
+        var createdUnknownChassis = CharacterCreation.Create(26294426UL, CharacterStore.CharacterGuidForSlot(26294426UL, 0), 0, "Mystery", 0, 12345, 0, 0, 0, 0, 0, 0);
+        createdUnknownChassis.Visuals.WarpaintId = DefaultCharacterTemplate.WarpaintId;
+        createdUnknownChassis.Visuals.Warpaint = [.. DefaultCharacterTemplate.Warpaint];
+
+        // The admin zone-picker seed keeps its admin look, a character with a
+        // custom paint job is left alone, and a record without visuals survives.
         var seed = CharacterStore.BuildZoneSeed(AccountStore.AdminAccountId, CharacterStore.GuidPrefix)
                                  .Single(c => c.LastZoneId == 448);
         var customPaint = CharacterCreation.Create(26294424UL, CharacterStore.CharacterGuidForSlot(26294424UL, 0), 0, "Painted", 0, 75772, 0, 0, 0, 0, 0, 0);
         customPaint.Visuals.Warpaint = [1, 2, 3];
+        var noVisuals = new CharacterRecord { AccountId = 26294427UL, IsCustom = true, Name = "Bare", Visuals = null };
 
-        var stripped = CharacterStore.StripInheritedAdminWarpaint(new[] { created, seed, customPaint });
+        var refreshed = CharacterStore.RefreshInheritedWarpaints(new[] { created, createdEmpty, createdUnknownChassis, seed, customPaint, noVisuals });
 
-        Assert.Same(created, Assert.Single(stripped));
-        Assert.Equal(0, created.Visuals.WarpaintId);
-        Assert.Empty(created.Visuals.Warpaint);
+        // Exactly the three created characters with an inherited or missing
+        // paint job are touched (in name order: Biotech, Dread, Mystery).
+        Assert.Equal(
+            new[] { createdEmpty, created, createdUnknownChassis },
+            refreshed.OrderBy(c => c.Name, StringComparer.Ordinal));
+
+        // The purple is gone everywhere...
+        Assert.All(refreshed, c => Assert.NotEqual(DefaultCharacterTemplate.Warpaint, c.Visuals?.Warpaint));
+        Assert.All(refreshed, c => Assert.Equal(0, c.Visuals.WarpaintId));
+
+        // ...and the known chassis wear their own stock colors (the Dreadnaught
+        // and the Biotech share palette 77221 in the SDB).
+        Assert.Equal(
+            new uint[] { 0xffff2104, 0x9cd30000, 0x31860000, 0x4a490000, 0x94b27bae, 0xcc803141, 0xcc803141 },
+            created.Visuals.Warpaint);
+        Assert.Equal(created.Visuals.Warpaint, createdEmpty.Visuals.Warpaint);
+
+        // The unknown chassis has nothing to stamp, so its warpaint is empty.
+        Assert.Empty(createdUnknownChassis.Visuals.Warpaint);
+
+        // ...while everything else is untouched.
         Assert.Equal(DefaultCharacterTemplate.Warpaint, seed.Visuals.Warpaint);
         Assert.Equal(new uint[] { 1, 2, 3 }, customPaint.Visuals.Warpaint);
+        Assert.Null(noVisuals.Visuals);
     }
 
     [Fact]
