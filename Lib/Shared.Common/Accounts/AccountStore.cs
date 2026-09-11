@@ -37,7 +37,11 @@ public sealed class AccountStore
     /// <summary>Password of the seeded admin account.</summary>
     public const string AdminPassword = "admin";
 
-    /// <summary>Character slots per account; the seeded zone-picker list needs all of them.</summary>
+    /// <summary>
+    /// Character slots per account, as reported to the client on login. The
+    /// admin account's zone-picker entries count against its limit; every other
+    /// account starts empty and fills its slots through character creation.
+    /// </summary>
     public const int DefaultCharacterLimit = 40;
 
     private const int PasswordSaltLength = 16;

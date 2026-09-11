@@ -11,8 +11,8 @@
 `characters.json` is a **process-wide, file-backed store** of player characters:
 
 * Both **WebHostManager** (REST `ClientApi` → character selection screen) and **GameServer** (via gRPC `GameServerAPI`) read from the **same file**, so the character you pick is the character you spawn as.
-* Every account owns its own entries: the selection screen shows only the logged-in account's characters, and each account gets its own copy of the seed list on first login (see [`ACCOUNTS.md`](ACCOUNTS.md) §6).
-* On first run the store is **seeded** with 38 entries — one per zone — from `CharacterStore.SeedZones`, owned by the built-in admin account.
+* Every account owns its own entries: the selection screen shows only the logged-in account's characters. Accounts start fresh — no characters until one is created in-game (see [`ACCOUNTS.md`](ACCOUNTS.md) §6–§7).
+* On first run the store is **seeded** with 38 entries — one per zone — from `CharacterStore.SeedZones`, owned by the built-in admin account. That seed list is the **admin-only zone picker** (the operator's way to load into any zone from the selection screen); it is deliberately not given to other accounts, and untouched copies written by older builds are pruned on load.
 * When you switch battleframes in-game (`SelectLoadout`), the GameServer calls `SaveCurrentBattleframeAsync` → gRPC `SaveCurrentBattleframe` → `CharacterStore.UpdateCurrentBattleframe`, which updates the JSON and the selection screen instantly.
 * When you log out / teleport, `SaveGameSessionData` persists `LastZoneId`, `LastOutpostId`, `TimePlayed`, `LastSeenAt`.
 
@@ -77,10 +77,12 @@ Firefall__GameServerApi__Port=5201
 public const ulong GuidPrefix = 0x99aabbccddee0000;                 // admin account (legacy)
 public const ulong GeneratedAccountGuidPrefixBase = 0xaa00000000000000;
 guid = GuidPrefixForAccount(accountId) + zoneId   // zoneId fits in low 16 bits
+guid = GeneratedAccountGuidPrefixBase | (slot << 48) | (accountId << 16) | zoneId   // slots above the first
 ```
 
 * `CharacterGuid` encodes the zone: `ZoneId = CharacterGuid & 0xffff`.
 * The admin account keeps the legacy prefix `0x99aabbccddee0000` so existing files stay valid; every other account gets `GeneratedAccountGuidPrefixBase | (accountId << 16)` as its prefix, which keeps each account's guids in its own range while the zone stays in the low 16 bits.
+* Characters beyond an account's first carry their **slot index** in bits 48..55 (`CharacterStore.CharacterGuidForSlot`, slot 1..255): a created character always encodes the spawn zone (New Eden) in its guid, so the slot bits are what keep several created characters of one account on distinct guids. Slot 0 keeps the plain per-account prefix above (for the admin account, that is the legacy prefix — which is why its created character replaces the seeded "New Eden" entry).
 * Resolution of a (possibly low-byte-clobbered) guid lives in `CharacterResolver`: exact guid → unique clobbered match → account bits + the zone id from the command payload → legacy admin zone fallback. A zone-only lookup would be ambiguous once two accounts own the same zone.
 
 Seeded zones (`CharacterStore.SeedZones`):
@@ -185,7 +187,7 @@ File is `List<CharacterRecord>` indented JSON. Minimal valid entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `CharacterGuid` | ulong | Unique id, encodes ZoneId in low 16 bits. Admin: `0x99aabbccddee0000 + zoneId`, other accounts: `0xaa00000000000000 \| (accountId << 16) + zoneId` |
+| `CharacterGuid` | ulong | Unique id, encodes ZoneId in low 16 bits. Admin, first slot: `0x99aabbccddee0000 + zoneId`; other accounts, first slot: `0xaa00000000000000 \| (accountId << 16) + zoneId`; slots above the first, any account: `0xaa00000000000000 \| (slot << 48) \| (accountId << 16) + zoneId` |
 | `AccountId` | ulong | Owning account; defaults to the built-in admin account when absent (legacy files) |
 | `IsCustom` | bool | True for characters created through the account system's character creation; seed entries are replaceable by created characters, custom ones are not |
 | `Name` | string | Shown in selection screen |
