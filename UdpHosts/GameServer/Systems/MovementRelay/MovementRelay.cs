@@ -118,6 +118,10 @@ public class MovementRelay
         }
 
         // Forward update to remote clients
+        // Built once for the whole broadcast instead of per recipient: SendMessage only reads the
+        // message (it serializes a fresh copy per channel), so one instance can serve every client.
+        JumpActioned jumpActioned = sendJumpActioned ? new JumpActioned { ShortTime = input.ShortTime } : null;
+
         var currentPose = new CurrentPoseUpdate
         {
             Data = new AeroMessages.GSS.CurrentPoseUpdateData
@@ -154,9 +158,9 @@ public class MovementRelay
             // self-initiated jump/launch (a glider pad reports its launch as a jump via
             // TimeSinceLastJump resetting). Without it the client starts the launch/wings state and
             // aborts when the ack never arrives. Remote clients need it too.
-            if (sendJumpActioned)
+            if (jumpActioned != null)
             {
-                remoteClient.NetChannels[ChannelType.UnreliableGss].SendMessage(new JumpActioned { ShortTime = input.ShortTime }, character.EntityId);
+                remoteClient.NetChannels[ChannelType.UnreliableGss].SendMessage(jumpActioned, character.EntityId);
             }
         }
     }

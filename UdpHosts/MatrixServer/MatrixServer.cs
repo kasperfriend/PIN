@@ -35,7 +35,9 @@ internal class MatrixServer : PacketServer
             return;
         }
 
-        Logger.Verbose("[MATRIX] " + packet.RemoteEndpoint + " sent " + packet.PacketData.Length + " bytes.");
+        // Structured (not concatenated): string concatenation ran for every handshake packet even
+        // with Verbose off, which is the normal state.
+        Logger.Verbose("[MATRIX] {RemoteEndpoint} sent {PacketLength} bytes.", packet.RemoteEndpoint, packet.PacketData.Length);
 
         var matrixPkt = Deserializer.ReadStruct<MatrixPacketBase>(mem);
 

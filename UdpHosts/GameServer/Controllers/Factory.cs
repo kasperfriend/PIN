@@ -9,9 +9,18 @@ public static class Factory
 {
     private static ConcurrentDictionary<(int Ns, int ViewOrdinal), Base> _controllers;
 
+    /// <summary>
+    ///     (ns, ordinal) pairs known to have no controller. A client can talk on typecodes the
+    ///     server's protocol version routes to nothing (and does so on every packet it sends in
+    ///     that state), and resolving a miss used to scan the assembly reflectively each time.
+    ///     Remembering the miss turns that per-packet scan into one per unknown typecode.
+    /// </summary>
+    private static ConcurrentDictionary<(int Ns, int ViewOrdinal), bool> _unresolved;
+
     public static void Init()
     {
         _controllers = new ConcurrentDictionary<(int Ns, int ViewOrdinal), Base>();
+        _unresolved = new ConcurrentDictionary<(int Ns, int ViewOrdinal), bool>();
     }
 
     public static T Get<T>()
@@ -29,14 +38,27 @@ public static class Factory
 
     public static Base Get(int ns, int viewOrdinal)
     {
-        if (_controllers.TryGetValue((ns, viewOrdinal), out var controller))
+        var key = (ns, viewOrdinal);
+
+        if (_controllers.TryGetValue(key, out var controller))
         {
             return controller;
         }
 
+        if (_unresolved.ContainsKey(key))
+        {
+            return null;
+        }
+
         var t = ForTypecode(ns, viewOrdinal);
 
-        return t != null ? _controllers.AddOrUpdate((ns, viewOrdinal), Activator.CreateInstance(t) as Base, (_, nc) => nc) : null;
+        if (t == null)
+        {
+            _unresolved[key] = true;
+            return null;
+        }
+
+        return _controllers.AddOrUpdate(key, _ => Activator.CreateInstance(t) as Base, (_, nc) => nc);
     }
 
     private static Type ForTypecode(int ns, int viewOrdinal)

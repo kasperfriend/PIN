@@ -1,5 +1,6 @@
 ﻿#nullable enable
 using System;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -80,7 +81,6 @@ public class Channel
     private GssVersion GssProtocolVersion { get; }
     private MatrixVersion MatrixProtocolVersion { get; }
     private ushort CurrentSequenceNumber { get; set; }
-    private DateTime LastActivity { get; set; }
     private ushort LastAck { get; set; }
     private bool InSplitMode { get; set; }
 
@@ -105,7 +105,6 @@ public class Channel
         while (_outgoingPackets.TryDequeue(out var qi))
         {
             _client.Send(qi);
-            LastActivity = DateTime.Now;
         }
 
         while (_incomingPackets.TryDequeue(out var packet))
@@ -186,8 +185,6 @@ public class Channel
             {
                 PacketAvailable?.Invoke(packet);
             }
-
-            LastActivity = DateTime.Now;
         }
     }
 
@@ -254,7 +251,9 @@ public class Channel
     /// <returns>true if the operation succeeded, false in all other cases</returns>
     public bool SendChecksum(ulong entityId, byte typecode, uint checksum)
     {
-        var messageData = Serializer.WritePrimitive(checksum);
+        var checksumBytes = new byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(checksumBytes, checksum);
+        Memory<byte> messageData = checksumBytes;
         return SendPacketMemory(entityId, 2, typecode, ref messageData);
     }
 
@@ -369,7 +368,7 @@ public class Channel
         controller.SerializeToMemory(out var packetMemory);
         var messageData = new Memory<byte>(new byte[8 + packetMemory.Length]);
         packetMemory.CopyTo(messageData[8..]);
-        Serializer.WritePrimitive(playerId).CopyTo(messageData);
+        BinaryPrimitives.WriteUInt64LittleEndian(messageData.Span[..8], playerId);
         return SendPacketMemory(entityId, 4, wireTypecode, ref messageData);
     }
 
@@ -408,7 +407,7 @@ public class Channel
 
         // Generate and send
         var messageData = new Memory<byte>(new byte[8]);
-        Serializer.WritePrimitive(playerId).CopyTo(messageData);
+        BinaryPrimitives.WriteUInt64LittleEndian(messageData.Span, playerId);
         return SendPacketMemory(entityId, 5, wireTypecode, ref messageData);
     }
 
@@ -488,11 +487,16 @@ public class Channel
         var serializedData = new Memory<byte>(new byte[HeaderByteSize + packetToSend.Length]);
         packetToSend.CopyTo(serializedData[HeaderByteSize..]);
 
-        Serializer.WritePrimitive(entityId).CopyTo(serializedData);
+        // The three header fields used to be built as three Serializer.WritePrimitive arrays and
+        // copied over — three allocations and three boxes per message, on the path that every
+        // view change, keyframe and command answer crosses. Writing them straight into the
+        // buffer produces the identical bytes.
+        var headerSpan = serializedData.Span;
+        BinaryPrimitives.WriteUInt64LittleEndian(headerSpan[..8], entityId);
 
         // Intentionally overwrite first byte of Entity ID
-        Serializer.WritePrimitive(typecode).CopyTo(serializedData);
-        Serializer.WritePrimitive(messageId).CopyTo(serializedData[8..]);
+        headerSpan[0] = typecode;
+        headerSpan[8] = messageId;
 
         if (msgEnumType == null)
         {
@@ -528,7 +532,7 @@ public class Channel
         const int HeaderByteSize = 1;
         var serializedData = new Memory<byte>(new byte[HeaderByteSize + packetMemory.Length]);
         packetMemory.CopyTo(serializedData[HeaderByteSize..]);
-        Serializer.WritePrimitive(messageId).CopyTo(serializedData);
+        serializedData.Span[0] = messageId;
         return Send(serializedData);
     }
 
@@ -553,6 +557,8 @@ public class Channel
             var t = new Memory<byte>(new byte[length]);
             packetData[..(length - headerLength)].CopyTo(t[headerLength..]);
 
+            var packetSpan = t.Span;
+
             if (IsSequenced)
             {
                 if (IsReliable)
@@ -560,7 +566,10 @@ public class Channel
                     _logger.Verbose("<- {Channel} SeqNum =  {SeqNum}", Type, CurrentSequenceNumber);
                 }
 
-                Serializer.WritePrimitive(Utils.SimpleFixEndianness(CurrentSequenceNumber)).CopyTo(t.Slice(2, 2));
+                // The old form byte-swapped the value and let WritePrimitive store it little-endian;
+                // writing it big-endian directly is the same bytes with neither the swap nor the
+                // throw-away array and box per packet.
+                BinaryPrimitives.WriteUInt16BigEndian(packetSpan.Slice(2, 2), CurrentSequenceNumber);
                 unchecked
                 {
                     CurrentSequenceNumber++;
@@ -568,8 +577,7 @@ public class Channel
             }
 
             var header = new GamePacketHeader(Type, 0, packetData.Length + headerLength > _maxPacketSize, (ushort)t.Length);
-            var headerData = Serializer.WritePrimitive(Utils.SimpleFixEndianness(header.PacketHeader));
-            headerData.CopyTo(t);
+            BinaryPrimitives.WriteUInt16BigEndian(packetSpan[..2], header.PacketHeader);
 
             if (IsGSS)
             {
