@@ -116,6 +116,12 @@ public class CharacterVisualsRecord
 
     public List<uint> Ornaments { get; set; } = [];
 
+    // The admin account's purple Raptor paint: the zone-picker seeds (and
+    // legacy records) keep it, and the client falls back to this same default
+    // avatar when a record carries no colors — which is exactly why
+    // CharacterCreation.Create stamps the chosen chassis' own stock colors
+    // (ChassisDefaultWarpaints) onto a created character instead of relying
+    // on this default.
     public int WarpaintId { get; set; } = DefaultCharacterTemplate.WarpaintId;
 
     public List<uint> Warpaint { get; set; } = [.. DefaultCharacterTemplate.Warpaint];

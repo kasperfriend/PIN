@@ -300,6 +300,11 @@ python3 Tools/SdbDump/sdb_dump.py spawnables /tmp/clientdb.sd2 vehicle
 # every row with its exact spawn command (~30 s)
 python3 Tools/SdbDump/spawn_reference.py /tmp/clientdb.sd2
 
+# The chassis default warpaint table the web hosts use at character creation
+# (writes Lib/Shared.Common/Characters/ChassisDefaultWarpaints.cs; run it when
+# the shipped clientdb.sd2 changes)
+python3 Tools/SdbDump/chassis_warpaints.py
+
 # Overview / single tables / the mobs report
 python3 Tools/SdbDump/sdb_dump.py info     /tmp/clientdb.sd2
 python3 Tools/SdbDump/sdb_dump.py dump     /tmp/clientdb.sd2 dbcharacter::Turret -o turrets.json

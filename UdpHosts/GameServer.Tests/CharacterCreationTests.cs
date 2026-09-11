@@ -1,4 +1,5 @@
 using System.Linq;
+using Shared.Common;
 using Shared.Common.Accounts;
 using Shared.Common.Characters;
 using Xunit;
@@ -102,8 +103,44 @@ public class CharacterCreationTests
         Assert.Equal(10117u, character.Visuals.Hair);
         Assert.Equal(new[] { 10117u }, character.Visuals.HeadAccessories);
 
-        // Armor colors stay empty so the chassis' own default SDB warpaint is
-        // used in-game — not the admin account's purple Raptor.
+        // Armor colors are the Raptor's own stock SDB colors — not the admin
+        // account's purple Raptor paint, and not empty (an empty warpaint
+        // makes the client fall back to that same purple default avatar).
+        Assert.Equal(0, character.Visuals.WarpaintId);
+        Assert.Equal(
+            new uint[] { 0xacf018e3, 0x62480000, 0x00000000, 0xdedb0000, 0x00007bae, 0xefebbe80, 0xefebbe80 },
+            character.Visuals.Warpaint);
+        Assert.NotEqual(DefaultCharacterTemplate.Warpaint, character.Visuals.Warpaint);
+    }
+
+    [Fact]
+    public void Create_WearsTheChassisOwnStockColors()
+    {
+        // The Biotech's stock colors come from its SDB default palette
+        // (77221), not from the admin template's Raptor palette (143225).
+        var character = CharacterCreation.Create(1, CharacterStore.GuidPrefix + 448, 0, "Biotech", 0, 75774, 0, 0, 0, 0, 0, 0);
+        Assert.Equal(0, character.Visuals.WarpaintId);
+        Assert.Equal(
+            new uint[] { 0xffff2104, 0x9cd30000, 0x31860000, 0x4a490000, 0x94b27bae, 0xcc803141, 0xcc803141 },
+            character.Visuals.Warpaint);
+        Assert.NotEqual(DefaultCharacterTemplate.Warpaint, character.Visuals.Warpaint);
+
+        // The Raptor (76334) is the frame the admin template was built for, but
+        // its SDB stock colors are still not the admin's custom purple paint.
+        var raptor = CharacterCreation.Create(2, CharacterStore.GuidPrefix + 448, 0, "Raptor", 0, 76334, 0, 0, 0, 0, 0, 0);
+        Assert.Equal(
+            new uint[] { 0xacf018e3, 0x62480000, 0x00000000, 0xdedb0000, 0x00007bae, 0xefebbe80, 0xefebbe80 },
+            raptor.Visuals.Warpaint);
+        Assert.NotEqual(DefaultCharacterTemplate.Warpaint, raptor.Visuals.Warpaint);
+    }
+
+    [Fact]
+    public void Create_WithoutAStockPaletteForTheChassis_KeepsAnEmptyWarpaint()
+    {
+        // A chassis the generated table does not know (no resolvable default
+        // palette in the SDB) keeps an empty warpaint: the GameServer wears its
+        // default SDB colors for it, and the admin purple never comes back.
+        var character = CharacterCreation.Create(1, CharacterStore.GuidPrefix + 448, 0, "Unknown", 0, 12345, 0, 0, 0, 0, 0, 0);
         Assert.Equal(0, character.Visuals.WarpaintId);
         Assert.Empty(character.Visuals.Warpaint);
     }
