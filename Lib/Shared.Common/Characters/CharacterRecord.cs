@@ -118,14 +118,5 @@ public class CharacterVisualsRecord
 
     public int WarpaintId { get; set; } = DefaultCharacterTemplate.WarpaintId;
 
-    public List<uint> Warpaint { get; set; } =
-    [
-        4216738474,
-        0,
-        4216717312,
-        418250752,
-        1525350400,
-        4162844703,
-        4162844703
-    ];
+    public List<uint> Warpaint { get; set; } = [.. DefaultCharacterTemplate.Warpaint];
 }

@@ -132,7 +132,11 @@ public static class CharacterCreation
             SkinColorId = skinColorItemId,
             EyeColorId = eyeColorItemId,
             HairColorId = hairColorItemId,
-            HeadAccessories = headAccessoryA != 0 ? [headAccessoryA] : []
+            HeadAccessories = headAccessoryA != 0 ? [headAccessoryA] : [],
+            // Empty warpaint so the GameServer wears the chosen chassis' own
+            // default SDB colors instead of the admin account's purple Raptor.
+            WarpaintId = 0,
+            Warpaint = []
         };
 
         return new CharacterRecord
