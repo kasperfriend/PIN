@@ -68,8 +68,10 @@ public class AccountsController : ControllerBase
             // shows by default): UnknownAccount means no account with that
             // email is stored — a creation that never landed — while
             // SignatureMismatch means the account exists and the password is
-            // wrong.
-            _logger.LogWarning("Rejected a login: {Reason} (uid {Uid})", failure, SignedUid(header));
+            // wrong. A uid that is an opaque ticket (Steam session ticket,
+            // see AccountStore.DescribeUid) is provisioned for instead and
+            // never reaches this line.
+            _logger.LogWarning("Rejected a login: {Reason} (uid {Uid})", failure, AccountStore.DescribeUid(SignedUid(header)));
             return Error(AccountErrors.ErrIncorrectUserPass, "Login failed, check your username and password");
         }
 

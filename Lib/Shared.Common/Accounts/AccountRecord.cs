@@ -36,6 +36,17 @@ public class AccountRecord
     /// <summary>Whether this is the built-in seeded admin account.</summary>
     public bool IsAdmin { get; set; }
 
+    /// <summary>
+    /// Whether this account was provisioned from an opaque client login ticket
+    /// (the Steam session ticket a Steam-launched client signs its requests
+    /// with) instead of from email + password. Such an account is keyed to the
+    /// Steam account embedded in the ticket and is reused for it, but the
+    /// client's signature cannot be verified — the ticket secret is only
+    /// computable with a Steam backend PIN does not have — so signatures are
+    /// not checked for it (see <see cref="AccountStore.TryVerifyLogin"/>).
+    /// </summary>
+    public bool TicketAuth { get; set; }
+
     /// <summary>How many characters the account may own (the seeded zone list has one entry per zone).</summary>
     public int CharacterLimit { get; set; } = AccountStore.DefaultCharacterLimit;
 

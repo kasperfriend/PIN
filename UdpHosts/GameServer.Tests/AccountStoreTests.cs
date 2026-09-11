@@ -258,4 +258,153 @@ public class AccountStoreTests : IDisposable
         Assert.Equal(string.Empty, AccountStore.NormalizeEmail(null));
         Assert.Equal(string.Empty, AccountStore.NormalizeEmail("   "));
     }
+
+    // ---- Opaque client login tickets (the Steam session ticket a
+    // ---- Steam-launched client signs the login and account creation with).
+
+    /// <summary>
+    ///     A synthetic client ticket, laid out like the ~234-byte blob a
+    ///     Steam-launched client was observed putting in the signature's
+    ///     <c>uid</c>: a few length-prefixed fields with the Steam account id
+    ///     embedded in front of the SteamID64 marker, twice.
+    /// </summary>
+    private static byte[] TicketBytes(uint steamAccountId, byte entropy)
+    {
+        var ticket = new byte[234];
+        BitConverter.GetBytes(20).CopyTo(ticket, 0);
+        ticket[4] = entropy;
+        BitConverter.GetBytes(steamAccountId).CopyTo(ticket, 8);
+        new byte[] { 0x01, 0x00, 0x10, 0x01 }.CopyTo(ticket, 12);
+        ticket[20] = entropy;
+        BitConverter.GetBytes(4).CopyTo(ticket, 0x44);
+        BitConverter.GetBytes(steamAccountId).CopyTo(ticket, 0x48);
+        new byte[] { 0x01, 0x00, 0x10, 0x01 }.CopyTo(ticket, 0x4C);
+        ticket[100] = entropy;
+        ticket[200] = entropy;
+        return ticket;
+    }
+
+    private static string TicketUid(uint steamAccountId, byte entropy)
+    {
+        return Convert.ToBase64String(TicketBytes(steamAccountId, entropy));
+    }
+
+    private static string HeaderFor(string uid)
+    {
+        // The token of a ticket login is not verified (see TryVerifyLogin), it
+        // only has to be 40 characters for the header to parse.
+        var headerData = $"ver=2&tc=1610833076&nonce=3e691feb538a38a2&uid={Uri.EscapeDataString(uid)}&host=clientapi&path=%2Fapi%2Fv2%2Faccounts%2Flogin&hbody=da39a3ee5e6b4b0d3255bfef95601890afd80709&cid=0";
+        return $"Red5 {"0123456789012345678901234567890123456789"} {headerData}";
+    }
+
+    [Fact]
+    public void OpaqueTicketLogin_ProvisionsAccountForTheSteamAccount()
+    {
+        var store = FreshStore();
+
+        var uid = TicketUid(0x0aef4a56, 0x2a);
+        Assert.True(AccountStore.IsOpaqueTicketUid(uid));
+        Assert.True(AccountStore.TryGetSteamAccountId(uid, out var steamAccountId));
+        Assert.Equal(0x0110000100000000UL | 0x0aef4a56, steamAccountId);
+
+        Assert.True(store.TryVerifyLogin(HeaderFor(uid), out var account, out var failure));
+        Assert.Equal(LoginFailure.None, failure);
+        Assert.NotNull(account);
+        Assert.NotEqual(AccountStore.AdminAccountId, account.AccountId);
+        Assert.True(account.TicketAuth);
+        Assert.Equal($"steam-{steamAccountId}@pin.local", account.Email);
+
+        // The account was persisted.
+        Assert.Equal(account.AccountId, FreshStore().GetByEmail(account.Email).AccountId);
+    }
+
+    [Fact]
+    public void OpaqueTicketLogin_IsStableAcrossSessions()
+    {
+        var store = FreshStore();
+
+        // A new session means a new ticket around the same Steam account.
+        var firstUid = TicketUid(0x0aef4a56, 0x01);
+        var secondUid = TicketUid(0x0aef4a56, 0x02);
+        Assert.NotEqual(firstUid, secondUid);
+
+        Assert.True(store.TryVerifyLogin(HeaderFor(firstUid), out var first, out _));
+        Assert.True(store.TryVerifyLogin(HeaderFor(secondUid), out var second, out _));
+
+        Assert.Equal(first.AccountId, second.AccountId);
+        Assert.Equal(secondUid, second.Uid);
+        Assert.Equal(2, store.GetAll().Count); // admin + one provisioned account
+    }
+
+    [Fact]
+    public void OpaqueTicketLogin_DoesNotVerifyTheSignature()
+    {
+        var store = FreshStore();
+        var uid = TicketUid(0x0aef4a56, 0x2a);
+
+        // The ticket secret is only computable with a Steam backend, so any
+        // well-formed signature for the ticket uid authenticates.
+        Assert.True(store.TryVerifyLogin(HeaderFor(uid), out _, out _));
+        Assert.True(store.TryVerifyLogin(HeaderFor(uid).Replace("0123456789012345678901234567890123456789", "ffffffffffffffffffffffffffffffffffffffff"), out _, out _));
+    }
+
+    [Fact]
+    public void OpaqueTicketLogin_DifferentSteamAccounts_GetDifferentAccounts()
+    {
+        var store = FreshStore();
+
+        Assert.True(store.TryVerifyLogin(HeaderFor(TicketUid(0x0aef4a56, 0x2a)), out var first, out _));
+        Assert.True(store.TryVerifyLogin(HeaderFor(TicketUid(0x00424242, 0x2a)), out var second, out _));
+
+        Assert.NotEqual(first.AccountId, second.AccountId);
+        Assert.Equal(3, store.GetAll().Count); // admin + two provisioned accounts
+    }
+
+    [Fact]
+    public void OpaqueTicketWithoutEmbeddedSteamId_IsProvisionedUnderItsOwnHash()
+    {
+        var store = FreshStore();
+
+        // Same shape, but the Steam account fields zeroed out.
+        var ticket = TicketBytes(0, 0x2a);
+        Assert.False(AccountStore.TryGetSteamAccountId(Convert.ToBase64String(ticket), out _));
+
+        var uid = Convert.ToBase64String(ticket);
+        Assert.True(store.TryVerifyLogin(HeaderFor(uid), out var account, out _));
+        Assert.True(account.TicketAuth);
+        Assert.StartsWith("ticket-", account.Email);
+
+        // The same ticket again resolves to the same account.
+        Assert.True(store.TryVerifyLogin(HeaderFor(uid), out var again, out _));
+        Assert.Equal(account.AccountId, again.AccountId);
+    }
+
+    [Fact]
+    public void DerivedUid_IsNeverTreatedAsATicket()
+    {
+        Assert.False(AccountStore.IsOpaqueTicketUid(Red5Auth.GenerateUserId("player@example.com")));
+        Assert.False(AccountStore.IsOpaqueTicketUid("garbage"));
+        Assert.False(AccountStore.IsOpaqueTicketUid(null));
+        Assert.False(AccountStore.IsOpaqueTicketUid(string.Empty));
+        Assert.False(AccountStore.TryGetSteamAccountId(Red5Auth.GenerateUserId("player@example.com"), out _));
+
+        // So an unknown derived uid keeps its rejection (the "creation never
+        // landed" signal), it is not silently provisioned.
+        var store = FreshStore();
+        Assert.False(store.TryVerifyLogin(HeaderFor(Red5Auth.GenerateUserId("nobody@example.com")), out _, out var failure));
+        Assert.Equal(LoginFailure.UnknownAccount, failure);
+    }
+
+    [Fact]
+    public void DescribeUid_SummarizesTicketsAndKeepsDerivedUids()
+    {
+        var uid = TicketUid(0x0aef4a56, 0x2a);
+        var described = AccountStore.DescribeUid(uid);
+        Assert.Contains("234 bytes", described);
+        Assert.Contains($"Steam account {0x0110000100000000UL | 0x0aef4a56}", described);
+
+        var derived = Red5Auth.GenerateUserId("player@example.com");
+        Assert.Equal(derived, AccountStore.DescribeUid(derived));
+        Assert.Equal("(none)", AccountStore.DescribeUid(null));
+    }
 }
