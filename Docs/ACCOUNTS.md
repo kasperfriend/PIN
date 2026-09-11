@@ -379,8 +379,17 @@ screen preview uses, so what you pick is what you play as:
 Appearance edited at a New You terminal is stored back on the record: the
 screen's `visual_loadouts` save is applied to the character (with its posted
 palette ids resolved to ARGB through the same precomputed
-`CharacterColorPalettes` table creation uses), so the character logs in wearing
-the look the player saved.
+`CharacterColorPalettes` table creation uses). The save also reaches the
+character that is zoned in **right now**: the ClientApi host fires an in-process
+`CharacterEvents.VisualsUpdated` notification, the GameServerApi host pushes it
+down the GRPC stream as a `CharacterVisualsUpdated` event (under the guid form
+the GameServer matches its players by — `CharacterResolver.GameServerEventGuid`),
+and the GameServer applies it through the same `LoadRemote` the login uses —
+head, eyes, hair, colors, gender, accessories and ornaments update on the live
+entity (replicated to everyone who can see it), and the worn chassis' armor
+colors are re-replicated as well. The look also shows at the next login, and a
+GameServer that is not connected only means the in-game update is dropped — the
+save is persisted either way.
 
 Known remaining limitations: warpaint *patterns* and decals from the record are
 not yet applied in-game (colors only, which is what the default entries carry
