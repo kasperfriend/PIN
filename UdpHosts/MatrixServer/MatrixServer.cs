@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using Aero.Protocol;
 using MatrixServer.Packets;
@@ -9,6 +10,16 @@ namespace MatrixServer;
 
 internal class MatrixServer : PacketServer
 {
+    /// <summary>
+    ///     How many of the most recently handed out socket ids stay reserved. The id space only has 256
+    ///     values, so without this window two connections collide (on average once every 256 POKEs) and
+    ///     the GameServer then serves both endpoints with a single NetworkPlayer.
+    /// </summary>
+    private const int RecentSocketIdWindow = 64;
+
+    private readonly Queue<uint> _recentSocketIds = new();
+    private readonly HashSet<uint> _recentSocketIdSet = new();
+
     public MatrixServer(MatrixServerSettings matrixServerSettings,
                         ILogger logger)
         : base(matrixServerSettings.Port, logger)
@@ -71,8 +82,27 @@ internal class MatrixServer : PacketServer
         }
     }
 
-    private static uint GenerateSocketId()
+    private uint GenerateSocketId()
     {
-        return unchecked((uint)((0xff00ff << 8) | new Random().Next(0, 256)));
+        // Keep the 0xff00ff00..0xff00ffff format the original service handed out (the client only echoes
+        // the value back), but skip the ids reserved by the recent window so concurrent connections never
+        // share one. Random.Shared instead of a fresh Random per POKE, which paid the seed entropy on
+        // every call.
+        uint socketId;
+        do
+        {
+            socketId = unchecked((uint)((0xff00ff << 8) | Random.Shared.Next(0, 256)));
+        }
+        while (_recentSocketIdSet.Contains(socketId) && _recentSocketIdSet.Count < 256);
+
+        if (_recentSocketIds.Count >= RecentSocketIdWindow)
+        {
+            _recentSocketIdSet.Remove(_recentSocketIds.Dequeue());
+        }
+
+        _recentSocketIds.Enqueue(socketId);
+        _recentSocketIdSet.Add(socketId);
+
+        return socketId;
     }
 }

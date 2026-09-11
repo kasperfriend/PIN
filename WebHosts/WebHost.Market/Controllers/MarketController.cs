@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -13,8 +13,12 @@ public class MarketController : ControllerBase
 {
     private readonly ILogger<MarketController> _logger;
 
-    private Dictionary<string, ItemDisplayAttribute> _itemDisplayAttributes;
-    private List<MarketCategory> _marketCategories;
+    // Controllers are constructed per request, so keeping this data per instance read and parsed
+    // both JSON documents from disk on every request. They are static data shipped with the host,
+    // so load them once for the process. The null double-check races benignly on a cold start:
+    // both threads read the same files and assign identical graphs.
+    private static Dictionary<string, ItemDisplayAttribute> _itemDisplayAttributes;
+    private static List<MarketCategory> _marketCategories;
 
     public MarketController(ILogger<MarketController> logger)
     {
@@ -46,13 +50,18 @@ public class MarketController : ControllerBase
         return Ok(_marketCategories);
     }
 
-    private void LoadMarketData()
+    private static void LoadMarketData()
     {
+        if (_itemDisplayAttributes != null && _marketCategories != null)
+        {
+            return;
+        }
+
         var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = new SnakeCasePropertyNamingPolicy() };
-        
+
         var attributes = System.IO.File.ReadAllText("Data/ItemDisplayAttributes.json");
         _itemDisplayAttributes = JsonSerializer.Deserialize<Dictionary<string, ItemDisplayAttribute>>(attributes, jsonOptions);
-        
+
         var categories = System.IO.File.ReadAllText("Data/MarketCategories.json");
         _marketCategories = JsonSerializer.Deserialize<List<MarketCategory>>(categories, jsonOptions);
     }

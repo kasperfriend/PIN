@@ -1,6 +1,7 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using GameServer.Controllers;
@@ -55,7 +56,15 @@ internal class GameServer : PacketServer
         Factory.Init();
 
         var shardId = _serverId | (1u << 8) | (byte)GuidService.AdditionalTypes.Instance;
-        _shard = new Shard(_gameTickRate, shardId, _settings, this, Logger);
+        var shard = new Shard(_gameTickRate, shardId, _settings, this, Logger);
+
+        // Attach before the shard starts serving clients: a player that migrates out must also leave the
+        // socket id map. The map is the one reference to the player the shard does not control — a leaked
+        // entry pins the player (character entity, inventory, channels) for the lifetime of the process,
+        // and a later client handed the same socket id would be served the dead player's connection.
+        shard.PlayerMigratedOut += OnPlayerMigratedOut;
+
+        _shard = shard;
 
         _shard.Run(ct);
 
@@ -94,6 +103,13 @@ internal class GameServer : PacketServer
         ranSpan.Clear();
         Random.Shared.NextBytes(ranSpan.Slice(2, 6));
         return BinaryPrimitives.ReadUInt64LittleEndian(ranSpan);
+    }
+
+    private void OnPlayerMigratedOut(INetworkPlayer player)
+    {
+        // Value-checked removal (like the shard's client map): if a new connection already reused
+        // the socket id during teardown, its entry stays.
+        _clientMap.TryRemove(new KeyValuePair<uint, INetworkPlayer>(player.SocketId, player));
     }
 
     private INetworkClient RetrieveClient(Packet packet)

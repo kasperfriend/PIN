@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -16,7 +17,9 @@ namespace GameServer.Systems.WeaponSim;
 
 public class WeaponSim
 {
-    private readonly Dictionary<ulong, WeaponPlayerSim> _weaponSimState;
+    // Concurrent: fire handling runs on the shard thread, but entries are dropped from
+    // EntityManager.Remove, which can also run on ability timer threads.
+    private readonly ConcurrentDictionary<ulong, WeaponPlayerSim> _weaponSimState;
     private readonly Shard _shard;
     private readonly ILogger _logger;
     private readonly ulong _updateIntervalMs = 50;
@@ -27,6 +30,15 @@ public class WeaponSim
         _shard = shard;
         _weaponSimState = [];
         _logger = shard.Logger.ForContext<WeaponSim>();
+    }
+
+    /// <summary>
+    ///     Drops the spread state of a removed character. Without this the per-player state dictionary
+    ///     grows by one entry per player session for the lifetime of the shard.
+    /// </summary>
+    public void Forget(ulong entityGuid)
+    {
+        _weaponSimState.TryRemove(entityGuid, out _);
     }
 
     public void Tick(double deltaTime, ulong currentTime, CancellationToken ct)

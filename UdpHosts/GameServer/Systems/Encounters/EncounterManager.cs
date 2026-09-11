@@ -141,6 +141,24 @@ public class EncounterManager
         _entitiesToCheckProximity.Add(entity, encounter);
     }
 
+    /// <summary>
+    ///     Drops a player that left the shard from the participant sets of all live encounters: the sets
+    ///     are strong references, so an entry would otherwise pin the player's whole object graph until
+    ///     the encounter ends. The encounters themselves keep running — every encounter terminates on
+    ///     its own schedule (a race through its lifetime timeout, a thumper through its state machine)
+    ///     and cleans up its entities on the way out, at which point <see cref="Remove(IEncounter)" />
+    ///     follows it through every registry. Removing them here instead would orphan the entities of
+    ///     the types that only clean up in their success path.
+    /// </summary>
+    public void ForgetPlayer(INetworkPlayer player)
+    {
+        // ConcurrentDictionary enumeration tolerates encounters being removed while this runs.
+        foreach (var encounter in _shard.Encounters.Values)
+        {
+            encounter.Participants.Remove(player);
+        }
+    }
+
     public void Tick(double deltaTime, ulong currentTime, CancellationToken ct)
     {
         if (!_hasSpawnedZoneEncounters && currentTime != 0)
@@ -190,11 +208,15 @@ public class EncounterManager
             {
                 if (currentTime > tracker.ExpireAt)
                 {
+                    // Remove the tracker before (and regardless of) the timeout: the encounter it belongs
+                    // to may already have been removed, and a tracker for a dead encounter was previously
+                    // left in place — re-checked (and re-leaked) every second, forever. Removing first
+                    // also keeps a tracker that OnTimeOut re-arms through SetRemainingLifetime.
+                    _lifetimeByEncounter.TryRemove(entityId, out _);
+
                     if (_shard.Encounters.TryGetValue(entityId, out var e) && e is ICanTimeout encounter)
                     {
                         encounter.OnTimeOut();
-
-                        _lifetimeByEncounter.Remove(encounter.EntityId, out _);
                     }
                 }
             }
@@ -210,16 +232,73 @@ public class EncounterManager
     public void Remove(IEncounter encounter)
     {
         ScopeOut(encounter);
-        Remove(encounter.EntityId);
+        ForgetEncounter(encounter);
     }
 
     public void Remove(ulong guid)
     {
-        _shard.Encounters.TryGetValue(guid, out IEncounter encounter);
-        if (encounter != null)
+        if (_shard.Encounters.TryGetValue(guid, out var encounter))
         {
-            _shard.Encounters.Remove(guid);
+            Remove(encounter);
         }
+    }
+
+    /// <summary>
+    ///     Leaves every registry an encounter was entered in, not just the shard map. The update set, the
+    ///     proximity checks, the outstanding UI queries and the lifetime tracker each hold a strong
+    ///     reference, so an encounter that is removed from the shard map but stays in any of them is never
+    ///     collected — and keeps ticking. A finished LGV race, for example, used to leak its finish-line
+    ///     entity (and through the encounter's participant set, the player) into the proximity map, where
+    ///     its distance checks ran every flush for the rest of the shard's life.
+    /// </summary>
+    private void ForgetEncounter(IEncounter encounter)
+    {
+        _encountersToUpdate.Remove(encounter);
+        _lifetimeByEncounter.TryRemove(encounter.EntityId, out _);
+
+        if (_entitiesToCheckProximity.Count > 0)
+        {
+            List<BaseEntity> staleProximityEntities = null;
+            foreach (var (entity, handler) in _entitiesToCheckProximity)
+            {
+                if (handler == encounter)
+                {
+                    staleProximityEntities ??= new List<BaseEntity>();
+                    staleProximityEntities.Add(entity);
+                }
+            }
+
+            if (staleProximityEntities != null)
+            {
+                foreach (var entity in staleProximityEntities)
+                {
+                    _entitiesToCheckProximity.Remove(entity);
+                }
+            }
+        }
+
+        if (_uiQueries.Count > 0)
+        {
+            List<ulong> staleQueries = null;
+            foreach (var (queryGuid, candidate) in _uiQueries)
+            {
+                if (candidate == encounter)
+                {
+                    staleQueries ??= new List<ulong>();
+                    staleQueries.Add(queryGuid);
+                }
+            }
+
+            if (staleQueries != null)
+            {
+                foreach (var queryGuid in staleQueries)
+                {
+                    _uiQueries.Remove(queryGuid);
+                }
+            }
+        }
+
+        _shard.Encounters.Remove(encounter.EntityId);
     }
 
     private void ScopeIn(IEncounter encounter)
