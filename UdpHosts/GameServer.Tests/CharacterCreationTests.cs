@@ -101,6 +101,11 @@ public class CharacterCreationTests
         // screen and the in-game character show the same hair.
         Assert.Equal(10117u, character.Visuals.Hair);
         Assert.Equal(new[] { 10117u }, character.Visuals.HeadAccessories);
+
+        // Armor colors stay empty so the chassis' own default SDB warpaint is
+        // used in-game — not the admin account's purple Raptor.
+        Assert.Equal(0, character.Visuals.WarpaintId);
+        Assert.Empty(character.Visuals.Warpaint);
     }
 
     [Fact]

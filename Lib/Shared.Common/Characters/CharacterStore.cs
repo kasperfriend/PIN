@@ -163,6 +163,19 @@ public static class CharacterStore
             // characters now; the zone picker is the admin account's dev
             // tool). Never touches created characters, the admin's own entries
             // or anything hand-added with a non-seed name.
+            // Created characters used to inherit the admin Raptor warpaint
+            // (CharacterVisualsRecord defaults). Strip that copy so they wear
+            // the chassis they actually created with.
+            var strippedWarpaint = StripInheritedAdminWarpaint(Characters.Values);
+            if (strippedWarpaint.Count > 0)
+            {
+                SaveUnsafe();
+                Log.Warning(
+                    "Cleared inherited admin Raptor warpaint from {Count} created character(s) in {StorePath}: new characters wear their chassis' own default colors",
+                    strippedWarpaint.Count,
+                    _storePath);
+            }
+
             var staleSeeds = StaleZonePickerSeeds(Characters.Values);
             if (staleSeeds.Count > 0)
             {
@@ -367,6 +380,54 @@ public static class CharacterStore
                                 .Max();
 
         return (highest ?? -1) + 1;
+    }
+
+    /// <summary>
+    /// Created characters used to inherit the admin Raptor warpaint
+    /// (the colors <see cref="DefaultCharacterTemplate.Warpaint"/>
+    /// used to stamp on every <see cref="CharacterVisualsRecord"/>). Clears
+    /// that copy so they wear the chassis they actually created with. Admin
+    /// zone-picker seeds and characters that already have a different paint
+    /// job are left alone.
+    /// </summary>
+    public static IReadOnlyList<CharacterRecord> StripInheritedAdminWarpaint(IEnumerable<CharacterRecord> characters)
+    {
+        var stripped = new List<CharacterRecord>();
+        var admin = DefaultCharacterTemplate.Warpaint;
+        foreach (var character in characters)
+        {
+            if (character == null || !character.IsCustom)
+            {
+                continue;
+            }
+
+            var paint = character.Visuals?.Warpaint;
+            if (paint == null || paint.Count != admin.Length)
+            {
+                continue;
+            }
+
+            var matches = true;
+            for (var i = 0; i < admin.Length; i++)
+            {
+                if (paint[i] != admin[i])
+                {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (!matches)
+            {
+                continue;
+            }
+
+            character.Visuals.WarpaintId = 0;
+            character.Visuals.Warpaint = [];
+            stripped.Add(character);
+        }
+
+        return stripped;
     }
 
     /// <summary>

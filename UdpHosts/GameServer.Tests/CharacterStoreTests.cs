@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using Shared.Common;
 using Shared.Common.Accounts;
 using Shared.Common.Characters;
 using Xunit;
@@ -130,6 +131,28 @@ public class CharacterStoreTests
         // hand-named characters survive the pruning.
         var staleSeed = Assert.Single(stale);
         Assert.Same(playerSeed, staleSeed);
+    }
+
+    [Fact]
+    public void StripInheritedAdminWarpaint_ClearsTheCopiedRaptorLookFromCreatedCharacters()
+    {
+        var created = CharacterCreation.Create(26294423UL, CharacterStore.CharacterGuidForSlot(26294423UL, 0), 0, "Dread", 0, 75772, 0, 0, 0, 0, 0, 0);
+        // Simulate a store written before creation stopped copying the admin look.
+        created.Visuals.WarpaintId = DefaultCharacterTemplate.WarpaintId;
+        created.Visuals.Warpaint = [.. DefaultCharacterTemplate.Warpaint];
+
+        var seed = CharacterStore.BuildZoneSeed(AccountStore.AdminAccountId, CharacterStore.GuidPrefix)
+                                 .Single(c => c.LastZoneId == 448);
+        var customPaint = CharacterCreation.Create(26294424UL, CharacterStore.CharacterGuidForSlot(26294424UL, 0), 0, "Painted", 0, 75772, 0, 0, 0, 0, 0, 0);
+        customPaint.Visuals.Warpaint = [1, 2, 3];
+
+        var stripped = CharacterStore.StripInheritedAdminWarpaint(new[] { created, seed, customPaint });
+
+        Assert.Same(created, Assert.Single(stripped));
+        Assert.Equal(0, created.Visuals.WarpaintId);
+        Assert.Empty(created.Visuals.Warpaint);
+        Assert.Equal(DefaultCharacterTemplate.Warpaint, seed.Visuals.Warpaint);
+        Assert.Equal(new uint[] { 1, 2, 3 }, customPaint.Visuals.Warpaint);
     }
 
     [Fact]

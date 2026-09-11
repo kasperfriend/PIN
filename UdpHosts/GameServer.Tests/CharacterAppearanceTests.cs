@@ -7,6 +7,7 @@ using GameServer.Entities.Character;
 using GameServer.StaticDB;
 using GameServer.Tests.Fakes;
 using GrpcGameServerAPIClient;
+using Shared.Common;
 using Shared.Common.Characters;
 using Xunit;
 using BasicCharacterInfo = GrpcGameServerAPIClient.BasicCharacterInfo;
@@ -104,7 +105,7 @@ public class CharacterAppearanceTests
         // The 7 packed light-dark colors a characters.json record carries in
         // Visuals.Warpaint — the exact values the selection screen preview
         // renders the armor with.
-        var chosenWarpaint = new uint[] { 4216738474, 0, 4216717312, 418250752, 1525350400, 4162844703, 4162844703 };
+        var chosenWarpaint = DefaultCharacterTemplate.Warpaint;
         character.SetChassisWarpaint(chosenWarpaint);
 
         var loadout = new CharacterLoadout
@@ -159,7 +160,7 @@ public class CharacterAppearanceTests
         var shard = new FakeShard();
         var character = new CharacterEntity(shard, shard.GetNextGuid(0));
 
-        var chosenWarpaint = new uint[] { 4216738474, 0, 4216717312, 418250752, 1525350400, 4162844703, 4162844703 };
+        var chosenWarpaint = DefaultCharacterTemplate.Warpaint;
 
         var remote = new CharacterAndBattleframeVisuals
         {

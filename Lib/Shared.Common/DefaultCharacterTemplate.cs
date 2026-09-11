@@ -55,6 +55,23 @@ public static class DefaultCharacterTemplate
 
     public const int WarpaintId = 143225;
 
+    /// <summary>
+    /// Packed light-dark armor colors of the default (admin) Raptor look. Copied
+    /// onto seeded zone-picker entries so the admin's preview stays purple; a
+    /// created character must not inherit this — it should wear the chassis'
+    /// own default SDB warpaint instead.
+    /// </summary>
+    public static uint[] Warpaint =>
+    [
+        4216738474,
+        0,
+        4216717312,
+        418250752,
+        1525350400,
+        4162844703,
+        4162844703
+    ];
+
     /// <summary>Head accessories worn by the default character.</summary>
     public static uint[] HeadAccessories => [HeadAccessoryId];
 
