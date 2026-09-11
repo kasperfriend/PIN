@@ -346,6 +346,7 @@ public class BaseController : Base
 
         // Instantly transport character to target location
         character.PositionAtSpawnPoint(spawnPoint);
+        client.AssignedShard.FallDamage?.ResetFor(character); // The drop onto the destination must not count as a fall
         var forcedMove = new ForcedMovement
         {
             Data = new ForcedMovementData

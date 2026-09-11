@@ -102,8 +102,15 @@ Safety rails so teleports, respawns and vehicles cannot fake landings:
 
 - A landing is only trusted within `LandingGraceMs` (150ms) of the last
   airborne sample.
-- `Respawn` and the `tp`/`teleport` command reset the tracker
-  (`FallDamageSystem.ResetFor`).
+- `EnterZone`, `Respawn`, the client's `RequestTeleport` (map/outpost travel)
+  and the `tp`/`teleport` command reset the tracker (`FallDamageSystem.ResetFor`).
+  A reset does not only clear the tracker: tracking stays *suspended* for
+  `SpawnSettleMs` (1s) and, after that, until the first grounded pose arrives.
+  Right after a server directed move the client still streams a few poses from
+  its previous state and then drops the character onto the destination; without
+  the suspension those poses looked like a fast fall followed by a landing
+  within the grace window, and a clean spawn could start bleeding out with a
+  "Fall damage" chat line.
 - Samples with the `Occupant` movestate (in a vehicle) are ignored entirely.
 - Falling damage lands in the normal `DamageSystem` pipeline, so it hits
   shields first, can trigger bleedout/death and sends a `TookHit` feedback
