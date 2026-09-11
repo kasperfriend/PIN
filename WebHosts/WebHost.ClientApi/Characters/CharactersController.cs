@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using Serilog;
 using Shared.Common.Accounts;
 using Shared.Common.Characters;
 using WebHost.ClientApi.Accounts;
@@ -240,17 +241,34 @@ public class CharactersController : ControllerBase
 
         var gender = string.Equals(characterCreateData.Gender, "female", StringComparison.OrdinalIgnoreCase) ? 1u : 0u;
 
+        Log.Information(
+            "Creating character \"{Name}\" for account {AccountId}: chassis={Chassis} head={Head} eyes={Eyes} voice={Voice} " +
+            "skin={SkinId}/{SkinPalette} eye={EyeId}/{EyePalette} lip={LipId} hair={HairId}/{HairPalette} " +
+            "facialHair={FacialHair}/{FacialHairPalette} accA={AccA} accB={AccB} gender={Gender}",
+            characterCreateData.Name, account.AccountId,
+            characterCreateData.StartClassId,
+            characterCreateData.Head, characterCreateData.Eyes, characterCreateData.VoiceSet,
+            characterCreateData.SkinColorId, characterCreateData.EyeColorId, characterCreateData.LipColorId,
+            characterCreateData.HairColorId, characterCreateData.FacialHairColorId,
+            characterCreateData.FacialHair, characterCreateData.HeadAccessoryA, characterCreateData.HeadAccessoryB,
+            gender);
+
         if (!CharacterStore.TryCreateCharacter(
                 account.AccountId,
                 characterCreateData.Name,
                 gender,
                 (uint)characterCreateData.StartClassId,
                 (uint)characterCreateData.Head,
+                (uint)characterCreateData.Eyes,
                 (uint)characterCreateData.VoiceSet,
                 (uint)characterCreateData.SkinColorId,
                 (uint)characterCreateData.EyeColorId,
+                (uint)characterCreateData.LipColorId,
                 (uint)characterCreateData.HairColorId,
+                (uint)characterCreateData.FacialHairColorId,
                 (uint)characterCreateData.HeadAccessoryA,
+                (uint)characterCreateData.HeadAccessoryB,
+                (uint)characterCreateData.FacialHair,
                 out var character,
                 out var errorCode,
                 out var errorMessage))
@@ -265,7 +283,9 @@ public class CharactersController : ControllerBase
                       CreatedAt = character.CreatedAt,
                       UpdatedAt = character.CreatedAt,
                       HeadAccAId = characterCreateData.HeadAccessoryA,
-                      HeadAccBId = 0,
+                      HeadAccBId = characterCreateData.HeadAccessoryB != 0
+                          ? characterCreateData.HeadAccessoryB
+                          : characterCreateData.FacialHair,
                       HeadMainId = characterCreateData.Head,
                       IsActive = true,
                       IsDev = characterCreateData.IsDev,

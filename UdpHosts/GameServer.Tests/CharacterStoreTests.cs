@@ -139,18 +139,18 @@ public class CharacterStoreTests
         // A created character that still wears the copied admin purple Raptor
         // paint (store written before creation stopped copying the admin look):
         // it gets its own chassis' stock colors (the Dreadnaught's).
-        var created = CharacterCreation.Create(26294423UL, CharacterStore.CharacterGuidForSlot(26294423UL, 0), 0, "Dread", 0, 75772, 0, 0, 0, 0, 0, 0);
+        var created = CharacterCreation.Create(26294423UL, CharacterStore.CharacterGuidForSlot(26294423UL, 0), 0, "Dread", 0, 75772, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         created.Visuals.WarpaintId = DefaultCharacterTemplate.WarpaintId;
         created.Visuals.Warpaint = [.. DefaultCharacterTemplate.Warpaint];
 
         // A created character saved after the copy was stripped: its warpaint
         // was never written, so it is empty and looks purple to the client.
-        var createdEmpty = CharacterCreation.Create(26294425UL, CharacterStore.CharacterGuidForSlot(26294425UL, 0), 0, "Biotech", 0, 75774, 0, 0, 0, 0, 0, 0);
+        var createdEmpty = CharacterCreation.Create(26294425UL, CharacterStore.CharacterGuidForSlot(26294425UL, 0), 0, "Biotech", 0, 75774, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         createdEmpty.Visuals.Warpaint = [];
 
         // A created character whose chassis has no stock palette in the table:
         // the purple must be cleared, even though there is nothing to stamp.
-        var createdUnknownChassis = CharacterCreation.Create(26294426UL, CharacterStore.CharacterGuidForSlot(26294426UL, 0), 0, "Mystery", 0, 12345, 0, 0, 0, 0, 0, 0);
+        var createdUnknownChassis = CharacterCreation.Create(26294426UL, CharacterStore.CharacterGuidForSlot(26294426UL, 0), 0, "Mystery", 0, 12345, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         createdUnknownChassis.Visuals.WarpaintId = DefaultCharacterTemplate.WarpaintId;
         createdUnknownChassis.Visuals.Warpaint = [.. DefaultCharacterTemplate.Warpaint];
 
@@ -158,7 +158,7 @@ public class CharacterStoreTests
         // custom paint job is left alone, and a record without visuals survives.
         var seed = CharacterStore.BuildZoneSeed(AccountStore.AdminAccountId, CharacterStore.GuidPrefix)
                                  .Single(c => c.LastZoneId == 448);
-        var customPaint = CharacterCreation.Create(26294424UL, CharacterStore.CharacterGuidForSlot(26294424UL, 0), 0, "Painted", 0, 75772, 0, 0, 0, 0, 0, 0);
+        var customPaint = CharacterCreation.Create(26294424UL, CharacterStore.CharacterGuidForSlot(26294424UL, 0), 0, "Painted", 0, 75772, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         customPaint.Visuals.Warpaint = [1, 2, 3];
         var noVisuals = new CharacterRecord { AccountId = 26294427UL, IsCustom = true, Name = "Bare", Visuals = null };
 
