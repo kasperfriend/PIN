@@ -64,7 +64,7 @@ public static class Deserializer
         if (type == typeof(char))
         {
             // One wire byte, decoded with Encoding.ASCII's replacement rule like the general path.
-            var value = (char)(data.Span[0] <= 0x7F ? data.Span[0] : '?');
+            var value = (char)(data.Span[0] <= 0x7F ? data.Span[0] : (byte)'?');
             data = data[1..];
             return Unsafe.As<char, T>(ref value);
         }
@@ -162,6 +162,7 @@ public static class Deserializer
         {
             span = data[..1].Span;
             data = data[1..];
+
             // Same mapping Encoding.ASCII.GetChars(span.ToArray())[0] performed (byte values above
             // ASCII are the replacement character), without the array copy and char[] per read.
             return span[0] <= 0x7F ? (char)span[0] : '?';

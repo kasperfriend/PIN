@@ -218,11 +218,18 @@ public class GameServerModule : Module
                 string LogTemplate(bool withSystem)
                     => $"[{{Timestamp:HH:mm:ss.fff}}] [{{Level:u3}}] {(withSystem ? "[{System}] " : string.Empty)}{{Message:lj}}{{NewLine}}{{Exception}}";
 
+                // retainedFileCountLimit keeps the daily roll from becoming unbounded disk growth:
+                // a shard running for months previously accumulated every day's log forever.
+                // 31 days of Verbose-capable files (~a few MB/day at normal levels) is the working
+                // set an operator actually tails when troubleshooting a session.
+                const int RetainedLogFiles = 31;
+
                 loggerConfig = loggerConfig
                     .WriteTo.File(
                         "logs/master_.log",
                         outputTemplate: LogTemplate(true),
                         rollingInterval: RollingInterval.Day,
+                        retainedFileCountLimit: RetainedLogFiles,
                         restrictedToMinimumLevel: minLevelFile)
                     .WriteTo.Map(
                         "System",
@@ -231,6 +238,7 @@ public class GameServerModule : Module
                             $"logs/systems/{system}_.log",
                             outputTemplate: LogTemplate(false),
                             rollingInterval: RollingInterval.Day,
+                            retainedFileCountLimit: RetainedLogFiles,
                             restrictedToMinimumLevel: minLevelFile));
             }
 
