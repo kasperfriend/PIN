@@ -82,8 +82,10 @@ public static class CharacterCreation
 
     /// <summary>
     /// Whether a created character may take over this slot: only untouched seed
-    /// entries can be replaced — a character that already lives here blocks the
-    /// creation with <see cref="AccountErrors.ErrDuplicateCharacter"/>.
+    /// entries can be replaced — a character that already lives here keeps it
+    /// (the creation then moves on to the account's next free slot instead of
+    /// failing; it only runs out of slots once every guid the scheme can
+    /// address is taken, see <see cref="CharacterStore.MaxCharacterSlotsPerAccount"/>).
     /// </summary>
     public static bool TryClaimSlot(CharacterRecord existingSlot, out string errorCode)
     {

@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Serilog;
-using Shared.Common.Characters;
 
 namespace Shared.Common.Accounts;
 
@@ -251,9 +250,11 @@ public static class AccountCreation
     }
 
     /// <summary>
-    /// Validate and store a create-account request, and give the fresh account
-    /// its zone-picker entries. Every failure is reported with the original
-    /// client error code, so the client can show its own localized message.
+    /// Validate and store a create-account request. The fresh account starts
+    /// with no characters — they arrive through the client's character creation
+    /// flow — so nothing is seeded for it here. Every failure is reported with
+    /// the original client error code, so the client can show its own localized
+    /// message.
     /// </summary>
     public static bool TryCreate(AccountCreationRequest request, out AccountRecord account, out string errorCode, out string errorMessage)
     {
@@ -278,8 +279,6 @@ public static class AccountCreation
             return false;
         }
 
-        SeedZonePicker(account);
-
         Log.Information("Created account {AccountId} ({Email})", account.AccountId, account.Email);
 
         return true;
@@ -303,25 +302,6 @@ public static class AccountCreation
                value.Equals("on", StringComparison.OrdinalIgnoreCase) ||
                value.Equals("yes", StringComparison.OrdinalIgnoreCase) ||
                value == "1";
-    }
-
-    /// <summary>
-    /// Give the new account its own copy of the zone-picker entries, the same
-    /// way the first-run seed does for the admin account. Best effort: the
-    /// account is stored already, so a failure here must never turn a created
-    /// account into a rejected creation (the client would show an error and then
-    /// fail to log in with an account that does exist).
-    /// </summary>
-    private static void SeedZonePicker(AccountRecord account)
-    {
-        try
-        {
-            CharacterStore.EnsureSeededForAccount(account.AccountId);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Could not seed the zone-picker entries of account {AccountId}; the account was created anyway", account.AccountId);
-        }
     }
 
     /// <summary>

@@ -22,8 +22,10 @@ public class CharactersController : ControllerBase
 
     /// <summary>
     /// The character selection list of the account that signed the request
-    /// (identified via its X-Red5-Signature, same as the login). Unauthenticated
-    /// callers keep seeing the built-in admin account's entries, which is what
+    /// (identified via its X-Red5-Signature, same as the login). A fresh
+    /// account's list is empty by design — the client then walks the player
+    /// through character creation. Unauthenticated callers keep seeing the
+    /// built-in admin account's entries (its zone picker), which is what
     /// everyone got before the account system existed.
     /// </summary>
     [Route("api/v2/characters/list")]
@@ -205,10 +207,12 @@ public class CharactersController : ControllerBase
     /// <summary>
     /// Character creation (<c>POST api/v1/characters</c>). The request carries
     /// the name, starting battleframe and the head/voice/color choices of the
-    /// creation screen; the created character takes over the account's
-    /// zone-picker slot for the spawn zone (New Eden) and shows up in the
-    /// character list the client re-fetches afterwards. The account is taken
-    /// from the request's X-Red5-Signature, exactly like the original service.
+    /// creation screen; the created character takes the account's next free
+    /// slot in the spawn zone (New Eden) — the first one replaces the admin
+    /// account's untouched "New Eden" zone-picker entry, further ones get their
+    /// own guids — and shows up in the character list the client re-fetches
+    /// afterwards. The account is taken from the request's X-Red5-Signature,
+    /// exactly like the original service.
     /// </summary>
     [Route("api/v1/characters")]
     [HttpPost]
@@ -224,6 +228,14 @@ public class CharactersController : ControllerBase
         if (account == null)
         {
             return Error(AccountErrors.ErrIncorrectUserPass, "Login failed, check your username and password");
+        }
+
+        // The client only offers the create flow while the account is under its
+        // slot limit; enforce the same limit server-side for hand-crafted
+        // requests (the admin account's zone-picker entries count against it).
+        if (CharacterStore.GetAll(account.AccountId).Count >= account.CharacterLimit)
+        {
+            return Error(AccountErrors.ErrDuplicateCharacter, "This account has no free character slot");
         }
 
         var gender = string.Equals(characterCreateData.Gender, "female", StringComparison.OrdinalIgnoreCase) ? 1u : 0u;

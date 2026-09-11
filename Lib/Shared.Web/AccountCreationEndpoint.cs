@@ -60,7 +60,7 @@ public static class AccountCreationEndpoint
                 return Error(errorCode, errorMessage);
             }
 
-            logger.LogWarning("Created account {AccountId} ({Email})", account.AccountId, account.Email);
+            logger.LogWarning("Created account {AccountId} ({Email}); it starts fresh — no characters until you create one in-game", account.AccountId, account.Email);
 
             return new OkObjectResult(new { });
         }

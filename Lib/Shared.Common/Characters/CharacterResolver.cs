@@ -22,7 +22,11 @@ public static class CharacterResolver
     /// <summary>Masks off the byte the client overwrites.</summary>
     private const ulong LowByteMask = 0xffffffffffffff00;
 
-    /// <summary>Masks off the zone id, leaving the guid prefix and account id bits.</summary>
+    /// <summary>
+    /// Masks off the zone id, leaving the guid prefix, account id and character
+    /// slot bits (characters beyond an account's first carry their slot index
+    /// in bits 48..55, see <see cref="CharacterStore.CharacterGuidForSlot"/>).
+    /// </summary>
     private const ulong PrefixAndAccountMask = 0xffffffffffff0000;
 
     private const ulong ZoneMask = 0xffff;

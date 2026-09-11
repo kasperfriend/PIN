@@ -11,7 +11,8 @@ namespace GameServer.Tests;
 /// <summary>
 ///     Tests for the per-account character rules of <see cref="CharacterStore"/>
 ///     and the pure resolution logic in <see cref="CharacterResolver"/>:
-///     zone-picker seeding per account, the guid scheme, and how a (possibly
+///     fresh accounts and the admin-only zone picker, the guid scheme (including
+///     the character slots beyond an account's first), and how a (possibly
 ///     low-byte-clobbered) character guid resolves back to a record once several
 ///     accounts exist.
 /// </summary>
@@ -52,6 +53,83 @@ public class CharacterStoreTests
         var prefix = CharacterStore.GuidPrefixForAccount(26294423);
         Assert.Equal(CharacterStore.GeneratedAccountGuidPrefixBase, prefix & 0xffff000000000000);
         Assert.Equal(26294423UL << 16, prefix & 0x0000ffffffff0000);
+    }
+
+    [Fact]
+    public void CharacterGuidForSlot_SlotZero_KeepsTheGuidsCreatedCharactersAlwaysHad()
+    {
+        // Slot 0 is the guid a created character has always used: the account's
+        // own prefix plus the spawn zone. For the admin account that is the
+        // legacy prefix, so its created character still replaces the seeded
+        // "New Eden" zone-picker entry.
+        var account = 26294423UL;
+        Assert.Equal(
+            CharacterStore.GuidPrefixForAccount(account) + CharacterStore.DefaultSpawnZoneId,
+            CharacterStore.CharacterGuidForSlot(account, 0));
+        Assert.Equal(
+            CharacterStore.GuidPrefix + CharacterStore.DefaultSpawnZoneId,
+            CharacterStore.CharacterGuidForSlot(AccountStore.AdminAccountId, 0));
+    }
+
+    [Fact]
+    public void CharacterGuidForSlot_FurtherSlots_GetTheirOwnGuids()
+    {
+        var account = 26294423UL;
+        var first = CharacterStore.CharacterGuidForSlot(account, 0);
+        var second = CharacterStore.CharacterGuidForSlot(account, 1);
+        var third = CharacterStore.CharacterGuidForSlot(account, 2);
+
+        // Distinct guids and distinct entity ids (the upper seven bytes the
+        // GameServer derives a player id from)...
+        Assert.NotEqual(first, second);
+        Assert.NotEqual(second, third);
+        Assert.NotEqual(first & 0xffffffffffffff00, second & 0xffffffffffffff00);
+
+        // ...with the slot index in bits 48..55 and the account still in its
+        // own range...
+        Assert.Equal(1UL << 48, second & 0x00ff000000000000);
+        Assert.Equal(2UL << 48, third & 0x00ff000000000000);
+        Assert.Equal(account << 16, second & 0x0000ffffffff0000);
+
+        // ...and every slot encodes the spawn zone in the low 16 bits, so the
+        // GameServer spawns them all into New Eden.
+        Assert.All(new[] { first, second, third }, guid => Assert.Equal(CharacterStore.DefaultSpawnZoneId, (uint)(guid & 0xffff)));
+
+        // The admin account's further slots use the generated range too: its
+        // legacy prefix already carries non-zero bits where the slot index goes.
+        Assert.Equal(
+            CharacterStore.GeneratedAccountGuidPrefixBase | (1UL << 48) | (AccountStore.AdminAccountId << 16) | CharacterStore.DefaultSpawnZoneId,
+            CharacterStore.CharacterGuidForSlot(AccountStore.AdminAccountId, 1));
+    }
+
+    [Fact]
+    public void StaleZonePickerSeeds_MatchesOnlyNonAdminUntouchedSeeds()
+    {
+        // What a store written by the seed-every-account build contains: the
+        // admin's zone picker, a copied zone picker for a player account, that
+        // player's created character, and a pre-account-system record with a
+        // custom name.
+        var adminSeed = CharacterStore.BuildZoneSeed(AccountStore.AdminAccountId, CharacterStore.GuidPrefix)
+                                      .Single(c => c.LastZoneId == 448);
+        var playerAccount = 26294424UL;
+        var playerSeed = CharacterStore.BuildZoneSeed(playerAccount, CharacterStore.GuidPrefixForAccount(playerAccount))
+                                       .Single(c => c.LastZoneId == 448);
+        var playerCharacter = new CharacterRecord
+                              {
+                                  AccountId = playerAccount,
+                                  CharacterGuid = CharacterStore.GuidPrefixForAccount(playerAccount) + 448,
+                                  IsCustom = true,
+                                  Name = "Kasper"
+                              };
+        var legacyNamed = new CharacterRecord { AccountId = playerAccount, Name = "New Eden - Raptor" };
+
+        var stale = CharacterStore.StaleZonePickerSeeds(new[] { adminSeed, playerSeed, playerCharacter, legacyNamed });
+
+        // Only the player account's untouched seed copy is stale: accounts
+        // start fresh now, the admin keeps its zone picker, and created or
+        // hand-named characters survive the pruning.
+        var staleSeed = Assert.Single(stale);
+        Assert.Same(playerSeed, staleSeed);
     }
 
     [Fact]
@@ -170,5 +248,27 @@ public class CharacterStoreTests
 
         var clobberedAdmin833 = (CharacterStore.GuidPrefix + 833) | 0xfe;
         Assert.Equal("admin-833", CharacterResolver.Find(characters, clobberedAdmin833, 833).Name);
+    }
+
+    [Fact]
+    public void Resolver_CreatedSlotsOfOneAccount_ResolveIndividually()
+    {
+        // A fresh account's characters: slot 0 plus the numbered slots, all
+        // spawning into the same zone. The slot bits keep their upper seven
+        // bytes distinct, so each one resolves on its own — the client
+        // clobbered the low byte of the second character's guid here.
+        var account = 26294424UL;
+        var characters = new List<CharacterRecord>
+                         {
+                             new() { AccountId = account, CharacterGuid = CharacterStore.CharacterGuidForSlot(account, 0), Name = "first" },
+                             new() { AccountId = account, CharacterGuid = CharacterStore.CharacterGuidForSlot(account, 1), Name = "second" }
+                         };
+
+        Assert.Equal("second", CharacterResolver.Find(characters, CharacterStore.CharacterGuidForSlot(account, 1)).Name);
+        Assert.Equal("first", CharacterResolver.Find(characters, CharacterStore.CharacterGuidForSlot(account, 0)).Name);
+
+        var clobbered = CharacterStore.CharacterGuidForSlot(account, 1) | 0xfe;
+        Assert.Equal("second", CharacterResolver.Find(characters, clobbered).Name);
+        Assert.Equal("second", CharacterResolver.Find(characters, clobbered, CharacterStore.DefaultSpawnZoneId).Name);
     }
 }

@@ -72,12 +72,14 @@ account was created or rejected and with which client error code, and — for a
 rejected login — whether the account was unknown or the password wrong. See
 [Docs/ACCOUNTS.md](Docs/ACCOUNTS.md) §10 for reading them.
 
-Characters belong to accounts: each account gets its own copy of the
-zone-picker entries in `characters.json`, and the selection screen shows only
-the logged-in account's characters. Character creation works too — the client's
-creation form creates a real, persisted character for the logged-in account
-(starting in New Eden), with the original name rules and error codes. See
-[`Docs/ACCOUNTS.md`](Docs/ACCOUNTS.md) §7-§8 for both.
+Characters belong to accounts: the selection screen shows only the logged-in
+account's characters, and **accounts start fresh** — no characters until you
+create one in-game. The 38 zone-picker entries in `characters.json` are the
+built-in admin account's dev tool for jumping into any zone from the selection
+screen. Character creation works too — the client's creation form creates a
+real, persisted character for the logged-in account (starting in New Eden), as
+many as the account's limit allows, with the original name rules and error
+codes. See [`Docs/ACCOUNTS.md`](Docs/ACCOUNTS.md) §7-§8 for both.
 
 The store location is configurable:
 

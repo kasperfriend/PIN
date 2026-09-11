@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Serilog;
 using Shared.Common.Accounts;
 
 namespace Shared.Common.Characters;
@@ -15,6 +16,15 @@ namespace Shared.Common.Characters;
 /// Both the web ClientApi (which renders the character selection screen) and the
 /// GRPC service the GameServer calls read from this same store, so selection and
 /// in-game state cannot drift apart.
+///
+/// Accounts start fresh: a new account owns no characters until it creates one
+/// through the client's character creation flow (<c>POST api/v1/characters</c>).
+/// The 38 built-in zone-picker entries are the admin account's dev tool — they
+/// are what lets an operator jump into any zone straight from the selection
+/// screen — and are deliberately not given to anyone else (an earlier build
+/// seeded every account with its own copy, which read as "every new account
+/// already has the admin's characters"; those copies are pruned on load, see
+/// <see cref="StaleZonePickerSeeds"/>).
 ///
 /// This is deliberately a simple file-backed store rather than a real database:
 /// it needs no external dependencies and matches how the rest of PIN keeps state.
@@ -38,6 +48,15 @@ public static class CharacterStore
     /// its life in reach of.
     /// </summary>
     public const uint DefaultSpawnZoneId = 448;
+
+    /// <summary>
+    /// Character slots the guid scheme can address per account: the slot index
+    /// beyond the first lives in guid bits 48..55 (see
+    /// <see cref="CharacterGuidForSlot"/>), so an account can create at most
+    /// this many characters (the account's reported character limit is the
+    /// lower, client-visible bound).
+    /// </summary>
+    public const int MaxCharacterSlotsPerAccount = 256;
 
     private static readonly object SaveLock = new();
 
@@ -138,6 +157,32 @@ public static class CharacterStore
                 SaveUnsafe();
             }
 
+            // Migration for stores written by the build that seeded the 38
+            // zone-picker entries for every account: drop the untouched copies
+            // so those accounts come back fresh (accounts start with no
+            // characters now; the zone picker is the admin account's dev
+            // tool). Never touches created characters, the admin's own entries
+            // or anything hand-added with a non-seed name.
+            var staleSeeds = StaleZonePickerSeeds(Characters.Values);
+            if (staleSeeds.Count > 0)
+            {
+                foreach (var staleSeed in staleSeeds)
+                {
+                    Characters.TryRemove(staleSeed.CharacterGuid, out _);
+                }
+
+                SaveUnsafe();
+
+                // At Warning, the level the WebHostManager shows by default:
+                // without this line, an operator wondering where a fresh
+                // account's characters went would have no pointer to the
+                // change that removed them.
+                Log.Warning(
+                    "Removed {StaleSeedCount} zone-picker seed entries of non-admin accounts from {StorePath}: accounts start fresh now, only the admin account keeps the zone picker (created characters are untouched)",
+                    staleSeeds.Count,
+                    _storePath);
+            }
+
             _initialised = true;
         }
     }
@@ -151,13 +196,13 @@ public static class CharacterStore
 
     /// <summary>
     /// Get the characters of one account, ordered the way the selection screen
-    /// expects. Seeds the account's zone-picker entries on first sight (covers
-    /// accounts added by hand-editing accounts.json).
+    /// expects. Accounts start with none — characters arrive through the
+    /// creation flow (<see cref="TryCreateCharacter"/>) — and only the built-in
+    /// admin account owns the seeded zone-picker entries.
     /// </summary>
     public static IReadOnlyList<CharacterRecord> GetAll(ulong accountId)
     {
         Init();
-        EnsureSeededForAccount(accountId);
         return Characters.Values.Where(c => c.AccountId == accountId).OrderBy(c => c.SortOrder).ToList();
     }
 
@@ -165,11 +210,34 @@ public static class CharacterStore
     /// Guid prefix for a character belonging to <paramref name="accountId"/>: the
     /// legacy <see cref="GuidPrefix"/> for the admin account (keeping existing
     /// files valid), <see cref="GeneratedAccountGuidPrefixBase"/> plus the account
-    /// id for everyone else.
+    /// id for everyone else. This prefix addresses an account's first character
+    /// slot; characters beyond the first add their slot index in guid bits
+    /// 48..55 (see <see cref="CharacterGuidForSlot"/>).
     /// </summary>
     public static ulong GuidPrefixForAccount(ulong accountId)
     {
         return accountId == AccountStore.AdminAccountId ? GuidPrefix : GeneratedAccountGuidPrefixBase | (accountId << 16);
+    }
+
+    /// <summary>
+    /// The guid of the character an account creates in <paramref name="slot"/>:
+    /// the spawn zone stays in the low 16 bits (the GameServer reads the zone to
+    /// spawn into from there) and the slot index goes into bits 48..55, so an
+    /// account can create more than one character. Slot 0 keeps the plain
+    /// per-account prefix — for the admin account that is the legacy prefix, so
+    /// a created character replaces the seeded "New Eden" zone-picker entry
+    /// exactly the way it always did — while slots above 0 always use the
+    /// generated range, because the legacy admin prefix already carries non-zero
+    /// bits where the slot index goes.
+    /// </summary>
+    public static ulong CharacterGuidForSlot(ulong accountId, int slot)
+    {
+        if (slot == 0)
+        {
+            return GuidPrefixForAccount(accountId) + DefaultSpawnZoneId;
+        }
+
+        return GeneratedAccountGuidPrefixBase | ((ulong)slot << 48) | (accountId << 16) | DefaultSpawnZoneId;
     }
 
     /// <summary>Whether <paramref name="name"/> is one of the built-in zone-picker seed names.</summary>
@@ -190,13 +258,15 @@ public static class CharacterStore
     /// Create a character for an account through the client's character creation
     /// flow (<c>POST api/v1/characters</c>).
     ///
-    /// The new character takes over the account's zone-picker slot for the spawn
-    /// zone (<see cref="DefaultSpawnZoneId"/>): the guid keeps the
-    /// prefix+zoneId scheme the GameServer resolves spawns by, and the selection
-    /// list stays coherent (the seed entry is replaced by the named character).
-    /// Only untouched seed entries can be replaced — a character that already
-    /// exists in that slot blocks the creation with
-    /// <see cref="AccountErrors.ErrDuplicateCharacter"/>.
+    /// The new character takes the account's next free slot (see
+    /// <see cref="CharacterGuidForSlot"/>): slot 0, which replaces an untouched
+    /// seed entry — the admin account's "New Eden" zone-picker slot — while one
+    /// is still there, and then the numbered slots above it, so a fresh account
+    /// can create as many characters as its limit allows instead of exactly one.
+    /// Every created character encodes the spawn zone
+    /// (<see cref="DefaultSpawnZoneId"/>) in its guid, which is the scheme the
+    /// GameServer resolves spawns by; a slot already owned by a custom character
+    /// is skipped, never replaced.
     /// </summary>
     public static bool TryCreateCharacter(
         ulong accountId,
@@ -218,7 +288,6 @@ public static class CharacterStore
         errorMessage = null;
 
         Init();
-        EnsureSeededForAccount(accountId);
 
         // Names are reserved by real characters across all accounts (the seed
         // zone entries do not reserve their zone names).
@@ -235,12 +304,26 @@ public static class CharacterStore
             return false;
         }
 
-        var guid = GuidPrefixForAccount(accountId) + DefaultSpawnZoneId;
-        Characters.TryGetValue(guid, out var existingSlot);
-
-        if (!CharacterCreation.TryClaimSlot(existingSlot, out errorCode))
+        // The account's next free slot: slot 0 unless a custom character
+        // already lives there (an untouched seed entry is replaceable, a
+        // created character is not — the creation moves on to the next slot
+        // instead of failing).
+        ulong characterGuid = 0;
+        CharacterRecord existingSlot = null;
+        int slot;
+        for (slot = 0; slot < MaxCharacterSlotsPerAccount; slot++)
         {
-            errorMessage = $"This account already has a character for the zone {DefaultSpawnZoneId}";
+            characterGuid = CharacterGuidForSlot(accountId, slot);
+            if (!Characters.TryGetValue(characterGuid, out existingSlot) || CharacterCreation.TryClaimSlot(existingSlot, out _))
+            {
+                break;
+            }
+        }
+
+        if (slot == MaxCharacterSlotsPerAccount)
+        {
+            errorCode = AccountErrors.ErrDuplicateCharacter;
+            errorMessage = "This account has no free character slot";
             return false;
         }
 
@@ -251,13 +334,13 @@ public static class CharacterStore
             battleframeSdbId = DefaultCharacterTemplate.FrameSdbId;
         }
 
-        // Keep the replaced seed's position in the selection list; a missing slot
-        // (should not happen after seeding) sorts to the front.
-        var sortOrder = existingSlot?.SortOrder ?? -1;
+        // Keep the replaced seed's position in the selection list; a character
+        // in a new slot sorts behind the account's existing entries.
+        var sortOrder = existingSlot?.SortOrder ?? NextSortOrder(accountId);
 
         character = CharacterCreation.Create(
             accountId,
-            guid,
+            characterGuid,
             sortOrder,
             name,
             gender,
@@ -269,40 +352,36 @@ public static class CharacterStore
             hairColorItemId,
             headAccessoryA);
 
-        Characters[guid] = character;
+        Characters[characterGuid] = character;
         Save();
 
         return true;
     }
 
-    /// <summary>
-    /// Make sure an account owns its zone-picker entries. Every account gets its
-    /// own copy of the seed list (with its own guid prefix), so the selection
-    /// screen keeps working as a zone picker no matter which account is logged in.
-    /// </summary>
-    public static void EnsureSeededForAccount(ulong accountId)
+    /// <summary>Sort position for a character in a new slot: behind the account's existing entries.</summary>
+    private static int NextSortOrder(ulong accountId)
     {
-        Init();
+        var highest = Characters.Values
+                                .Where(c => c.AccountId == accountId)
+                                .Select(c => (int?)c.SortOrder)
+                                .Max();
 
-        if (Characters.Values.Any(c => c.AccountId == accountId))
-        {
-            return;
-        }
+        return (highest ?? -1) + 1;
+    }
 
-        lock (SaveLock)
-        {
-            if (Characters.Values.Any(c => c.AccountId == accountId))
-            {
-                return;
-            }
-
-            foreach (var character in BuildZoneSeed(accountId, GuidPrefixForAccount(accountId)))
-            {
-                Characters[character.CharacterGuid] = character;
-            }
-
-            Save();
-        }
+    /// <summary>
+    /// The records to drop when a store was written by a build that seeded the
+    /// zone-picker entries for <em>every</em> account: the untouched seed
+    /// entries of accounts other than the built-in admin. Created characters,
+    /// the admin account's own zone picker and anything renamed
+    /// (pre-account-system records, hand-added entries) are never matched, so
+    /// pruning only ever removes the never-touched copies.
+    /// </summary>
+    public static IReadOnlyList<CharacterRecord> StaleZonePickerSeeds(IEnumerable<CharacterRecord> characters)
+    {
+        return characters
+            .Where(c => c.AccountId != AccountStore.AdminAccountId && CharacterCreation.IsZoneSeedEntry(c))
+            .ToList();
     }
 
     /// <summary>Look up a single character, or null when it is not known.</summary>

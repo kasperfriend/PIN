@@ -12,8 +12,9 @@ namespace WebHost.ClientApi.Characters;
 /// truth is what stops the selected character and the in-game character diverging.
 ///
 /// The list is scoped to the account that signed the request, so every player
-/// only sees their own characters (each account gets its own copy of the
-/// zone-picker seed entries).
+/// only sees their own characters: a fresh account's list is empty until it
+/// creates its first character, and only the admin account carries the
+/// zone-picker seed entries.
 /// </summary>
 public class CharactersRepository : ICharactersRepository
 {

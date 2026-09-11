@@ -23,10 +23,15 @@
   `ERR_EMAIL_MISMATCH`, `ERR_PASSWORD_MISMATCH`, ...) so the client shows the
   proper localized message.
 * Characters belong to accounts: the character selection screen shows only the
-  logged-in account's entries. Every account gets its own copy of the 38
-  zone-picker seed entries (`characters.json`, see
-  [`CHARACTERS_AND_BATTLEFRAMES.md`](CHARACTERS_AND_BATTLEFRAMES.md)), so the
-  selection screen keeps working as a zone picker for every account.
+  logged-in account's entries, and **accounts start fresh** — a new account owns
+  no characters until you create one in-game (see §7). The 38 zone-picker seed
+  entries (`characters.json`, see
+  [`CHARACTERS_AND_BATTLEFRAMES.md`](CHARACTERS_AND_BATTLEFRAMES.md)) belong to
+  the built-in **admin** account only: they are the operator's dev tool for
+  jumping into any zone straight from the selection screen. (An earlier build
+  copied them to every account on first use, which read as "every new account
+  already has the admin's characters"; on load, PIN prunes those stale copies —
+  created characters are never touched.)
 
 Implementation:
 
@@ -166,7 +171,7 @@ A JSON list of accounts (written by `AccountStore`, sorted by id):
 | `IsDev` | bool | Reports `is_dev` to the client |
 | `IsAdmin` | bool | Marks the built-in seeded account (also the fallback for unauthenticated API calls) |
 | `TicketAuth` | bool | The account was provisioned from an opaque client login ticket (a Steam session ticket) instead of email + password; its signatures are not verified (see §3) |
-| `CharacterLimit` | int | Character slots reported on login (the zone-picker seed needs all 40) |
+| `CharacterLimit` | int | Character slots reported on login (40; the admin account's zone-picker entries count against it) |
 | `Language` | string | UI language chosen via `api/v2/accounts/change_language` |
 | `Country` / `Birthday` / `EmailOptIn` / `ReferralKey` | mixed | Values from the account creation form |
 | `CreatedAt` | DateTime | Account creation |
@@ -292,12 +297,23 @@ curl -k -X POST https://localhost:44302/api/v2/accounts \
 
 ## 6. Characters per account
 
+* Accounts start fresh: a new account owns **no** characters until it creates
+  one (§7). Only the built-in admin account carries the 38 zone-picker seed
+  entries — its copies of zone entries beyond "New Eden" are what make the
+  selection screen double as a zone picker for an operator.
+* A `characters.json` written by the build that seeded every account is
+  migrated on load: the untouched seed copies of non-admin accounts are removed
+  (and logged at `Warning`), so those accounts come back fresh. Created
+  characters, the admin's entries and hand-added entries with non-seed names
+  are never touched.
 * `CharacterRecord` gained an `AccountId` field. Records from before the account
   system (no `AccountId` in the JSON) deserialize as the **admin** account's, so
   an existing `characters.json` keeps working unchanged.
 * Guid scheme (see [`CHARACTERS_AND_BATTLEFRAMES.md`](CHARACTERS_AND_BATTLEFRAMES.md) §3):
-  * admin/legacy: `0x99aabbccddee0000 + zoneId`
-  * other accounts: `0xaa00000000000000 | (accountId << 16) | zoneId`
+  * admin/legacy, first slot: `0x99aabbccddee0000 + zoneId`
+  * other accounts, first slot: `0xaa00000000000000 | (accountId << 16) | zoneId`
+  * every account, slots above the first: `0xaa00000000000000 | (slot << 48) | (accountId << 16) | zoneId`
+    (`slot` = 1..255; what lets one account own several created characters)
 * The zone id always stays in the low 16 bits, which the GameServer relies on
   when spawning the player into the selected zone.
 * Character resolution for GameServer requests (login guid, session saves,
@@ -318,11 +334,12 @@ posts to `POST api/v1/characters` with the name, starting battleframe
 * belongs to the logged-in account (identified through the same verified
   `X-Red5-Signature` as the login),
 * starts at battleframe progression level 1 with the chosen chassis,
-* **takes over the account's zone-picker slot for the spawn zone (New Eden)**:
-  the seed entry named "New Eden" is replaced by your named character — the
-  other 37 zone entries stay as zone teleports. A second creation while a custom
-  character already owns that slot fails with the original
-  `ERR_DUPLICATE_CHARACTER` error,
+* **takes the account's next free slot in the spawn zone (New Eden)**: the first
+  character replaces the admin account's untouched "New Eden" seed entry (an
+  operator keeps the other 37 zone entries as zone teleports), and further
+  characters get their own guids (`slot` bits 48..55), so an account can hold as
+  many characters as its limit — not just one. Creating past the account's
+  character limit fails with the original `ERR_DUPLICATE_CHARACTER` error,
 * appears in the character list the client re-fetches right after creation.
 
 Name rules (`POST api/v1/characters/validate_name`, reported with the original
@@ -469,9 +486,16 @@ creation form is always a question about what the server answered — read the
 
 **Character list is empty / shows the admin's characters**
 
+* An empty list is what a fresh account looks like: accounts start with no
+  characters, and the client walks you into character creation from there. Only
+  the admin account carries the 38 zone-picker seed entries.
 * `api/v2/characters/list` identifies the account through the request's
   `X-Red5-Signature`; unauthenticated callers (curl, swagger) get the admin
   account's list — log in with the account in the client to see its own list.
+* If a non-admin account still shows zone entries after upgrading: they are
+  stale copies from the build that seeded every account. They are pruned on the
+  next start (watch for `Removed ... zone-picker seed entries of non-admin
+  accounts` at `Warning`) — or delete `characters.json` to reseed from scratch.
 
 **Lost the admin password**
 
