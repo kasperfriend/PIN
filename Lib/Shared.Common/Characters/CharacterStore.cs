@@ -358,17 +358,6 @@ public static class CharacterStore
         return true;
     }
 
-    /// <summary>Sort position for a character in a new slot: behind the account's existing entries.</summary>
-    private static int NextSortOrder(ulong accountId)
-    {
-        var highest = Characters.Values
-                                .Where(c => c.AccountId == accountId)
-                                .Select(c => (int?)c.SortOrder)
-                                .Max();
-
-        return (highest ?? -1) + 1;
-    }
-
     /// <summary>
     /// The records to drop when a store was written by a build that seeded the
     /// zone-picker entries for <em>every</em> account: the untouched seed
@@ -536,5 +525,16 @@ public static class CharacterStore
         {
             Characters[character.CharacterGuid] = character;
         }
+    }
+
+    /// <summary>Sort position for a character in a new slot: behind the account's existing entries.</summary>
+    private static int NextSortOrder(ulong accountId)
+    {
+        var highest = Characters.Values
+                                .Where(c => c.AccountId == accountId)
+                                .Select(c => (int?)c.SortOrder)
+                                .Max();
+
+        return (highest ?? -1) + 1;
     }
 }
