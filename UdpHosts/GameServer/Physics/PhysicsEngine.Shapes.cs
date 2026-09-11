@@ -215,10 +215,16 @@ public partial class PhysicsEngine
         var info = character.Collision;
 
         // Entities without collision data (e.g. a monster row with neither a chassis nor a
-        // usable PosetypeId) get the fallback shape rather than a NullReferenceException.
+        // usable PosetypeId) get the fallback shape rather than a NullReferenceException. This
+        // resolution re-runs on every movement update of the entity, so the warning is issued
+        // once per entity (pruned with the body in RemoveEntity) instead of once per tick.
         if (info?.PoseTypeRecord == null)
         {
-            _logger.Warning("GetCharacterPoseAsset: character {entityId} has no collision/pose data, using fallback shape", character.EntityId);
+            if (_poseShapeWarningsIssued.Add(character.EntityId))
+            {
+                _logger.Warning("GetCharacterPoseAsset: character {entityId} has no collision/pose data, using fallback shape", character.EntityId);
+            }
+
             return new AssetCompoundKey(0, Vector3.Zero, 1f);
         }
 
@@ -242,9 +248,9 @@ public partial class PhysicsEngine
             {
                 collisionId = info.RagdollCollisionId;
             }
-            else
+            else if (_poseShapeWarningsIssued.Add(character.EntityId))
             {
-                _logger.Warning("No suitable collisionId found during GetCharacterShape");
+                _logger.Warning("No suitable collisionId found during GetCharacterShape for entity {entityId}", character.EntityId);
             }
         }
         else if (movestate == Movestate.Glider || movestate == Movestate.GliderThrusters || movestate == Movestate.GliderStalling)

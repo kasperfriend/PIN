@@ -49,6 +49,14 @@ public partial class PhysicsEngine
     private readonly Dictionary<BodyHandle, ulong> _bodyToEntityId = [];
     private readonly Dictionary<ulong, BodyHandle> _entityIdToBody = [];
     private readonly Dictionary<ulong, AssetCompoundKey> _entityIdToAssetKey = [];
+
+    /// <summary>
+    ///     Entities that already got their pose-shape warning at creation. The shape resolution runs
+    ///     again on every movement update (and every ai tick for NPCs), and the "no collision data"
+    ///     state is permanent for the entity — warning per update turned one bad database row into a
+    ///     warning per packet from its victims. Lives as long as the body does; pruned in RemoveEntity.
+    /// </summary>
+    private readonly HashSet<ulong> _poseShapeWarningsIssued = [];
     private readonly string _mapsPath = string.Empty;
     private readonly string _cachePath = string.Empty;
     private readonly bool _forceReload;
@@ -224,12 +232,11 @@ public partial class PhysicsEngine
 
     public void UpdateEntity(CharacterEntity entity)
     {
-        if (!_entityIdToBody.ContainsKey(entity.EntityId))
+        if (!_entityIdToBody.TryGetValue(entity.EntityId, out var bodyHandle))
         {
             return;
         }
 
-        var bodyHandle = _entityIdToBody[entity.EntityId];
         var body = Simulation.Bodies[bodyHandle];
         ref var currentPose = ref body.Pose;
         var currentShape = body.Collidable.Shape;
@@ -249,12 +256,11 @@ public partial class PhysicsEngine
 
     public void UpdateEntity(BaseEntity entity)
     {
-        if (!_entityIdToBody.ContainsKey(entity.EntityId))
+        if (!_entityIdToBody.TryGetValue(entity.EntityId, out var bodyHandle))
         {
             return;
         }
 
-        var bodyHandle = _entityIdToBody[entity.EntityId];
         ref var currentPose = ref Simulation.Bodies[bodyHandle].Pose;
 
         var orientation = Quaternion.Inverse(entity.Orientation);
@@ -274,13 +280,13 @@ public partial class PhysicsEngine
 
     public void RemoveEntity(IEntity entity)
     {
-        if (!_entityIdToBody.ContainsKey(entity.EntityId))
+        if (!_entityIdToBody.TryGetValue(entity.EntityId, out var bodyHandle))
         {
             _logger.Warning("RemoveEntity was called for {entity} but there is no body!", entity.ToString());
             return;
         }
 
-        var bodyHandle = _entityIdToBody[entity.EntityId];
+        _ = _poseShapeWarningsIssued.Remove(entity.EntityId);
         _entityIdToAssetKey.Remove(entity.EntityId);
         _entityIdToBody.Remove(entity.EntityId);
         _bodyToEntityId.Remove(bodyHandle);

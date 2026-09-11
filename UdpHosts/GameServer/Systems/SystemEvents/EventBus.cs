@@ -103,7 +103,7 @@ public sealed class EventBus : IEventBus
     private sealed class HandlerList
     {
         // Read without the lock by every dispatch; the reference is only ever replaced wholesale.
-        public volatile Entry[] Snapshot = [];
+        internal volatile Entry[] Snapshot = [];
 
         public void Add(Delegate handler, Action<object> invokeUntyped)
         {
@@ -143,7 +143,7 @@ public sealed class EventBus : IEventBus
             return updated.Length == 0;
         }
 
-        private sealed class Entry(Delegate handler, Action<object> invokeUntyped)
+        internal sealed class Entry(Delegate handler, Action<object> invokeUntyped)
         {
             public readonly Delegate Handler = handler;
             public readonly Action<object> InvokeUntyped = invokeUntyped;
