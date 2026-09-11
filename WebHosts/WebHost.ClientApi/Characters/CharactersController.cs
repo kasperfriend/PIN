@@ -40,6 +40,73 @@ public class CharactersController : ControllerBase
         return _charactersRepository.GetCharacters(account?.AccountId ?? AccountStore.AdminAccountId);
     }
 
+    /// <summary>
+    /// The character's equipped appearance. The client's New You / garage
+    /// customization screen loads it when the player interacts with a New You
+    /// terminal (the live client's first request for it, captured 2015-05-02):
+    /// only item ids are sent, because the client resolves the colors from its
+    /// own static database by palette id.
+    /// </summary>
+    [Route("api/v2/characters/{characterId:ulong}/visual_loadouts")]
+    [HttpGet]
+    [Produces("application/json")]
+    public IReadOnlyList<PlayerVisualLoadout> GetVisualLoadouts(ulong characterId)
+    {
+        return _charactersRepository.GetVisualLoadouts(characterId);
+    }
+
+    /// <summary>
+    /// Saves the appearance the player edited at a New You terminal
+    /// (<c>POST api/v2/characters/{guid}/visual_loadouts/{idx}/purchase_and_update</c>).
+    /// The client posts the same flat loadout shape it read from the GET, with
+    /// the item ids of everything it changed; the colors are resolved from the
+    /// posted palette ids through the precomputed palette table, exactly like
+    /// character creation does. The original service answered an empty JSON
+    /// object and the client expects nothing else back.
+    /// </summary>
+    [Route("api/v2/characters/{characterId:ulong}/visual_loadouts/{loadoutIdx}/purchase_and_update")]
+    [HttpPost]
+    [Produces("application/json")]
+    public IActionResult PurchaseAndUpdateVisualLoadout(ulong characterId, int loadoutIdx, [FromBody] PlayerVisualLoadout visualLoadout)
+    {
+        if (visualLoadout == null)
+        {
+            return Error(AccountErrors.ErrUnknown, "No visual loadout received");
+        }
+
+        var character = CharacterStore.Get(characterId);
+        if (character == null)
+        {
+            return Error(AccountErrors.ErrUnknown, "Character not found");
+        }
+
+        // A verified signature may only edit its own character (the admin
+        // account may edit any, matching the character list's fallback). A
+        // request whose signature cannot be verified — a Steam ticket login —
+        // keeps the same permissive behaviour as the read endpoints.
+        var account = HttpContext.TryGetRed5Account();
+        if (account != null && !account.IsAdmin && character.AccountId != account.AccountId)
+        {
+            return Error(AccountErrors.ErrIncorrectUserPass, "That character belongs to another account");
+        }
+
+        visualLoadout.ApplyTo(character);
+        CharacterStore.Upsert(character);
+
+        Log.Information(
+            "Saved the New You appearance of character {Name} ({CharacterGuid}, loadout {LoadoutIdx}): " +
+            "head={Head} eyes={Eyes} hair={Hair} facialHair={FacialHair} skin={SkinId} eye={EyeId} " +
+            "lip={LipId} hairColor={HairColorId} facialHairColor={FacialHairColorId} " +
+            "accessories={Accessories} ornaments={Ornaments}",
+            character.Name, character.CharacterGuid, loadoutIdx,
+            character.Visuals.Head, character.Visuals.Eyes, character.Visuals.Hair, character.Visuals.FacialHair,
+            character.Visuals.SkinColorId, character.Visuals.EyeColorId, character.Visuals.LipColorId,
+            character.Visuals.HairColorId, character.Visuals.FacialHairColorId,
+            string.Join(",", character.Visuals.HeadAccessories), string.Join(",", character.Visuals.Ornaments));
+
+        return Ok(new { });
+    }
+
     [Route("api/v1/characters/{characterId}/data")]
     [HttpGet]
     [Produces("application/json")]

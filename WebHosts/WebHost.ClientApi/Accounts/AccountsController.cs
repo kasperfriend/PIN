@@ -254,7 +254,8 @@ public class AccountsController : ControllerBase
     // Temporary location
     [Route("api/v3/ui_actions")]
     [HttpPost]
-    public void UIActions()
+    [Produces("application/json")]
+    public object UIActions()
     {
         /*
          * POST is the following (example):
@@ -267,10 +268,13 @@ public class AccountsController : ControllerBase
          *]
          *
          * What is this for? Logging?
-         * Return seems to always have been empty.
+         * The live service answered the empty object — Content-Length 2, "{}",
+         * captured 2015-05-02 — which is what the client's screen tracking
+         * reads back. Answering with no body at all is not the same thing to a
+         * JSON parser.
          */
 
-        Ok();
+        return new { };
     }
 
     private ObjectResult Error(string code, string message)

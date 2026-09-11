@@ -31,6 +31,28 @@ public class CharactersRepository : ICharactersRepository
                };
     }
 
+    /// <summary>
+    /// The character's equipped appearance, which is what the client's New You /
+    /// garage customization screen reads
+    /// (<c>GET api/v2/characters/{guid}/visual_loadouts</c>) when the player
+    /// interacts with a New You terminal. The original service answered this for
+    /// the client's own character; an unknown guid returns an empty list instead
+    /// of an error so a stale selection cannot leave the screen with a nil value
+    /// to render.
+    /// </summary>
+    public IReadOnlyList<PlayerVisualLoadout> GetVisualLoadouts(ulong characterGuid)
+    {
+        CharacterStore.Init();
+
+        var record = CharacterStore.Get(characterGuid);
+        if (record == null)
+        {
+            return new List<PlayerVisualLoadout>();
+        }
+
+        return new List<PlayerVisualLoadout> { PlayerVisualLoadout.From(record) };
+    }
+
     private static Character ToApiCharacter(CharacterRecord record)
     {
         var visuals = record.Visuals;

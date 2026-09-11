@@ -200,7 +200,7 @@ PlayIntroMovie = false
 - Loading into any zone (WebHostManager)
 - Basic character movement, including jetpacks and gliders(in work now, trying to get fixed)
 - Switch between battleframes with preconfigured loadouts
-- Customize character appearance in NewYou (RIN.WebAPI)
+- Customize character appearance at NewYou terminals (the appearance loadout and the cosmetics catalogue are served by `WebHost.ClientApi`)
 - Call down vehicles and some deployables
 - Health, damage, shields, bleedout/death/respawn and fall damage (see `Docs/HEALTH_SYSTEM.md`)
 - Projectile combat against spawned NPCs (`Docs/SPAWNING_AND_COMBAT.md`)
