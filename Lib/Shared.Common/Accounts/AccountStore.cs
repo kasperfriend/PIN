@@ -223,18 +223,47 @@ public sealed class AccountStore
     /// </summary>
     public AccountRecord VerifyLogin(string signatureHeader)
     {
+        return TryVerifyLogin(signatureHeader, out var account, out _) ? account : null;
+    }
+
+    /// <summary>
+    /// <see cref="VerifyLogin"/>, but reporting <em>why</em> a header was
+    /// rejected — see <see cref="LoginFailure"/>. The client shows the same
+    /// error for every failure, so this is what makes a rejected login
+    /// diagnosable from the server log.
+    /// </summary>
+    public bool TryVerifyLogin(string signatureHeader, out AccountRecord account, out LoginFailure failure)
+    {
+        account = null;
+
+        if (string.IsNullOrEmpty(signatureHeader))
+        {
+            failure = LoginFailure.MissingSignature;
+            return false;
+        }
+
         if (!Red5Signature.TryParse(signatureHeader, out var signature))
         {
-            return null;
+            failure = LoginFailure.MalformedSignature;
+            return false;
         }
 
-        var account = GetByUid(signature.Uid);
+        account = GetByUid(signature.Uid);
         if (account == null)
         {
-            return null;
+            failure = LoginFailure.UnknownAccount;
+            return false;
         }
 
-        return Red5Auth.Verify(account.Secret, signatureHeader) ? account : null;
+        if (!Red5Auth.Verify(account.Secret, signatureHeader))
+        {
+            account = null;
+            failure = LoginFailure.SignatureMismatch;
+            return false;
+        }
+
+        failure = LoginFailure.None;
+        return true;
     }
 
     /// <summary>
@@ -416,6 +445,15 @@ public sealed class AccountStore
         {
             SeedDefault();
         }
+
+        // At Warning, the level the WebHostManager shows by default: when a
+        // client cannot log in, the first question is which file the accounts
+        // were stored in and whether the account is in it at all.
+        Log.Warning(
+            "Account store {StorePath} holds {AccountCount} account(s): {Emails}",
+            storePath,
+            accounts.Count,
+            string.Join(", ", accounts.Values.OrderBy(a => a.AccountId).Select(a => a.Email)));
     }
 
     private void SeedDefault()

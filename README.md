@@ -53,7 +53,15 @@ curl -k -X POST https://localhost:44302/api/v2/accounts \
 
 The client posts the email/password pair only — it validates its own
 confirmation boxes, so `confirm_email`/`confirm_password` are optional (they are
-checked when a caller does send them).
+checked when a caller does send them). A body that is not JSON is read as a form
+body, and the WebAccounts stand-in (the catch-all host) serves a creation on any
+path ending in `accounts`.
+
+Every step of the flow is logged at `Warning`, the level WebHostManager shows by
+default: the creation request that arrived (password redacted), whether the
+account was created or rejected and with which client error code, and — for a
+rejected login — whether the account was unknown or the password wrong. See
+[Docs/ACCOUNTS.md](Docs/ACCOUNTS.md) §10 for reading them.
 
 Characters belong to accounts: each account gets its own copy of the
 zone-picker entries in `characters.json`, and the selection screen shows only
