@@ -267,6 +267,7 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         // Ensure character entity is placed at the respawn point
         CharacterEntity.PositionAtSpawnPoint(spawnPoint);
         CharacterEntity.SetSpawnPose();
+        AssignedShard.FallDamage?.ResetFor(CharacterEntity);
 
         CurrentZone = z;
         CurrentOutpostId = outpostId;

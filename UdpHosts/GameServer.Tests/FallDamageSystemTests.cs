@@ -269,4 +269,51 @@ public class FallDamageSystemTests
 
         Assert.Equal(5000, character.CurrentHealth);
     }
+
+    [Fact]
+    public void ResetFor_StalePosesRightAfterSpawnAreIgnored()
+    {
+        var (shard, character, system) = CreateSut(maxHealth: 5000);
+
+        // Spawn: the client still streams a few poses from its old (falling) state,
+        // then reports a hard landing at the spawn point within the grace window.
+        system.ResetFor(character);
+        GoAirborne(shard, character, system, fallSpeed: 60f);
+        shard.CurrentTimeLong += 50;
+        Land(shard, character, system);
+
+        Assert.Equal(5000, character.CurrentHealth);
+        Assert.True(character.IsAlive);
+    }
+
+    [Fact]
+    public void ResetFor_SettleDropAfterSpawnIsIgnoredUntilGrounded()
+    {
+        var (shard, character, system) = CreateSut(maxHealth: 5000);
+
+        system.ResetFor(character);
+        shard.CurrentTimeLong += (ulong)FallDamageSystem.SpawnSettleMs + 500;
+
+        // Character is dropped onto the ground at the spawn point well after the settle window.
+        GoAirborne(shard, character, system, fallSpeed: 30f);
+        Land(shard, character, system);
+
+        Assert.Equal(5000, character.CurrentHealth);
+        Assert.False(system.IsSuspended(character));
+    }
+
+    [Fact]
+    public void ResetFor_TrackingResumesAfterCharacterSettled()
+    {
+        var (shard, character, system) = CreateSut(maxHealth: 5000);
+
+        system.ResetFor(character);
+        shard.CurrentTimeLong += (ulong)FallDamageSystem.SpawnSettleMs + 1;
+        Land(shard, character, system); // settled at the spawn point
+
+        GoAirborne(shard, character, system, fallSpeed: 30f);
+        Land(shard, character, system);
+
+        Assert.Equal(5000 - 2340, character.CurrentHealth);
+    }
 }

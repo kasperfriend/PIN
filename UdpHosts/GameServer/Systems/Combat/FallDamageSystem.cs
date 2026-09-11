@@ -29,6 +29,15 @@ public class FallDamageSystem
     /// </summary>
     public const float LandingGraceMs = 150f;
 
+    /// <summary>
+    ///     After a server directed move (spawn, respawn, teleport) the client still
+    ///     reports a few poses from its old state and then drops onto the destination.
+    ///     Fall tracking stays suspended for at least this long and, after that,
+    ///     until the first grounded pose arrives, so neither the stale poses nor the
+    ///     settle drop at the spawn point can register as a landing.
+    /// </summary>
+    public const float SpawnSettleMs = 1000f;
+
     private static readonly ILogger Logger = Log.ForContext<FallDamageSystem>();
 
     private readonly IShard _shard;
@@ -83,7 +92,23 @@ public class FallDamageSystem
             _trackers[character.EntityId] = tracker;
         }
 
-        if (IsAirborneMovestate(movestate))
+        bool airborne = IsAirborneMovestate(movestate);
+
+        if (tracker.Suspended)
+        {
+            // Ignore everything until the settle window passed *and* the client
+            // reports the character standing on the ground at the destination.
+            if (_shard.CurrentTimeLong < tracker.SuspendedUntilMs || airborne)
+            {
+                return;
+            }
+
+            tracker.Suspended = false;
+            tracker.SuspendedUntilMs = 0;
+            return;
+        }
+
+        if (airborne)
         {
             tracker.Active = true;
             tracker.Airborne = true;
@@ -144,15 +169,31 @@ public class FallDamageSystem
     }
 
     /// <summary>
-    ///     Clears any in-progress fall tracking for a character. Call on respawn,
-    ///     teleport and other server directed moves.
+    ///     Clears any in-progress fall tracking for a character and suspends
+    ///     tracking until the character has settled on the ground again. Call on
+    ///     spawn, respawn, teleport and other server directed moves.
     /// </summary>
     public void ResetFor(CharacterEntity character)
     {
-        if (character != null)
+        if (character == null)
         {
-            _trackers.Remove(character.EntityId);
+            return;
         }
+
+        _trackers[character.EntityId] = new FallTracker
+        {
+            Suspended = true,
+            SuspendedUntilMs = _shard.CurrentTimeLong + (ulong)SpawnSettleMs,
+        };
+    }
+
+    /// <summary>
+    ///     Whether fall tracking for the character is currently suspended because
+    ///     of a server directed move.
+    /// </summary>
+    public bool IsSuspended(CharacterEntity character)
+    {
+        return character != null && _trackers.TryGetValue(character.EntityId, out var tracker) && tracker.Suspended;
     }
 
     public void Tick(double deltaTime, ulong currentTime, CancellationToken ct)
@@ -258,5 +299,7 @@ public class FallDamageSystem
         public float MaxFallSpeed;
         public float AirTimeMs;
         public ulong LastAirborneAtMs;
+        public bool Suspended;
+        public ulong SuspendedUntilMs;
     }
 }
