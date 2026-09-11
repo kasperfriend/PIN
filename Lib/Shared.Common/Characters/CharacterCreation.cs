@@ -101,10 +101,14 @@ public static class CharacterCreation
     }
 
     /// <summary>
-    /// Build the record for a newly created character. The visual color ids come
-    /// from the creation request; the ARGB color values themselves stay at the
-    /// default template's until appearance editing (NewYou) is served from the
-    /// static database. The armor colors (warpaint) come from the chosen
+    /// Build the record for a newly created character. The visual color ids
+    /// come from the creation request and are resolved to their packed ARGB
+    /// values via <see cref="CharacterColorPalettes"/> (precomputed from
+    /// <c>dbvisualrecords::WarpaintPalette</c> using the same
+    /// <c>FColor.CombineLightDark</c> formula the GameServer uses), so the
+    /// skin/eye/hair color matches what the player picked on the creation
+    /// form instead of every character silently inheriting the default
+    /// template's face. The armor colors (warpaint) come from the chosen
     /// chassis' own stock colors in the static database — never from the admin
     /// account's hardcoded Raptor paint, and never empty, because an empty
     /// warpaint makes the client fall back to that same purple default avatar
@@ -118,25 +122,76 @@ public static class CharacterCreation
         uint gender,
         uint battleframeSdbId,
         uint head,
+        uint eyes,
         uint voiceSet,
         uint skinColorItemId,
         uint eyeColorItemId,
+        uint lipColorItemId,
         uint hairColorItemId,
-        uint headAccessoryA)
+        uint facialHairColorItemId,
+        uint headAccessoryA,
+        uint headAccessoryB,
+        uint facialHair)
     {
+        // Body colors come from dbvisualrecords::WarpaintPalette rows identified
+        // by the palette id the client sends. Resolve each chosen palette to its
+        // packed light-dark ARGB color the same way FColor.CombineLightDark does
+        // (low 16 bits = shadow RGB565, high 16 bits = highlight RGB565), so the
+        // stored value matches the color the player picked on the creation form
+        // instead of silently inheriting the default template's skin/hair/eye.
+        // A missing/unknown palette id falls back to the hardcoded template
+        // default for that slot, which keeps legacy/hand-crafted creates safe.
+        var skinColor = ResolveBodyColor(skinColorItemId, DefaultCharacterTemplate.SkinColor);
+        var eyeColor = ResolveBodyColor(eyeColorItemId, DefaultCharacterTemplate.EyeColor);
+        var lipColor = ResolveBodyColor(lipColorItemId, DefaultCharacterTemplate.LipColor);
+        var hairColor = ResolveBodyColor(hairColorItemId, DefaultCharacterTemplate.HairColor);
+        var facialHairColor = ResolveBodyColor(facialHairColorItemId, DefaultCharacterTemplate.FacialHairColor);
+
+        // The head accessory list the client sends is a pair: accessory A is the
+        // hair mesh, accessory B is the facial-hair mesh. The original service's
+        // data also carries a dedicated facial_hair slot; both are worn as the
+        // leading entries of the head-accessories array (see
+        // CharacterAppearance.HeadAccessoryMeshes), which is what lets both the
+        // selection screen preview and the in-game character see the beard.
+        // Prefer the client's explicit facialHair value when it differs from
+        // headAccessoryB so that any future UI that separates them still works,
+        // and fall back to B when it isn't supplied (both are 0 when nothing is
+        // selected, which matches the neutral defaults).
+        var facialHairMesh = facialHair != 0 ? facialHair : headAccessoryB;
+        var hairMesh = headAccessoryA;
+
+        var accessories = new List<uint>();
+        AddAccessory(accessories, hairMesh);
+        AddAccessory(accessories, facialHairMesh);
+
         var template = new CharacterVisualsRecord
         {
             Head = head,
+            Eyes = eyes,
             VoiceSet = voiceSet,
-            // The creation form's head accessory A is the hair mesh (the original
-            // service's data carries hair == head_accessories[0]); wearing it in
-            // both fields is what keeps the selection screen and the in-game
-            // character identical.
-            Hair = headAccessoryA,
+            // The creation form has no glider / vehicle picker yet; new
+            // characters start with none (0) rather than inheriting whatever
+            // the admin template last carried.
+            Glider = 0,
+            Vehicle = 0,
+            Hair = hairMesh,
+            FacialHair = facialHairMesh,
             SkinColorId = skinColorItemId,
             EyeColorId = eyeColorItemId,
+            LipColorId = lipColorItemId,
             HairColorId = hairColorItemId,
-            HeadAccessories = headAccessoryA != 0 ? [headAccessoryA] : [],
+            FacialHairColorId = facialHairColorItemId,
+            SkinColor = skinColor,
+            EyeColor = eyeColor,
+            LipColor = lipColor,
+            HairColor = hairColor,
+            FacialHairColor = facialHairColor,
+            HeadAccessories = accessories,
+            // No head-accessory tint on a fresh character — the selection form
+            // doesn't expose a tint picker, so the neutral 0 is the right
+            // starting value (the admin template's HeadAccessoryColor was for
+            // the previews, not a character default).
+            HeadAccessoryColor = 0,
             // The frame's own stock armor colors (see ChassisDefaultWarpaints):
             // a chassis without a resolvable default palette keeps an empty
             // warpaint, and the GameServer wears its default SDB colors for it.
@@ -154,17 +209,60 @@ public static class CharacterCreation
             Name = name.Trim(),
             SortOrder = sortOrder,
             Gender = gender,
+            // The creation screen only offers one race (Human, 0); anything
+            // other than 0 would be a hand-crafted request, which we clamp to
+            // 0 so the character never inherits the admin's race by accident.
+            Race = 0,
+            // Fresh characters have no title; setting this explicitly keeps
+            // them from carrying whatever the admin template has if that
+            // constant ever changes.
+            TitleId = 0,
             CurrentBattleframeSDBId = battleframeSdbId,
             // A fresh battleframe starts at progression level 1 (see
             // FrameProgressionLevel); the seed zone entries keep the template
-            // levels instead.
+            // levels (10) instead.
             CurrentLevel = 1,
             MaxFrameLevel = 1,
+            // A brand new character is not in an army yet: the property
+            // initializer defaults (ArmyTag="ARMY", ArmyGuid=1,
+            // ArmyIsOfficer=true) match the admin seed, so stamp "no army"
+            // explicitly rather than leaking those placeholder values.
+            ArmyTag = string.Empty,
+            ArmyGuid = 0,
+            ArmyIsOfficer = false,
+            TimePlayed = 0,
             LastZoneId = (uint)(characterGuid & 0xffff),
+            LastOutpostId = 0,
             CreatedAt = DateTime.UtcNow,
             LastSeenAt = DateTime.UtcNow,
             Visuals = template
         };
+    }
+
+    private static void AddAccessory(List<uint> accessories, uint id)
+    {
+        if (id != 0 && !accessories.Contains(id))
+        {
+            accessories.Add(id);
+        }
+    }
+
+    /// <summary>
+    /// Resolve a character-creation color palette id (skin/eye/lip/hair/facial
+    /// hair) to its packed light-dark ARGB color. Zero or unknown ids fall back
+    /// to the hardcoded default for that slot (DefaultCharacterTemplate), so a
+    /// character created with an omitted/invalid palette (e.g. a hand-crafted
+    /// request, an older client, or an SDB mismatch) still renders with a
+    /// sane face instead of pure black.
+    /// </summary>
+    private static uint ResolveBodyColor(uint paletteId, uint fallback)
+    {
+        if (paletteId != 0 && CharacterColorPalettes.TryGet(paletteId, out var color))
+        {
+            return color;
+        }
+
+        return fallback;
     }
 
     /// <summary>Only ASCII letters, digits and spaces — the characters the original names may contain.</summary>

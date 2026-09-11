@@ -178,6 +178,26 @@ public static class CharacterStore
                     _storePath);
             }
 
+            // Created characters used to leave SkinColor/EyeColor/HairColor at
+            // the hardcoded DefaultCharacterTemplate values (the admin's face),
+            // because CharacterCreation.Create never resolved the palette id the
+            // client sent to an actual ARGB color. Every created character
+            // therefore looked identical in the face regardless of what the
+            // player picked. Refresh them here: look up each stored *ColorId
+            // against the precomputed palette table and stamp the packed color
+            // on, the same way a freshly created character now does at create
+            // time. Characters whose ids are unknown (hand-edited records,
+            // mismatched SDB) are left alone.
+            var refreshedFace = RefreshInheritedBodyColors(Characters.Values);
+            if (refreshedFace.Count > 0)
+            {
+                SaveUnsafe();
+                Log.Warning(
+                    "Refreshed the skin/eye/hair colors of {Count} created character(s) in {StorePath}: they now wear the face colors chosen at creation instead of the inherited admin default face",
+                    refreshedFace.Count,
+                    _storePath);
+            }
+
             var staleSeeds = StaleZonePickerSeeds(Characters.Values);
             if (staleSeeds.Count > 0)
             {
@@ -289,11 +309,16 @@ public static class CharacterStore
         uint gender,
         uint battleframeSdbId,
         uint head,
+        uint eyes,
         uint voiceSet,
         uint skinColorItemId,
         uint eyeColorItemId,
+        uint lipColorItemId,
         uint hairColorItemId,
+        uint facialHairColorItemId,
         uint headAccessoryA,
+        uint headAccessoryB,
+        uint facialHair,
         out CharacterRecord character,
         out string errorCode,
         out string errorMessage)
@@ -361,11 +386,16 @@ public static class CharacterStore
             gender,
             battleframeSdbId,
             head,
+            eyes,
             voiceSet,
             skinColorItemId,
             eyeColorItemId,
+            lipColorItemId,
             hairColorItemId,
-            headAccessoryA);
+            facialHairColorItemId,
+            headAccessoryA,
+            headAccessoryB,
+            facialHair);
 
         Characters[characterGuid] = character;
         Save();
@@ -436,6 +466,112 @@ public static class CharacterStore
         }
 
         return refreshed;
+    }
+
+    /// <summary>
+    /// Refresh characters whose body colors (skin/eye/lip/hair/facial hair) are
+    /// still at the hardcoded <see cref="DefaultCharacterTemplate"/> values (the
+    /// admin template's face): resolve each stored <c>*ColorId</c> through
+    /// <see cref="CharacterColorPalettes"/> and stamp the packed color on. This
+    /// fixes characters created before the palette lookup existed, when every
+    /// new character silently inherited the admin's face regardless of what the
+    /// player picked.
+    ///
+    /// Only slots that are still at the default ARGB are refreshed, so
+    /// characters whose colors were already customized (e.g. NewYou) keep what
+    /// they have. Characters whose palette id is unknown (hand-edited records,
+    /// mismatched SDB) are left untouched.
+    /// </summary>
+    public static IReadOnlyList<CharacterRecord> RefreshInheritedBodyColors(IEnumerable<CharacterRecord> characters)
+    {
+        var refreshed = new List<CharacterRecord>();
+
+        foreach (var character in characters)
+        {
+            if (character == null || !character.IsCustom || character.Visuals == null)
+            {
+                continue;
+            }
+
+            var visuals = character.Visuals;
+            var changed = false;
+
+            changed |= RefreshBodyColorSlot(visuals,
+                storedIsDefault: visuals.SkinColor == DefaultCharacterTemplate.SkinColor,
+                paletteId: visuals.SkinColorId,
+                defaultValue: DefaultCharacterTemplate.SkinColor,
+                apply: c => visuals.SkinColor = c);
+
+            changed |= RefreshBodyColorSlot(visuals,
+                storedIsDefault: visuals.EyeColor == DefaultCharacterTemplate.EyeColor,
+                paletteId: visuals.EyeColorId,
+                defaultValue: DefaultCharacterTemplate.EyeColor,
+                apply: c => visuals.EyeColor = c);
+
+            changed |= RefreshBodyColorSlot(visuals,
+                storedIsDefault: visuals.LipColor == DefaultCharacterTemplate.LipColor,
+                paletteId: visuals.LipColorId,
+                defaultValue: DefaultCharacterTemplate.LipColor,
+                apply: c => visuals.LipColor = c);
+
+            changed |= RefreshBodyColorSlot(visuals,
+                storedIsDefault: visuals.HairColor == DefaultCharacterTemplate.HairColor,
+                paletteId: visuals.HairColorId,
+                defaultValue: DefaultCharacterTemplate.HairColor,
+                apply: c => visuals.HairColor = c);
+
+            changed |= RefreshBodyColorSlot(visuals,
+                storedIsDefault: visuals.FacialHairColor == DefaultCharacterTemplate.FacialHairColor,
+                paletteId: visuals.FacialHairColorId,
+                defaultValue: DefaultCharacterTemplate.FacialHairColor,
+                apply: c => visuals.FacialHairColor = c);
+
+            if (changed)
+            {
+                refreshed.Add(character);
+            }
+        }
+
+        return refreshed;
+    }
+
+    private static bool RefreshBodyColorSlot(
+        CharacterVisualsRecord visuals,
+        bool storedIsDefault,
+        uint paletteId,
+        uint defaultValue,
+        Action<uint> apply)
+    {
+        // Only touch slots that still carry the inherited default so we never
+        // clobber a NewYou customization the character already has.
+        if (!storedIsDefault)
+        {
+            return false;
+        }
+
+        uint resolved;
+        if (paletteId == 0)
+        {
+            // A zero palette id means "no customization"; the default template
+            // color is the correct value for that slot, and it is already there.
+            return false;
+        }
+
+        if (!CharacterColorPalettes.TryGet(paletteId, out resolved))
+        {
+            // Unknown palette id (hand-edited record, SDB mismatch) — leave it.
+            return false;
+        }
+
+        if (resolved == defaultValue)
+        {
+            // Already matches; nothing to do (e.g. the character legitimately
+            // picked the default face palette at creation, as new accounts do).
+            return false;
+        }
+
+        apply(resolved);
+        return true;
     }
 
     /// <summary>
