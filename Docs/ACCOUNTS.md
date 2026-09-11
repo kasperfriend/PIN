@@ -376,11 +376,15 @@ screen preview uses, so what you pick is what you play as:
 * Switching battleframes in-game keeps your warpaint — it belongs to the
   character, not the chassis.
 
-Known remaining limitations: the creation form's color *choices* are stored as
-the correct SDB item ids, but the ARGB color *values* the avatar renders with
-stay at the default template's until appearance editing (NewYou) is served from
-the static database; warpaint *patterns* and decals from the record are not yet
-applied in-game (colors only, which is what the default entries carry anyway).
+Appearance edited at a New You terminal is stored back on the record: the
+screen's `visual_loadouts` save is applied to the character (with its posted
+palette ids resolved to ARGB through the same precomputed
+`CharacterColorPalettes` table creation uses), so the character logs in wearing
+the look the player saved.
+
+Known remaining limitations: warpaint *patterns* and decals from the record are
+not yet applied in-game (colors only, which is what the default entries carry
+anyway).
 
 ---
 
