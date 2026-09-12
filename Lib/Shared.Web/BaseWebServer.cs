@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Net;
 using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -14,12 +13,22 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Shared.Common;
+using Shared.Common.Certificates;
 using Shared.Web.Config;
 
 namespace Shared.Web;
 
 public abstract class BaseWebServer
 {
+    /// <summary>Guards <see cref="CachedCertificate"/>; the hosts of one process are built one after another.</summary>
+    private static readonly object CertificateLock = new();
+
+    /// <summary>
+    ///     The certificate every web host of this process serves with, and the public half of it every host
+    ///     hands out to players. Resolved once - see <see cref="ResolveCertificate"/>.
+    /// </summary>
+    private static TlsCertificate CachedCertificate;
+
     protected BaseWebServer(IConfiguration configuration)
     {
         Configuration = configuration;
@@ -38,9 +47,9 @@ public abstract class BaseWebServer
 
             Log.Information($"Starting web host {serverType.FullName}");
 
-            // Optional TLS certificate, see LoadConfiguredCertificate. Null keeps Kestrel's default, the
-            // ASP.NET Core development certificate.
-            var certificate = LoadConfiguredCertificate(configuration);
+            // The TLS certificate of the https endpoints: a configured .pfx, the one PIN issued for the
+            // advertised address, or none (then Kestrel's development certificate). See TlsCertificateStore.
+            var certificate = ResolveCertificate(configuration);
 
             #pragma warning disable SYSLIB0039 // TLS 1.0 required
             var hostBuilder =
@@ -57,11 +66,12 @@ public abstract class BaseWebServer
 
                                                                                                                   // A client connecting over an IP address (LAN, VPN) can
                                                                                                                   // never validate the development certificate, which is
-                                                                                                                  // issued for "localhost" - serve the configured one
-                                                                                                                  // instead when there is one. See Docs/REMOTE_PLAY.md.
-                                                                                                                  if (certificate != null)
+                                                                                                                  // issued for "localhost" - serve the certificate PIN
+                                                                                                                  // issued for the advertised address instead (or the one
+                                                                                                                  // that was configured for it). See Docs/REMOTE_PLAY.md.
+                                                                                                                  if (certificate.HasCertificate)
                                                                                                                   {
-                                                                                                                      opts.ServerCertificate = certificate;
+                                                                                                                      opts.ServerCertificate = certificate.Certificate;
                                                                                                                   }
                                                                                                               });
                                                                         })
@@ -91,8 +101,12 @@ public abstract class BaseWebServer
                                            serviceConfigurationBuilder.Configure<RouteOptions>(options =>
                                                options.ConstraintMap["ulong"] = typeof(ULongRouteConstraint));
 
+                                           // The Firefall singleton is what PublicUrls and the hosts build their
+                                           // advertised addresses from; the certificate alongside it is what the
+                                           // operator host hands out to players (CertificateController).
                                            serviceConfigurationBuilder.AddSingleton(configuration.GetSection("Firefall")
                                                                                                  .Get<Firefall>() ?? new Firefall())
+                                                                      .AddSingleton(certificate)
                                                                       .AddSwaggerGen()
                                                                       .AddControllers()
                                                                       .AddJsonOptions(options =>
@@ -110,6 +124,37 @@ public abstract class BaseWebServer
             Log.Fatal(ex, "Host terminated unexpectedly");
 
             return null;
+        }
+    }
+
+    /// <summary>
+    ///     The certificate this process's hosts serve with: PIN's own (issued for the address the clients are
+    ///     told to dial, or the <c>.pfx</c> configured over it) or none, in which case Kestrel keeps using the
+    ///     ASP.NET Core development certificate - which is what a <c>localhost</c> server has always done, and
+    ///     what a client dialling an address cannot validate. See <c>TlsCertificateStore</c>.
+    /// </summary>
+    /// <remarks>
+    ///     Resolved once per process: <c>WebHostManager</c> builds nine hosts on the same configuration, all of
+    ///     them must serve the same certificate, and the key and certificate files it keeps on disk are only
+    ///     ever written by whoever gets there first. A host started with a different configuration - a
+    ///     standalone <c>WebHost.&lt;host&gt;</c> binary - resolves its own.
+    /// </remarks>
+    /// <param name="configuration">The configuration the host is built from.</param>
+    /// <returns>The certificate to serve, never <c>null</c> (a certificate-less one means "keep the dev certificate").</returns>
+    public static TlsCertificate ResolveCertificate(IConfiguration configuration)
+    {
+        var config = configuration.GetSection("Firefall").Get<Firefall>() ?? new Firefall();
+        var configured = config.Certificate ?? new FirefallCertificate();
+        var urls = new PublicUrls(config);
+        lock (CertificateLock)
+        {
+            return CachedCertificate ??= TlsCertificateStore.Resolve(
+                urls.UseHttps,
+                configured.AutoIssue,
+                configured.Path,
+                configured.Password,
+                configured.StorePath,
+                urls.Host);
         }
     }
 
@@ -147,14 +192,15 @@ public abstract class BaseWebServer
             _ = app.UseDeveloperExceptionPage();
         }
 
-        // Advertising plain http (Firefall:AdvertiseHttps = false) only works while the http requests are
-        // not bounced back to https: with a TLS address bound, UseHttpsRedirection answers every plain
-        // request with a 307 to the https port, and a remote client that does not trust PIN's self-signed
-        // development certificate never gets through that redirect. The hosts keep listening on both
-        // either way, so switching back to https is a configuration change and nothing more.
-        if (Configuration.GetSection("Firefall").Get<Firefall>()?.AdvertiseHttps ?? true)
+        // Both ports answer what they are asked for: the http endpoints are as functional as the TLS ones,
+        // and the client dials whatever the configuration advertises (Firefall:AdvertiseHttps), so bouncing
+        // plain requests to the TLS port is not what makes https work - it only hides the http half. It is
+        // opt-in now, and even when it is on the certificate download routes stay plain: fetching the
+        // certificate a client has to trust is the one request that cannot be conditioned on having
+        // trusted it already. See TlsCertificateStore and Docs/REMOTE_PLAY.md.
+        if ((Configuration.GetSection("Firefall").Get<Firefall>() ?? new Firefall()).RedirectHttpToHttps)
         {
-            _ = app.UseHttpsRedirection();
+            _ = app.UseWhen(context => !IsCertificateRequest(context), builder => builder.UseHttpsRedirection());
         }
 
         _ = app.UseSerilogRequestLogging()
@@ -174,44 +220,20 @@ public abstract class BaseWebServer
     }
 
     /// <summary>
-    ///     Loads the TLS certificate named by <c>Firefall:Certificate:Path</c> - a PKCS#12 file (.pfx/.p12),
-    ///     decrypted with <c>Firefall:Certificate:Password</c> when it has one.
+    ///     Whether a request is one of the certificate downloads, which answer in the clear even with
+    ///     <c>Firefall:RedirectHttpToHttps</c> on - see <c>TlsCertificate.CerRoute</c>.
     /// </summary>
-    /// <remarks>
-    ///     Kestrel's default is the ASP.NET Core development certificate: issued for <c>localhost</c> and
-    ///     trusted only on the machine that ran <c>dotnet dev-certs https --trust</c>, so a player who
-    ///     connects over a LAN or VPN address can never validate it. Serving a certificate whose subject or
-    ///     SAN matches <c>Firefall:PublicHost</c> - and trusting that certificate on each
-    ///     player's machine - is what makes the https hosts work remotely; <c>Firefall:AdvertiseHttps</c>
-    ///     set to false is the alternative that avoids certificates altogether. An empty path (the default)
-    ///     keeps the development certificate, so a local setup is untouched. A certificate that cannot be
-    ///     loaded is reported and skipped rather than taking the hosts down. See <c>Docs/REMOTE_PLAY.md</c>.
-    /// </remarks>
-    /// <param name="configuration">The configuration the host is built from.</param>
-    /// <returns>The configured certificate, or null when none is configured or it could not be loaded.</returns>
-    private static X509Certificate2 LoadConfiguredCertificate(IConfiguration configuration)
+    /// <param name="context">The request being routed.</param>
+    /// <returns><c>true</c> when the request must not be redirected to TLS.</returns>
+    private static bool IsCertificateRequest(HttpContext context)
     {
-        var path = configuration.GetValue<string>("Firefall:Certificate:Path");
-        if (string.IsNullOrWhiteSpace(path))
+        var path = context.Request.Path.Value;
+        if (string.IsNullOrEmpty(path))
         {
-            return null;
+            return false;
         }
 
-        if (!File.Exists(path))
-        {
-            Log.Error("Firefall:Certificate:Path points at {Path}, which does not exist - serving the development certificate instead", path);
-            return null;
-        }
-
-        try
-        {
-            var password = configuration.GetValue<string>("Firefall:Certificate:Password") ?? string.Empty;
-            return X509CertificateLoader.LoadPkcs12FromFile(path, password);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Could not load the TLS certificate from {Path} - serving the development certificate instead", path);
-            return null;
-        }
+        return path.Equals(TlsCertificate.CerRoute, StringComparison.OrdinalIgnoreCase) ||
+               path.Equals(TlsCertificate.PemRoute, StringComparison.OrdinalIgnoreCase);
     }
 }

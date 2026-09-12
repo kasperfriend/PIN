@@ -17,5 +17,9 @@
          (project references are transitive, but the tests use these types
          explicitly and should not depend on GameServer pulling them in). -->
     <ProjectReference Include="..\..\Lib\Shared.Common\Shared.Common.csproj"/>
+    <!-- The advertised addresses and the certificate behind them are shared web-host
+         configuration (PublicUrls, TlsCertificateStore); the rules of both are worth
+         testing whether or not a web host is running, so they are tested here. -->
+    <ProjectReference Include="..\..\Lib\Shared.Web\Shared.Web.csproj"/>
   </ItemGroup>
 </Project>

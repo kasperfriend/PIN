@@ -382,3 +382,11 @@ characters.json.tmp
 accounts.json
 accounts.json.tmp
 accounts.json.corrupt
+
+# PIN-issued TLS certificates: machine-local key material for whatever address the
+# server advertises, created next to the WebHostManager binary on first https start.
+# Never commit the .key/.crt pair; the .cer is only a copy for players to install.
+certs/
+pin-*.key
+pin-*.crt
+pin-*.cer
