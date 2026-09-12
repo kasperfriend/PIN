@@ -30,6 +30,9 @@ public sealed class TlsCertificate
     /// <summary>Route the public half is served at by every web host - over plain http as well.</summary>
     public const string CerRoute = "/certificate.cer";
 
+    /// <summary>Media type of a PEM document, so a downloaded <c>.pem</c> says what it is.</summary>
+    public const string PemContentType = "application/x-pem-file";
+
     /// <summary>Route the same certificate is served at in PEM form, for tools that cannot read DER.</summary>
     public const string PemRoute = "/certificate.pem";
 

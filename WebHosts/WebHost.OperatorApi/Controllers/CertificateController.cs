@@ -57,7 +57,7 @@ public class CertificateController : ControllerBase
         var pem = _certificate.PublicCertificatePem;
         return pem == null
                    ? NothingToDownload()
-                   : Content(pem, TlsCertificate.CerContentType);
+                   : Content(pem, TlsCertificate.PemContentType);
     }
 
     /// <summary>
