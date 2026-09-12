@@ -6,15 +6,22 @@ using Xunit;
 namespace GameServer.Tests;
 
 /// <summary>
-///     The walk over a weapon's ability chains: the database puts an attack's animation (and, for some
-///     weapons, the attack's own damage) inside the status effects the ability applies, so finding them
-///     means following apply/remove/update/duration chains, branches and called abilities. The chains used
-///     here are the shapes the build's monster weapons actually have - see <c>Docs/NPC_AI.md</c>.
+///     The walk over a weapon's ability chains: the database puts what an attack draws - its animation, its
+///     muzzle flash, its sound - inside the status effects the ability applies, and the client only runs
+///     those commands when the effect is replicated. Finding them means following apply/remove/update/
+///     duration chains, branches and called abilities, and telling the client's commands from the server's.
+///     The chains used here are the shapes the build's monster weapons actually have - see
+///     <c>Docs/NPC_AI.md</c>.
 /// </summary>
 public class NpcWeaponAbilitiesTests
 {
     private const ushort PlayAnimation = (ushort)CommandType.PlayAnimation;
     private const ushort AbilityAnimation = (ushort)CommandType.AbilityAnimation;
+    private const ushort PerformEmote = (ushort)CommandType.PerformEmote;
+    private const ushort ParticleEffectAsset = (ushort)CommandType.ParticleEffectAsset;
+    private const ushort AudioFeedback = (ushort)CommandType.AudioFeedback;
+    private const ushort StatModifier = (ushort)CommandType.StatModifier;
+    private const ushort RequireCState = (ushort)CommandType.RequireCState;
     private const ushort InflictDamage = (ushort)CommandType.InflictDamage;
     private const ushort FireProjectile = (ushort)CommandType.FireProjectile;
     private const ushort ImpactApplyEffect = (ushort)CommandType.ImpactApplyEffect;
@@ -28,12 +35,12 @@ public class NpcWeaponAbilitiesTests
 
         var scan = NpcWeaponAbilities.Scan(data, 0, 0);
 
-        Assert.False(scan.Animates);
+        Assert.False(scan.ClientFeedback);
         Assert.False(scan.DeliversDamage);
     }
 
     [Fact]
-    public void AnAnimationInTheChains_IsFound()
+    public void AnAnimationInTheChains_IsClientFeedback()
     {
         // Melee - Shadowstrike's shape: the burst ability applies the swing effect, whose apply chain is
         // the animation command.
@@ -45,7 +52,62 @@ public class NpcWeaponAbilitiesTests
 
         var scan = NpcWeaponAbilities.Scan(data, 0, 188);
 
-        Assert.True(scan.Animates);
+        Assert.True(scan.ClientFeedback);
+        Assert.False(scan.DeliversDamage);
+    }
+
+    [Fact]
+    public void AnEmoteInTheChains_IsClientFeedback()
+    {
+        // 359 status effects in the build hold a tfPerformEmote command: the emote animation reaches the
+        // client the same way an attack animation does, so the chain has to run for it to play.
+        var data = new FakeNpcAttackDataSource()
+            .WithAbility(1, 100)
+            .WithCommand(100, ImpactApplyEffect, effectId: 13_551)
+            .WithStatusEffect(13_551, applyChain: 200)
+            .WithCommand(200, PerformEmote);
+
+        var scan = NpcWeaponAbilities.Scan(data, 1, 0);
+
+        Assert.True(scan.ClientFeedback);
+        Assert.False(scan.DeliversDamage);
+    }
+
+    [Fact]
+    public void ParticleAndAudioCommandsInTheChains_AreClientFeedback()
+    {
+        // The shape 9 of the build's ability-bearing monster weapons have (the charge sniper 51, the plasma
+        // cannon 12129, the fusion cannon 60, the flamethrower 12144, ...): the chain's effect applies a
+        // muzzle flash and a weapon sound but no skeleton animation.
+        var data = new FakeNpcAttackDataSource()
+            .WithAbility(34_894, 1_000)
+            .WithCommand(1_000, ImpactApplyEffect, effectId: 2_759)
+            .WithStatusEffect(2_759, applyChain: 1_100)
+            .WithCommand(1_100, ParticleEffectAsset, next: 1_101)
+            .WithCommand(1_101, AudioFeedback);
+
+        var scan = NpcWeaponAbilities.Scan(data, 34_894, 0);
+
+        Assert.True(scan.ClientFeedback);
+        Assert.False(scan.DeliversDamage);
+    }
+
+    [Fact]
+    public void ServerCommandsAlone_AreNotClientFeedback()
+    {
+        // The Vorrax beam's shape (template 29): the chain applies a stat modifier and holds it with a
+        // state requirement. Nothing there is drawn by a client, so running the chain would change the
+        // fight without changing what anyone sees.
+        var data = new FakeNpcAttackDataSource()
+            .WithAbility(30_010, 1_000)
+            .WithCommand(1_000, ImpactApplyEffect, effectId: 356)
+            .WithStatusEffect(356, applyChain: 1_100, durationChain: 1_200)
+            .WithCommand(1_100, StatModifier)
+            .WithCommand(1_200, RequireCState);
+
+        var scan = NpcWeaponAbilities.Scan(data, 0, 30_010);
+
+        Assert.False(scan.ClientFeedback);
         Assert.False(scan.DeliversDamage);
     }
 
@@ -64,7 +126,7 @@ public class NpcWeaponAbilitiesTests
 
         var scan = NpcWeaponAbilities.Scan(data, 39_249, 0);
 
-        Assert.True(scan.Animates);
+        Assert.True(scan.ClientFeedback);
         Assert.True(scan.DeliversDamage);
     }
 
@@ -95,7 +157,7 @@ public class NpcWeaponAbilitiesTests
         var scan = NpcWeaponAbilities.Scan(data, 0, 38_264);
 
         Assert.True(scan.DeliversDamage);
-        Assert.False(scan.Animates);
+        Assert.False(scan.ClientFeedback);
     }
 
     [Fact]
@@ -111,7 +173,7 @@ public class NpcWeaponAbilitiesTests
 
         var scan = NpcWeaponAbilities.Scan(data, 1, 0);
 
-        Assert.True(scan.Animates);
+        Assert.True(scan.ClientFeedback);
         Assert.True(scan.DeliversDamage);
     }
 
@@ -129,7 +191,7 @@ public class NpcWeaponAbilitiesTests
 
         var scan = NpcWeaponAbilities.Scan(data, 1, 0);
 
-        Assert.True(scan.Animates);
+        Assert.True(scan.ClientFeedback);
     }
 
     [Fact]
@@ -144,7 +206,7 @@ public class NpcWeaponAbilitiesTests
 
         var scan = NpcWeaponAbilities.Scan(data, 39_249, 0);
 
-        Assert.False(scan.Animates);
+        Assert.False(scan.ClientFeedback);
         Assert.False(scan.DeliversDamage);
     }
 }

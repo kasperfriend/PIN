@@ -310,19 +310,23 @@ attack itself is announced the same way (`WeaponBurstFired`, then `WeaponBurstEn
 or `WeaponBurstCancelled`), so a mob's shooting and reloading are visible rather
 than silent; see [NPC_AI.md](NPC_AI.md) §3.
 
-Two of the weapons the build's monsters carry also animate from their own ability
-chains, which is the only path in the database that names an animation: the chain
-applies a status effect and the client plays the `tf*` animation command inside that
-effect's chains, for everyone who can see the character. The engine runs the weapon's
-ability for the weapons whose chains carry one (the Shadowstrike swing and the
-charge-up weapon's charge/release, 16 monster slots), hands it the weapon's
-`ms_chargeup` as the activation register so the charge effect lasts exactly as long
-as the weapon charges, and lets the chain land the hit itself rather than adding its
-own melee damage or volley on top (falling back to its own attack if the activation
-does not run). The charge effect's `restrict_movement` / `restrict_abilities` /
-`restrict_melee` flags are honoured while it lasts, so a charging mob holds position
-and does not fire. Weapons whose chains carry no animation keep the AI attack
-described above; see [NPC_AI.md](NPC_AI.md) §3.
+Some of the weapons the build's monsters carry also animate and sound from their own
+ability chains, which is the only path in the database that names an animation: the
+chain applies a status effect, and the client plays the `tf*` commands inside that
+effect's chains - the animation, the muzzle flash, the weapon sound - for everyone who
+can see the character, because the client is the one that runs them. The engine
+therefore runs the weapon's ability whenever its chain carries a command the client
+executes (`apttf::`), which is 7 of the 14 templates with attack/burst ids and 75 of
+their 102 monster slots: the Shadowstrike swing and the charge-up weapon's
+charge/release (the 2 that animate), the flamethrower's burning cone, and the charge
+sniper, phason thrower, fluid cannon and magic finger (whose effects carry the flash and
+the sound). It hands the activation the weapon's `ms_chargeup` as the register so the
+charge effect lasts exactly as long as the weapon charges, and lets a chain that
+delivers the hit land it itself rather than adding its own melee damage or volley on top
+(falling back to its own attack if the activation does not run). The charge effect's
+`restrict_movement` / `restrict_abilities` / `restrict_melee` flags are honoured while it
+lasts, so a charging mob holds position and does not fire. Weapons whose chains carry no
+client command keep the AI attack described above; see [NPC_AI.md](NPC_AI.md) §3.
 
 Damage per hit comes from the weapon's own database rows (attribute 954, or the
 level's `MonsterScaling.damage` rating scaled by the item's attribute 1145), and

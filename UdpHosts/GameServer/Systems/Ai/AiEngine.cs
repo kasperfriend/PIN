@@ -484,11 +484,11 @@ public class AiEngine
             return false;
         }
 
-        // Only the abilities the data animates are run for now. The other weapon abilities apply effects
-        // that carry no animation (stat modifiers, charge states, audio) and are a separate change: they
-        // alter combat numbers rather than what a client draws, and their own duration semantics would have
-        // to be verified with them.
-        if (!profile.ChainAnimates)
+        // Only the abilities whose chains carry something the client draws or plays are run. A chain of
+        // server-side commands alone (a stat modifier, a damage-over-time tick) needs no activation here:
+        // the AI's own attack already delivers the hit, and running such a chain would change the fight
+        // without changing what a client shows.
+        if (!profile.ChainClientFeedback)
         {
             return false;
         }

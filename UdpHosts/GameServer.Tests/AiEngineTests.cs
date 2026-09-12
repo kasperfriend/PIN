@@ -773,14 +773,15 @@ public class AiEngineTests
 
 
     /// <summary>
-    ///     A ranged weapon whose chains carry an animation, like the NPC Charge Up and Channel Fire
-    ///     template: the charge effect the attack ability applies is what a client draws the charge from.
+    ///     A ranged weapon whose chains carry something a client draws, like the NPC Charge Up and Channel
+    ///     Fire template: the charge effect the attack ability applies is what a client draws the charge
+    ///     from.
     /// </summary>
     private static NpcAttackProfile AnimatingProfile() => RangedProfile() with
     {
         AttackAbilityId = 39_249,
         ChargeUpMs = 2_000,
-        ChainAnimates = true,
+        ChainClientFeedback = true,
         ChainDeliversDamage = true,
     };
 
@@ -798,8 +799,20 @@ public class AiEngineTests
         BurstDurationMs = 1600,
         DamagePerRound = 697,
         BurstAbilityId = 188,
-        ChainAnimates = true,
+        ChainClientFeedback = true,
         ChainDeliversDamage = true,
+    };
+
+    /// <summary>
+    ///     A ranged weapon whose chains carry client feedback but no damage of their own, like the 39-slot
+    ///     NPC Charge Sniper Rifle (template 51): the attack ability applies the charge state - a muzzle
+    ///     flash, the charge sound and the combat flags - while the hit stays the AI's own volley.
+    /// </summary>
+    private static NpcAttackProfile FeedbackOnlyProfile() => RangedProfile() with
+    {
+        AttackAbilityId = 34_894,
+        ChargeUpMs = 2_500,
+        ChainClientFeedback = true,
     };
 
     [Fact]
@@ -869,10 +882,33 @@ public class AiEngineTests
     }
 
     [Fact]
-    public void WeaponWithoutAnAnimatingChain_RunsNoAbility()
+    public void FeedbackOnlyChain_RunsTheAbility_AndKeepsTheAiItsOwnHit()
     {
-        // The rest of the weapon database carries no animation in its chains, and their functional
-        // effects are not this engine's business yet - the AI's own attack stays exactly as it was.
+        // The chain draws the weapon's charge (particles, audio, the charge state) but delivers no damage,
+        // so the ability runs and the AI's own volley goes out as well: the mob both charges and shoots.
+        var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: shots,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(34_894u, Assert.Single(abilities.Activations).AbilityId);
+        Assert.Equal(3, shots.Shots.Count);
+    }
+
+    [Fact]
+    public void WeaponWithoutClientFeedback_RunsNoAbility()
+    {
+        // The chains of the database's other weapons carry nothing a client draws (stat modifiers, charge
+        // states with no feedback, requirements), and their functional effects are not this engine's
+        // business yet - the AI's own attack stays exactly as it was.
         var stats = new FakeAiMonsterStats { AttackProfile = RangedProfile() };
         var abilities = new FakeNpcAbilityActivator();
         var shots = new RecordingAiProjectileLauncher();

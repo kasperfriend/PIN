@@ -352,7 +352,7 @@ public class NpcAttackResolverTests
 
         Assert.Equal(39_249u, profile.AttackAbilityId);
         Assert.Equal(2_000u, profile.ChargeUpMs);
-        Assert.True(profile.ChainAnimates);
+        Assert.True(profile.ChainClientFeedback);
         Assert.True(profile.ChainDeliversDamage);
     }
 
@@ -366,7 +366,7 @@ public class NpcAttackResolverTests
         Assert.Equal(0u, profile.AttackAbilityId);
         Assert.Equal(0u, profile.BurstAbilityId);
         Assert.Equal(0u, profile.ChargeUpMs);
-        Assert.False(profile.ChainAnimates);
+        Assert.False(profile.ChainClientFeedback);
         Assert.False(profile.ChainDeliversDamage);
     }
 }

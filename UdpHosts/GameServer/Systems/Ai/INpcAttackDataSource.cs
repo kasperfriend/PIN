@@ -51,6 +51,19 @@ public interface INpcAttackDataSource
 
     /// <summary>An <c>apt::StatusEffectData</c> row (its four chains), or null.</summary>
     StatusEffectData GetStatusEffect(uint effectId);
+
+    /// <summary>
+    ///     Whether a command subtype is one the client runs. The database splits the aptitude commands by
+    ///     who executes them - <c>apt::CommandType.sdb_fullname</c> names the table a command's parameters
+    ///     live in - and the <c>apttf::</c> tables are the client's: animations
+    ///     (<c>tfPlayAnimationCommandDef</c>, <c>tfAbilityAnimationCommandDef</c>), emotes, material
+    ///     switches, particles and audio feedback. The server does not run them (this build wires them to
+    ///     a no-op command on purpose); the client plays them out of the replicated effect whose chain
+    ///     carries them, so a chain holding one draws nothing at all until that effect is applied.
+    /// </summary>
+    /// <param name="commandSubtype">An <c>apt::BaseCommandDef.subtype</c>.</param>
+    /// <returns>Whether the command's definition table is one of the client's (<c>apttf::</c>).</returns>
+    bool IsClientCommand(uint commandSubtype);
 }
 
 /// <summary>The production <see cref="INpcAttackDataSource" />: reads the loaded static database.</summary>
@@ -82,4 +95,9 @@ public sealed class SdbNpcAttackDataSource : INpcAttackDataSource
     public ImpactApplyEffectCommandDef GetImpactApplyEffect(uint commandId) => SDBInterface.GetImpactApplyEffectCommandDef(commandId);
 
     public StatusEffectData GetStatusEffect(uint effectId) => SDBInterface.GetStatusEffectData(effectId);
+
+    public bool IsClientCommand(uint commandSubtype)
+    {
+        return SDBInterface.GetCommandType(commandSubtype)?.SdbFullname?.StartsWith("apttf::") == true;
+    }
 }

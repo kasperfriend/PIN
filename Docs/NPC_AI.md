@@ -277,24 +277,43 @@ monster slots) and four rows whose `default_ammo_id` resolves to no
 `dbitems::Ammo` row at all (visual-only and trigger-only templates). A weapon the
 database gives no magazine fires forever, exactly as it did before.
 
-**Chain animations (the charge and the swing).** The database's *named* animations
-live in aptitude chains: a `tfPlayAnimationCommandDef` ("MeleeAttack", "Shoot",
-"roar", ...) or a `tfAbilityAnimationCommandDef` (an animation-graph state) is a node
-in a chain, and the chain that holds it belongs to a status effect, so applying the
-effect is what makes every client with the same database play it. Those commands are
-client-side by design - `Factory.LoadCommand` turns them into `CustomNOOPCommand`,
-because the client runs them from the replicated effect - which means the server's
-whole job is to apply the effect. Nothing did: a weapon template's
-`attack_ability_id` / `burst_ability_id` reached `NpcAttackProfile` and stopped
-there, so the 2 mobs and 14 mobs whose weapons carry the build's only two animating
-chains never applied their effects. `NpcWeaponAbilities.Scan` now walks those chains
-once, at profile resolution (through `INpcAttackDataSource`, so it is unit tested
-without a database), and reports two things: whether an animation is reachable
-(`ChainAnimates`) and whether the chain delivers the hit itself
-(`ChainDeliversDamage`). `AiEngine` runs the ability for the weapons that animate,
-through the shard's own `AbilitySystem.HandleActivateAbility`.
+**Chain animations (the charge, the swing and the weapon's own feedback).** The
+database's *named* animations live in aptitude chains: a `tfPlayAnimationCommandDef`
+("MeleeAttack", "Shoot", "roar", ...) or a `tfAbilityAnimationCommandDef` (an
+animation-graph state) is a node in a chain, and the chain that holds it belongs to a
+status effect, so applying the effect is what makes every client with the same
+database play it. Those commands are client-side by design - `Factory.LoadCommand`
+turns them into `CustomNOOPCommand`, because the client runs them from the replicated
+effect - which means the server's whole job is to apply the effect. Nothing did: a
+weapon template's `attack_ability_id` / `burst_ability_id` reached `NpcAttackProfile`
+and stopped there, so no mob ever applied the effects its weapon's chains apply.
 
-The two weapons, command by command:
+`NpcWeaponAbilities.Scan` now walks those chains once, at profile resolution (through
+`INpcAttackDataSource`, so it is unit tested without a database), and reports two
+things: whether the chain carries a command the **client** runs (`ChainClientFeedback`)
+and whether the chain delivers the hit itself (`ChainDeliversDamage`). The first is read
+out of the database rather than from a list kept in the code: a command instance's kind
+is its `apt::BaseCommandDef.subtype`, and the table that subtype's parameters live in
+(`apt::CommandType.sdb_fullname`) says who executes it - the `apttf::` tables are the
+client's feedback commands (animations, emotes, material switches, particles, audio),
+the `aptfs::` ones are the server's functions and the bare `apt::` ones are control flow
+both sides know. `AiEngine` runs the ability when the chain carries client feedback,
+through the shard's own `AbilitySystem.HandleActivateAbility`, which is **7 of the 14
+templates with an `attack_ability_id` / `burst_ability_id` and 75 of their 102 monster
+slots**: 2 templates (16 slots) carry a named animation, 3 (22 slots) deliver their own
+damage, and the four that do neither (53 slots) carry the weapon's muzzle flash and
+sound - the charge sniper 51, the phason thrower 12157, the fluid cannon 12264 and the
+magic finger 12183.
+
+The other 7 templates with attack/burst ids (27 slots) carry no client command at all:
+the Vorrax beam's stat modifier 356, the missile launcher's 251, the overcharge stat
+modifier 11326, and chains that reach no effect, so they keep the AI's own attack and
+running them would change combat numbers without changing what anyone sees. Five more
+templates (30 slots) carry their ids only in the hooks the engine does not activate
+(the `overcharge_ability` of 12129 and 60, the `clip_empty_ability` of 12132, 11975 and
+11971); three of those chains do carry client feedback and are the next step.
+
+The two weapons that animate, command by command:
 
 * **Melee - Shadowstrike** (`burst_ability_id` 188, 2 monster slots). The chain
   targets a cone in front of the mob and the hostiles inside it, applies effect 270
@@ -335,30 +354,33 @@ Three details make that work, and each is a place the data forced a decision:
   it, `ImpactApplyEffect.pass_register` is 0 on every monster weapon row, so the
   applied effect's context is copied with no register and its replenishable duration
   would fall back to the command's 30 s default instead of the charge time.
-* **A chain that delivers the hit replaces the AI's own.** For the two animating
-  weapons the chain is the attack as well - a cone swing that inflicts its own
-  damage, a charge that ends in its own projectile - so the engine does not add the
-  melee hit or the volley it would otherwise fire on top of it (`ChainDeliversDamage`
-  is what says so). If the activation does not run (no aptitude system, an unknown
-  ability, a chain requirement that rejects it), the engine falls back to its own
-  attack, so a data or runtime gap cannot leave a mob harmless. Every other weapon
-  keeps the AI attack it had: the chains of the other 12 templates with ability ids
-  apply effects that carry no animation (the sniper's charge state 2759, the
-  flamethrower's cone effect 8785, the phason's 12513, the Vorrax beam's 356/358,
-  the missile launcher's 251, an overcharge stat modifier 11326) and running them
-  changes combat numbers rather than what a client draws, so they are the next step
-  rather than this one.
+* **A chain that delivers the hit replaces the AI's own.** For the weapons whose chain
+  is the attack as well - the Shadowstrike cone swing, the charge that ends in its own
+  projectile, the flamethrower's burning cone - the engine does not add the melee hit or
+  the volley it would otherwise fire on top of it (`ChainDeliversDamage` is what says
+  so). If the activation does not run (no aptitude system, an unknown ability, a chain
+  requirement that rejects it), the engine falls back to its own attack, so a data or
+  runtime gap cannot leave a mob harmless. Every other weapon keeps the AI attack it had:
+  the 7 templates whose attack/burst chains hold no client command (the Vorrax beam's
+  356/358 stat modifier, the missile launcher's 251, the overcharge stat modifier 11326,
+  chains that reach no effect) change combat numbers rather than what a client draws, and
+  so do the charge states the AI never triggers (sniper 2759, phason 12513) - the next
+  step rather than this one.
 * **A death mid-charge releases the shot.** The charge effect's duration chain starts
   with `RequireCState(living=1)`, so the effect ends the moment the mob stops living -
   and the chain that ends an effect is its removal chain, which for this effect is the
   release: animation, projectile, audio. A corpse therefore fires the shot it had
   charged. That is the data's own structure (the release runs on any removal) and the
   build does not special-case it.
-* **The weapon fire markers stay as they are.** Both animating templates carry
+* **The weapon fire markers stay as they are.** The two animating templates carry
   `anim_fire_type` 0 and `anim_charge_type` 0 - the database gives them no weapon fire
-  or charge animation of its own, which is exactly why its own animation lives in the
+  or charge animation of its own, which is exactly why their animation lives in the
   effect chains instead. A client's `WeaponBurstFired` handling has nothing to play for
-  a type of 0; the chain's `tfPlayAnimation` / `tfAbilityAnimation` is what it plays.
+  a type of 0; the chain's `tfPlayAnimation` / `tfAbilityAnimation` is what it plays. The
+  templates whose chains carry only particles and audio are the other way round: they do
+  carry an `anim_fire_type` (1 or 2 - `Fire`, `ChargeFire`), so the client plays the
+  weapon's own fire animation from the marker and the effect chain adds the muzzle flash,
+  the beam and the sound on top.
 * **The flags the charge sets are honoured.** A charge-up effect restricts the
   character it sits on, and the client shows that; the AI reads the same replicated
   flags (`CharacterEntity.HasCombatFlag`) rather than inventing its own charge state,
@@ -413,7 +435,7 @@ these three pieces, and the line currently sits here:
 | `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction (references the 32 directional rows) | unused - no row points at it |
 | `dbcharacter::EmoteRecord` (`animation_name`, `anim_override_id`, `head_anim_override_id`, `statuseffect`) | 382 | emotes: the animation ids the client resolves from the emote id, and on 4 rows the status effect whose chain draws the emote | used for the emote lifecycle: `PerformEmote` is validated against the table (an id outside it is ignored), emote 0 clears the emote, and the 4 rows apply their effect so the emote animates for every client watching, not only for the performer (`Docs/EMOTES.md` §1-2). NPCs still have no emote of their own: 530 `tfPerformEmote` commands and the 359 effects holding them are reachable from no monster weapon in this build |
 | `dbcharacter::MonsterMood` / `MonsterMoodName` | 2,268 / 6 | mood -> portrait id (`Neutral`, `Excited`, `Thinking`, `Angry`, `Happy`, `Sad`) | unused - a UI portrait with no field in the character views, so there is nothing for the server to replicate (`Docs/EMOTES.md` §5) |
-| `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the animation commands of the original game's chains, and the only place an animation is named | placeholder records, because the client runs them from the replicated effect they sit in; the two monster weapons below reach one through the effect their ability applies, and the rest of these rows belong to player abilities and to effects no monster weapon applies |
+| `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the animation commands of the original game's chains, and the only place an animation is named | placeholder records, because the client runs them from the replicated effect they sit in; the two monster weapons below reach one through the effect their ability applies, the rest of these rows belong to player abilities, to the 359 emote effects (`Docs/EMOTES.md` §3) and to effects no monster weapon applies |
 | `dbitems::Weapons.first_person_animnet_id` / `third_person_animnet_id`, `dbcharacter::Head.animnet_id`, `dbitems::BattleframeVisuals.animnetwork_id`, `dbcharacter::Deployable.animnetwork` | 6,789 / 67 / 2,786 / 3,902 | animation-network (animation graph) asset ids | client side: the client picks the graph from the item/visual id the server already replicates, so there is nothing for the server to send |
 
 **Where the animations actually live.** Probing the aptitude chains settles what
@@ -441,9 +463,12 @@ documented rather than wired:
   effects is the faithful way to animate those 16 mobs, and §3 now does it: the
   charge effect's restrictions, its `ReplenishableDurationCommandDef` and the
   `ReplenishEffectDurationCommandDef` that hands the charge time to it are all
-  part of the same change. The other 12 templates (86 monster slots) carry ids too,
-  but their chains apply effects without an animation, so their mobs still animate
-  from the AI's own attack only.
+  part of the same change. The same walk also reports what the other templates' chains
+  hold, which is why the engine's rule is not "does it animate" but "does it carry
+  anything a client runs": **7 of the 14 templates (75 slots)** do - two of them
+  animate (above), two more deliver the hit themselves (the flamethrower's cone burn
+  8785 among them), and the rest carry the weapon's muzzle flash and sound - while the
+  other 7 (27 slots) reach only server-side commands and keep the AI's own attack.
 - *Hit reactions have no trigger in this build.* The stumble data is complete -
   `dbcharacter::Stumble` 9452 is the effect a stumble applies, and that effect's
   own chain is a stumble in full: `RequireHasEffectTag`, then
@@ -688,12 +713,14 @@ stays horizontal, exactly as before.
 
 ## 6. Known gaps
 
-* **Animation is the attack + reload + locomotion + death markers, plus the two
-  weapons whose chains animate.** The engine drives the attack burst markers, the
+* **Animation is the attack + reload + locomotion + death markers, plus the weapon
+  chains that carry client feedback.** The engine drives the attack burst markers, the
   weapon reload markers, the walk/run/stand movement state and the death state, and
-  it runs a weapon's ability when the database puts an animation in the effect that
-  ability applies (16 monster slots: the Shadowstrike swing and the charge-up
-  weapon's charge/release - see
+  it runs a weapon's ability when the database puts anything a client draws or plays in
+  the effect that ability applies (7 of the 14 templates with attack/burst ids, 75
+  monster slots: the Shadowstrike swing, the charge-up weapon's charge/release, the
+  flamethrower's cone, and the charge sniper/phason/fluid cannon/magic finger muzzle
+  flash and sound - see
   [What an NPC animates](#what-an-npc-animates), which lists the animation rows that
   are and are not used). Everything else in the animation surface is untouched: the
   engine does not run a monster's behaviour tree, so there are no idle, taunt or

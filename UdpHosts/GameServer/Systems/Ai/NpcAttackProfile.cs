@@ -165,11 +165,13 @@ public sealed record NpcAttackProfile
     public uint ChargeUpMs { get; init; }
 
     /// <summary>
-    ///     Whether the weapon's ability chains reach an animation command (<c>tfPlayAnimationCommandDef</c>
-    ///     or <c>tfAbilityAnimationCommandDef</c>). See <see cref="NpcWeaponAbilities" />: those commands are
-    ///     client-side, so the animation only happens if the server applies the effect that carries them.
+    ///     Whether the weapon's ability chains carry a command the client runs (see
+    ///     <see cref="INpcAttackDataSource.IsClientCommand" />): an animation, an emote, a material switch,
+    ///     a particle or an audio feedback. The server does not execute any of them, so the chain has to be
+    ///     run for the effect it applies to replicate - that effect is what the client draws the weapon's
+    ///     animation, muzzle flash and sound from.
     /// </summary>
-    public bool ChainAnimates { get; init; }
+    public bool ChainClientFeedback { get; init; }
 
     /// <summary>
     ///     Whether the weapon's ability chains deliver the hit themselves (<c>InflictDamageCommandDef</c> or

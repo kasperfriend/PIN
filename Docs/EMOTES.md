@@ -67,18 +67,23 @@ is why `EmoteRecord.statuseffect` is the only emote → effect link in the datab
 
 * 359 `apt::StatusEffectData` rows contain a `PerformEmote` command in one of their four chains.
 * 3 `apt::AbilityData` rows contain one directly (no effect in between).
-* Neither reaches a monster weapon: none of the 19 weapon templates the build's 3,109 monsters use
-  (85 templates / 1,861 slots in total) has an emote, `tfPlayAnimation`, `tfAbilityAnimation` or
-  `tfSetAnimCtrlParam` in its chains — 2 templates animate (12143 the charge sniper's channel fire,
-  21 melee Shadowstrike) and 3 deliver their own hit. Chain animation commands elsewhere
-  (`apttf::tfParticleEffectAssetCommandDef` 9,571 rows, `tfAudioFeedbackCommandDef` 7,609,
-  `tfAbilityAnimationCommandDef` 1,898, `tfPlayAnimationCommandDef` 642, `tfSetAnimCtrlParamCommandDef`)
-  are reachable only from the effects of abilities the mobs do not hold, or from the 17 templates
-  whose chains change combat numbers (documented in `Docs/NPC_AI.md` §6).
+* None of them is a `tfPerformEmote`, and none is reachable from a monster weapon: of the 19 weapon
+  templates the build's 3,109 monsters use (85 templates / 1,861 slots in total) 14 carry an attack or
+  burst ability id (102 slots), of which 7 (75 slots) carry client feedback the engine now runs — 2
+  animate (12143 the charge sniper's channel fire, 21 melee Shadowstrike), 3 deliver their own hit, and
+  the other four (51, 12157, 12264, 12183) carry the weapon's muzzle flash and sound. The remaining
+  client commands are reachable only from the effects of abilities the mobs do not hold, or from
+  chains that hold no client command at all (documented in `Docs/NPC_AI.md` §3 and §6). `Docs/NPC_AI.md`
+  §3 lists the same walk per template, including the seven templates whose attack/burst chains are
+  server-side only.
 
 Consequence: an NPC has no **data path of its own** to an emote in this build — a mob emotes only if
 something applies one of those effects to it (a scripted encounter, a deployable, a future
-`ApplyClientStatusEffect` implementation). What the data does give NPCs is dialog, below.
+`ApplyClientStatusEffect` implementation). The general rule the walk above established is in
+`Docs/NPC_AI.md` §3: a chain is run when it carries a command the client executes (`apttf::`), which
+for a mob means the effect that holds the animation, the emote, the muzzle flash or the sound — so an
+emote effect applied to an NPC *does* animate it. What the data does give NPCs of their own is dialog,
+below.
 
 ## 4. `dbdialogdata::DialogScript` — 39,261 lines (not implemented)
 

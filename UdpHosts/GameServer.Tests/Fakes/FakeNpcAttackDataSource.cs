@@ -71,6 +71,27 @@ public sealed class FakeNpcAttackDataSource : INpcAttackDataSource
     public StatusEffectData GetStatusEffect(uint effectId) => StatusEffects.GetValueOrDefault(effectId);
 
     /// <summary>
+    ///     The command subtypes whose definition table is one of the client's (<c>apttf::</c> in
+    ///     <c>apt::CommandType.sdb_fullname</c>): the commands the client executes and the server does not.
+    ///     Seeded with the client's feedback family, so a test only adds a subtype when it writes a command
+    ///     the seed does not cover.
+    /// </summary>
+    public HashSet<uint> ClientSubtypes { get; } =
+    [
+        (uint)AptCommandType.AudioFeedback,
+        (uint)AptCommandType.PlayAnimation,
+        (uint)AptCommandType.SetAnimCtrlParam,
+        (uint)AptCommandType.ParticleEffectAsset,
+        (uint)AptCommandType.AbilityAnimation,
+        (uint)AptCommandType.SwitchMaterial,
+        (uint)AptCommandType.PerformEmote,
+        (uint)AptCommandType.LocalParticleEffect,
+        (uint)AptCommandType.AudioStateChange,
+    ];
+
+    public bool IsClientCommand(uint commandSubtype) => ClientSubtypes.Contains(commandSubtype);
+
+    /// <summary>
     ///     Writes one command of <paramref name="subtype" /> into the fake's tables: the shared
     ///     <c>apt::BaseCommandDef</c> row plus whatever the walker needs from the command's own type.
     /// </summary>

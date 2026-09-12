@@ -212,7 +212,7 @@ public sealed class NpcAttackResolver
             AttackAbilityId = template.AttackAbility,
             BurstAbilityId = template.BurstAbility,
             ChargeUpMs = template.MsChargeUp,
-            ChainAnimates = abilities.Animates,
+            ChainClientFeedback = abilities.ClientFeedback,
             ChainDeliversDamage = abilities.DeliversDamage,
             MeleeAbilityId = template.MeleeAbility,
             MuzzleOffset = muzzleOffset,

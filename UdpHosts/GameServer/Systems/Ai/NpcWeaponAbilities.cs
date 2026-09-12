@@ -5,20 +5,23 @@ namespace GameServer.Systems.Ai;
 
 /// <summary>
 ///     What the chains behind a weapon's ability ids do, as far as an NPC is concerned: whether the data
-///     declares an animation in them, and whether they deliver the hit themselves.
+///     makes a client draw something in them, and whether they deliver the hit themselves.
 /// </summary>
-/// <param name="Animates">
-///     A <c>apttf::tfPlayAnimationCommandDef</c> or <c>tfAbilityAnimationCommandDef</c> is reachable. Those
-///     are the database's only animation instructions, and they are client-side commands: a client plays them
-///     from the replicated status effect, which is why an NPC has to apply the effect to animate at all.
+/// <param name="ClientFeedback">
+///     A command the client runs (a <c>apttf::</c> definition table: <c>tfPlayAnimationCommandDef</c>,
+///     <c>tfAbilityAnimationCommandDef</c>, <c>tfPerformEmoteCommandDef</c>,
+///     <c>tfParticleEffectAssetCommandDef</c>, <c>tfAudioFeedbackCommandDef</c>, ...) is reachable. Every
+///     one of those commands is a client-side instruction the server does not execute, so a chain that
+///     holds one produces nothing at all until the effect carrying it is applied and replicated - which is
+///     what this flag tells the AI to do.
 /// </param>
 /// <param name="DeliversDamage">
 ///     An <c>aptfs::InflictDamageCommandDef</c> or <c>FireProjectileCommandDef</c> is reachable: the chain is
 ///     the attack, so the AI must not add its own direct hit on top of it.
 /// </param>
-public readonly record struct NpcWeaponAbilityScan(bool Animates, bool DeliversDamage)
+public readonly record struct NpcWeaponAbilityScan(bool ClientFeedback, bool DeliversDamage)
 {
-    /// <summary>A weapon with no ability ids, or one whose chains do neither.</summary>
+    /// <summary>A weapon with no ability ids, or one whose chains carry no client feedback and no damage.</summary>
     public static readonly NpcWeaponAbilityScan None = default;
 }
 
@@ -33,6 +36,13 @@ public readonly record struct NpcWeaponAbilityScan(bool Animates, bool DeliversD
 ///     <c>apt::CallCommandDef</c> names, and the apply/remove/update/duration chains of every
 ///     <c>apt::ImpactApplyEffectCommandDef</c> it finds - one effect level deep, which is as deep as the
 ///     build's monster weapon trees nest. A node is visited once, so shared tails and cycles cannot loop.
+///     <para>
+///         Whether a command is the client's is decided from the database, not from a list kept here: the
+///         kind of a command instance is its <c>apt::BaseCommandDef.subtype</c>, and the table that subtype's
+///         parameters live in (<c>apt::CommandType.sdb_fullname</c>) says who runs it. The <c>apttf::</c>
+///         tables are the client's feedback commands, the <c>aptfs::</c> ones are the server's functions and
+///         the bare <c>apt::</c> ones are control flow both sides know.
+///     </para>
 /// </remarks>
 public static class NpcWeaponAbilities
 {
@@ -48,20 +58,20 @@ public static class NpcWeaponAbilities
         }
 
         var visited = new HashSet<uint>();
-        bool animates = false;
+        bool clientFeedback = false;
         bool deliversDamage = false;
 
-        ScanAbility(data, attackAbilityId, visited, ref animates, ref deliversDamage);
-        ScanAbility(data, burstAbilityId, visited, ref animates, ref deliversDamage);
+        ScanAbility(data, attackAbilityId, visited, ref clientFeedback, ref deliversDamage);
+        ScanAbility(data, burstAbilityId, visited, ref clientFeedback, ref deliversDamage);
 
-        return new NpcWeaponAbilityScan(animates, deliversDamage);
+        return new NpcWeaponAbilityScan(clientFeedback, deliversDamage);
     }
 
     private static void ScanAbility(
         INpcAttackDataSource data,
         uint abilityId,
         HashSet<uint> visited,
-        ref bool animates,
+        ref bool clientFeedback,
         ref bool deliversDamage)
     {
         var ability = abilityId != 0 ? data.GetAbility(abilityId) : null;
@@ -70,14 +80,14 @@ public static class NpcWeaponAbilities
             return;
         }
 
-        WalkChain(data, ability.Chain, visited, ref animates, ref deliversDamage);
+        WalkChain(data, ability.Chain, visited, ref clientFeedback, ref deliversDamage);
     }
 
     private static void WalkChain(
         INpcAttackDataSource data,
         uint chainId,
         HashSet<uint> visited,
-        ref bool animates,
+        ref bool clientFeedback,
         ref bool deliversDamage)
     {
         for (uint commandId = chainId; commandId != 0 && visited.Count < MaxCommands;)
@@ -94,13 +104,13 @@ public static class NpcWeaponAbilities
                 return;
             }
 
+            if (data.IsClientCommand(command.Subtype))
+            {
+                clientFeedback = true;
+            }
+
             switch ((CommandType)command.Subtype)
             {
-                case CommandType.PlayAnimation:
-                case CommandType.AbilityAnimation:
-                    animates = true;
-                    break;
-
                 case CommandType.InflictDamage:
                 case CommandType.FireProjectile:
                     deliversDamage = true;
@@ -111,9 +121,9 @@ public static class NpcWeaponAbilities
                     var branch = data.GetConditionalBranch(commandId);
                     if (branch != null)
                     {
-                        WalkChain(data, branch.IfChain, visited, ref animates, ref deliversDamage);
-                        WalkChain(data, branch.ThenChain, visited, ref animates, ref deliversDamage);
-                        WalkChain(data, branch.ElseChain, visited, ref animates, ref deliversDamage);
+                        WalkChain(data, branch.IfChain, visited, ref clientFeedback, ref deliversDamage);
+                        WalkChain(data, branch.ThenChain, visited, ref clientFeedback, ref deliversDamage);
+                        WalkChain(data, branch.ElseChain, visited, ref clientFeedback, ref deliversDamage);
                     }
 
                     break;
@@ -127,7 +137,7 @@ public static class NpcWeaponAbilities
                         var called = call.AbilityId != 0 ? data.GetAbility(call.AbilityId) : null;
                         if (called != null)
                         {
-                            WalkChain(data, called.Chain, visited, ref animates, ref deliversDamage);
+                            WalkChain(data, called.Chain, visited, ref clientFeedback, ref deliversDamage);
                         }
                     }
 
@@ -140,10 +150,10 @@ public static class NpcWeaponAbilities
                     var effect = apply != null && apply.EffectId != 0 ? data.GetStatusEffect(apply.EffectId) : null;
                     if (effect != null)
                     {
-                        WalkChain(data, effect.ApplyChain, visited, ref animates, ref deliversDamage);
-                        WalkChain(data, effect.RemoveChain, visited, ref animates, ref deliversDamage);
-                        WalkChain(data, effect.UpdateChain, visited, ref animates, ref deliversDamage);
-                        WalkChain(data, effect.DurationChain, visited, ref animates, ref deliversDamage);
+                        WalkChain(data, effect.ApplyChain, visited, ref clientFeedback, ref deliversDamage);
+                        WalkChain(data, effect.RemoveChain, visited, ref clientFeedback, ref deliversDamage);
+                        WalkChain(data, effect.UpdateChain, visited, ref clientFeedback, ref deliversDamage);
+                        WalkChain(data, effect.DurationChain, visited, ref clientFeedback, ref deliversDamage);
                     }
 
                     break;
