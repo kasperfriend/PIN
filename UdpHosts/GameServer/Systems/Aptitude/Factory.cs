@@ -149,16 +149,16 @@ public class Factory
                 return new ImpactApplyEffectCommand(SDBInterface.GetImpactApplyEffectCommandDef(commandId));
             case CommandType.InstantActivation:
                 return new InstantActivationCommand(SDBInterface.GetInstantActivationCommandDef(commandId));
-            // case CommandType.TargetFriendlies:
-            //     return new TargetFriendliesCommand(SDBInterface.GetTargetFriendliesCommandDef(commandId));
-            // case CommandType.TargetHostiles:
-            //     return new TargetHostilesCommand(SDBInterface.GetTargetHostilesCommandDef(commandId));
+            case CommandType.TargetFriendlies:
+                return new TargetFriendliesCommand(SDBInterface.GetTargetFriendliesCommandDef(commandId));
+            case CommandType.TargetHostiles:
+                return new TargetHostilesCommand(SDBInterface.GetTargetHostilesCommandDef(commandId));
             case CommandType.TargetPBAE:
                 return new TargetPBAECommand(SDBInterface.GetTargetPBAECommandDef(commandId));
             case CommandType.TargetSelf:
                 return new TargetSelfCommand(SDBInterface.GetTargetSelfCommandDef(commandId));
-            // case CommandType.TargetSingle:
-            //     return new TargetSingleCommand(SDBInterface.GetTargetSingleCommandDef(commandId));
+            case CommandType.TargetSingle:
+                return new TargetSingleCommand(SDBInterface.GetTargetSingleCommandDef(commandId));
             case CommandType.TimeCooldown:
                 return new TimeCooldownCommand(SDBInterface.GetTimeCooldownCommandDef(commandId));
             // case CommandType.ImpactAura:
@@ -593,8 +593,8 @@ public class Factory
             //     return new ClearHostilityCommand(CustomDBInterface.GetClearHostilityCommandDef(commandId));
             // case CommandType.UpdateSpawnTable:
             //     return new UpdateSpawnTableCommand(CustomDBInterface.GetUpdateSpawnTableCommandDef(commandId));
-            // case CommandType.TargetByHostility:
-            //     return new TargetByHostilityCommand(SDBInterface.GetTargetByHostilityCommandDef(commandId));
+            case CommandType.TargetByHostility:
+                return new TargetByHostilityCommand(SDBInterface.GetTargetByHostilityCommandDef(commandId));
             // case CommandType.RegisterClientProximity:
             //     return new RegisterClientProximityCommand(SDBInterface.GetRegisterClientProximityCommandDef(commandId));
             case CommandType.ApplySinCard:
