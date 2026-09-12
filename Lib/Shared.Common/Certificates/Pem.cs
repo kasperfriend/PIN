@@ -1,11 +1,12 @@
 using System;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace Shared.Common.Certificates;
 
 /// <summary>
 ///     The PEM documents PIN keeps its certificate and key in: base64 under banner lines, the format
-///     <see cref="System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPemFile(string, string)"/>
+///     <see cref="X509Certificate2.CreateFromPemFile(string, string)"/>
 ///     reads and the one every other TLS tool expects. Written here by hand rather than through a
 ///     convenience API, so a file produced by <c>openssl</c>, by an older runtime, or by the operator with
 ///     their own key, is byte-for-byte the same kind of file PIN writes and can read back.

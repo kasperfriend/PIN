@@ -63,10 +63,6 @@ public static class ServerAddress
         return host;
     }
 
-    /// <summary>Parses an address after stripping whatever a URL puts around it.</summary>
-    private static bool TryParse(string host, out IPAddress address) =>
-        IPAddress.TryParse(AddressHost(host), out address);
-
     /// <summary>
     ///     A file name for an address, so one artifact per advertised address sits side by side and a changed
     ///     VPN address leaves the certificate the old one installed alone.
@@ -92,4 +88,8 @@ public static class ServerAddress
 
         return builder.ToString();
     }
+
+    /// <summary>Parses an address after stripping whatever a URL puts around it.</summary>
+    private static bool TryParse(string host, out IPAddress address) =>
+        IPAddress.TryParse(AddressHost(host), out address);
 }
