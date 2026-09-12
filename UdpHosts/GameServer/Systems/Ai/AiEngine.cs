@@ -60,6 +60,16 @@ public class AiEngine
     private const float _muzzleHeight = 1.62f;
 
     private static readonly short _movementStateIdle = (short)((ushort)Movestate.Standing << 8);
+
+    /// <summary>
+    ///     Moving state an NPC carries while it is fighting: the walk. The two locomotion animations a
+    ///     mob has are the database's own two speeds - <c>dbcharacter::Monster.normal_speed</c> (the
+    ///     walk, used while closing on a target it is already attacking) and <c>fast_speed</c> (the
+    ///     run, used to chase) - see <see cref="AiSpeeds" />.
+    /// </summary>
+    private static readonly short _movementStateWalking = (short)(((ushort)Movestate.Walking << 8) | (ushort)MovementFlags.Movement);
+
+    /// <summary>Moving state a NPC carries while it runs its target down: the chase speed's animation.</summary>
     private static readonly short _movementStateRunning = (short)(((ushort)Movestate.Running << 8) | (ushort)MovementFlags.Movement);
 
     private readonly ConcurrentDictionary<ulong, NpcBrain> _brains = new();
@@ -219,6 +229,10 @@ public class AiEngine
     {
         if (evt.Target != null && _brains.TryGetValue(evt.Target.EntityId, out var npc))
         {
+            // A burst that was in flight when the NPC died is cancelled, not ended: the client has to
+            // drop the attack animation and play the death (the gib visuals and corpse linger come from
+            // NpcDeathService, which listens to the same event).
+            CancelAttackAnimation(npc);
             npc.Brain.OnDeath();
             npc.TargetId = 0;
         }
@@ -241,6 +255,11 @@ public class AiEngine
             npc.TargetId = 0;
             return;
         }
+
+        // The attack animation (CombatView burst markers) is a window: close the one that has run out
+        // before deciding anything new, so a client sees Fire... then Ended in the same order the DB
+        // timing describes.
+        EndAttackAnimationIfElapsed(npc, currentTime);
 
         if (perceive)
         {
@@ -289,6 +308,7 @@ public class AiEngine
         if (decision.Attack && targetAlive)
         {
             ResolveAttack(npc, target);
+            StartAttackAnimation(npc, currentTime);
         }
 
         ApplyDecision(npc, decision, elapsedMs, target);
@@ -376,6 +396,58 @@ public class AiEngine
         var hit = physics.SegmentRayCast(from, to, source.EntityId);
 
         return !hit.Hit || hit.HitEntityId == target.EntityId;
+    }
+
+    /// <summary>
+    ///     Starts the attack animation of one attack: the <c>FireBurst</c> marker every watching client
+    ///     plays the weapon's attack animation from, plus the window this engine closes with
+    ///     <c>FireEnd</c>. The window is the weapon's own burst timing (see
+    ///     <see cref="NpcAttackAnimation.ResolveDurationMs" />) - for a mob with a rifle that is the
+    ///     template's <c>ms_per_burst</c> volley, for a melee row its swing.
+    /// </summary>
+    private void StartAttackAnimation(NpcBrain npc, ulong currentTime)
+    {
+        var entity = npc.Entity;
+        if (entity == null)
+        {
+            return;
+        }
+
+        uint duration = NpcAttackAnimation.ResolveDurationMs(
+            npc.Profile?.BurstDurationMs ?? 0,
+            (uint)Math.Max(0, npc.Brain.AttackCooldownMs));
+
+        entity.SetFireBurst(unchecked((uint)currentTime));
+        npc.Animation = NpcAttackAnimation.Start(currentTime, duration);
+    }
+
+    /// <summary>Closes an attack animation whose window has run out, telling clients when it ended.</summary>
+    private void EndAttackAnimationIfElapsed(NpcBrain npc, ulong currentTime)
+    {
+        var animation = npc.Animation;
+        if (animation == null || animation.Value.IsActive(currentTime))
+        {
+            return;
+        }
+
+        npc.Animation = null;
+        npc.Entity?.SetFireEnd(unchecked((uint)animation.Value.EndTime));
+    }
+
+    /// <summary>
+    ///     Drops an attack animation that did not run to its end - the NPC died (or was despawned) in
+    ///     the middle of it. The marker is the one the client's own <c>FireCancel</c> produces, so the
+    ///     animation stops instead of being played out over whatever happens next.
+    /// </summary>
+    private void CancelAttackAnimation(NpcBrain npc)
+    {
+        if (npc.Animation == null)
+        {
+            return;
+        }
+
+        npc.Animation = null;
+        npc.Entity?.SetFireCancel(_shard.CurrentTime);
     }
 
     private void ResolveAttack(NpcBrain npc, CharacterEntity target)
@@ -496,7 +568,12 @@ public class AiEngine
             }
         }
 
-        var movementState = moved ? _movementStateRunning : _movementStateIdle;
+        // Two locomotion animations come straight from the database's two speeds: the walk while the
+        // NPC repositions at combat speed (normal_speed, the Attack state's MoveSpeed) and the run
+        // while it runs a target down (fast_speed, the Chase/Return speed).
+        short movementState = !moved
+            ? _movementStateIdle
+            : decision.State == AiBrainState.Attack ? _movementStateWalking : _movementStateRunning;
         entity.MovementState = movementState;
         BroadcastPose(entity, movementState);
     }
@@ -624,5 +701,8 @@ public class AiEngine
 
         /// <summary>The weapon this NPC attacks with, as the static database describes it.</summary>
         public NpcAttackProfile Profile;
+
+        /// <summary>The attack animation currently being shown, or null when none is running.</summary>
+        public NpcAttackAnimation? Animation;
     }
 }

@@ -105,6 +105,11 @@ public sealed class NpcAttackResolver
             _rules.AttackDamageFraction,
             _rules.AttackDamage);
 
+        // The animation window is the weapon's own burst timing, not the AI cadence: ms_burst_duration
+        // when the burst is fired over time, otherwise ms_per_burst (the fire cycle). See
+        // NpcAttackAnimation for how it is spent.
+        uint burstDuration = template.MsBurstDuration > 0 ? template.MsBurstDuration : template.MsPerBurst;
+
         float rangeAttribute = ReadAttribute(attributes, (ushort)ItemAttributeId.WeaponRange);
         float range = rangeAttribute > 0f ? rangeAttribute : template.Range;
         byte rounds = template.RoundsPerBurst > 0 ? template.RoundsPerBurst : (byte)1;
@@ -181,6 +186,12 @@ public sealed class NpcAttackResolver
             ImpactRadius = impactRadius,
             MaxRadius = maxRadius,
             FireType = template.FireType,
+            BurstDurationMs = burstDuration,
+            ArmedAnimationId = template.AnimArmedId,
+            ArmedAnimationPriority = template.AnimArmedPriority,
+            FireAnimationType = template.AnimFireType,
+            ReloadAnimationType = template.AnimReloadType,
+            ChargeAnimationType = template.AnimChargeType,
             AttackAbilityId = template.AttackAbility,
             MeleeAbilityId = template.MeleeAbility,
             MuzzleOffset = muzzleOffset,

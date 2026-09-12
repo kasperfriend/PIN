@@ -26,6 +26,10 @@ public class NpcAttackResolverTests
         MsPerBurst = 100,
         RoundsPerBurst = 4,
         AmmoId = AmmoId,
+        AnimArmedId = 1,
+        AnimArmedPriority = 100,
+        AnimFireType = 1,
+        AnimReloadType = 7,
     };
 
     private static WeaponTemplateResult MeleeTemplate() => new()
@@ -36,6 +40,10 @@ public class NpcAttackResolverTests
         MsPerBurst = 1600,
         RoundsPerBurst = 1,
         AmmoId = 0,
+        AnimArmedId = 1,
+        AnimArmedPriority = 100,
+        AnimFireType = 2,
+        AnimReloadType = 4,
     };
 
     /// <summary>
@@ -113,6 +121,39 @@ public class NpcAttackResolverTests
         Assert.Equal(30f, profile.AttackRange);
         Assert.Equal(34.5f, profile.AttackRangeExit, 3);
         Assert.Equal("Main 30025 (Type 30 - NPC Guard Rifle)", profile.WeaponName);
+
+        // The weapon's animation data, straight from the template's anim_* columns: the window the
+        // engine marks its attack animation with (ms_per_burst here) and the client's animation selectors.
+        Assert.Equal(100u, profile.BurstDurationMs);
+        Assert.Equal(1, profile.ArmedAnimationId);
+        Assert.Equal(100, profile.ArmedAnimationPriority);
+        Assert.Equal(1, profile.FireAnimationType);
+        Assert.Equal(7, profile.ReloadAnimationType);
+        Assert.Equal(0, profile.ChargeAnimationType);
+    }
+
+    [Fact]
+    public void Resolve_BurstDuration_PrefersMsBurstDurationOverMsPerBurst()
+    {
+        // 7 of the 85 templates NPCs use carry ms_burst_duration (the burst is fired over time); it is
+        // the animation window there, ms_per_burst only the fallback.
+        var data = DataWith(RangedTemplate());
+        data.Weapons[WeaponId].Main.MsBurstDuration = 120;
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(120u, profile.BurstDurationMs);
+    }
+
+    [Fact]
+    public void Resolve_MeleeSwing_AnimatesForTheWeaponsBurstCycle()
+    {
+        var data = DataWith(MeleeTemplate());
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(1600u, profile.BurstDurationMs);
+        Assert.Equal(2, profile.FireAnimationType);
     }
 
     [Fact]

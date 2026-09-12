@@ -120,7 +120,11 @@ CustomData/character_spawn.json | \npc 290 | admin "npc 290"
   `spawn <kind> <name>` commands use.
 - NPC behavior strings (`behavior*`) are **not simulated yet**: every monster
   type runs the same generic state machine (see [NPC_AI.md](NPC_AI.md)) instead
-  of its database behavior tree.
+  of its database behavior tree. What *is* simulated is the animation those
+  attacks and movements need: each attack is marked with the weapon's own burst
+  timing (`ms_burst_duration` / `ms_per_burst`, clamped to the AI's cadence) and
+  the walk/run states come from the monster's `normal_speed` / `fast_speed`
+  columns - see [NPC_AI.md](NPC_AI.md) §3 "What an NPC animates".
 
 ## 4. What the database actually contains (catalog)
 

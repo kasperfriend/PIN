@@ -95,6 +95,35 @@ public sealed record NpcAttackProfile
     /// <summary>Template fire type byte, kept for diagnostics.</summary>
     public byte FireType { get; init; }
 
+    /// <summary>
+    ///     Length of one attack's animation in milliseconds, straight from the template's burst
+    ///     columns (<c>ms_burst_duration</c> when the burst is fired over time, otherwise
+    ///     <c>ms_per_burst</c>). This is the window the engine marks with
+    ///     <c>CombatView.WeaponBurstFired</c> ... <c>WeaponBurstEnded</c>; it is independent of
+    ///     <see cref="AttackIntervalMs" />, which is the behaviour's time between two attacks.
+    /// </summary>
+    public uint BurstDurationMs { get; init; }
+
+    /// <summary>
+    ///     The weapon's armed-pose animation id (<c>dbitems::WeaponTemplates.anim_armed_id</c>, with
+    ///     the item's and slot's modifiers applied). The client picks the armed animation set from the
+    ///     equipped template id; the value is carried here so the AI's animation decision is explicit
+    ///     and testable. Absent on a template that carries none.
+    /// </summary>
+    public byte ArmedAnimationId { get; init; }
+
+    /// <summary>Priority of the armed pose (<c>anim_armed_priority</c>, 100 on every weapon an NPC uses).</summary>
+    public byte ArmedAnimationPriority { get; init; }
+
+    /// <summary>Attack animation selector of the weapon (<c>anim_fire_type</c>).</summary>
+    public byte FireAnimationType { get; init; }
+
+    /// <summary>Reload animation selector of the weapon (<c>anim_reload_type</c>).</summary>
+    public byte ReloadAnimationType { get; init; }
+
+    /// <summary>Charge animation selector of the weapon (<c>anim_charge_type</c>).</summary>
+    public byte ChargeAnimationType { get; init; }
+
     /// <summary>Template attack ability id (an aptitude chain in the original game), or 0.</summary>
     public uint AttackAbilityId { get; init; }
 

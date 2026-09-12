@@ -503,6 +503,13 @@ public class SDBUtils
             EquipExitMs = WeaponTemplateModifier(template.EquipExitMs, modifiers?.EquipExitMs),
             SlotIndex = WeaponTemplateOverrider(template.SlotIndex, (byte?)modifiers?.SlotIndex), // Not sure why the modifier table has this as sbyte, but 0 and no negative values are seen, so assuming we should not subtract and simply cast to byte.
 
+            // Animation
+            AnimArmedId = WeaponTemplateModifier(template.AnimArmedId, modifiers?.AnimArmedId),
+            AnimArmedPriority = (byte)WeaponTemplateModifier((ushort)template.AnimArmedPriority, modifiers?.AnimArmedPriority),
+            AnimFireType = WeaponTemplateModifier(template.AnimFireType, modifiers?.AnimFireType),
+            AnimReloadType = WeaponTemplateModifier(template.AnimReloadType, modifiers?.AnimReloadType),
+            AnimChargeType = WeaponTemplateModifier(template.AnimChargeType, modifiers?.AnimChargeType),
+
             // Abilities
             MeleeAbility = WeaponTemplateOverrider(template.MeleeAbilityId, modifiers?.MeleeAbilityId),
             AttackAbility = WeaponTemplateOverrider(template.AttackAbilityId, modifiers?.AttackAbilityId),
@@ -601,6 +608,11 @@ public class SDBUtils
                             result.Range = WeaponTemplateModifier(result.Range, moduleModifiers.Range, moduleModifiers.RangeMult);
                             result.EquipEnterMs = WeaponTemplateModifier(result.EquipEnterMs, moduleModifiers.EquipEnterMs);
                             result.EquipExitMs = WeaponTemplateModifier(result.EquipExitMs, moduleModifiers.EquipExitMs);
+                            result.AnimArmedId = WeaponTemplateModifier(result.AnimArmedId, moduleModifiers.AnimArmedId);
+                            result.AnimArmedPriority = (byte)WeaponTemplateModifier((ushort)result.AnimArmedPriority, moduleModifiers.AnimArmedPriority);
+                            result.AnimFireType = WeaponTemplateModifier(result.AnimFireType, moduleModifiers.AnimFireType);
+                            result.AnimReloadType = WeaponTemplateModifier(result.AnimReloadType, moduleModifiers.AnimReloadType);
+                            result.AnimChargeType = WeaponTemplateModifier(result.AnimChargeType, moduleModifiers.AnimChargeType);
                             result.MeleeAbility = WeaponTemplateOverrider(result.MeleeAbility, moduleModifiers.MeleeAbilityId);
                             result.AttackAbility = WeaponTemplateOverrider(result.AttackAbility, moduleModifiers.AttackAbilityId);
                             result.OverchargeAbility = WeaponTemplateOverrider(result.OverchargeAbility, moduleModifiers.OverchargeAbility);
@@ -829,6 +841,16 @@ public class WeaponTemplateResult
     public float Agility;
     public uint MsAgilityReturn;
     public uint MsAgilityReturnDelay;
+
+    // Animation. The client's weapon animation state machine reads these to pick the armed pose
+    // (AnimArmedId/AnimArmedPriority) and the fire, reload and charge animations (AnimFireType,
+    // AnimReloadType, AnimChargeType); the server carries them for the AI's attack animation, which
+    // is timed from the same template's MsPerBurst/MsBurstDuration columns. See NpcAttackProfile.
+    public byte AnimArmedId;
+    public byte AnimArmedPriority;
+    public byte AnimFireType;
+    public byte AnimReloadType;
+    public byte AnimChargeType;
 
     // ?
     public uint MsReturn;

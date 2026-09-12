@@ -16,6 +16,11 @@ give up when they are dragged too far from where they spawned.
 > [What an attack actually does](#3-what-an-attack-actually-does) and
 > [Weapon attacks come from the database](#weapon-attacks-come-from-the-database).
 
+> **Mobs animate their attacks.** Each attack is marked in the combat view with the
+> weapon's own burst timing, and the walk/run states come from the monster's two
+> speed columns - see
+> [What an NPC animates](#what-an-npc-animates).
+
 > Character origins sit at the feet (the muzzle offset is `(0.2, 0, 1.62)` in
 > `CalculateProjectileOrigin`, i.e. chest height above the origin) and the body
 > orientation is a yaw-only rotation about world +Z, confirmed against the
@@ -42,6 +47,7 @@ UdpHosts/GameServer/Systems/Ai/
 ├── NpcAttackProfile.cs         everything one NPC attack needs, resolved from the DB
 ├── NpcAttackResolver.cs        monster -> weapon -> template/attributes/ammo -> profile
 ├── NpcAttackDamageMath.cs      the pure damage + cadence rules
+├── NpcAttackAnimation.cs       the attack animation window (burst markers)
 ├── NpcBehaviorParams.cs        parser for the behaviour string's attack parameters
 ├── NpcProjectileLauncher.cs    fires a resolved shot through ProjectileSim
 ├── INpcAttackDataSource.cs     the DB surface the resolver reads (fakeable in tests)
@@ -208,6 +214,67 @@ Before stepping, a short forward ray cast checks for a wall; if the way is
 blocked the NPC holds position instead of walking through it. With no collision
 data loaded (`LoadMapsCollision` off) nothing can block and nothing occludes, so
 every target counts as visible.
+
+### What an NPC animates
+
+A mob's animation is not a server-side asset choice - the client owns the animation
+graphs and picks them from replicated state. Three pieces of that state are the
+server's job, and all three are now driven by the database:
+
+| What | Replicated where | Where the value comes from |
+|---|---|---|
+| Attack / fire | `CombatView.WeaponBurstFired`, then `WeaponBurstEnded` (or `WeaponBurstCancelled`) | `dbitems::WeaponTemplates.ms_burst_duration` (else `ms_per_burst`), clamped to the NPC's own attack cadence |
+| Locomotion | `CurrentPoseUpdate` / `MovementView` movement state | `dbcharacter::Monster.normal_speed` (the walk, `0x5004`, while attacking) and `fast_speed` (the run, `0x2004`, while chasing) |
+| Armed pose + weapon animation set | `CurrentEquipment` (the weapon item's template id) | `dbitems::WeaponTemplates.anim_armed_id` / `anim_armed_priority` / `anim_fire_type` / `anim_reload_type` / `anim_charge_type` |
+
+**Attack animation.** A player's is driven by the client itself: it sends
+`FireBurst` when a burst starts and `FireEnd`/`FireCancel` when it stops, and the
+server only relays those three times to everyone else, who play the animation of
+the weapon the replicated equipment says the character holds. An NPC has no client
+to send them, which is why mobs used to stand still while hitting you. `AiEngine`
+now produces the same three markers: `FireBurst` at the attack, `FireEnd` at the
+weapon's own burst timing, and `FireCancel` if the mob dies in the middle of one
+(the client then drops the attack pose for the death). The window is the
+template's `ms_burst_duration` (the burst is fired over time) else `ms_per_burst`
+(the fire cycle), clamped so an animation can never outlive the attack cycle that
+started it - a rifle's 100 ms volley inside a 2,500 ms behaviour cycle, a melee
+Spyder's 1,600 ms swing inside its 2,000 ms one. A monster the database gives no
+weapon at all swings with a documented 500 ms default (the only animation length
+here that is not a row), so weaponless mobs animate too.
+
+**Weapon animation parameters.** `SDBUtils.GetDetailedWeaponTemplateInfo` used to
+drop the `anim_*` columns ("stuff that is presumably client side like
+animations"); they are now resolved through the same item/slot modifier cascade as
+every other template field and carried on `NpcAttackProfile`
+(`ArmedAnimationId`, `ArmedAnimationPriority`, `FireAnimationType`,
+`ReloadAnimationType`, `ChargeAnimationType`, `BurstDurationMs`). Of the 85
+templates the build's mobs actually use, all 85 carry `anim_armed_id` (1 on 76 of
+them, 4 on the other 9) and `anim_armed_priority` 100, 47 carry a non-zero
+`anim_fire_type`, 53 a `anim_reload_type` and 2 an `anim_charge_type`; the client
+gets them from the item's template id, which the equipment replication already
+carries.
+
+**Locomotion.** The database gives a mob two speeds and the client has two
+locomotion animations to match: `normal_speed` is the walk used while it
+repositions inside its attack (the `Attack` state's speed) and `fast_speed` the
+run it chases with, so the engine broadcasts `Walking` (`0x5004`) while attacking
+and `Running` (`0x2004`) while chasing, and `Standing` (`0x1000`) when it holds
+still. `AiSpeeds` picks which of the two rows is trusted; the movement state that
+goes out with every pose is the DB-driven selection on top of it.
+
+**Death.** The state change (`CharacterState.Dead`) plus `NpcDeathService`'s gib
+visuals and corpse linger are what the client plays its death and gib animation
+from; an attack animation in flight is cancelled first (above).
+
+What is *not* driven by the database yet: the idle/wander animations inside a
+monster's behaviour tree, and the animation commands inside ability chains
+(`apttf::tfPlayAnimationCommandDef` - 642 rows with names like `AttackSingle`,
+`Shoot`, `Death` - and `tfAbilityAnimationCommandDef`, 1,898 rows), which the
+client's own copy of a chain plays for the entity it controls while PIN's server
+side treats them as placeholders. `AbilityActivated`/`AbilityFailed` are
+`CombatController` events, i.e. addressed to the controlling player, so an
+observer of an NPC has no channel carrying them today; the attack animation above
+is what observers get.
 
 ---
 
@@ -430,8 +497,14 @@ stays horizontal, exactly as before.
 
 ## 6. Known gaps
 
-* **No animation selection.** The engine only sets the movement state
-  (`0x1000` standing, `0x2004` running); there is no attack or death animation.
+* **Animation is attack + locomotion only.** The engine drives the attack burst
+  markers, the walk/run/stand movement state and the death state (see
+  [What an NPC animates](#what-an-npc-animates)), but it does not run a monster's
+  behaviour tree, so there are no idle, taunt or wander animations, no per-ability
+  animations (the `apttf::tfPlayAnimationCommandDef` rows in ability chains are
+  client-side feedback with no observer channel), and no NPC emotes
+  (`dbcharacter::EmoteRecord` is only wired to the player's `PerformEmote` and to
+  dialog rows PIN does not run).
 * **No accuracy model.** NPC shots aim at the target's chest with the weapon's
   own spread profile left unused: there is no per-NPC spread state, no
   `MinSpread`/`MaxSpread` handling and no aim error, so a ranged mob hits for as
