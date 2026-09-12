@@ -266,15 +266,28 @@ goes out with every pose is the DB-driven selection on top of it.
 visuals and corpse linger are what the client plays its death and gib animation
 from; an attack animation in flight is cancelled first (above).
 
-What is *not* driven by the database yet: the idle/wander animations inside a
-monster's behaviour tree, and the animation commands inside ability chains
-(`apttf::tfPlayAnimationCommandDef` - 642 rows with names like `AttackSingle`,
-`Shoot`, `Death` - and `tfAbilityAnimationCommandDef`, 1,898 rows), which the
-client's own copy of a chain plays for the entity it controls while PIN's server
-side treats them as placeholders. `AbilityActivated`/`AbilityFailed` are
-`CombatController` events, i.e. addressed to the controlling player, so an
-observer of an NPC has no channel carrying them today; the attack animation above
-is what observers get.
+**What is *not* driven yet.** The database's animation surface is larger than
+these three pieces, and the line currently sits here:
+
+| Static DB | Rows | Describes | State in PIN |
+|---|---|---|---|
+| `dbitems::WeaponTemplates` / `WeaponTemplateModifiers` `anim_*`, `ms_burst_duration`, `ms_per_burst` | 318 / 5,387 | the weapon's animation selectors and its burst timing | used (above) |
+| `dbcharacter::Monster.normal_speed` / `fast_speed` | 3,109 | the two locomotion speeds the walk/run animation matches | used (above) |
+| `dbcharacter::GibVisuals` (`death_anim_index`, `blast_impulse_strength`, `direct_vrec_id`) via `dbitems::Battleframe.gibset_id` | 128 | the death/gib animation a corpse plays | reached on death by the existing `NpcDeathService` chain, but only for 1,137 of the 3,109 monster rows: 1,806 have `gibset_id` 0, 54 point at a missing `GibVisuals` row and 112 chassis have no battleframe row, and those die with `No gib visuals id available` |
+| `dbcharacter::Stumble` (`anim_index`, `duration`, `cooldown_ms`, `distance`, `only_once`) | 39 | hit-reaction ("stumble") animations | unused |
+| `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction | unused |
+| `dbcharacter::EmoteRecord` (`animation_name`, `anim_override_id`, `head_anim_override_id`) | 382 | emotes | player-only (`PerformEmote`); NPCs never emote |
+| `dbcharacter::MonsterMood` / `MonsterMoodName` | 2,268 / 6 | mood -> portrait id | unused (a UI portrait, not a world animation) |
+| `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the per-ability animation commands of the original game's chains | placeholder records: PIN does not execute ability chains for NPCs, so no `AttackSingle`/`Shoot`/`Injured`/`roar` animation is ever triggered |
+| `dbitems::Weapons.first_person_animnet_id` / `third_person_animnet_id`, `dbcharacter::Head.animnet_id`, `dbitems::BattleframeVisuals.animnetwork_id`, `dbcharacter::Deployable.animnetwork` | 6,789 / 67 / 2,786 / 3,902 | animation-network (animation graph) asset ids | client side: the client picks the graph from the item/visual id the server already replicates, so there is nothing for the server to send |
+
+The protocol's only animation-specific observer message is the GSS character
+event `AnimationUpdated` (`ushort` + `byte`, both fields unnamed in
+`AeroMessages`);
+PIN has never sent it, so stumbles and the chain animations above have no observer
+channel today. `AbilityActivated`/`AbilityFailed` are `CombatController` events,
+i.e. addressed to the controlling player, and so cannot carry an NPC's animation
+either. The attack animation described above is what an observer of an NPC gets.
 
 ---
 
@@ -497,14 +510,17 @@ stays horizontal, exactly as before.
 
 ## 6. Known gaps
 
-* **Animation is attack + locomotion only.** The engine drives the attack burst
-  markers, the walk/run/stand movement state and the death state (see
-  [What an NPC animates](#what-an-npc-animates)), but it does not run a monster's
-  behaviour tree, so there are no idle, taunt or wander animations, no per-ability
-  animations (the `apttf::tfPlayAnimationCommandDef` rows in ability chains are
-  client-side feedback with no observer channel), and no NPC emotes
-  (`dbcharacter::EmoteRecord` is only wired to the player's `PerformEmote` and to
-  dialog rows PIN does not run).
+* **Animation is attack + locomotion + death only.** The engine drives the attack
+  burst markers, the walk/run/stand movement state and the death state (see
+  [What an NPC animates](#what-an-npc-animates), which lists the animation rows
+  that are and are not used), but it does not run a monster's behaviour tree, so
+  there are no idle, taunt or wander animations, no per-ability animations (the
+  `apttf::tfPlayAnimationCommandDef` / `tfAbilityAnimationCommandDef` chain
+  commands are placeholders, and the protocol's `AnimationUpdated` observer event
+  is never sent), no stumble/hit-reaction animations (`dbcharacter::Stumble`,
+  `dbcharacter::StumbleDirection`) and no NPC emotes (`dbcharacter::EmoteRecord`
+  is only wired to the player's `PerformEmote` and to dialog rows PIN does not
+  run).
 * **No accuracy model.** NPC shots aim at the target's chest with the weapon's
   own spread profile left unused: there is no per-NPC spread state, no
   `MinSpread`/`MaxSpread` handling and no aim error, so a ranged mob hits for as
