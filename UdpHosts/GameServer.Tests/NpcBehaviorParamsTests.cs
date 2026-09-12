@@ -111,14 +111,14 @@ public class NpcBehaviorParamsTests
             "Arch_MedRangedHumanoid_Base(triggerPullTime=5000,am1Id = 33833, am1Cooldown = 1700, am1Chance = 0.65, am1Timeout = 1000, am2Id = 33812, am2Cooldown = 1700, am2Chance = 0.65, am2Timeout = 1000)");
 
         Assert.True(parsed.TryGetAbilityModule("am1", out var first));
-        Assert.Equal(33_833u, first.AbilityId);
+        Assert.Equal(33_833u, first.ModuleId);
         Assert.Equal(0.65f, first.Chance);
         Assert.Equal(1_700, first.CooldownMs);
         Assert.Equal(0f, first.MinDistance);
         Assert.Equal(float.MaxValue, first.MaxDistance);
 
         Assert.True(parsed.TryGetAbilityModule("am2", out var second));
-        Assert.Equal(33_812u, second.AbilityId);
+        Assert.Equal(33_812u, second.ModuleId);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class NpcBehaviorParamsTests
         var parsed = NpcBehaviorParams.Parse("Arch_FullbodyMelee_Base(combatDist=4,am1Id=82621,am1Facing=true,am1Coodown=3000)");
 
         Assert.True(parsed.TryGetAbilityModule("am1", out var module));
-        Assert.Equal(8_2621u, module.AbilityId);
+        Assert.Equal(8_2621u, module.ModuleId);
         Assert.Equal(3_000, module.CooldownMs);
         Assert.Equal(1f, module.Chance);
     }
@@ -157,7 +157,7 @@ public class NpcBehaviorParamsTests
         Assert.False(wanderer.TryGetAbilityModule("am2", out _));
         Assert.False(oneModule.TryGetAbilityModule("am1", out _));
         Assert.True(oneModule.TryGetAbilityModule("am2", out var module));
-        Assert.Equal(86_100u, module.AbilityId);
+        Assert.Equal(86_100u, module.ModuleId);
     }
 
     [Fact]
