@@ -80,7 +80,12 @@ through `UseUrls`. Which address the *client* is told to use is decided
 separately, by `Firefall:PublicHost`: the capability response (`/check`) and the
 oracle ticket build their URLs through `Lib/Shared.Web/Config/PublicUrls.cs`, so
 the servers can listen everywhere while still advertising `localhost`, or
-advertise a LAN/VPN address instead. See [Remote Play & Networking](REMOTE_PLAY.md).
+advertise a LAN/VPN address instead — and the advertised address decides the TLS
+certificate the https endpoints are served with, since a client dialling
+`26.1.2.3` needs one that names `26.1.2.3`. PIN issues and keeps that one
+(`Lib/Shared.Common/Certificates/TlsCertificateStore.cs`, `certs/` next to the
+binary) and serves its public half at `GET /certificate.cer`. See
+[Remote Play & Networking](REMOTE_PLAY.md).
 
 ### References
 

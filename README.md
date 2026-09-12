@@ -22,6 +22,10 @@ https://user-images.githubusercontent.com/920861/134824107-03e9f99c-b420-47c7-b7
      from there. A release produced by CI contains the three servers only.
 8. Make sure the [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) is installed
 9. Trust self-signed development certificates by running `dotnet dev-certs https --trust`
+   (that covers a server advertising `localhost`; if `Firefall:PublicHost` names an
+   address instead, PIN issues its own certificate for it and
+   `WebHostManager.exe --trust-cert` is the matching one-liner — see
+   [Connecting with friends](#connecting-with-friends))
 10. Start all three applications:
    - GameServer
    - MatrixServer
@@ -173,17 +177,23 @@ and restart it:
 ```json
 "Firefall": {
   "PublicHost": "26.11.22.33",
-  "AdvertiseHttps": false
+  "AdvertiseHttps": true
 }
 ```
 
-`AdvertiseHttps: false` serves the plain http endpoints, so no friend has to
-trust PIN's self-signed certificate. Then click **Allow access** — with *both*
+Keep `AdvertiseHttps` on: the client refuses a plain http oracle URL, so an
+http-only server gets a friend as far as the character list and no further. There is
+no certificate to make — PIN issues one for whatever address it advertises, keeps it
+in `certs\` next to `WebHostManager.exe`, and serves the half players need at
+`http://<your-address>:4400/certificate.cer`. Let the client on *this* machine trust
+it with `WebHostManager.exe --trust-cert` (once; it writes your user's certificate
+store, `--machine` the local machine's), then click **Allow access** — with *both*
 Private and Public ticked — when Windows Defender Firewall asks about
 WebHostManager, MatrixServer and GameServer. That is the whole host setup: no
 port forwarding, no router changes, the VPN tunnels through NAT by itself.
 
-**Your friends** — put that same address in their own
+**Your friends** — take `certificate.cer` off the host once (`certutil -addstore -f
+Root pin.cer` in an elevated shell) and put that same address in their own
 `steamapps\common\Firefall\firefall.ini`:
 
 ```ini
@@ -206,11 +216,33 @@ and the oracle ticket advertise. The client finds the game server through the
 MatrixServer, so there is no second address to configure.
 
 > **Full guide:** [`Docs/REMOTE_PLAY.md`](Docs/REMOTE_PLAY.md) — what binds where,
-> the firewall and port table, staying on https with a certificate that matches
-> your address, `curl` checks that prove the setup, and troubleshooting
+> the firewall and port table, how PIN's own certificate works and how a player
+> trusts it, `curl` checks that prove the setup, and troubleshooting
 > (including the MTU trap over a VPN tunnel).
 
 ### Troubleshooting
+
+**`unable to locate server. Oracle URL http://… not configured for HTTPS (request must be secure)`**
+
+`Firefall:AdvertiseHttps` is `false`. Login and the character list run over plain
+http, but the client will not ask an `http://` URL for the ticket that names its game
+server, so **Enter World** is where it stops — and the log says so while the client is
+still on the character screen. Set `AdvertiseHttps` to `true` and restart: PIN issues a
+certificate for whatever address `PublicHost` names, and
+`WebHostManager.exe --trust-cert` trusts it on the server machine
+([`Docs/REMOTE_PLAY.md`](Docs/REMOTE_PLAY.md) §6).
+
+**Login form flashes red at the username and password, on a server that advertises an address**
+
+The client is being handed `https://<address>:443xx` URLs and refuses the certificate
+waiting there: the ASP.NET Core development certificate is issued for `localhost`, so
+it does not validate for an address, and a remote player has no reason to trust a
+self-signed certificate he was never given. With `AdvertiseHttps: true` PIN issues the
+right certificate (`certs\pin-<host>.cer`); trust it on each machine that runs a
+client — `--trust-cert` on the host, `certutil -addstore -f Root pin.cer` after
+downloading `http://<address>:4400/certificate.cer` elsewhere. Playing on the server
+machine alone: leave `PublicHost` at `localhost`, where
+`dotnet dev-certs https --trust` is all there is to it.
 
 **`GameServer terminated: CodeBase is not supported on assemblies loaded from a single-file bundle`**
 
@@ -273,6 +305,8 @@ running the servers — see [Connecting with friends](#connecting-with-friends).
 3. Build the solution
 4. Edit `GameServer.config.json` produced by the build in `UdpHosts\GameServer\bin\Release\net10.0` (copy `GameServer.config.example.json` to `GameServer.config.json` if it is missing) and set `StaticDBPath`, `MapsPath`, and `AssetDBPath` to your Firefall installation.
 5. Trust self-signed development certificates by running `dotnet dev-certs https --trust`
+   (or `WebHostManager --trust-cert` once, for a server that advertises a LAN/VPN
+   address: that is the certificate PIN issues for `Firefall:PublicHost`)
 6. Start multiple targets at once
    - Visual Studio: Create a `Multiple Startup Projects` target that start WebHostManager, GameServer and MatrixServer
    - Rider: Create a `Compound` target that starts WebHostManager, GameServer and MatrixServer
@@ -318,5 +352,9 @@ box and should stay closed to other machines.
 
 Which address clients are *told* to use is a separate setting,
 `Firefall:PublicHost` (`localhost` by default), together with
-`Firefall:AdvertiseHttps` for the scheme — see
-[`Docs/REMOTE_PLAY.md`](Docs/REMOTE_PLAY.md).
+`Firefall:AdvertiseHttps` for the scheme — and the address that gets advertised
+decides the TLS certificate the hosts serve, because a client validating
+`https://26.11.22.33:44302` needs a certificate that names `26.11.22.33`. PIN
+issues that one itself (`Firefall:Certificate`, `TlsCertificateStore`) and hands the
+public half out over plain http, so the certificate is never the thing that stops a
+setup — see [`Docs/REMOTE_PLAY.md`](Docs/REMOTE_PLAY.md).

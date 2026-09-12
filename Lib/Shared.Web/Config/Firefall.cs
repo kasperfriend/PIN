@@ -25,12 +25,34 @@ public class Firefall
     public string PublicHost { get; set; } = "localhost";
 
     /// <summary>
-    ///     Whether the advertised URLs use https (the default) or plain http. Set this to <c>false</c> to
-    ///     serve players that do not trust PIN's self-signed development certificate: the http endpoints
-    ///     are bound either way, and with this off the hosts stop redirecting plain requests to their TLS
-    ///     port (a redirect a remote client cannot follow without trusting that certificate).
+    ///     Whether the advertised URLs use https (the default) or plain http.
     /// </summary>
+    /// <remarks>
+    ///     Keep this <c>true</c>: the client itself refuses a plain http oracle URL - it answers the click
+    ///     on <c>Enter World</c> with <c>Oracle URL http://host:4402 not configured for HTTPS (request must
+    ///     be secure)</c>, so an http-only server gets a remote player to the character selection screen
+    ///     and no further (see <c>PublicUrls.ClientWarning</c>, which says so in the log). With this on,
+    ///     PIN issues itself a certificate for <see cref="PublicHost"/> when you have not configured one
+    ///     (see <see cref="Certificate"/>) so the address the client dials is on the certificate it is
+    ///     validated against.
+    /// </remarks>
     public bool AdvertiseHttps { get; set; } = true;
+
+    /// <summary>
+    ///     Whether a plain http request is answered with a redirect to the host's TLS port. Off by
+    ///     default: both ports are fully functional, and a 307 the client does not follow - or cannot,
+    ///     because it has no reason to trust the certificate on the other side of it - is a server that
+    ///     silently does not exist for that client. Turn it on to push everything that arrives in the clear
+    ///     onto https; the certificate download routes stay plain either way, since a player who has to
+    ///     trust the certificate first cannot follow a redirect that already requires it.
+    /// </summary>
+    public bool RedirectHttpToHttps { get; set; }
+
+    /// <summary>
+    ///     The TLS certificate the https endpoints are served with: your own <c>.pfx</c>, or the one PIN
+    ///     issues for <see cref="PublicHost"/> and keeps next to the binary.
+    /// </summary>
+    public FirefallCertificate Certificate { get; set; } = new();
 
     /// <summary>
     ///     UDP port of the MatrixServer, advertised as the <c>host:port</c> matrix address of the oracle
