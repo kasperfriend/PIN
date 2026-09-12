@@ -182,9 +182,9 @@ public static class TlsCertificateStore
         // Everything a TLS server certificate has to claim, as extensions: the BasicConstraints of a trust
         // anchor of its own, KeyUsage for signing the handshake and for signing as that anchor
         // (KeyCertSign), and the enhanced key usage that says "this one is for server authentication".
-        _ = request.CertificateExtensions.Add(new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
-        _ = request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.KeyCertSign, critical: true));
-        _ = request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid(ServerAuthenticationOid) }, false));
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.KeyCertSign, critical: true));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid(ServerAuthenticationOid) }, false));
 
         var alternativeNames = new SubjectAlternativeNameBuilder();
         foreach (var name in DnsNamesFor(host))
@@ -197,7 +197,7 @@ public static class TlsCertificateStore
             alternativeNames.AddIpAddress(address);
         }
 
-        _ = request.CertificateExtensions.Add(alternativeNames.Build());
+        request.CertificateExtensions.Add(alternativeNames.Build());
 
         var notBefore = DateTimeOffset.UtcNow.AddMinutes(-NotBeforeSkewMinutes);
         return request.CreateSelfSigned(notBefore, notBefore.AddYears(ValidityYears));
