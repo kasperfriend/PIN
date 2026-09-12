@@ -26,6 +26,7 @@ public class SDBInterface
     private static List<FactionRelations> _factionRelations;
     private static Dictionary<uint, List<FactionReputations>> _factionReputations;
     private static Dictionary<uint, Monster> _monster;
+    private static Dictionary<ushort, EmoteRecord> _emoteRecord;
     private static Dictionary<KeyValuePair<uint, ushort>, MonsterAttributeRange> _monsterAttributeRange;
     private static Dictionary<uint, MonsterScaling> _monsterScaling;
     private static Dictionary<uint, Turret> _turret;
@@ -292,6 +293,7 @@ public class SDBInterface
         _factionRelations = loader.LoadFactionRelations();
         _factionReputations = loader.LoadFactionReputations();
         _monster = loader.LoadMonster();
+        _emoteRecord = loader.LoadEmoteRecord();
         _monsterAttributeRange = loader.LoadMonsterAttributeRange();
         _monsterScaling = loader.LoadMonsterScaling();
         _turret = loader.LoadTurret();
@@ -605,6 +607,14 @@ public class SDBInterface
 
     public static Monster GetMonster(uint id) => _monster.GetValueOrDefault(id);
     public static IReadOnlyDictionary<uint, Monster> GetMonsters() => _monster;
+
+    /// <summary>
+    ///     One <c>dbcharacter::EmoteRecord</c> row: an emote a character can perform, its client-side
+    ///     animation (animation override / animation network id) and the status effect the emote applies
+    ///     while it runs. 382 rows in build prod-1962, 4 of them naming a status effect.
+    /// </summary>
+    public static EmoteRecord GetEmoteRecord(ushort id) => _emoteRecord?.GetValueOrDefault(id);
+    public static IReadOnlyDictionary<ushort, EmoteRecord> GetEmoteRecords() => _emoteRecord;
     /// <summary>
     ///     One <c>dbcharacter::MonsterAttributeRange</c> row of a monster (attribute 1143 Creature HP
     ///     Modifier, 1144 Creature Damage Modifier, ...), or null when that monster has no row for it.

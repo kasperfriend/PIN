@@ -17,6 +17,7 @@ using GameServer.StaticDB.Records.dbcharacter;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.StaticDB.Records.dbvisualrecords;
 using GameServer.Systems.Aptitude;
+using GameServer.Systems.Emotes;
 using GameServer.Systems.Encounters;
 using GameServer.Systems.MovementRelay;
 using GameServer.Systems.NpcDeath;
@@ -1346,6 +1347,23 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         Emote = value;
         Character_ObserverView.EmoteIDProp = value;
         Character_BaseController?.EmoteIDProp = value;
+    }
+
+    /// <summary>
+    ///     Performs one of the database's emotes: replicates it on the performer's views and applies the
+    ///     status effect the emote's row names (see <see cref="Systems.Emotes.EmoteService" />). Emote 0
+    ///     stops the emote; an id that is not in <c>dbcharacter::EmoteRecord</c> is ignored.
+    /// </summary>
+    /// <param name="emoteId">The emote id from <c>dbcharacter::EmoteRecord</c>, 0 to stop the emote.</param>
+    /// <param name="time">The client's timestamp for the emote.</param>
+    /// <returns>Whether the emote is one the database holds.</returns>
+    public bool PerformEmote(ushort emoteId, uint time)
+    {
+        // Both halves of the service are stateless (the emote table is read from the loaded static
+        // database and the effect is applied through this character's own shard), so the service is
+        // rebuilt per request rather than kept in static state: emotes are player-paced.
+        return new EmoteService(new SdbEmoteDataSource(), new AbilitySystemEmoteEffectApplier())
+            .Perform(this, emoteId, time);
     }
 
     public void SetFireBurst(uint time)

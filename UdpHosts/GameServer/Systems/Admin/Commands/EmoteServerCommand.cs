@@ -1,4 +1,3 @@
-using AeroMessages.GSS.Character;
 using GameServer.Entities.Character;
 
 namespace GameServer.Systems.Admin.Commands;
@@ -41,7 +40,11 @@ public class EmoteServerCommand : ServerCommand
         ushort emoteId = (ushort)ParseUIntParameter(parameters[0]);
         uint time = context.Shard.CurrentTime;
 
-        character.SetEmote(new EmoteData { Id = emoteId, Time = time + 60 });
+        if (!character.PerformEmote(emoteId, time + 60))
+        {
+            SourceFeedback($"Emote {emoteId} is not in dbcharacter::EmoteRecord", context);
+            return;
+        }
 
         SourceFeedback($"Set emote {emoteId}", context);
     }

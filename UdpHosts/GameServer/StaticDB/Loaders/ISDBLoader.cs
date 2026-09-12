@@ -24,6 +24,7 @@ public interface ISDBLoader
     List<FactionRelations> LoadFactionRelations();
     Dictionary<uint, List<FactionReputations>> LoadFactionReputations();
     Dictionary<uint, Monster> LoadMonster();
+    Dictionary<ushort, EmoteRecord> LoadEmoteRecord();
     Dictionary<uint, MonsterScaling> LoadMonsterScaling();
     Dictionary<uint, Turret> LoadTurret();
     Dictionary<uint, PoseType> LoadPoseType();

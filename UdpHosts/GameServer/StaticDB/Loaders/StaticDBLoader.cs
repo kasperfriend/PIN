@@ -104,6 +104,12 @@ public class StaticDBLoader : ISDBLoader
         .ToDictionary(row => row.Id);
     }
 
+    public Dictionary<ushort, EmoteRecord> LoadEmoteRecord()
+    {
+        return LoadStaticDB<EmoteRecord>("dbcharacter::EmoteRecord")
+        .ToDictionary(row => row.Id);
+    }
+
     public Dictionary<uint, Turret> LoadTurret()
     {
         return LoadStaticDB<Turret>("dbcharacter::Turret")

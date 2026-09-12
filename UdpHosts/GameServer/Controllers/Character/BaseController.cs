@@ -228,7 +228,13 @@ public class BaseController : Base
     public void PerformEmote(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {
         var query = packet.Unpack<PerformEmote>();
-        player.CharacterEntity.SetEmote(new EmoteData { Id = query.EmoteId, Time = query.Time });
+
+        // The emote id has to be one the client's own emote table can resolve (dbcharacter::EmoteRecord):
+        // an id outside it would leave every client in range with an animation it cannot look up.
+        if (!player.CharacterEntity.PerformEmote(query.EmoteId, query.Time))
+        {
+            _logger?.Debug("Ignoring emote {EmoteId}: not in dbcharacter::EmoteRecord", query.EmoteId);
+        }
     }
 
     [MessageID(GssCharacterCommand.ClientQueryInteractionStatus)]
