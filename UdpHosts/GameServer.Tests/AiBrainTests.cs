@@ -357,4 +357,64 @@ public class AiBrainTests
         Assert.Equal(AiBrainState.Attack, backInRange.State);
         Assert.False(backInRange.Attack);
     }
+
+    /// <summary>A rifle's tuning, as <c>AiCombatTuning.FromProfile</c> builds it.</summary>
+    private static AiCombatTuning RangedCombat => new(
+        AttackRange: 30f,
+        AttackRangeExit: 34.5f,
+        StandoffRange: 20f,
+        AttackCooldownMs: 2500,
+        Ranged: true);
+
+    [Fact]
+    public void RangedWeapon_EngagesAtItsOwnRange_NotTheRulesReach()
+    {
+        var brain = new AiBrain(MeleeRules, 0, RangedCombat);
+
+        Assert.Equal(30f, brain.AttackRange);
+        Assert.Equal(2500, brain.AttackCooldownMs);
+
+        brain.Decide(SeenAt(20f, 20f, 0f, 0f, 100));
+        var decision = brain.Decide(SeenAt(20f, 20f, 0f, 0f, 200));
+
+        Assert.Equal(AiBrainState.Attack, decision.State);
+        Assert.True(decision.Attack);
+
+        // A weaponless mob on the same rules keeps the 3.5 m melee reach.
+        var melee = new AiBrain(MeleeRules, 0);
+        melee.Decide(SeenAt(20f, 20f, 0f, 0f, 100));
+        var meleeDecision = melee.Decide(SeenAt(20f, 20f, 0f, 0f, 200));
+
+        Assert.Equal(AiBrainState.Chase, meleeDecision.State);
+        Assert.False(meleeDecision.Attack);
+    }
+
+    [Fact]
+    public void RangedWeapon_HoldsItsBehaviourStandoff()
+    {
+        var brain = new AiBrain(MeleeRules, 0, RangedCombat);
+
+        var closing = brain.Decide(SeenAt(25f, 25f, 0f, 0f, 100));
+        Assert.Equal(AiMovementIntent.TowardTarget, closing.Movement);
+
+        var parked = brain.Decide(SeenAt(20f, 20f, 0f, 0f, 200));
+        Assert.Equal(AiMovementIntent.None, parked.Movement);
+    }
+
+    [Fact]
+    public void RangedWeapon_ShootsOverAHeightAMeleeSwingCouldNot()
+    {
+        // 10 m up, 12 m away: out of a melee swing's 2.5 m band, but inside a rifle's 30 m reach.
+        var melee = new AiBrain(MeleeRules, 0);
+        melee.Decide(SeenAt(10f, 12f, 10f, 0f, 100));
+        var meleeDecision = melee.Decide(SeenAt(10f, 12f, 10f, 0f, 200));
+        Assert.Equal(AiBrainState.Chase, meleeDecision.State);
+        Assert.False(meleeDecision.Attack);
+
+        var ranged = new AiBrain(MeleeRules, 0, RangedCombat);
+        ranged.Decide(SeenAt(10f, 12f, 10f, 0f, 100));
+        var rangedDecision = ranged.Decide(SeenAt(10f, 12f, 10f, 0f, 200));
+        Assert.Equal(AiBrainState.Attack, rangedDecision.State);
+        Assert.True(rangedDecision.Attack);
+    }
 }

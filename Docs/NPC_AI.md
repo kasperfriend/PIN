@@ -7,10 +7,14 @@ It replaces the old `AIEngine` stub, which was an empty `Tick`. Spawned mobs now
 pick a target, walk towards it, swing at it once they are within reach of it, and
 give up when they are dragged too far from where they spawned.
 
-> **NPC attacks are melee.** An attack is a direct damage call - PIN has no NPC
-> projectile path yet - so a monster can only hurt you once it has reached you,
-> and only if you are not standing above or below it out of reach. See
-> [What an attack actually does](#3-what-an-attack-actually-does).
+> **NPC attacks come from the database.** Each mob fights with the weapon its
+> `dbcharacter::Monster` row names: the `dbitems::Weapons` item, its
+> `WeaponTemplates` mode, its `AttributeRange` damage/range rows and, for ranged
+> rows, its `dbitems::Ammo` projectile - fired through the same `ProjectileSim`
+> a player shot uses. Mob melee is still a direct damage call, but only the rows
+> the data says are melee. See
+> [What an attack actually does](#3-what-an-attack-actually-does) and
+> [Weapon attacks come from the database](#weapon-attacks-come-from-the-database).
 
 > Character origins sit at the feet (the muzzle offset is `(0.2, 0, 1.62)` in
 > `CalculateProjectileOrigin`, i.e. chest height above the origin) and the body
@@ -31,13 +35,20 @@ UdpHosts/GameServer/Systems/Ai/
 ├── AiDecision.cs               what a brain tells the engine to do
 ├── IAiRules.cs                 tunables
 ├── StandardAiRules.cs          the shipped defaults
+├── AiCombatTuning.cs           per-NPC attack reach/cadence overrides from its weapon
 ├── AiSpeeds.cs                 monster row speed -> metres per second
-├── AiAttackDamage.cs           monster damage rating -> what one swing is worth
+├── AiAttackDamage.cs           monster damage rating -> what one swing is worth (fallback)
 ├── AiVectors.cs                horizontal / straight-line distance + character facing maths
+├── NpcAttackProfile.cs         everything one NPC attack needs, resolved from the DB
+├── NpcAttackResolver.cs        monster -> weapon -> template/attributes/ammo -> profile
+├── NpcAttackDamageMath.cs      the pure damage + cadence rules
+├── NpcBehaviorParams.cs        parser for the behaviour string's attack parameters
+├── NpcProjectileLauncher.cs    fires a resolved shot through ProjectileSim
+├── INpcAttackDataSource.cs     the DB surface the resolver reads (fakeable in tests)
 ├── IAiHostility.cs             who counts as an enemy
 ├── FactionAiHostility.cs       SDB faction table implementation
-├── IAiMonsterStats.cs          where movement speeds + the per-level damage rating come from
-├── SdbAiMonsterStats.cs        reads dbcharacter::Monster + MonsterScaling (by level)
+├── IAiMonsterStats.cs          where movement speeds, the damage rating and the weapon profile come from
+├── SdbAiMonsterStats.cs        reads dbcharacter::Monster + MonsterScaling + NpcAttackResolver
 ├── IAiAttackFeedback.cs        cosmetic hit messages
 └── HitFeedbackAttackFeedback.cs routes them through CombatSim.HitFeedback
 ```
@@ -92,15 +103,18 @@ Details worth knowing:
   `AiVectors.HorizontalDistance` alone makes a player standing on the crate, the
   ledge or the floor *above* a mob "0.5 m away" - which is how a mob ended up
   hitting a player through the ground it was standing on.
-* **Attacks are melee.** `AttackRange` is a reach (3.5 m, in the order of the
-  `range` the database gives the monster melee weapon rows, e.g. 2.6 m for
-  "NPC Melee Medium (Spyder)"), not a fire range: an attack here is a direct
-  `DamageSystem.ApplyDamage` call with no projectile, so anything beyond a reach
-  would be an unavoidable hitscan shot. Ranged monsters need the NPC projectile
-  path first (see [Known gaps](#6-known-gaps)).
-* **Entry and exit ranges differ.** A target is acquired at `AttackRange` but only
-  released at `AttackRangeExit` (3.5 m in, 5 m out). Without that hysteresis a
-  player walking along the edge of the range flips the state every tick.
+* **Attacks are per weapon.** The reach and the mode come from the mob's own
+  `dbcharacter::Monster` weapon row (`AiCombatTuning.FromProfile`): a mob melee
+  row swings (`range` 2.6 m for "NPC Melee Medium (Spyder)") and a ranged row
+  fires its `dbitems::Ammo` projectile at the weapon's `range` - the 3.5 m
+  rules reach is only what a mob with no resolvable weapon uses. The height band
+  widens to the weapon's own range for a ranged weapon, so a rifle can shoot a
+  target standing above the mob where a punch could not.
+* **Entry and exit ranges differ.** A target is acquired at the NPC's
+  `AttackRange` but only released at its `AttackRangeExit` (3.5 m in, 5 m out for
+  a weaponless mob; a ranged weapon's is its range and range × 1.15). Without that
+  hysteresis a player walking along the edge of the range flips the state every
+  tick.
 * **Giving up is time based.** Losing line of sight does not drop the target
   immediately - the NPC keeps hunting for `TargetLostTimeoutMs` and only then
   forgets. Dying or despawning drops it at once.
@@ -122,9 +136,9 @@ Details worth knowing:
    on the roof over it and then stand there with nothing to do.
 2. **Being shot.** `AiEngine` subscribes to `EntityDamagedEvent` and forces the
    damaged NPC onto its attacker regardless of distance. This is why you cannot
-   snipe a mob from across the map for free - and, since attacks are melee, why
-   sniping one from a roof is free: it will come, and it will not be able to
-   reach you.
+   snipe a mob from across the map for free: it will come, and a mob with a ranged
+   weapon will start shooting back as soon as you are inside that weapon's range -
+   only the melee rows still have to walk all the way to you.
 
 The target is sticky: as long as the current target entity still exists the scan
 is skipped, so a mob does not ping pong between two players standing side by side.
@@ -147,37 +161,42 @@ AiEngine.UpdateBrain
   -> AiPerception          flat distance (chasing) + straight-line distance and
                           height delta (attacking), line of sight
   -> AiBrain.Decide        Idle / Chase / Attack / Return / Dead
-       Attack gate: AttackDistance <= AttackRange (3.5 m)
-                   and HeightDeltaToTarget <= MaxAttackHeightDelta (2.5 m)
+       Attack gate: AttackDistance <= the NPC's AttackRange (its weapon's,
+                    or the rules 3.5 m when it has none)
+                   and HeightDeltaToTarget <= MaxAttackHeightDelta
+                    (2.5 m, or the weapon's own range for a ranged weapon)
   -> AiEngine.ResolveAttack
-       -> IShard.Damage.ApplyDamage(target, npcAttackDamage, npcEntity)
-            -> shields first, then health
-            -> EntityDamagedEvent
-                 -> CharacterLifecycleService  (bleedout / death for the player)
-       -> IAiAttackFeedback.OnAttack
+       melee  -> IShard.Damage.ApplyDamage(target, perRoundDamage, npcEntity)
+       ranged -> IAiProjectileLauncher.FireRangedAttack(  (ShardAiProjectileLauncher)
+                    npc, PRNG trace, muzzle origin, aim direction,
+                    ammo, range, speed, impactRadius, maxRadius, damage)
+                    -> ProjectileSim.FireProjectile  (one call per round)
+                         -> flight, gravity, bounces, falloff, impact
+                              -> ProjectileHitEvent -> DamageSystem.ApplyDamage
+       -> IAiAttackFeedback.OnAttack                       (melee only)
             -> CombatSim.HitFeedback.TookDebugHit -> TookHit to scoped clients
 ```
 
-Two things gate the hit itself, both of them in the brain so they are covered by
-`AiBrainTests` without a shard:
+Two things gate the attack itself, both of them in the brain so they are covered
+by `AiBrainTests` without a shard:
 
 * **Reach.** The attack is measured over the straight-line distance
   (`AiVectors.Distance`), not the flat one chasing is planned on. A mob 3 m under
   a player is not "3 m away in range", it is 3 m of air away from a swing.
-* **Height band.** `MaxAttackHeightDelta` is the vertical slack of that swing. It
+* **Height band.** `MaxAttackHeightDelta` is the vertical slack of the attack. It
   is a separate test on purpose: the 3.5 m sphere already covers most cases, but a
   player standing directly over the mob's head is 1 m away in every horizontal
-  measure, and an attack that lands there reads as "the mob hit me through the
-  floor".
+  measure, and a melee hit that lands there reads as "the mob hit me through the
+  floor". A ranged weapon keeps the band at its own range instead, because a
+  bullet does not care about the floor between the two of you.
 
-The damage per hit is a fraction of the monster's database rating, resolved once
-when the NPC is registered (see
-[Health and attack damage come from the database](#health-and-attack-damage-come-from-the-database)).
-
-It is a hitscan, not a projectile: no `ProjectileSim` trace, no ammo, no spread,
-and nothing to dodge while you are inside that reach. The victim gets the same
-`TookHit` message a weapon hit produces, so damage numbers and the health bar
-behave normally. NPC attacks never crit and never count as headshots.
+A melee attack is a hitscan: no projectile, no spread, and nothing to dodge while
+you are inside that reach; the victim gets the same `TookHit` message a weapon hit
+produces, so damage numbers and the health bar behave normally. A ranged attack is
+a real projectile carrying the per-round damage the database resolved, so it can
+miss, be dodged, fall off with distance (the ammo's `damage_decay`) and use the
+ammo's own gravity and bounce behaviour. Neither mode crits or counts as a
+headshot.
 
 Movement is applied by writing the entity position/orientation, pushing the new
 pose into the physics body with `PhysicsEngine.UpdateEntity` (so the mob stays
@@ -218,13 +237,13 @@ Everything is an `IAiRules` property. `AiEngine` takes an optional instance; pas
 | `Enabled`            | `true`  | Master switch                                                    |
 | `AggroRadius`        | `55`    | Metres at which an idle NPC notices a hostile player             |
 | `MaxAcquisitionHeightDelta` | `12` | Metres of height difference the notice scan accepts (`0` = unlimited, i.e. a cylinder) |
-| `AttackRange`        | `3.5`   | Metres of straight-line reach an attack needs - a melee reach, not a fire range |
-| `AttackRangeExit`    | `5`     | Metres at which attacking falls back to chasing                  |
-| `MaxAttackHeightDelta` | `2.5` | Metres of height difference one attack may span                  |
-| `StandoffRange`      | `2`     | Metres the NPC tries to keep from its target                     |
+| `AttackRange`        | `3.5`   | Metres of straight-line reach an attack needs; used by an NPC with no resolvable weapon (a mob with one uses its weapon's range) |
+| `AttackRangeExit`    | `5`     | Metres at which attacking falls back to chasing (weapon overrides, see above) |
+| `MaxAttackHeightDelta` | `2.5` | Metres of height difference one attack may span; a ranged weapon widens it to the weapon's range |
+| `StandoffRange`      | `2`     | Metres the NPC tries to keep from its target; a ranged weapon uses its behaviour's `combatDist` instead |
 | `LeashRadius`        | `120`   | Metres from the spawn point before it gives up                   |
 | `HomeArrivalRadius`  | `2`     | Metres from home that counts as arrived                          |
-| `AttackCooldownMs`   | `1200`  | Delay between two attacks by the same NPC                        |
+| `AttackCooldownMs`   | `1200`  | Delay between two attacks by the same NPC; used by an NPC with no resolvable weapon (a mob with one uses its behaviour/weapon cadence) |
 | `AttackDamageFraction` | `0.1` | Share of the monster's per-level damage rating one attack commits |
 | `AttackDamage`       | `5`     | Fallback damage per attack when the DB has no scaling row for the NPC's level |
 | `TargetLostTimeoutMs`| `6000`  | How long an unseen target is still hunted                        |
@@ -270,13 +289,17 @@ comes from where it spawns:
   `level` (1-80) that becomes the spawn's `MonsterScaling` level — the emulator
   equivalent of that flow.
 - The scaling row then sets the NPC's `MaxHealth` (`ScalingTable.health`), and
-  `AiEngine` asks `SdbAiMonsterStats.GetAttackDamage(typeId, level)` for the
-  damage **rating** of the NPC's level (`ScalingTable.damage`) when the NPC is
-  registered. `AiAttackDamage.Resolve` turns that rating into what one swing is
-  worth - `AttackDamageFraction` (a tenth) of it - because the rating is not a
-  per-hit amount. The rules' `AttackDamage` is only the fallback for a monster or
-  level the database has no row for, and it is already a per-swing number, so it
-  is not fractioned a second time.
+  `AiEngine` resolves the monster's weapon at the NPC's level when it registers:
+  `SdbAiMonsterStats.GetAttackProfile` (see
+  [Weapon attacks come from the database](#weapon-attacks-come-from-the-database))
+  gives the per-round damage, and only when that resolves to nothing does the
+  engine spend the rating: `SdbAiMonsterStats.GetAttackDamage(typeId, level)` for
+  the damage **rating** of the NPC's level (`ScalingTable.damage`), which
+  `AiAttackDamage.Resolve` turns into what one swing is worth -
+  `AttackDamageFraction` (a tenth) of it - because the rating is not a per-hit
+  amount. The rules' `AttackDamage` is only the fallback for a monster or level
+  the database has no row for, and it is already a per-swing number, so it is not
+  fractioned a second time.
 - A per-spawn `max_health` in `character_spawn.json` still overrides the database
   health for that one spawn (`EntityManager.SpawnZoneEntities` applies it after
   `LoadMonster`), and a per-spawn `level` overrides the level it is looked up at.
@@ -320,6 +343,74 @@ without a band resolves its NPCs at the default player level (1, see above)
 instead, hitting for 5. In a level-40 zone (Sertao's open-world band is 39-40) the
 same monster type spawns with 21,836 health and hits for 1,092.
 
+### Weapon attacks come from the database
+
+`NpcAttackResolver` walks the database's own chain when a monster is registered
+and hands the engine an `NpcAttackProfile` - the mode, per-round damage, rounds
+per burst, cadence, reach, and the ammo row to fire:
+
+```
+dbcharacter::Monster.weapon1_id (else weapon2_id)
+  -> dbitems::Weapons                      (the per-monster item)
+  -> dbitems::WeaponTemplates              (via weapon_type_id; the item's
+                                            WeaponTemplateModifiers and the
+                                            weapon-slot ability modules are
+                                            applied by SDBUtils.GetDetailedWeaponInfo)
+  + dbitems::AttributeRange rows of the item (954 damage, 957 range, 1145 modifier,
+                                              the ammo stat attributes)
+  + dbcharacter::MonsterAttributeRange row of the monster (1144 damage modifier)
+  + dbcharacter::Monster.behavior string   (triggerPullTime, fireRestDuration,
+                                             combatDist, preferredMinCombatDist)
+```
+
+**Mode.** A row is ranged when its template carries an `ammo` id that resolves
+*and* its range is past arm's length (4 m); everything else - the melee ability
+vehicles with 2-3 m ranges, rows whose ammo does not resolve, and every monster
+the database gives no weapon at all - melees. Of the 3,109 monsters in build
+`prod-1962`, 1,727 carry a weapon; 596 of the weapon items are used by monsters
+and 85 distinct templates are involved.
+
+**Damage.** The two damage statements are mutually exclusive on monster weapons
+(0 of the 596 items carry both):
+
+1. `AttributeRange` 954 (Damage Per Round) - the literal per-round damage of a
+   level-matched item (the shared PvE weapon families carry it). Used as-is.
+2. `AttributeRange` 1145 (Creature Weapon Damage Modifier) - the creature item's
+   own modifier on the monster's per-level damage rating
+   (`dbcharacter::MonsterScaling.damage` × 1145). This is how a level-45 mob hits
+   like a level-45 mob while its weapon item is a level-1 row: the rating is the
+   level term, the modifier is the weapon term (0.0217 on the common guards, 0.15
+   on the elite ones).
+3. Neither (the ~103 melee/ability-only items, and every weaponless monster) -
+   the rating share the engine has always used: `rating × AttackDamageFraction`
+   (a tenth), with the rules' flat `AttackDamage` for a monster or level the
+   database has no rating for.
+
+Every branch is then multiplied by the monster's own
+`MonsterAttributeRange` 1144 (Creature Damage Modifier, 0.95-1.5 on the 81 named
+monsters that carry one, 1 otherwise).
+
+**Cadence.** The behaviour string is where the original game put its AI attack
+timing: `triggerPullTime` (median 1,500 ms across the 248 rows that carry it) plus
+`fireRestDuration` (median 1,000 ms). The weapon template's `ms_per_burst` is the
+client's fire animation cadence (50-100 ms on several NPC weapons), so it is only
+used when the row has no behaviour timing, clamped at 250 ms (one 50 ms AI tick's
+worth of sanity), and `AttackCooldownMs` is the last resort. Rounds per burst come
+from the template, so one attack can be a burst of projectiles.
+
+**Range and standoff.** A ranged weapon's effective range is its item's 957 row
+when it has one, else the template's `range`; the exit range is that × 1.15. A
+melee row swings at the tuned 3.5 m reach rather than its own template `range`
+(2.6 m for the Spyder's "NPC Melee Medium", where the template value is an
+ability radius), and a ranged row whose ammo does not resolve falls back to that
+same reach instead of becoming a hitscan sniper at its own range. A ranged row
+keeps its behaviour's `preferredMinCombatDist` (or `combatDist`) as its standoff,
+so guards stop at the distance the data gives them instead of walking into melee.
+
+**Muzzle.** The shot leaves from `dbcharacter::Monster.projectile_offset` rotated
+into world space the same way `CharacterEntity.CalculateProjectileOrigin` rotates
+a character's own muzzle; a row with no offset uses the chest height (1.62 m).
+
 ### Ground snapping
 
 `SnapToGround` is on. The character origin sits at the feet, so `GroundOffset` is
@@ -341,15 +432,17 @@ stays horizontal, exactly as before.
 
 * **No animation selection.** The engine only sets the movement state
   (`0x1000` standing, `0x2004` running); there is no attack or death animation.
-* **Melee only, on purpose.** `Monster.weapon1_id` does point at real per-monster
-  weapon rows (`FAMAS Burst Rifle`, `NPC Assault Rifle`, an acid-spit launcher),
-  but their `WeaponTemplates.damage_per_round` is a placeholder stub - several
-  templates are `1` - and there is no NPC-side projectile path to fire them
-  through, so PIN ignores them and every monster swings instead. The mob's melee
-  reach does come from the data: a melee weapon's template `range` (2.6 m for
-  `NPC Melee Medium (Spyder)`) is what `AttackRange` / `StandoffRange` are
-  modelled on, and the 3.5 m / 2 m defaults keep the hit generous enough to land
-  while chasing walks the mob to 2 m.
+* **No accuracy model.** NPC shots aim at the target's chest with the weapon's
+  own spread profile left unused: there is no per-NPC spread state, no
+  `MinSpread`/`MaxSpread` handling and no aim error, so a ranged mob hits for as
+  long as line of sight holds. The database's behaviour strings also carry attack
+  *chance* parameters (`am1Chance`, `am1Cooldown`) that name aptitude abilities
+  the original game fired at intervals; those ability chains are not modelled, so
+  only the weapon's own attack is fired.
+* **Weapon damage rows are placeholder where the data is placeholder.** A few
+  templates (not per-monster items) carry `damage_per_round` 1; those rows still
+  resolve through the 954/1145 chain above, so the placeholder only survives where
+  a weapon item has neither attribute row - the rating share covers it.
 * **No pathfinding, no climbing.** Movement is a straight line towards the goal
   plus a wall check, always at the spawn's own height band. A mob behind a low
   obstacle will stand there until the leash or the give-up timer fires, and a mob

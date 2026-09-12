@@ -107,8 +107,11 @@ CustomData/character_spawn.json | \npc 290 | admin "npc 290"
   server resolves the level of the zone the NPC spawns in (the zone's level band
   from `dbzonemetadata::ZoneRecord` / `dbitems::LevelBand`, 45 when the zone has
   none) and takes the `health` of the matching `dbcharacter::MonsterScaling`
-  row. The AI engine reads that row's `damage` for the NPC's attacks the same
-  way — see §4.5 and [NPC_AI.md](NPC_AI.md) §5.
+  row. Attacks are database driven too: the monster's `weapon1_id`/`weapon2_id`
+  resolves to a weapon item whose `WeaponTemplates` mode and `AttributeRange`
+  rows give the attack its mode (melee or its shipped `dbitems::Ammo`
+  projectile), damage, cadence and range, and the `MonsterScaling` damage rating
+  is the fallback — see §4.5 and [NPC_AI.md](NPC_AI.md) §5.
 - On death: `DamageSystem` -> `CharacterLifecycleService` (`CharacterDiedEvent`)
   -> `NpcDeathService` (gib visuals, 10 s corpse linger by default).
 - Display names are now resolvable server-side:
@@ -2150,14 +2153,17 @@ The 1337 rows without a `localized_name_id` are mostly duplicate spawn variants,
 
 `dbcharacter::MonsterScaling` (80 rows) maps a monster level to its base
 health/damage. This is the table PIN serves NPC max health from, and the damage
-column is what its attacks are built on — but note what that column is: it is
-`round(health / 2)` on every one of the 80 rows, i.e. the level's damage *rating*
-(what a monster of that level is worth), not the damage of one hit. `AiEngine`
-therefore spends `StandardAiRules.AttackDamageFraction` (a tenth) of it per swing
-through `AiAttackDamage.Resolve` — level 45 is 13,934 in the table and 1,393 per
-attack in game (`dbcharacter::MonsterAttributeRange` adds per-attribute curves on
-top, but PIN does not read it yet — every monster of a given level uses the raw
-scaling row):
+column is the *fallback* its attacks are built on — note what that column is: it
+is `round(health / 2)` on every one of the 80 rows, i.e. the level's damage
+*rating* (what a monster of that level is worth), not the damage of one hit.
+`AiEngine` prefers the monster's own weapon row (`dbcharacter::Monster` →
+`dbitems::Weapons` → 954 / 1145 attribute rows) and only spends
+`StandardAiRules.AttackDamageFraction` (a tenth) of the rating when that resolves
+to nothing through `AiAttackDamage.Resolve`. The rating is scaled by the
+monster's own `dbcharacter::MonsterAttributeRange` attribute 1144 (Creature
+Damage Modifier) where the row has one — 81 named monsters do — and the table
+below is the raw column (level 45 is 13,934, i.e. 1,393 per attack at the default
+fraction):
 
 | level | health | damage |
 |-------|--------|--------|

@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Numerics;
 using GameServer.Entities;
 using GameServer.Entities.Character;
+using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;
 
 namespace GameServer.Tests.Fakes;
@@ -34,7 +36,7 @@ public sealed class RecordingAiAttackFeedback : IAiAttackFeedback
     }
 }
 
-/// <summary>Hands out fixed speeds instead of reading the monster table.</summary>
+/// <summary>Hands out fixed monster stats instead of reading the static database.</summary>
 public sealed class FakeAiMonsterStats : IAiMonsterStats
 {
     public FakeAiMonsterStats(float normalSpeed = 0f, float fastSpeed = 0f, int attackDamage = 0)
@@ -54,6 +56,12 @@ public sealed class FakeAiMonsterStats : IAiMonsterStats
     /// <summary>Every GetAttackDamage request, as (characterTypeId, level), for assertions.</summary>
     public List<(uint CharacterTypeId, byte Level)> AttackDamageRequests { get; } = [];
 
+    /// <summary>The profile GetAttackProfile hands out. Unarmed (the default) keeps the rating based attack.</summary>
+    public NpcAttackProfile AttackProfile { get; set; } = NpcAttackProfile.Unarmed;
+
+    /// <summary>Every GetAttackProfile request, as (characterTypeId, level), for assertions.</summary>
+    public List<(uint CharacterTypeId, byte Level)> AttackProfileRequests { get; } = [];
+
     public (float NormalSpeed, float FastSpeed) GetSpeeds(uint characterTypeId) => (NormalSpeed, FastSpeed);
 
     public int GetAttackDamage(uint characterTypeId, byte level)
@@ -61,4 +69,56 @@ public sealed class FakeAiMonsterStats : IAiMonsterStats
         AttackDamageRequests.Add((characterTypeId, level));
         return AttackDamage;
     }
+
+    public NpcAttackProfile GetAttackProfile(uint characterTypeId, byte level)
+    {
+        AttackProfileRequests.Add((characterTypeId, level));
+        return AttackProfile;
+    }
+}
+
+/// <summary>
+///     Records the ranged shots an NPC attack produced, so the engine tests can assert that a ranged
+///     mob fires its weapon's ammo at the resolved damage instead of applying damage directly.
+/// </summary>
+public sealed class RecordingAiProjectileLauncher : IAiProjectileLauncher
+{
+    public List<RecordedShot> Shots { get; } = [];
+
+    public void FireRangedAttack(
+        CharacterEntity source,
+        uint trace,
+        Vector3 origin,
+        Vector3 direction,
+        Ammo ammo,
+        float range,
+        float projectileSpeed,
+        float impactRadius,
+        float maxRadius,
+        int damage)
+    {
+        Shots.Add(new RecordedShot(
+            source.EntityId,
+            trace,
+            origin,
+            direction,
+            ammo != null ? ammo.Id : 0,
+            range,
+            projectileSpeed,
+            impactRadius,
+            maxRadius,
+            damage));
+    }
+
+    public readonly record struct RecordedShot(
+        ulong SourceId,
+        uint Trace,
+        Vector3 Origin,
+        Vector3 Direction,
+        uint AmmoId,
+        float Range,
+        float ProjectileSpeed,
+        float ImpactRadius,
+        float MaxRadius,
+        int Damage);
 }

@@ -21,4 +21,14 @@ public interface IAiMonsterStats
     ///     which tells the caller to fall back to its configured default damage.
     /// </summary>
     int GetAttackDamage(uint characterTypeId, byte level);
+
+    /// <summary>
+    ///     The monster's weapon resolved from the static database: mode (melee/ranged), per-round
+    ///     damage, rounds per burst, attack cadence, reach and, for ranged rows, the
+    ///     <c>dbitems::Ammo</c> row the projectile is fired with. Returns
+    ///     <see cref="NpcAttackProfile.Unarmed" /> when the monster or its weapon row does not
+    ///     resolve, which tells the caller to keep the rating based attack of
+    ///     <see cref="GetAttackDamage" />.
+    /// </summary>
+    NpcAttackProfile GetAttackProfile(uint characterTypeId, byte level);
 }

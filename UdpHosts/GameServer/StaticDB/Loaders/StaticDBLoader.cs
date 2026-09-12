@@ -1412,6 +1412,18 @@ public class StaticDBLoader : ISDBLoader
             .ToDictionary(row => row.Id);
     }
 
+    /// <summary>
+    ///     The per-monster attribute ranges of <c>dbcharacter::MonsterAttributeRange</c>: attributes
+    ///     1143 (Creature HP Modifier), 1144 (Creature Damage Modifier) and a handful of extras on the
+    ///     81 monsters that carry them. Keyed by (monster id, attribute id).
+    /// </summary>
+    public Dictionary<KeyValuePair<uint, ushort>, MonsterAttributeRange> LoadMonsterAttributeRange()
+    {
+        return LoadStaticDB<MonsterAttributeRange>("dbcharacter::MonsterAttributeRange")
+        .GroupBy(row => new KeyValuePair<uint, ushort>(row.MonsterId, row.AttributeId))
+        .ToDictionary(group => group.Key, group => group.Last());
+    }
+
     public Dictionary<uint, MonsterScaling> LoadMonsterScaling()
     {
         return LoadStaticDB<MonsterScaling>("dbcharacter::MonsterScaling")
