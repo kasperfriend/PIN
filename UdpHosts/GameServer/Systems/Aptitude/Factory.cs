@@ -24,6 +24,7 @@ using GameServer.Systems.Aptitude.Commands.Requirement;
 using GameServer.Systems.Aptitude.Commands.Self;
 using GameServer.Systems.Aptitude.Commands.SetFlags;
 using GameServer.Systems.Aptitude.Commands.Target;
+using GameServer.Systems.Aptitude.Commands.Update;
 using Serilog;
 
 namespace GameServer.Systems.Aptitude;
@@ -675,8 +676,8 @@ public class Factory
             //     return new RequireItemAttributeCommand(SDBInterface.GetRequireItemAttributeCommandDef(commandId));
             // case CommandType.AddLootTable:
             //     return new AddLootTableCommand(CustomDBInterface.GetAddLootTableCommandDef(commandId));
-            // case CommandType.UpdateWaitAndFireOnce:
-            //     return new UpdateWaitAndFireOnceCommand(SDBInterface.GetUpdateWaitAndFireOnceCommandDef(commandId));
+            case CommandType.UpdateWaitAndFireOnce:
+                return new UpdateWaitAndFireOnceCommand(SDBInterface.GetUpdateWaitAndFireOnceCommandDef(commandId));
             case CommandType.RequireZoneType:
                 return new RequireZoneTypeCommand(SDBInterface.GetRequireZoneTypeCommandDef(commandId));
             // case CommandType.SetInteractionType:

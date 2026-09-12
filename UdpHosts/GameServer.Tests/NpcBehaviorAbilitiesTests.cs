@@ -10,7 +10,8 @@ namespace GameServer.Tests;
 ///     database chains them: a module id is looked up in <c>dbitems::AbilityModule</c>, whose
 ///     <c>ability_chain_id</c> is the <c>apt::AbilityData</c> to run. Of the 26 module ids the build's
 ///     monsters name, 25 resolve through a module row and 33812 - the dodge's second direction - is written
-///     as an ability id already; 22 of the 26 reach an animation and only one is server-side alone.
+///     as an ability id already. The scan follows every chain the engine runs, so all 26 reach a client
+///     command, 25 of them an animation, and 20 deliver their own damage.
 /// </summary>
 public class NpcBehaviorAbilitiesTests
 {
@@ -96,10 +97,12 @@ public class NpcBehaviorAbilitiesTests
     }
 
     [Fact]
-    public void Resolve_AServerSideModuleIsReportedButNotRunnable()
+    public void Resolve_AModuleThatDrawsNothing_IsReportedButNotRunnable()
     {
-        // 120937 -> ability 38700 is the one module of the 26 whose chain carries nothing a client draws or
-        // plays: the engine leaves it and fires the weapon, exactly as it does for a server-only weapon chain.
+        // No behaviour string in the build names such a module - once the walk follows every chain the engine
+        // runs, all 26 reach a client command - but the gate has to hold for the shape: a module whose ability
+        // only damages is not run, and the weapon is the visible attack of that window, exactly as it is for
+        // a server-only weapon chain.
         var data = new FakeNpcAttackDataSource()
             .WithAbilityModule(12_0937, 38_700)
             .WithAbility(38_700, 700)
@@ -108,8 +111,32 @@ public class NpcBehaviorAbilitiesTests
         var module = Assert.Single(NpcBehaviorAbilities.Resolve(NpcBehaviorParams.Parse("Arch_Base(am1Id=120937)"), data));
 
         Assert.Equal(38_700u, module.AbilityId);
+        Assert.True(module.DeliversDamage);
         Assert.False(module.ClientFeedback);
         Assert.False(module.Runnable);
+    }
+
+    [Fact]
+    public void Resolve_FindsTheHitAndTheAnimationBehindAWait()
+    {
+        // Ability 38700 (module 120937, monster 2241's staged attack) keeps its animations 22 and 26 and its
+        // damage behind the update loop of the effects its logic branches apply: an update loop that waits,
+        // then fires the chain that holds them. Reporting only what a shallow walk sees would call the module
+        // harmless and let the AI fire its own attack on top of the stage.
+        var data = new FakeNpcAttackDataSource()
+            .WithAbilityModule(12_0937, 38_700)
+            .WithAbility(38_700, 957_984)
+            .WithCommand(957_984, ImpactApplyEffect, effectId: 9_920)
+            .WithStatusEffect(9_920, updateChain: 1_110_491)
+            .WithCommand(1_110_491, (ushort)CommandType.UpdateWaitAndFireOnce, waitChain: 1_000_536)
+            .WithCommand(1_000_536, AbilityAnimation, next: 1_000_530)
+            .WithCommand(1_000_530, InflictDamage);
+
+        var module = Assert.Single(NpcBehaviorAbilities.Resolve(NpcBehaviorParams.Parse("Arch_Base(am1Id=120937)"), data));
+
+        Assert.True(module.ClientFeedback);
+        Assert.True(module.DeliversDamage);
+        Assert.True(module.Runnable);
     }
 
     [Fact]

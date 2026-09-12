@@ -32,11 +32,21 @@ public readonly record struct NpcWeaponAbilityScan(bool ClientFeedback, bool Del
 /// </summary>
 /// <remarks>
 ///     The walk follows what the data can reach from a weapon ability: the command <c>next</c> chain, the
-///     <c>if</c>/<c>then</c>/<c>else</c> bodies of <c>apt::ConditionalBranchCommandDef</c>, the ability a
+///     <c>if</c>/<c>then</c>/<c>else</c> bodies of <c>apt::ConditionalBranchCommandDef</c>, the chains the rest
+///     of the control flow hands execution to (the and/or/negate chains of the logic commands, a while loop's
+///     condition and body, the pre-apply chain of an effect toggle), the chain an
+///     <c>apt::UpdateWaitAndFireOnceCommandDef</c> fires once its wait is up, the ability a
 ///     <c>apt::CallCommandDef</c> names, and the apply/remove/update/duration chains of every
 ///     <c>apt::ImpactApplyEffectCommandDef</c> it finds, however deeply the data nests them. A command is
 ///     visited once, so shared tails and cycles cannot loop, and the walk stops at
 ///     <see cref="MaxCommands" /> as a guard against malformed data.
+///     <para>
+///         Following the chains a command hands execution to is what keeps the flags true to the engine: a
+///         behaviour ability module can hide its whole attack behind a wait (module 81952's ability 35803
+///         fires its projectile from the effect update loop) or behind a logic branch (module 120937's ability
+///         38700 picks its stage that way, animations included). A walk that only followed <c>next</c> would
+///         call those chains harmless and let the AI add its own attack on top of them.
+///     </para>
 ///     <para>
 ///         Whether a command is the client's is decided from the database, not from a list kept here: the
 ///         kind of a command instance is its <c>apt::BaseCommandDef.subtype</c>, and the table that subtype's
@@ -146,6 +156,73 @@ public static class NpcWeaponAbilities
                         WalkChain(data, branch.IfChain, visited, ref clientFeedback, ref deliversDamage);
                         WalkChain(data, branch.ThenChain, visited, ref clientFeedback, ref deliversDamage);
                         WalkChain(data, branch.ElseChain, visited, ref clientFeedback, ref deliversDamage);
+                    }
+
+                    break;
+                }
+
+                case CommandType.UpdateWaitAndFireOnce:
+                {
+                    var wait = data.GetUpdateWaitAndFireOnce(commandId);
+                    if (wait != null)
+                    {
+                        WalkChain(data, wait.Chain, visited, ref clientFeedback, ref deliversDamage);
+                    }
+
+                    break;
+                }
+
+                case CommandType.LogicAndChain:
+                {
+                    var and = data.GetLogicAndChain(commandId);
+                    if (and != null)
+                    {
+                        WalkChain(data, and.AndChain, visited, ref clientFeedback, ref deliversDamage);
+                    }
+
+                    break;
+                }
+
+                case CommandType.LogicOrChain:
+                {
+                    var or = data.GetLogicOrChain(commandId);
+                    if (or != null)
+                    {
+                        WalkChain(data, or.OrChain, visited, ref clientFeedback, ref deliversDamage);
+                    }
+
+                    break;
+                }
+
+                case CommandType.LogicNegate:
+                {
+                    var negate = data.GetLogicNegate(commandId);
+                    if (negate != null)
+                    {
+                        WalkChain(data, negate.NegateChain, visited, ref clientFeedback, ref deliversDamage);
+                    }
+
+                    break;
+                }
+
+                case CommandType.WhileLoop:
+                {
+                    var loop = data.GetWhileLoop(commandId);
+                    if (loop != null)
+                    {
+                        WalkChain(data, loop.ConditionChain, visited, ref clientFeedback, ref deliversDamage);
+                        WalkChain(data, loop.BodyChain, visited, ref clientFeedback, ref deliversDamage);
+                    }
+
+                    break;
+                }
+
+                case CommandType.ImpactToggleEffect:
+                {
+                    var toggle = data.GetImpactToggleEffect(commandId);
+                    if (toggle != null)
+                    {
+                        WalkChain(data, toggle.PreApplyChain, visited, ref clientFeedback, ref deliversDamage);
                     }
 
                     break;

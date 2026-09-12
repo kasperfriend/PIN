@@ -266,8 +266,15 @@ public class AbilitySystem
                 && scopedCharacter.ScopeStatusEffectId == activeEffect?.Effect.Id
                 && scopedCharacter.FireMode_1.Mode != 0;
 
+            // `UpdateFrequency` is the period of this effect's update loop, so an update is due once a whole
+            // period has passed - at exactly `LastUpdateTime + UpdateFrequency`, not the tick after it. The
+            // strict comparison this used to have made every period one tick longer than the database says
+            // and, because `LastUpdateTime` moves to the tick that ran the loop, the lateness accumulated:
+            // an effect with a 1000 ms frequency under the 20 ms update sweep evaluated at 1020, 2040, 3060.
+            // Effect 10162 waits 20000 ms inside a 20000 ms effect, which that schedule could never reach -
+            // the duration chain expired on the evaluation where the wait was due.
             if (activeEffect is { Removed: false } && !isActiveScope && activeEffect.Effect.DurationChain != null
-                && currentTime > activeEffect.LastUpdateTime + activeEffect.Effect.UpdateFrequency)
+                && currentTime >= activeEffect.LastUpdateTime + activeEffect.Effect.UpdateFrequency)
             {
                 var context = activeEffect.Context;
                 var previousApplicationTime = context.EffectApplicationTime;

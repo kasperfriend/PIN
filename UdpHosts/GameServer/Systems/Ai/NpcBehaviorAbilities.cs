@@ -46,10 +46,14 @@ public readonly record struct NpcAbilityModuleScan(
 ///         therefore read as an ability id, which the data requires and 25 other values do not need.
 ///     </para>
 ///     <para>
-///         22 of the 26 modules reach a <c>tfAbilityAnimationCommandDef</c> (animation indices 1-28) through
+///         25 of the 26 modules reach a <c>tfAbilityAnimationCommandDef</c> (animation indices 1-28) through
 ///         the effect their chains apply, one of them (86132) also reaching a <c>tfPerformEmoteCommandDef</c>
-///         with the emote name <c>roar</c>, and 11 of them deliver their own damage; only 120937's chain is
-///         server-side alone and is left to the weapon path. See Docs/NPC_AI.md for the full table.
+///         with the emote name <c>roar</c>, and 20 deliver their own damage. All 26 reach a client command
+///         once the walk follows every chain the engine runs, so the gate
+///         (<see cref="NpcAbilityModuleScan.Runnable" />) never fires on a shipped row. Nine of the modules
+///         reach part of what they do only through a chain a control-flow command hands execution to - eight
+///         get their damage from one, and 120937 its animations 22 and 26 as well as its staged attack - so
+///         <see cref="NpcWeaponAbilities.ScanAbility" /> follows them. See Docs/NPC_AI.md for the table.
 ///     </para>
 /// </remarks>
 public static class NpcBehaviorAbilities

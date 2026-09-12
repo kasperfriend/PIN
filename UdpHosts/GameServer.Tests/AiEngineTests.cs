@@ -992,12 +992,14 @@ public class AiEngineTests
     [Fact]
     public void ServerSideBehaviorModule_IsNotRun()
     {
-        // 120937 is the one module id of the build's 26 whose chains carry nothing a client draws or plays
-        // (the others reach an animation, an emote, particles or audio): the engine leaves it and fires the
-        // weapon. The module's own key here is the misspelled am1Coodown the data ships.
+        // A module whose chains carry nothing a client draws or plays: the engine leaves it and fires the
+        // weapon, the same rule a server-only weapon chain gets. Every one of the build's 26 module ids
+        // reaches a client command - 120937's animations 22 and 26 included, once the walk follows the chains
+        // the engine runs - so this row is the shape the gate has to handle rather than a shipped one. The
+        // module's own key is the misspelled am1Coodown the data ships.
         var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
-        stats.Behavior = "Arch_FullbodyMelee_Base(combatDist=4,am1Id=120937,am1Facing=true,am1Coodown=3000)";
-        stats.AbilityModulesByBehavior[MeleeModuleSetName] = [BehaviorModule(120_937, abilityId: 38_700, clientFeedback: false)];
+        stats.Behavior = "Arch_FullbodyMelee_Base(combatDist=4,am1Id=254001,am1Facing=true,am1Coodown=3000)";
+        stats.AbilityModulesByBehavior[MeleeModuleSetName] = [BehaviorModule(254_001, abilityId: 254_002, clientFeedback: false)];
         var abilities = new FakeNpcAbilityActivator();
         var (shard, _, _) = CreateWorld(
             Vector3.Zero,

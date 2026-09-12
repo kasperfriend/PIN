@@ -27,6 +27,12 @@ public class NpcWeaponAbilitiesTests
     private const ushort ImpactApplyEffect = (ushort)CommandType.ImpactApplyEffect;
     private const ushort ConditionalBranch = (ushort)CommandType.ConditionalBranch;
     private const ushort Call = (ushort)CommandType.Call;
+    private const ushort UpdateWaitAndFireOnce = (ushort)CommandType.UpdateWaitAndFireOnce;
+    private const ushort LogicOrChain = (ushort)CommandType.LogicOrChain;
+    private const ushort LogicAndChain = (ushort)CommandType.LogicAndChain;
+    private const ushort LogicNegate = (ushort)CommandType.LogicNegate;
+    private const ushort WhileLoop = (ushort)CommandType.WhileLoop;
+    private const ushort ImpactToggleEffect = (ushort)CommandType.ImpactToggleEffect;
 
     [Fact]
     public void AWeaponWithNoAbilities_ScansToNothing()
@@ -208,5 +214,48 @@ public class NpcWeaponAbilitiesTests
 
         Assert.False(scan.ClientFeedback);
         Assert.False(scan.DeliversDamage);
+    }
+
+    [Fact]
+    public void TheChainAWaitFires_IsWalked()
+    {
+        // Monster 2241's ability 38700 (module 120937) and monster 898's 35803: the effect's update loop
+        // waits, then fires a chain that holds the attack - the projectile and its animation are behind the
+        // wait, so a walk that stopped at `next` would call the ability harmless.
+        var data = new FakeNpcAttackDataSource()
+            .WithAbility(35_803, 438_085)
+            .WithCommand(438_085, ImpactApplyEffect, effectId: 4_313)
+            .WithStatusEffect(4_313, applyChain: 673_704, updateChain: 673_705)
+            .WithCommand(673_704, AbilityAnimation)
+            .WithCommand(673_705, UpdateWaitAndFireOnce, waitChain: 673_701)
+            .WithCommand(673_701, FireProjectile);
+
+        var scan = NpcWeaponAbilities.Scan(data, 0, 35_803);
+
+        Assert.True(scan.ClientFeedback);
+        Assert.True(scan.DeliversDamage);
+    }
+
+    [Fact]
+    public void TheChainsTheLogicCommandsRun_AreWalked()
+    {
+        // The boss shape: an or-chain over and-chains, and a while loop trimming targets. The animation and
+        // the damage live one level below the branches the walk has to follow.
+        var data = new FakeNpcAttackDataSource()
+            .WithAbility(38_700, 957_984)
+            .WithCommand(957_984, LogicOrChain, orChain: 957_982)
+            .WithCommand(957_982, LogicAndChain, next: 957_973, andChain: 957_975)
+            .WithCommand(957_975, (ushort)CommandType.RequireHasEffect, next: 957_974)
+            .WithCommand(957_974, LogicNegate, negateChain: 957_978)
+            .WithCommand(957_978, WhileLoop, bodyChain: 1_000, conditionChain: 1_001)
+            .WithCommand(1_000, InflictDamage)
+            .WithCommand(1_001, (ushort)CommandType.HasTargetsDuration, next: 957_970)
+            .WithCommand(957_970, ImpactToggleEffect, preApplyChain: 957_971)
+            .WithCommand(957_971, AbilityAnimation);
+
+        var scan = NpcWeaponAbilities.Scan(data, 0, 38_700);
+
+        Assert.True(scan.ClientFeedback);
+        Assert.True(scan.DeliversDamage);
     }
 }

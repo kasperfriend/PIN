@@ -58,6 +58,18 @@ public sealed class FakeNpcAttackDataSource : INpcAttackDataSource
 
     public Dictionary<uint, ImpactApplyEffectCommandDef> ImpactApplyEffects { get; } = [];
 
+    public Dictionary<uint, UpdateWaitAndFireOnceCommandDef> WaitAndFireOnces { get; } = [];
+
+    public Dictionary<uint, LogicAndChainCommandDef> LogicAnds { get; } = [];
+
+    public Dictionary<uint, LogicOrChainCommandDef> LogicOrs { get; } = [];
+
+    public Dictionary<uint, LogicNegateCommandDef> LogicNegates { get; } = [];
+
+    public Dictionary<uint, WhileLoopCommandDef> WhileLoops { get; } = [];
+
+    public Dictionary<uint, ImpactToggleEffectCommandDef> ImpactToggleEffects { get; } = [];
+
     public Dictionary<uint, StatusEffectData> StatusEffects { get; } = [];
 
     public AbilityData GetAbility(uint abilityId) => Abilities.GetValueOrDefault(abilityId);
@@ -82,6 +94,20 @@ public sealed class FakeNpcAttackDataSource : INpcAttackDataSource
 
     public ImpactApplyEffectCommandDef GetImpactApplyEffect(uint commandId) =>
         ImpactApplyEffects.GetValueOrDefault(commandId);
+
+    public UpdateWaitAndFireOnceCommandDef GetUpdateWaitAndFireOnce(uint commandId) =>
+        WaitAndFireOnces.GetValueOrDefault(commandId);
+
+    public LogicAndChainCommandDef GetLogicAndChain(uint commandId) => LogicAnds.GetValueOrDefault(commandId);
+
+    public LogicOrChainCommandDef GetLogicOrChain(uint commandId) => LogicOrs.GetValueOrDefault(commandId);
+
+    public LogicNegateCommandDef GetLogicNegate(uint commandId) => LogicNegates.GetValueOrDefault(commandId);
+
+    public WhileLoopCommandDef GetWhileLoop(uint commandId) => WhileLoops.GetValueOrDefault(commandId);
+
+    public ImpactToggleEffectCommandDef GetImpactToggleEffect(uint commandId) =>
+        ImpactToggleEffects.GetValueOrDefault(commandId);
 
     public StatusEffectData GetStatusEffect(uint effectId) => StatusEffects.GetValueOrDefault(effectId);
 
@@ -118,7 +144,14 @@ public sealed class FakeNpcAttackDataSource : INpcAttackDataSource
         uint calledAbilityId = 0,
         uint ifChain = 0,
         uint thenChain = 0,
-        uint elseChain = 0)
+        uint elseChain = 0,
+        uint waitChain = 0,
+        uint andChain = 0,
+        uint orChain = 0,
+        uint negateChain = 0,
+        uint bodyChain = 0,
+        uint conditionChain = 0,
+        uint preApplyChain = 0)
     {
         Commands[commandId] = new BaseCommandDef { Id = commandId, Subtype = subtype, Next = next };
 
@@ -137,6 +170,34 @@ public sealed class FakeNpcAttackDataSource : INpcAttackDataSource
                     IfChain = ifChain,
                     ThenChain = thenChain,
                     ElseChain = elseChain,
+                };
+                break;
+            case AptCommandType.UpdateWaitAndFireOnce:
+                WaitAndFireOnces[commandId] = new UpdateWaitAndFireOnceCommandDef { Id = commandId, Chain = waitChain };
+                break;
+            case AptCommandType.LogicAndChain:
+                LogicAnds[commandId] = new LogicAndChainCommandDef { Id = commandId, AndChain = andChain };
+                break;
+            case AptCommandType.LogicOrChain:
+                LogicOrs[commandId] = new LogicOrChainCommandDef { Id = commandId, OrChain = orChain };
+                break;
+            case AptCommandType.LogicNegate:
+                LogicNegates[commandId] = new LogicNegateCommandDef { Id = commandId, NegateChain = negateChain };
+                break;
+            case AptCommandType.WhileLoop:
+                WhileLoops[commandId] = new WhileLoopCommandDef
+                {
+                    Id = commandId,
+                    BodyChain = bodyChain,
+                    ConditionChain = conditionChain,
+                };
+                break;
+            case AptCommandType.ImpactToggleEffect:
+                ImpactToggleEffects[commandId] = new ImpactToggleEffectCommandDef
+                {
+                    Id = commandId,
+                    EffectId = effectId,
+                    PreApplyChain = preApplyChain,
                 };
                 break;
         }

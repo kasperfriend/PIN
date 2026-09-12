@@ -57,6 +57,27 @@ public interface INpcAttackDataSource
     /// <summary>An <c>apt::CallCommandDef</c> row (the ability it calls), or null.</summary>
     CallCommandDef GetCall(uint commandId);
 
+    /// <summary>
+    ///     An <c>apt::UpdateWaitAndFireOnceCommandDef</c> row (the chain it fires once, after the wait in
+    ///     <c>duration</c>), or null.
+    /// </summary>
+    UpdateWaitAndFireOnceCommandDef GetUpdateWaitAndFireOnce(uint commandId);
+
+    /// <summary>An <c>apt::LogicAndChainCommandDef</c> row (the chain it runs when all of it succeeds), or null.</summary>
+    LogicAndChainCommandDef GetLogicAndChain(uint commandId);
+
+    /// <summary>An <c>apt::LogicOrChainCommandDef</c> row (the chain it runs until one command succeeds), or null.</summary>
+    LogicOrChainCommandDef GetLogicOrChain(uint commandId);
+
+    /// <summary>An <c>apt::LogicNegateCommandDef</c> row (the chain whose result it inverts), or null.</summary>
+    LogicNegateCommandDef GetLogicNegate(uint commandId);
+
+    /// <summary>An <c>apt::WhileLoopCommandDef</c> row (its condition and body chains), or null.</summary>
+    WhileLoopCommandDef GetWhileLoop(uint commandId);
+
+    /// <summary>An <c>apt::ImpactToggleEffectCommandDef</c> row (the chain it runs before toggling), or null.</summary>
+    ImpactToggleEffectCommandDef GetImpactToggleEffect(uint commandId);
+
     /// <summary>An <c>apt::ImpactApplyEffectCommandDef</c> row (the effect it applies), or null.</summary>
     ImpactApplyEffectCommandDef GetImpactApplyEffect(uint commandId);
 
@@ -103,6 +124,20 @@ public sealed class SdbNpcAttackDataSource : INpcAttackDataSource
     public ConditionalBranchCommandDef GetConditionalBranch(uint commandId) => SDBInterface.GetConditionalBranchCommandDef(commandId);
 
     public CallCommandDef GetCall(uint commandId) => SDBInterface.GetCallCommandDef(commandId);
+
+    public UpdateWaitAndFireOnceCommandDef GetUpdateWaitAndFireOnce(uint commandId) =>
+        SDBInterface.GetUpdateWaitAndFireOnceCommandDef(commandId);
+
+    public LogicAndChainCommandDef GetLogicAndChain(uint commandId) => SDBInterface.GetLogicAndChainCommandDef(commandId);
+
+    public LogicOrChainCommandDef GetLogicOrChain(uint commandId) => SDBInterface.GetLogicOrChainCommandDef(commandId);
+
+    public LogicNegateCommandDef GetLogicNegate(uint commandId) => SDBInterface.GetLogicNegateCommandDef(commandId);
+
+    public WhileLoopCommandDef GetWhileLoop(uint commandId) => SDBInterface.GetWhileLoopCommandDef(commandId);
+
+    public ImpactToggleEffectCommandDef GetImpactToggleEffect(uint commandId) =>
+        SDBInterface.GetImpactToggleEffectCommandDef(commandId);
 
     public ImpactApplyEffectCommandDef GetImpactApplyEffect(uint commandId) => SDBInterface.GetImpactApplyEffectCommandDef(commandId);
 

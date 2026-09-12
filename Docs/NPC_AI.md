@@ -297,9 +297,10 @@ is its `apt::BaseCommandDef.subtype`, and the row that names that subtype in
 `apt::CommandType` says who executes it: its `environment` column is `client`, `server`
 or `both` - the client's 50 types are the `apttf::` feedback commands (animations,
 emotes, material switches, particles, audio), the `aptfs::`/`aptgss::` ones are the
-server's functions and the bare `apt::` ones are control flow
-both sides know (`apt::CommandType.environment`, which the command factory keys on as
-well - the `apttf::` tables and the `client` value are the same 50 types). `AiEngine`
+server's functions and the bare `apt::` ones are control flow both sides know. That
+column is the rule (`INpcAttackDataSource.IsClientCommand` reads it), not the table-name
+prefix the walk first used: the two agree on all 392 types today, and the column is what
+the command factory keys on as well. `AiEngine`
 runs the ability when the chain carries client feedback,
 through the shard's own `AbilitySystem.HandleActivateAbility`, which is **7 of the 14
 templates with an `attack_ability_id` / `burst_ability_id` and 75 of their 102 monster
@@ -407,35 +408,40 @@ monsters' three behaviour columns each), both of which the parser absorbs. The i
 (the module that names ability 33812 is 77388), so that one value is read as an ability
 id, which is what the data needs.
 
-Running those chains is where most of a monster's behaviour drawing comes from: 24 of the
+Running those chains is where most of a monster's behaviour drawing comes from: 25 of the
 26 modules reach a `tfAbilityAnimationCommandDef` in an effect their chain applies
-(animation indices 1-28), one of them - `86132`, the `Arch_MoveThenFire` module on 12
+(animation indices 1-28; the twenty-sixth, `86461`, draws particles and sound but no
+skeleton animation), one of them - `86132`, the `Arch_MoveThenFire` module on 12
 references - also performs the `roar` emote (`tfPerformEmoteCommandDef` carries the emote
-*name*, and `EmoteRecord.name` is what turns it into an id), and 12 deliver their own
-damage.
+*name*, and `EmoteRecord.name` is what turns it into an id), and 20 deliver their own
+damage. Nine of the modules reach those commands only through chains that a control-flow
+command hands execution to - the `UpdateWaitAndFireOnce` chain of an effect's update loop
+and the logic branches (`120937`'s animations 22 and 26 are both behind a wait, and eight
+modules deliver their damage from one) - which is why the scan follows them (see the
+weapon-chain note above).
 
 | module (`am*Id`) | ability | refs | animation | emote | delivers the hit |
 |---|---|---|---|---|---|
 | `33833` | `33833` | 43 | 10 | - | no |
 | `33812` | `33812` | 39 | 9 | - | no |
 | `88159` | `37359` | 26 | 26 | - | yes |
-| `82621` | `35942` | 15 | 4 | - | no |
+| `82621` | `35942` | 15 | 4 | - | yes |
 | `86132` | `36817` | 12 | 28 | `roar` | yes |
-| `86465` | `36882` | 9 | 14 | - | no |
+| `86465` | `36882` | 9 | 14 | - | yes |
 | `95025` | `37439` | 9 | 4 | - | no |
-| `88161` | `37362` | 8 | 25 | - | no |
+| `88161` | `37362` | 8 | 25 | - | yes |
 | `86474` | `36035` | 6 | 8 | - | yes |
-| `96949` | `37682` | 6 | 25 | - | no |
+| `96949` | `37682` | 6 | 25 | - | yes |
 | `77721` | `35511` | 5 | 14 | - | yes |
 | `95445` | `37503` | 5 | 8 | - | no |
 | `85964` | `36757` | 3 | 7 | - | yes |
 | `86055` | `34753` | 3 | 1 | - | no |
 | `86392` | `36948` | 3 | 8 | - | yes |
-| `86393` | `36949` | 3 | 2 | - | no |
+| `86393` | `36949` | 3 | 2 | - | yes |
 | `86461` | `37049` | 3 | none | - | no |
-| `96905` | `37659` | 3 | 3 | - | no |
-| `120937` | `38700` | 3 | none | - | no |
-| `121427` | `39066` | 3 | 28 | - | no |
+| `96905` | `37659` | 3 | 3 | - | yes |
+| `120937` | `38700` | 3 | 22, 26 | - | yes |
+| `121427` | `39066` | 3 | 28 | - | yes |
 | `82610` | `35933` | 2 | 8 | - | yes |
 | `118356` | `38164` | 2 | 26 | - | yes |
 | `86100` | `34770` | 1 | 21 | - | yes |
@@ -453,8 +459,10 @@ preferred over `am2`, `am*Chance` is the roll, `am*Cooldown` the lockout and
 window's attack; one that only animates leaves the mob's own attack to go out with it,
 unless the module's own effect restricts the weapon meanwhile - the dodge pair's effect
 sets `restrict_weapon` for the 500 ms it runs, so a dodge window fires nothing. A module
-whose chains carry nothing a client draws or plays (`120937`, the only one) is left alone
-and the weapon fires as before, exactly like a server-only weapon chain.
+whose chains carry nothing a client draws or plays is left alone and the weapon fires as
+before, exactly like a server-only weapon chain - no behaviour string in the build names
+such a module (all 26 reach a client command once every chain the engine runs is followed,
+`120937` included), so the gate protects against a data change rather than a shipped row.
 
 What the strings state and the engine does **not** carry: `am*Timeout` (a watchdog),
 `am*NavToDist`/`am*NavTimeout` (the module's own navigation) and
@@ -511,7 +519,7 @@ these three pieces, and the line currently sits here:
 | `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction (references the 32 directional rows) | unused - no row points at it |
 | `dbcharacter::EmoteRecord` (`animation_name`, `anim_override_id`, `head_anim_override_id`, `statuseffect`) | 382 | emotes: the animation ids the client resolves from the emote id, and on 4 rows the status effect whose chain draws the emote | used for the emote lifecycle: `PerformEmote` is validated against the table (an id outside it is ignored), emote 0 clears the emote, and the 4 rows apply their effect so the emote animates for every client watching, not only for the performer (`Docs/EMOTES.md` §1-2). An NPC's own emote does not come from a chain at all: **207 monster rows name one in their `behavior` string** (`AlertAndInteractive(emote="calm")`), which the AI now performs while the NPC is in its base behaviour set and clears when it fights (`Docs/EMOTES.md` §7); the 530 `tfPerformEmote` commands and the 359 effects holding them stay unreachable from every monster weapon |
 | `dbcharacter::MonsterMood` / `MonsterMoodName` | 2,268 / 6 | mood -> portrait id (`Neutral`, `Excited`, `Thinking`, `Angry`, `Happy`, `Sad`) | unused - a UI portrait with no field in the character views, so there is nothing for the server to replicate (`Docs/EMOTES.md` §5) |
-| `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the animation commands of the original game's chains, and the only place an animation is named | placeholder records, because the client runs them from the replicated effect they sit in; the two monster weapons above reach one through the effect their ability applies, and so do 24 of the 26 behaviour ability modules (`am1Id`/`am2Id`, above); the rest of these rows belong to player abilities, to the 359 emote effects (`Docs/EMOTES.md` §3) and to effects no monster weapon applies |
+| `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the animation commands of the original game's chains, and the only place an animation is named | placeholder records, because the client runs them from the replicated effect they sit in; the two monster weapons above reach one through the effect their ability applies, and so do 25 of the 26 behaviour ability modules (`am1Id`/`am2Id`, above); the rest of these rows belong to player abilities, to the 359 emote effects (`Docs/EMOTES.md` §3) and to effects no monster weapon applies |
 | `dbitems::Weapons.first_person_animnet_id` / `third_person_animnet_id`, `dbcharacter::Head.animnet_id`, `dbitems::BattleframeVisuals.animnetwork_id`, `dbcharacter::Deployable.animnetwork` | 6,789 / 67 / 2,786 / 3,902 | animation-network (animation graph) asset ids | client side: the client picks the graph from the item/visual id the server already replicates, so there is nothing for the server to send |
 
 **Where the animations actually live.** Probing the aptitude chains settles what
@@ -526,8 +534,10 @@ documented rather than wired:
   so this is the one DB-declared animation path that reaches an observer of an NPC.
   The 2,540 animation commands are owned by status effects, `dbitems::AbilityModule`
   chains, one `WeaponTemplateModifiers.burst_ability_id`, one `Ammo.ability_id`, one
-  `Ammo.touch_ability_id` and one `dbcharacter::Deployable.spawn_abilityid`; only
-  **7** abilities in the whole build have a chain that reaches an animation command.
+  `Ammo.touch_ability_id` and one `dbcharacter::Deployable.spawn_abilityid`; through the
+  fields this first walk follows, only **7** abilities in the whole build have a chain
+  that reaches an animation command (the walk was later extended - see the end of the
+  next bullet - and the behaviour modules alone add 25).
 - *Monster weapons barely have abilities at all.* Of the 85 weapon templates the
   build's monsters use, 14 carry an `attack_ability_id` or a `burst_ability_id`
   (102 monster slots), and none of those abilities' own chains contains an animation
@@ -545,6 +555,16 @@ documented rather than wired:
   animate (above), two more deliver the hit themselves (the flamethrower's cone burn
   8785 among them), and the rest carry the weapon's muzzle flash and sound - while the
   other 7 (27 slots) reach only server-side commands and keep the AI's own attack.
+  **The walk was later extended, and it changed the module answer, not this one.** It
+  followed `next`, the branch bodies, called abilities and every effect chain, but not the
+  chains a control-flow command *hands execution to*: an `UpdateWaitAndFireOnce`'s chain,
+  the and/or/negate chains, a while loop's condition and body, and an effect toggle's
+  pre-apply chain - all of which the engine runs (`Factory.LoadCommand` has every one of
+  them). Following those too reaches 218 distinct client commands from the same 114 ability
+  roots instead of 134, gives eight behaviour modules the damage they hide behind a wait, and
+  uncovers `120937`'s animations 22 and 26; the corrected module numbers are in §3's
+  table. On the *weapon* side nothing changes: no attack/burst ability of the 14 templates
+  hides a command behind those fields, so the 7-of-14 finding above stands.
 - *Hit reactions have no trigger in this build.* The stumble data is complete -
   `dbcharacter::Stumble` 9452 is the effect a stumble applies, and that effect's
   own chain is a stumble in full: `RequireHasEffectTag`, then
@@ -797,9 +817,9 @@ stays horizontal, exactly as before.
   attack/burst ids, 75 monster slots: the Shadowstrike swing, the charge-up weapon's
   charge/release, the flamethrower's cone, and the charge sniper/phason/fluid
   cannon/magic finger muzzle flash and sound), it runs a behaviour set's ability modules
-  (`am1Id`/`am2Id`: 25 of the 26 module ids the build's monsters name, of which 24 hold
-  an animation - the dodge pair's 500 ms sidestep, the Move Then Fire roar, the melee
-  swings and the rest), and it performs the emote of the
+  (`am1Id`/`am2Id`: all 26 module ids the build's monsters name, 25 of them holding an
+  animation and 20 landing their own damage - the dodge pair's 500 ms sidestep, the Move
+  Then Fire roar, the melee swings and the rest), and it performs the emote of the
   behaviour set an NPC is in - 207 monster rows name one in `behavior`, so a guard
   guards, a citizen works and a dancer dances, and a monster that engages drops the pose
   (see [What an NPC animates](#what-an-npc-animates), which lists the animation rows
