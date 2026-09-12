@@ -264,7 +264,16 @@ goes out with every pose is the DB-driven selection on top of it.
 
 **Death.** The state change (`CharacterState.Dead`) plus `NpcDeathService`'s gib
 visuals and corpse linger are what the client plays its death and gib animation
-from; an attack animation in flight is cancelled first (above).
+from; an attack animation in flight is cancelled first (above). The gib visuals
+id is the chassis battleframe's `gibset_id`, resolved by `GibVisualsResolution`,
+and - the point of that type - a `gibset_id` of **0 is a value, not an absence**:
+it is `dbcharacter::GibVisuals` row 0, the database's default row, which 804 of
+the 1,676 battleframes and 3,816 of the 3,902 deployables use. The deployable
+death path has always reported it as-is (`DamageSystem`), while the character path
+used to drop it, so 1,806 monsters stayed silent at death and logged
+`No gib visuals id available`; they now report the default row at their death
+time like everything else. Only a chassis the database has no battleframe row for
+(112 monster rows, 89 of them with `chassis_id` 0) has no gib set to report.
 
 **What is *not* driven yet.** The database's animation surface is larger than
 these three pieces, and the line currently sits here:
@@ -273,7 +282,7 @@ these three pieces, and the line currently sits here:
 |---|---|---|---|
 | `dbitems::WeaponTemplates` / `WeaponTemplateModifiers` `anim_*`, `ms_burst_duration`, `ms_per_burst` | 318 / 5,387 | the weapon's animation selectors and its burst timing | used (above) |
 | `dbcharacter::Monster.normal_speed` / `fast_speed` | 3,109 | the two locomotion speeds the walk/run animation matches | used (above) |
-| `dbcharacter::GibVisuals` (`death_anim_index`, `blast_impulse_strength`, `direct_vrec_id`) via `dbitems::Battleframe.gibset_id` | 128 | the death/gib animation a corpse plays | reached on death by the existing `NpcDeathService` chain, but only for 1,137 of the 3,109 monster rows: 1,806 have `gibset_id` 0, 54 point at a missing `GibVisuals` row and 112 chassis have no battleframe row, and those die with `No gib visuals id available` |
+| `dbcharacter::GibVisuals` (`death_anim_index`, `blast_impulse_strength`, `direct_vrec_id`) via `dbitems::Battleframe.gibset_id` | 128 | the row a corpse reports at death: the death animation variant and the gib visuals | used: `NpcDeathService` reports the battleframe's `gibset_id` at the death time, 0 included (see below), covering the 1,137 monsters with an explicit gib set and the 1,806 whose battleframe names the default row. 112 monster rows have no battleframe to read it from (89 of them `chassis_id` 0, legacy entries), and 54 name a `GibVisuals` id this build does not ship - the id is reported as the row states it and the client resolves it against its own copy |
 | `dbcharacter::Stumble` (`anim_index`, `duration`, `cooldown_ms`, `distance`, `only_once`) | 39 | hit-reaction ("stumble") animations | unused |
 | `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction | unused |
 | `dbcharacter::EmoteRecord` (`animation_name`, `anim_override_id`, `head_anim_override_id`) | 382 | emotes | player-only (`PerformEmote`); NPCs never emote |

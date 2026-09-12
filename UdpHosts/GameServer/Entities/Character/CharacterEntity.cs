@@ -19,6 +19,7 @@ using GameServer.StaticDB.Records.dbvisualrecords;
 using GameServer.Systems.Aptitude;
 using GameServer.Systems.Encounters;
 using GameServer.Systems.MovementRelay;
+using GameServer.Systems.NpcDeath;
 using GameServer.Systems.WeaponSim;
 using GameServer.Test;
 using GrpcGameServerAPIClient;
@@ -2121,24 +2122,13 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         Character_BaseController?.GibVisualsIdProp = GibVisualsInfo;
     }
 
+    /// <summary>
+    ///     Resolves the gib visuals the character's corpse plays from its chassis' battleframe, the way the static
+    ///     database describes it (<see cref="GibVisualsResolution" />). False only when there is no chassis or no
+    ///     battleframe row for it; a <c>gibset_id</c> of 0 is the database's own default row and is returned as such.
+    /// </summary>
     public bool TryGetGibVisualsId(out uint gibVisualsId)
-    {
-        gibVisualsId = 0;
-        uint chassisId = CurrentLoadout?.ChassisID ?? 0;
-        if (chassisId == 0)
-        {
-            return false;
-        }
-
-        var battleframe = SDBInterface.GetBattleframe(chassisId);
-        if (battleframe == null || battleframe.GibsetId == 0)
-        {
-            return false;
-        }
-
-        gibVisualsId = battleframe.GibsetId;
-        return true;
-    }
+        => GibVisualsResolution.TryResolve(CurrentLoadout?.ChassisID ?? 0, SDBInterface.GetBattleframe, out gibVisualsId);
 
     public ulong GetCurrentPermissionsValue()
     {

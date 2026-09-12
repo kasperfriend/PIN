@@ -34,7 +34,9 @@ public class NpcDeathService
         }
         else
         {
-            Logger.Debug("No gib visuals id available for {Name}, skipping gib visuals", character);
+            // The database has no battleframe row for this chassis (89 legacy monsters carry chassis_id 0), so there
+            // is no gibset_id to report - not a gib set of 0, which is a real row and is sent above.
+            Logger.Debug("No battleframe (and so no gib visuals id) for {Name}, skipping gib visuals", character);
         }
 
         _shard.EntityMan.SetRemainingLifetime(character, (uint)_rules.CorpseLingerMs);
