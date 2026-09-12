@@ -62,6 +62,28 @@ public sealed class NpcBehaviorParams
     /// <summary>Whether the behaviour carries any of the parameters that drive a ranged attack cycle.</summary>
     public bool HasAttackTiming => TriggerPullTimeMs > 0 || FireRestDurationMs > 0;
 
+    /// <summary>
+    ///     The emote the behaviour has the NPC hold (<c>emote="calm"</c>, <c>emote="townstand4"</c>,
+    ///     <c>emote="dance"</c>, ...), or an empty string when it names none. It is a
+    ///     <c>dbcharacter::EmoteRecord.name</c>, never an id, and 207 of the build's 3,109 monster rows
+    ///     carry one - 62 distinct names, of which 60 are rows of the emote table, from <c>calm</c> (28
+    ///     rows, emote 1062) and <c>officer</c> (22, 1105) down to <c>dance</c> (1) and <c>cover</c> (1456).
+    ///     Two rows name an emote the table does not have (<c>waterplant01</c> on monster 999,
+    ///     <c>townstand04</c> on 2481), so callers resolve the name and get nothing rather than a
+    ///     substitution. Every emote in the data sits in the base <c>behavior</c> column; the same three
+    ///     rows repeat it in <c>behavior_offensive</c> and <c>behavior_defensive</c>.
+    /// </summary>
+    public string EmoteName => _values.TryGetValue("emote", out string value) ? value.Trim() : string.Empty;
+
+    /// <summary>
+    ///     Seconds the behaviour wants that emote to last (<c>emoteDuration</c>), or false when it does not
+    ///     say. Every monster row that says it says <c>-1</c>, "until the behaviour changes": an NPC that
+    ///     poses, works or dances holds the emote until its behaviour set does.
+    /// </summary>
+    /// <param name="seconds">The parsed duration in seconds (a negative value means indefinite).</param>
+    /// <returns>Whether the behaviour carries an <c>emoteDuration</c>.</returns>
+    public bool TryGetEmoteDurationSeconds(out int seconds) => TryGetInt("emoteDuration", out seconds);
+
     /// <summary>Parses a behaviour string. Never returns null; an empty input gives <see cref="Empty" />.</summary>
     public static NpcBehaviorParams Parse(string behavior)
     {

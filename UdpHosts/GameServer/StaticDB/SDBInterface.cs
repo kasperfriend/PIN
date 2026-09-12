@@ -27,6 +27,12 @@ public class SDBInterface
     private static Dictionary<uint, List<FactionReputations>> _factionReputations;
     private static Dictionary<uint, Monster> _monster;
     private static Dictionary<ushort, EmoteRecord> _emoteRecord;
+
+    /// <summary>
+    ///     The emote table keyed by name, because <c>dbcharacter::Monster.behavior</c> names the emote an
+    ///     NPC poses in (<c>AlertAndInteractive(emote="calm")</c>) rather than its id.
+    /// </summary>
+    private static Dictionary<string, EmoteRecord> _emoteRecordByName;
     private static Dictionary<KeyValuePair<uint, ushort>, MonsterAttributeRange> _monsterAttributeRange;
     private static Dictionary<uint, MonsterScaling> _monsterScaling;
     private static Dictionary<uint, Turret> _turret;
@@ -294,6 +300,7 @@ public class SDBInterface
         _factionReputations = loader.LoadFactionReputations();
         _monster = loader.LoadMonster();
         _emoteRecord = loader.LoadEmoteRecord();
+        _emoteRecordByName = BuildEmoteNameIndex(_emoteRecord);
         _monsterAttributeRange = loader.LoadMonsterAttributeRange();
         _monsterScaling = loader.LoadMonsterScaling();
         _turret = loader.LoadTurret();
@@ -615,6 +622,15 @@ public class SDBInterface
     /// </summary>
     public static EmoteRecord GetEmoteRecord(ushort id) => _emoteRecord?.GetValueOrDefault(id);
     public static IReadOnlyDictionary<ushort, EmoteRecord> GetEmoteRecords() => _emoteRecord;
+
+    /// <summary>
+    ///     The <c>dbcharacter::EmoteRecord</c> row with that name, matched case-insensitively, or null when
+    ///     no row has it. Behaviour strings name emotes this way (<c>emote="townstand4"</c>); the 380 names
+    ///     are not unique (two rows are called <c>thinking</c>, two <c>UNUSED</c>), so the lowest id wins and
+    ///     a name only two of the rows share can never be resolved to the other one.
+    /// </summary>
+    public static EmoteRecord GetEmoteRecord(string name) =>
+        string.IsNullOrWhiteSpace(name) ? null : _emoteRecordByName?.GetValueOrDefault(name.Trim());
     /// <summary>
     ///     One <c>dbcharacter::MonsterAttributeRange</c> row of a monster (attribute 1143 Creature HP
     ///     Modifier, 1144 Creature Damage Modifier, ...), or null when that monster has no row for it.
@@ -887,4 +903,26 @@ public class SDBInterface
     public static DeployableComponentDef GetDeployableComponentDef(uint id) => _deployableComponentDef.GetValueOrDefault(id);
     public static SpawnPointComponentDef GetSpawnPointComponentDef(uint id) => _spawnPointComponentDef.GetValueOrDefault(id);
     public static HullSegmentDef GetHullSegmentComponentDef(uint id) => _hullSegmentDef.GetValueOrDefault(id);
+
+    /// <summary>Indexes the emote rows by name for <see cref="GetEmoteRecord(string)" />.</summary>
+    /// <param name="records">The loaded <c>dbcharacter::EmoteRecord</c> rows, or null before they load.</param>
+    /// <returns>The name index, empty when the rows are not loaded yet.</returns>
+    private static Dictionary<string, EmoteRecord> BuildEmoteNameIndex(Dictionary<ushort, EmoteRecord> records)
+    {
+        var index = new Dictionary<string, EmoteRecord>(System.StringComparer.OrdinalIgnoreCase);
+        if (records == null)
+        {
+            return index;
+        }
+
+        foreach (var record in records.Values.OrderBy(row => row.Id))
+        {
+            if (!string.IsNullOrWhiteSpace(record.Name) && !index.ContainsKey(record.Name))
+            {
+                index[record.Name] = record;
+            }
+        }
+
+        return index;
+    }
 }

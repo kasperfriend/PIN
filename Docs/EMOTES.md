@@ -67,7 +67,8 @@ is why `EmoteRecord.statuseffect` is the only emote → effect link in the datab
 
 * 359 `apt::StatusEffectData` rows contain a `PerformEmote` command in one of their four chains.
 * 3 `apt::AbilityData` rows contain one directly (no effect in between).
-* None of them is a `tfPerformEmote`, and none is reachable from a monster weapon: of the 19 weapon
+* None of the 530 is reachable from a monster weapon, and no monster weapon's chains hold an emote: of
+  the 19 weapon
   templates the build's 3,109 monsters use (85 templates / 1,861 slots in total) 14 carry an attack or
   burst ability id (102 slots), of which 7 (75 slots) carry client feedback the engine now runs — 2
   animate (12143 the charge sniper's channel fire, 21 melee Shadowstrike), 3 deliver their own hit, and
@@ -82,8 +83,9 @@ something applies one of those effects to it (a scripted encounter, a deployable
 `ApplyClientStatusEffect` implementation). The general rule the walk above established is in
 `Docs/NPC_AI.md` §3: a chain is run when it carries a command the client executes (`apttf::`), which
 for a mob means the effect that holds the animation, the emote, the muzzle flash or the sound — so an
-emote effect applied to an NPC *does* animate it. What the data does give NPCs of their own is dialog,
-below.
+emote effect applied to an NPC *does* animate it. NPCs do have an emote path of their own that is not a
+chain: **207 monster rows name an emote in their behaviour string** (§7), which is where an NPC's emote
+now comes from. What the data gives every NPC besides that is dialog, below.
 
 ## 4. `dbdialogdata::DialogScript` — 39,261 lines (not implemented)
 
@@ -94,7 +96,7 @@ The NPC voice/emote line table. Columns: `character_type`, `text_id`, `sound_eve
 | Fact | Value |
 |---|---|
 | `character_type` | 785 distinct: 784 are `dbcharacter::Monster` ids, 0 is generic |
-| Lines with an emote | 356 (13 distinct emotes: 1275 `talk` ×321, 12 ×21, `working`/`focus`/`goodbye` 1067-1070, `cry` 12, 53-60 ...) |
+| Lines with an emote | 356, 13 distinct emotes: 1275 `talk` ×321, 12 `salute` ×21, 1068 `Focus` ×2, 60 `utility` ×2, 59 `cheer` ×2, then 1067 `Working\|Working_Standing`, 1069 `FocusGreeting`, 1070 `GoodbyeWorking`, 4 `taunt`, 53 `wave`, 55 `roar`, 56 `laugh` and 57 `cry` once each |
 | Lines with a sound event | 33,548 |
 | Lines with text | 38,707 |
 | `delay_ms` | −1 = none (37,949), else 500-4,000 ms |
@@ -144,7 +146,7 @@ Documented, not implemented.
 
 | Table | Rows | Status |
 |---|---|---|
-| Player emote menu (anonymous table, `name_id`, `keybinding`, `category_id`, `order`, `emote_id`) | 93 | The client's emote list; validation uses `EmoteRecord` (the superset) so scripted/administrative emotes keep working |
+| `dbquickchatdata::QuickChatCommand` (`name_id`, `soundrecord_id`, `keybinding`, `category_id`, `order`, `radius`, `emote_id`) | 93 | The client's quick-chat/emote menu. **Not one of the 93 rows names an `emote_id`** (all zero) or a particle effect, and `PerformQuickChatCommand` / `QuickChat` carry a single unnamed uint each with no server handling, so the menu plays nothing in this build. Validation of a performed emote therefore uses `EmoteRecord` (the superset) rather than this list |
 | `dbcharacter::PoseType` | 48 | Physics/collision per pose; `Monster.posetype_id` is replicated through the entity, no server rule |
 | `dbcharacter::Head` (`animnet_id`) | 67 | Client-side |
 | `dbitems::BattleframeVisuals` / `Battleframe` (`animnetwork_id`, `hand_animnetwork_id`, `anim_armed_id`, `posetype_id`) | 2,786 / 1,676 | Client-side (visuals are already replicated from the loadout) |
@@ -156,7 +158,51 @@ Documented, not implemented.
 | `aptfs::ForcePushCommandDef.do_animation`, `aptfs::SwitchWeaponCommandDef.play_animation` | 632 / 343 | Server commands with a client feedback flag; their defs are already loaded, the flags are not acted on |
 | `aptfs::ApplyClientStatusEffectCommandDef` / `RemoveClientStatusEffectCommandDef` | 3 / 8 | Server → client "apply/remove this effect **on your side**" commands. `Commands/Effect/Todo/ApplyClientStatusEffectCommand.cs` exists but is not wired into `Factory`, which is the remaining path by which a server-side rule could start a client-only animation without a replicated effect |
 
-## 7. Tests
+## 7. NPC emotes: the monster behaviour string
+
+Every emote above is something a *player* performs or an *ability* applies. The database does give an
+NPC an emote of its own, in the one place that is easy to miss: the `emote` parameter of
+`dbcharacter::Monster.behavior`.
+
+| Fact | Value |
+|---|---|
+| Monster rows naming an emote | **207** of 3,109 - all in the base `behavior` column; three rows repeat it in `behavior_offensive` and `behavior_defensive`, and only monster 3258/3259 has it in a combat behaviour at all |
+| Distinct names | 62, of which **60 are rows of `EmoteRecord`** |
+| Most named | `calm` (28 rows, emote 1062), `officer` (22, 1105), `kioskviewer3` (12), `guard` (7, 1097), `controlseat` (7, 1096), `kioskviewer1/2` (7 each, 1098/1099), `townstand4` (7, 1044) |
+| Named once or twice | gestures (`gesture1`-`gesture3`, `wave`-like town poses), counter work (`typing`, `typing01`, `dataentry01`, `lazyengineer`, `working`, `workingtech01`), seats (`sittingchair01/03/05`, `sittingstairs01/03`, `controlseat`), `dance` (monster 2053), `tikidance` (2063), `sleep01`, `smoking01`, `oilspill`, `trash01`, `statuepose01/02/03`, `cover` (1456), `utility` (60) |
+| Names the emote table does not have | 2 rows: `waterplant01` on monster 999 (the table has `DELETEwaterplant01Delete`, 1138) and `townstand04` on monster 2481 (`townstand4` is 1044) - resolve-and-fail, never a substitution |
+| Emote length | `emoteDuration=-1` on the 59 rows that state it: hold the emote until the behaviour set changes |
+| Also in the behaviour | 7 rows name a `dialogScript=<id>` to say (10551 on 612/620/621/622, 39340 on the vendors 2118/3013/3096) plus `interactionType` / `lookAtTarget`; that is dialog rather than animation, and the interaction it belongs to is a client-side conversation in this build |
+
+**Implemented.** The wire side was already there - `EmoteData` is replicated on `ObserverView` and
+`BaseController`, which is exactly what `CharacterEntity.SetEmote` writes and what a client plays an
+NPC's emote from - so the work was the rule for *when* an NPC holds its emote, and the database states
+it in the same string: the emote belongs to the behaviour set that is running. `AiEngine` resolves the
+name at registration (`EmoteService.ResolveEmoteName`, case-insensitively, into the emote table) and
+then keeps the NPC's emote in step with its brain:
+
+* `Idle` and `Return` run the base `behavior`, so the NPC holds its idle emote from its first tick
+  (`AlertAndInteractive(emote="calm")` -> emote 1062).
+* `Chase` and `Attack` run `behavior_offensive`, which names an emote on one monster only
+  (3258/3259, the same `calm`), so an NPC that engages drops its pose - the emote of a set that has
+  no emote is no emote.
+* `Dead` clears it.
+* `emoteDuration` is honoured: the 59 rows that state it all state `-1`, "hold it until the
+  behaviour changes", and a row that states a number of seconds has the emote cleared when it is up
+  without restarting while the same set still asks for it.
+* A name the emote table does not have (monsters 999 and 2481) resolves to nothing: those NPCs have
+  no emote rather than a substituted one.
+* The 2,902 monster rows that name no emote are untouched - `SyncBehaviorEmote` finds the same emote
+  id on every tick and sends nothing.
+
+`behavior_defensive` is not read, because the emulator's brain has no defensive state to run it in,
+and the `dialogScript=` parameters on seven of these rows are dialog rather than animation (see §4).
+
+Feature coverage: `NpcBehaviorParamsTests` (the `emote`/`emoteDuration` parameters, including a
+behaviour that names none) and four `AiEngineTests` cases - the pose a `calm` NPC takes, its removal
+when the NPC engages, a timed emote ending and not restarting, and the typo name posing nothing.
+
+## 8. Tests
 
 `GameServer.Tests/EmoteServiceTests.cs`: an emote in the table is replicated with its id and time, an
 emote outside it is ignored and leaves a running emote alone, id 0 stops the emote, the rows with a

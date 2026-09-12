@@ -70,6 +70,38 @@ public class NpcBehaviorParamsTests
     }
 
     [Fact]
+    public void Parse_ReadsTheBehaviourEmoteByName()
+    {
+        // The database names the emote an NPC holds in its behaviour string, never by id: monster 2053
+        // (AlertAndInteractive(emote="dance")) is one of the 207 rows that do.
+        var parsed = NpcBehaviorParams.Parse("AlertAndInteractive(emote=\"dance\")");
+
+        Assert.Equal("dance", parsed.EmoteName);
+        Assert.Equal("AlertAndInteractive", parsed.Name);
+    }
+
+    [Fact]
+    public void Parse_ReadsTheEmoteDuration()
+    {
+        var parsed = NpcBehaviorParams.Parse("AlertAndInteractive(emote=\"crouchSupply\",emoteDuration=-1)");
+
+        Assert.Equal("crouchSupply", parsed.EmoteName);
+        Assert.True(parsed.TryGetEmoteDurationSeconds(out int seconds));
+        Assert.Equal(-1, seconds);
+    }
+
+    [Fact]
+    public void Parse_BehaviourWithoutAnEmote_HasNoEmote()
+    {
+        var wanderer = NpcBehaviorParams.Parse("AggressiveWanderer");
+        var ranged = NpcBehaviorParams.Parse("Arch_MedRangedHumanoid_Attack(triggerPullTime=1500)");
+
+        Assert.Equal(string.Empty, wanderer.EmoteName);
+        Assert.Equal(string.Empty, ranged.EmoteName);
+        Assert.False(ranged.TryGetEmoteDurationSeconds(out _));
+    }
+
+    [Fact]
     public void TryGetInt_ReturnsFalseForNonNumbers()
     {
         var parsed = NpcBehaviorParams.Parse("Wanderer(speed=fast,count=12)");

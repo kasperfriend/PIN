@@ -13,6 +13,17 @@ public interface IAiMonsterStats
     (float NormalSpeed, float FastSpeed) GetSpeeds(uint characterTypeId);
 
     /// <summary>
+    ///     The monster's behaviour strings: the base <c>behavior</c> column (the behaviour set it runs while
+    ///     it has no target, where its idle emote lives) and the <c>behavior_offensive</c> one (the set it
+    ///     runs while it is fighting). Either may be empty or carry no parentheses at all, and the third
+    ///     column the database has, <c>behavior_defensive</c>, is not read because the engine has no
+    ///     defensive state to run it in.
+    /// </summary>
+    /// <param name="characterTypeId">The <c>dbcharacter::Monster</c> row id.</param>
+    /// <returns>The two behaviour strings, each <c>string.Empty</c> when the row or the column is missing.</returns>
+    (string Base, string Offensive) GetBehaviors(uint characterTypeId);
+
+    /// <summary>
     ///     The monster's <c>dbcharacter::MonsterScaling</c> damage <b>rating</b> for
     ///     <paramref name="level"/>, straight from that row's <c>damage</c> column. This is the
     ///     level's damage budget (half of the level's health rating on every row of the table), not

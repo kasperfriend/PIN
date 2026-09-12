@@ -39,6 +39,24 @@ public sealed class EmoteService
     }
 
     /// <summary>
+    ///     The emote id a name maps to, for the callers whose data names the emote instead of numbering it:
+    ///     the monster behaviour strings do (<c>AlertAndInteractive(emote="calm")</c>). The comparison is
+    ///     the table's own, case-insensitively, and a name no row carries resolves to
+    ///     <see cref="NoEmote" /> rather than to a guess.
+    /// </summary>
+    /// <param name="name">An <c>dbcharacter::EmoteRecord.name</c> value, or null/empty.</param>
+    /// <returns>The emote id, or <see cref="NoEmote" /> when the table has no such emote.</returns>
+    public ushort ResolveEmoteName(string name)
+    {
+        if (_data == null || string.IsNullOrWhiteSpace(name))
+        {
+            return NoEmote;
+        }
+
+        return _data.GetEmoteByName(name.Trim())?.Id ?? NoEmote;
+    }
+
+    /// <summary>
     ///     Performs an emote: replicates it on the character's views and applies the status effect the
     ///     emote's row names, if any. Emote id 0 stops the emote.
     /// </summary>

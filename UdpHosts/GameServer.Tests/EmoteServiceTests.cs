@@ -109,7 +109,7 @@ public class EmoteServiceTests
     public void EmoteWithAStatusEffect_StillReplicatesWithoutAnApplier()
     {
         var character = CreateCharacter();
-        var service = new EmoteService(new FakeEmoteTable());
+        var service = new EmoteService(new FakeEmoteDataSource());
 
         var performed = service.Perform(character, 1460, 4_000);
 
@@ -133,7 +133,7 @@ public class EmoteServiceTests
 
     private static EmoteService CreateService(RecordingEmoteEffectApplier effects)
     {
-        return new EmoteService(new FakeEmoteTable(), effects);
+        return new EmoteService(new FakeEmoteDataSource(), effects);
     }
 
     private static CharacterEntity CreateCharacter()
@@ -144,30 +144,6 @@ public class EmoteServiceTests
         shard.Entities.Add(character.EntityId, character);
 
         return character;
-    }
-
-    /// <summary>The emote rows these tests need out of the 382 in the database.</summary>
-    private sealed class FakeEmoteTable : IEmoteDataSource
-    {
-        private readonly Dictionary<ushort, EmoteDefinition> _emotes = new()
-        {
-            [1] = new EmoteDefinition(1, "dance", 0),
-            [4] = new EmoteDefinition(4, "taunt", 0),
-            [1460] = new EmoteDefinition(1460, "shocking", 13_551),
-            [1462] = new EmoteDefinition(1462, "firedance", 4348),
-            [1479] = new EmoteDefinition(1479, "heartbooth_right", 14_752),
-            [1480] = new EmoteDefinition(1480, "sumostomp", 0),
-        };
-
-        public EmoteDefinition? GetEmote(ushort emoteId)
-        {
-            if (_emotes.TryGetValue(emoteId, out var emote))
-            {
-                return emote;
-            }
-
-            return null;
-        }
     }
 
     private sealed class RecordingEmoteEffectApplier : IEmoteEffectApplier

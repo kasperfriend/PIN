@@ -62,7 +62,18 @@ public sealed class FakeAiMonsterStats : IAiMonsterStats
     /// <summary>Every GetAttackProfile request, as (characterTypeId, level), for assertions.</summary>
     public List<(uint CharacterTypeId, byte Level)> AttackProfileRequests { get; } = [];
 
+    /// <summary>
+    ///     The monster's base <c>behavior</c> string, i.e. the behaviour set it runs while idle. Empty by
+    ///     default, which is what 2,902 of the build's 3,109 monster rows carry or come close to.
+    /// </summary>
+    public string Behavior { get; set; } = string.Empty;
+
+    /// <summary>The monster's <c>behavior_offensive</c> string, i.e. the set it fights in.</summary>
+    public string OffensiveBehavior { get; set; } = string.Empty;
+
     public (float NormalSpeed, float FastSpeed) GetSpeeds(uint characterTypeId) => (NormalSpeed, FastSpeed);
+
+    public (string Base, string Offensive) GetBehaviors(uint characterTypeId) => (Behavior, OffensiveBehavior);
 
     public int GetAttackDamage(uint characterTypeId, byte level)
     {

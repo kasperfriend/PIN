@@ -32,6 +32,15 @@ public interface IEmoteDataSource
     /// <param name="emoteId">The emote id a client asked for.</param>
     /// <returns>The row, or null when the id is not one of the database's emotes.</returns>
     EmoteDefinition? GetEmote(ushort emoteId);
+
+    /// <summary>
+    ///     The emote with that name, matched case-insensitively. The database names emotes in the monster
+    ///     behaviour strings (<c>AlertAndInteractive(emote="calm")</c>) and never by id, so this is how an
+    ///     NPC's own emote is resolved.
+    /// </summary>
+    /// <param name="name">An <c>dbcharacter::EmoteRecord.name</c> value, as a behaviour string wrote it.</param>
+    /// <returns>The row, or null when no emote carries that name.</returns>
+    EmoteDefinition? GetEmoteByName(string name);
 }
 
 /// <summary>The production <see cref="IEmoteDataSource" />: reads the loaded static database.</summary>
@@ -40,6 +49,17 @@ public sealed class SdbEmoteDataSource : IEmoteDataSource
     public EmoteDefinition? GetEmote(ushort emoteId)
     {
         var record = SDBInterface.GetEmoteRecord(emoteId);
+        if (record == null)
+        {
+            return null;
+        }
+
+        return new EmoteDefinition(record.Id, record.Name, record.Statuseffect);
+    }
+
+    public EmoteDefinition? GetEmoteByName(string name)
+    {
+        var record = SDBInterface.GetEmoteRecord(name);
         if (record == null)
         {
             return null;

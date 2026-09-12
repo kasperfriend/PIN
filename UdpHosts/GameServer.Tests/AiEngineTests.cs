@@ -1,9 +1,11 @@
+using System.Collections.Generic;
 using System.Numerics;
 using System.Threading;
 using AeroMessages.GSS.Character;
 using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;
+using GameServer.Systems.Emotes;
 using GameServer.Tests.Fakes;
 using Xunit;
 
@@ -23,10 +25,11 @@ public class AiEngineTests
         FakeAiMonsterStats monsterStats = null,
         byte npcLevel = 0,
         IAiProjectileLauncher projectileLauncher = null,
-        INpcAbilityActivator abilityActivator = null)
+        INpcAbilityActivator abilityActivator = null,
+        EmoteService emotes = null)
     {
         var shard = new FakeShard();
-        if (rules != null || monsterStats != null || projectileLauncher != null || abilityActivator != null)
+        if (rules != null || monsterStats != null || projectileLauncher != null || abilityActivator != null || emotes != null)
         {
             shard.AI = new AiEngine(
                 shard,
@@ -36,7 +39,8 @@ public class AiEngineTests
                 shard.AiAttackFeedback,
                 monsterStats ?? new FakeAiMonsterStats(),
                 projectileLauncher,
-                abilityActivator);
+                abilityActivator,
+                emotes);
         }
 
         var npc = CreateLivingCharacter(shard, npcPosition);
@@ -65,6 +69,11 @@ public class AiEngineTests
     private static void AssertState(FakeShard shard, CharacterEntity npc, AiBrainState expected)
     {
         Assert.Equal(new AiBrainState?(expected), shard.AI.GetState(npc.EntityId));
+    }
+
+    private static EmoteService CreateEmoteService(RecordingEmoteEffectApplier effects)
+    {
+        return new EmoteService(new FakeEmoteDataSource(), effects);
     }
 
     private static void Tick(FakeShard shard, ulong currentTime)
@@ -1008,4 +1017,103 @@ public class AiEngineTests
         Assert.Equal(reloadedAtSpawn, npc.Character_CombatView.WeaponReloadedProp);
         Assert.Equal(cancelledAtSpawn, npc.Character_CombatView.WeaponReloadCancelledProp);
     }
+
+    /// <summary>
+    ///     A monster whose behaviour string names an emote holds it: <c>dbcharacter::Monster.behavior</c> is
+    ///     where 207 of the build's 3,109 rows name one (<c>AlertAndInteractive(emote="calm")</c> on 28 of
+    ///     them, emote 1062), never a table column, and the emote is the same <c>EmoteRecord</c> row a
+    ///     player performs, replicated on the NPC's own views so every client in range plays it.
+    /// </summary>
+    [Fact]
+    public void NpcWithABehaviorEmote_PosesTheNamedEmote()
+    {
+        var effects = new RecordingEmoteEffectApplier();
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(500f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = "AlertAndInteractive(emote=\"calm\")" },
+            emotes: CreateEmoteService(effects));
+
+        Tick(shard, FirstTick);
+
+        Assert.Equal((ushort)1062, npc.Emote.Id);
+        Assert.Equal((uint)FirstTick, npc.Emote.Time);
+        Assert.Empty(effects.Applied);
+    }
+
+    [Fact]
+    public void NpcWithABehaviorEmote_DropsItWhenItFights()
+    {
+        var (shard, npc, player) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(300f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = "AlertAndInteractive(emote=\"calm\")" },
+            emotes: CreateEmoteService(new RecordingEmoteEffectApplier()));
+
+        Tick(shard, FirstTick);
+        Assert.Equal((ushort)1062, npc.Emote.Id);
+
+        // The behaviour set changes when the NPC engages, and the emote belongs to the idle set: the
+        // offensive string of this monster (and of every monster but one) names none.
+        shard.Damage.ApplyDamage(npc, 50, player);
+        Tick(shard, FirstTick + Step);
+
+        AssertState(shard, npc, AiBrainState.Chase);
+        Assert.Equal((ushort)0, npc.Emote.Id);
+    }
+
+    [Fact]
+    public void NpcWithATimedBehaviorEmote_HoldsItForTheBehaviorsOwnDuration()
+    {
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(500f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = "AlertAndInteractive(emote=\"calm\",emoteDuration=2)" },
+            emotes: CreateEmoteService(new RecordingEmoteEffectApplier()));
+
+        Tick(shard, FirstTick);
+        Assert.Equal((ushort)1062, npc.Emote.Id);
+
+        Tick(shard, FirstTick + 1_000);
+        Assert.Equal((ushort)1062, npc.Emote.Id);
+
+        // Two seconds are up: the emote ends, and the set that still asks for it does not start it over.
+        Tick(shard, FirstTick + 2_000);
+        Assert.Equal((ushort)0, npc.Emote.Id);
+
+        Tick(shard, FirstTick + 5_000);
+        Assert.Equal((ushort)0, npc.Emote.Id);
+    }
+
+    [Fact]
+    public void NpcWhoseBehaviorNamesAnEmoteTheTableDoesNotHave_PosesNothing()
+    {
+        // Monster 999's row names "waterplant01" and the emote table has "DELETEwaterplant01Delete" (1138)
+        // - the shipped data's own typo. Resolving the name is where that ends: no substitution, no emote.
+        var effects = new RecordingEmoteEffectApplier();
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(500f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = "AlertAndLookAtPlayer(emote=\"waterplant01\", greetingSet=1197)" },
+            emotes: CreateEmoteService(effects));
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal((ushort)0, npc.Emote.Id);
+        Assert.Empty(effects.Applied);
+    }
+
+    /// <summary>Records the emote effects an NPC's emote applied, so a test can assert on them.</summary>
+    private sealed class RecordingEmoteEffectApplier : IEmoteEffectApplier
+    {
+        public List<(ulong EntityId, uint EffectId, uint Time)> Applied { get; } = [];
+
+        public bool Apply(CharacterEntity target, uint effectId, uint time)
+        {
+            Applied.Add((target.EntityId, effectId, time));
+            return true;
+        }
+    }
+
 }

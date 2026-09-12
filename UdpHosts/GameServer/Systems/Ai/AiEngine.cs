@@ -8,6 +8,7 @@ using BepuUtilities;
 using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.Systems.CharacterLifecycle;
+using GameServer.Systems.Emotes;
 using GameServer.Systems.SystemEvents;
 using Serilog;
 using AiPrng = GameServer.Systems.PRNG.PRNG;
@@ -81,6 +82,7 @@ public class AiEngine
     private readonly IAiMonsterStats _monsterStats;
     private readonly IAiProjectileLauncher _projectiles;
     private readonly INpcAbilityActivator _abilityActivator;
+    private readonly EmoteService _emotes;
     private readonly IShard _shard;
     private ulong _lastPerceptionAt;
     private ulong _lastMovementAt;
@@ -93,7 +95,8 @@ public class AiEngine
         IAiAttackFeedback feedback = null,
         IAiMonsterStats monsterStats = null,
         IAiProjectileLauncher projectileLauncher = null,
-        INpcAbilityActivator abilityActivator = null)
+        INpcAbilityActivator abilityActivator = null,
+        EmoteService emotes = null)
     {
         _shard = shard ?? throw new ArgumentNullException(nameof(shard));
         _rules = rules ?? new StandardAiRules();
@@ -112,6 +115,11 @@ public class AiEngine
         // AbilitySystem; a shard without one (a test shard) then simply reports that nothing ran, and the
         // AI's own attack stays the mob's attack.
         _abilityActivator = abilityActivator ?? new ShardAbilityActivator(_shard);
+
+        // The idle emote of a monster row's behaviour string (behavior=AlertAndInteractive(emote="calm"))
+        // is performed through the same emote table the players' emotes come from, so an NPC's pose is a
+        // row lookup and a replicated EmoteData, not a private animation path.
+        _emotes = emotes ?? new EmoteService(new SdbEmoteDataSource(), new AbilitySystemEmoteEffectApplier());
         _logger = shard.Logger?.ForContext<AiEngine>() ?? Log.ForContext<AiEngine>();
 
         // The bus is injected like every other system's: IShard does not expose it.
@@ -146,6 +154,8 @@ public class AiEngine
         }
 
         var (normalSpeed, fastSpeed) = _monsterStats.GetSpeeds(npc.StaticInfo.CharacterTypeId);
+        var (baseBehavior, offensiveBehavior) = _monsterStats.GetBehaviors(npc.StaticInfo.CharacterTypeId);
+        var baseParams = NpcBehaviorParams.Parse(baseBehavior);
         int dbDamageRating = _monsterStats.GetAttackDamage(npc.StaticInfo.CharacterTypeId, npc.MonsterLevel);
         var attackProfile = _monsterStats.GetAttackProfile(npc.StaticInfo.CharacterTypeId, npc.MonsterLevel) ?? NpcAttackProfile.Unarmed;
 
@@ -172,6 +182,9 @@ public class AiEngine
             Magazine = attackProfile.Reloads
                 ? NpcWeaponMagazine.Loaded(attackProfile.MagazineSize)
                 : NpcWeaponMagazine.None,
+            IdleEmoteId = ResolveBehaviorEmote(baseParams),
+            CombatEmoteId = ResolveBehaviorEmote(NpcBehaviorParams.Parse(offensiveBehavior)),
+            EmoteDurationSeconds = baseParams.TryGetEmoteDurationSeconds(out int emoteSeconds) ? emoteSeconds : -1,
         };
 
         return _brains.TryAdd(npc.EntityId, brain);
@@ -269,6 +282,7 @@ public class AiEngine
         {
             npc.Brain.OnDeath();
             npc.TargetId = 0;
+            SyncBehaviorEmote(npc, currentTime);
             return;
         }
 
@@ -374,6 +388,71 @@ public class AiEngine
         }
 
         ApplyDecision(npc, decision, elapsedMs, target);
+
+        // The emote belongs to the behaviour set the brain is running: the base behaviour while it has no
+        // target, the offensive one while it fights (see NpcBehaviorParams.EmoteName). The walk back home
+        // after a leash pull is still the base behaviour, a corpse has none.
+        SyncBehaviorEmote(npc, currentTime);
+    }
+
+    /// <summary>
+    ///     The emote id a behaviour string's <c>emote=</c> names, or 0 when it names none or the name is not
+    ///     one of the emote table's (two monster rows name emotes build prod-1962 does not ship: this is
+    ///     where that ends as "this NPC has no emote" rather than as a guess).
+    /// </summary>
+    /// <param name="behavior">A parsed <c>dbcharacter::Monster</c> behaviour string.</param>
+    /// <returns>The emote id, or 0.</returns>
+    private ushort ResolveBehaviorEmote(NpcBehaviorParams behavior)
+    {
+        return behavior.EmoteName.Length > 0 ? _emotes.ResolveEmoteName(behavior.EmoteName) : EmoteService.NoEmote;
+    }
+
+    /// <summary>
+    ///     Keeps the NPC's emote in step with the behaviour set its brain is running, and honours the
+    ///     <c>emoteDuration</c> the set asks for: an emote the database gives a length is cleared when that
+    ///     many seconds have passed, and the <c>-1</c> every shipped row carries holds it until the
+    ///     behaviour changes. Nothing is sent for the monsters that name no emote (every one of them but
+    ///     207), and a name the emote table does not have leaves the NPC with none.
+    /// </summary>
+    /// <param name="npc">The NPC whose behaviour emote is being synced.</param>
+    /// <param name="currentTime">The shard's current time, in milliseconds.</param>
+    private void SyncBehaviorEmote(NpcBrain npc, ulong currentTime)
+    {
+        ushort behaviorEmote = npc.Brain.State switch
+        {
+            AiBrainState.Dead => EmoteService.NoEmote,
+            AiBrainState.Chase or AiBrainState.Attack => npc.CombatEmoteId,
+            _ => npc.IdleEmoteId,
+        };
+
+        if (behaviorEmote != npc.BehaviorEmoteId)
+        {
+            // A different behaviour set is running (or a different emote inside it): a length that ran out
+            // under the old one does not carry over, so the emote of the new set starts fresh.
+            npc.BehaviorEmoteId = behaviorEmote;
+            npc.EmotePlayedOut = false;
+        }
+
+        ushort wanted = npc.EmotePlayedOut ? EmoteService.NoEmote : behaviorEmote;
+        if (wanted != npc.EmoteId && _emotes.Perform(npc.Entity, wanted, (uint)currentTime))
+        {
+            npc.EmoteId = wanted;
+            npc.EmoteStartedAt = currentTime;
+        }
+
+        if (npc.EmoteId != EmoteService.NoEmote && npc.EmoteDurationSeconds >= 0 &&
+            currentTime >= npc.EmoteStartedAt + (ulong)(npc.EmoteDurationSeconds * 1000))
+        {
+            // The length the behaviour asked for ("pose for 30 seconds") has run out: the emote ends, and
+            // the set that still asks for it does not start it over. A `-1` - every value the database
+            // ships - holds the emote until the behaviour set changes.
+            npc.EmotePlayedOut = true;
+            if (_emotes.Perform(npc.Entity, EmoteService.NoEmote, (uint)currentTime))
+            {
+                npc.EmoteId = EmoteService.NoEmote;
+                npc.EmoteStartedAt = currentTime;
+            }
+        }
     }
 
     private void RefreshTarget(NpcBrain npc)
@@ -897,5 +976,29 @@ public class AiEngine
         ///     for a weapon that does not reload.
         /// </summary>
         public NpcWeaponMagazine Magazine;
+
+        /// <summary>The emote the monster's base behaviour string names, or 0 when it names none.</summary>
+        public ushort IdleEmoteId;
+
+        /// <summary>The emote its <c>behavior_offensive</c> string names, or 0 (the usual case).</summary>
+        public ushort CombatEmoteId;
+
+        /// <summary>The emote the running behaviour set asks for, whether or not it is on the character yet.</summary>
+        public ushort BehaviorEmoteId;
+
+        /// <summary>The emote performed on the character right now, as far as the engine knows.</summary>
+        public ushort EmoteId;
+
+        /// <summary>The time <see cref="EmoteId" /> was performed at, for the behaviour's own duration.</summary>
+        public ulong EmoteStartedAt;
+
+        /// <summary>Whether <see cref="BehaviorEmoteId" /> has already played out its own duration.</summary>
+        public bool EmotePlayedOut;
+
+        /// <summary>
+        ///     Seconds the behaviour wants the emote held (<c>emoteDuration</c>), or -1 for "until the
+        ///     behaviour changes" - the only value the database ships.
+        /// </summary>
+        public int EmoteDurationSeconds = -1;
     }
 }

@@ -433,7 +433,7 @@ these three pieces, and the line currently sits here:
 | `dbcharacter::GibVisuals` (`death_anim_index`, `blast_impulse_strength`, `direct_vrec_id`) via `dbitems::Battleframe.gibset_id` | 128 | the row a corpse reports at death: the death animation variant and the gib visuals | used: `NpcDeathService` reports the battleframe's `gibset_id` at the death time, 0 included (see below), covering the 1,137 monsters with an explicit gib set and the 1,806 whose battleframe names the default row. 112 monster rows have no battleframe to read it from (89 of them `chassis_id` 0, legacy entries), and 54 name a `GibVisuals` id this build does not ship - the id is reported as the row states it and the client resolves it against its own copy |
 | `dbcharacter::Stumble` (`anim_index`, `duration`, `cooldown_ms`, `distance`, `only_once`) | 39 | hit-reaction ("stumble") rows: which animation, which status effect, how long, how often | unused, and not implementable from this build (see below) |
 | `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction (references the 32 directional rows) | unused - no row points at it |
-| `dbcharacter::EmoteRecord` (`animation_name`, `anim_override_id`, `head_anim_override_id`, `statuseffect`) | 382 | emotes: the animation ids the client resolves from the emote id, and on 4 rows the status effect whose chain draws the emote | used for the emote lifecycle: `PerformEmote` is validated against the table (an id outside it is ignored), emote 0 clears the emote, and the 4 rows apply their effect so the emote animates for every client watching, not only for the performer (`Docs/EMOTES.md` §1-2). NPCs still have no emote of their own: 530 `tfPerformEmote` commands and the 359 effects holding them are reachable from no monster weapon in this build |
+| `dbcharacter::EmoteRecord` (`animation_name`, `anim_override_id`, `head_anim_override_id`, `statuseffect`) | 382 | emotes: the animation ids the client resolves from the emote id, and on 4 rows the status effect whose chain draws the emote | used for the emote lifecycle: `PerformEmote` is validated against the table (an id outside it is ignored), emote 0 clears the emote, and the 4 rows apply their effect so the emote animates for every client watching, not only for the performer (`Docs/EMOTES.md` §1-2). An NPC's own emote does not come from a chain at all: **207 monster rows name one in their `behavior` string** (`AlertAndInteractive(emote="calm")`), which the AI now performs while the NPC is in its base behaviour set and clears when it fights (`Docs/EMOTES.md` §7); the 530 `tfPerformEmote` commands and the 359 effects holding them stay unreachable from every monster weapon |
 | `dbcharacter::MonsterMood` / `MonsterMoodName` | 2,268 / 6 | mood -> portrait id (`Neutral`, `Excited`, `Thinking`, `Angry`, `Happy`, `Sad`) | unused - a UI portrait with no field in the character views, so there is nothing for the server to replicate (`Docs/EMOTES.md` §5) |
 | `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the animation commands of the original game's chains, and the only place an animation is named | placeholder records, because the client runs them from the replicated effect they sit in; the two monster weapons below reach one through the effect their ability applies, the rest of these rows belong to player abilities, to the 359 emote effects (`Docs/EMOTES.md` §3) and to effects no monster weapon applies |
 | `dbitems::Weapons.first_person_animnet_id` / `third_person_animnet_id`, `dbcharacter::Head.animnet_id`, `dbitems::BattleframeVisuals.animnetwork_id`, `dbcharacter::Deployable.animnetwork` | 6,789 / 67 / 2,786 / 3,902 | animation-network (animation graph) asset ids | client side: the client picks the graph from the item/visual id the server already replicates, so there is nothing for the server to send |
@@ -713,24 +713,27 @@ stays horizontal, exactly as before.
 
 ## 6. Known gaps
 
-* **Animation is the attack + reload + locomotion + death markers, plus the weapon
-  chains that carry client feedback.** The engine drives the attack burst markers, the
-  weapon reload markers, the walk/run/stand movement state and the death state, and
-  it runs a weapon's ability when the database puts anything a client draws or plays in
-  the effect that ability applies (7 of the 14 templates with attack/burst ids, 75
-  monster slots: the Shadowstrike swing, the charge-up weapon's charge/release, the
-  flamethrower's cone, and the charge sniper/phason/fluid cannon/magic finger muzzle
-  flash and sound - see
-  [What an NPC animates](#what-an-npc-animates), which lists the animation rows that
-  are and are not used). Everything else in the animation surface is untouched: the
-  engine does not run a monster's behaviour tree, so there are no idle, taunt or
-  wander animations, and no NPC emote has a data path of its own: the emote table is
-  wired to `PerformEmote` and to the 4 rows that apply a status effect
-  (`Docs/EMOTES.md`), and the 39,261 dialog rows - 356 of them with an emote - are
-  not played because the trigger rules for them are not in the database (6 chatter
-  rows describe the probabilities, not the events); the other 12
-  weapon templates with ability ids apply effects that carry no animation, and their
-  effects (charge states, cone effects, stat modifiers) are a separate step; the
+* **Animation is the attack + reload + locomotion + death markers, the weapon
+  chains that carry client feedback, and the NPC's own emote.** The engine drives the
+  attack burst markers, the weapon reload markers, the walk/run/stand movement state and
+  the death state, it runs a weapon's ability when the database puts anything a client
+  draws or plays in the effect that ability applies (7 of the 14 templates with
+  attack/burst ids, 75 monster slots: the Shadowstrike swing, the charge-up weapon's
+  charge/release, the flamethrower's cone, and the charge sniper/phason/fluid
+  cannon/magic finger muzzle flash and sound), and it performs the emote of the
+  behaviour set an NPC is in - 207 monster rows name one in `behavior`, so a guard
+  guards, a citizen works and a dancer dances, and a monster that engages drops the pose
+  (see [What an NPC animates](#what-an-npc-animates), which lists the animation rows
+  that are and are not used, and `Docs/EMOTES.md` §7). What is still untouched: the
+  engine does not run a monster's behaviour tree, so the *tree's* other actions (taunts,
+  wander idles, interaction poses) do not happen - only the emote parameter of the set
+  it is in; the 39,261 dialog rows - 356 of them with an emote - are not played because
+  the trigger rules for them are not in the database (6 chatter rows describe the
+  probabilities, not the events), and the 7 monster rows whose behaviour names a
+  `dialogScript=` are dialog rather than animation; the other 7
+  weapon templates with attack/burst ids carry no client command, so their
+  effects (charge states, cone effects, stat modifiers) change numbers rather than
+  what anyone sees; the
   protocol's `AnimationUpdated` observer event is never sent, so the `apttf::tf*`
   animations only reach a client through the status effect the effect-data chain
   replicates; and stumble/hit-reaction animations (`dbcharacter::Stumble`,

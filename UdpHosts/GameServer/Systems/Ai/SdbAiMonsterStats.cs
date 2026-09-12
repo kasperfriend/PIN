@@ -34,6 +34,17 @@ public class SdbAiMonsterStats : IAiMonsterStats
         return (monster.NormalSpeed, monster.FastSpeed);
     }
 
+    public (string Base, string Offensive) GetBehaviors(uint characterTypeId)
+    {
+        var monster = SDBInterface.GetMonster(characterTypeId);
+        if (monster == null)
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        return (monster.Behavior ?? string.Empty, monster.BehaviorOffensive ?? string.Empty);
+    }
+
     public int GetAttackDamage(uint characterTypeId, byte level)
     {
         if (SDBInterface.GetMonster(characterTypeId) == null)
