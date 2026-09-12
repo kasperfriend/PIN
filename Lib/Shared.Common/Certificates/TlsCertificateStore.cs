@@ -23,14 +23,15 @@ namespace Shared.Common.Certificates;
 ///     </para>
 ///     <para>
 ///         So PIN issues what it needs. A self-signed certificate for the advertised address goes into
-///         <c>certs</c> next to the binary - <c>pin-&lt;host&gt;.key</c> and <c>.crt</c> for the server,
-///         <c>pin-&lt;host&gt;.cer</c> for the players - in the shape the development certificate has (its
-///         own trust anchor, server authentication, RSA 2048), plus <c>localhost</c> and the loopback
-///         addresses in the same subject alternative name so one certificate covers a player's own ini entry
-///         point and the URLs the server advertises. On disk rather than in memory is the load-bearing part:
-///         a certificate that changed at every restart would make everybody reinstall it at every restart, so
-///         it is reused until it stops naming the advertised address or runs out of validity, and an address
-///         change gets a second file instead of invalidating the first.
+///         <c>certs</c> next to the binary - <c>pin-&lt;host&gt;.key</c> and <c>.crt</c> for people and tools,
+///         <c>pin-&lt;host&gt;.pfx</c> as the container the hosts serve from, and <c>pin-&lt;host&gt;.cer</c>
+///         for the players - in the shape the development certificate has (its own trust anchor, server
+///         authentication, RSA 2048), plus <c>localhost</c> and the loopback addresses in the same subject
+///         alternative name so one certificate covers a player's own ini entry point and the URLs the server
+///         advertises. On disk rather than in memory is the load-bearing part: a certificate that changed at
+///         every restart would make everybody reinstall it at every restart, so it is reused until it stops
+///         naming the advertised address or runs out of validity, and an address change gets a second file
+///         instead of invalidating the first.
 ///     </para>
 ///     <para>
 ///         The private key is never served and never leaves the machine; the public half is downloadable in
@@ -58,6 +59,15 @@ public static class TlsCertificateStore
 
     /// <summary>Prefix of the certificate file names, so they read as what they are in a folder of build output.</summary>
     public const string FileNamePrefix = "pin-";
+
+    /// <summary>Extension of the PKCS#12 container the hosts load their serving certificate from.</summary>
+    private const string PfxExtension = ".pfx";
+
+    /// <summary>
+    ///     Password of the PKCS#12 the store keeps for its own certificates. Not a security boundary - the same
+    ///     private key sits in the <c>.key</c> next to it - a PFX simply always carries one.
+    /// </summary>
+    public const string PfxPassword = "pin";
 
     /// <summary>An issued certificate is replaced once less of its validity is left than this.</summary>
     public const int RenewalPeriodDays = 30;
@@ -265,8 +275,9 @@ public static class TlsCertificateStore
         var keyPath = stem + ".key";
         var certificatePath = stem + ".crt";
         var playerPath = stem + ".cer";
+        var pfxPath = stem + PfxExtension;
 
-        var reusable = TryLoadReusable(keyPath, certificatePath, host);
+        var reusable = TryLoadReusable(pfxPath, keyPath, certificatePath, host);
         if (reusable != null)
         {
             Log.Debug("Reusing the TLS certificate for {Host} at {Path}", host, certificatePath);
@@ -279,7 +290,14 @@ public static class TlsCertificateStore
 
         File.WriteAllBytes(playerPath, created.RawData);
         File.WriteAllText(certificatePath, Pem.Encode(Pem.CertificateLabel, created.RawData));
+
+        // The .key/.crt pair is for people and tools; the hosts serve from the .pfx. That is the container
+        // whose key Schannel on Windows can actually sign a handshake with - X509Certificate2.CreateFromPemFile
+        // loads a key SChannel cannot use, so serving from the PEM pair would drop every TLS connection right
+        // after the client hello (what the game shows as a red blink at the login box). See TryLoadReusable.
+        File.WriteAllBytes(pfxPath, created.Export(X509ContentType.Pkcs12, PfxPassword));
         TryRestrictToThisUser(keyPath);
+        TryRestrictToThisUser(pfxPath);
 
         // Issuing happens once per advertised address, and the one thing a server owner has to pass on to the
         // players is in it, so it goes to the level the default configuration shows.
@@ -287,50 +305,87 @@ public static class TlsCertificateStore
 
         // Read back what is on disk rather than keeping the fresh object: the hosts then serve exactly the
         // certificate the next start will find again, and a file edited in between stays the source of truth.
-        return new TlsCertificate(X509Certificate2.CreateFromPemFile(certificatePath, keyPath), host, true, keyPath, playerPath);
+        return new TlsCertificate(X509CertificateLoader.LoadPkcs12FromFile(pfxPath, PfxPassword), host, true, keyPath, playerPath);
     }
 
     /// <summary>
-    ///     The certificate from a previous start, when it can still serve this address.
+    ///     The certificate from a previous start, when it can still serve this address. Loaded from the PKCS#12
+    ///     (the only container whose key Schannel on Windows accepts - see <see cref="IssueOrReuse"/>), with a
+    ///     PEM pair written by an older version migrated into one when there is no PFX yet.
     /// </summary>
-    private static X509Certificate2 TryLoadReusable(string keyPath, string certificatePath, string host)
+    private static X509Certificate2 TryLoadReusable(string pfxPath, string keyPath, string certificatePath, string host)
     {
-        if (!File.Exists(keyPath) || !File.Exists(certificatePath))
+        if (File.Exists(pfxPath))
         {
+            try
+            {
+                return ValidateForServing(X509CertificateLoader.LoadPkcs12FromFile(pfxPath, PfxPassword), host, certificatePath);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "The certificate at {Path} could not be read; a new one is being issued", certificatePath);
+                return null;
+            }
+        }
+
+        // A store written before the PFX existed: reuse the very certificate, moved into the container the
+        // TLS stack can serve from. Failing that (or a pair that no longer names the address), issue afresh.
+        if (File.Exists(keyPath) && File.Exists(certificatePath))
+        {
+            try
+            {
+                using var pem = X509Certificate2.CreateFromPemFile(certificatePath, keyPath);
+                if (ValidateForServing(pem, host, certificatePath) == null)
+                {
+                    return null;
+                }
+
+                File.WriteAllBytes(pfxPath, pem.Export(X509ContentType.Pkcs12, PfxPassword));
+                TryRestrictToThisUser(pfxPath);
+
+                // The checks already passed on the very certificate, and a PFX export cannot drop the key they
+                // passed on; load the container the TLS stack serves from and return it directly.
+                return X509CertificateLoader.LoadPkcs12FromFile(pfxPath, PfxPassword);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "The certificate pair at {Path} could not be read; a new one is being issued", certificatePath);
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     The checks every reused certificate has to pass, whatever container it was loaded from: it carries its
+    ///     key, it has most of its validity left, and it names the address clients dial. A certificate that fails
+    ///     one of these is disposed and <c>null</c> is returned so the caller issues a replacement.
+    /// </summary>
+    private static X509Certificate2 ValidateForServing(X509Certificate2 loaded, string host, string certificatePath)
+    {
+        if (!loaded.HasPrivateKey)
+        {
+            Log.Warning("The certificate at {Path} came without its key and cannot serve TLS; a new one is being issued", certificatePath);
+            loaded.Dispose();
             return null;
         }
 
-        try
+        if (loaded.NotAfter <= DateTime.UtcNow.AddDays(RenewalPeriodDays))
         {
-            var loaded = X509Certificate2.CreateFromPemFile(certificatePath, keyPath);
-            if (!loaded.HasPrivateKey)
-            {
-                Log.Warning("The certificate at {Path} came without its key and cannot serve TLS; a new one is being issued", certificatePath);
-                loaded.Dispose();
-                return null;
-            }
-
-            if (loaded.NotAfter <= DateTime.UtcNow.AddDays(RenewalPeriodDays))
-            {
-                Log.Warning("The certificate for {Host} at {Path} expires on {NotAfter:yyyy-MM-dd}; a new one is being issued", host, certificatePath, loaded.NotAfter);
-                loaded.Dispose();
-                return null;
-            }
-
-            if (!Covers(loaded, host))
-            {
-                Log.Warning("The certificate at {Path} does not name {Host}; the advertised address changed, so a new one is being issued", certificatePath, host);
-                loaded.Dispose();
-                return null;
-            }
-
-            return loaded;
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "The certificate pair at {Path} could not be read; a new one is being issued", certificatePath);
+            Log.Warning("The certificate for {Host} at {Path} expires on {NotAfter:yyyy-MM-dd}; a new one is being issued", host, certificatePath, loaded.NotAfter);
+            loaded.Dispose();
             return null;
         }
+
+        if (!Covers(loaded, host))
+        {
+            Log.Warning("The certificate at {Path} does not name {Host}; the advertised address changed, so a new one is being issued", certificatePath, host);
+            loaded.Dispose();
+            return null;
+        }
+
+        return loaded;
     }
 
     /// <summary>Names a client may dial this server by: the advertised address and <c>localhost</c>.</summary>

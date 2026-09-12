@@ -383,13 +383,15 @@ the only question is whose certificate.
 ### 6.1 Option A — let PIN issue the certificate (recommended)
 
 Nothing to configure. On the first start that advertises an address, PIN creates
-`certs\pin-<host>.key` and `certs\pin-<host>.crt` next to `WebHostManager.exe`
-(and a `pin-<host>.cer` for the players), and serves that on every https endpoint:
-a self-signed certificate for the address in `Firefall:PublicHost`, in the same
-shape as the ASP.NET Core development certificate — its own trust anchor, server
-authentication, RSA 2048, five years — plus `localhost`, `127.0.0.1` and `::1` in
-the subject alternative name, so one certificate also covers whatever a player's
-own `firefall.ini` points at.
+`certs\pin-<host>.key` + `pin-<host>.crt` (for people and tools) and a
+`pin-<host>.pfx` next to `WebHostManager.exe` — the hosts serve from the `.pfx`,
+because that is the only container whose key Schannel on Windows can sign a TLS
+handshake with — plus a `pin-<host>.cer` for the players. It serves that
+certificate on every https endpoint: a self-signed certificate for the address in
+`Firefall:PublicHost`, in the same shape as the ASP.NET Core development
+certificate — its own trust anchor, server authentication, RSA 2048, five years —
+plus `localhost`, `127.0.0.1` and `::1` in the subject alternative name, so one
+certificate also covers whatever a player's own `firefall.ini` points at.
 
 The code is `Lib/Shared.Common/Certificates/TlsCertificateStore.cs`; the rules it
 follows are worth knowing because they are the rules your players' trust decisions
@@ -402,8 +404,8 @@ follow:
 * **`PublicHost` decides the names.** Change the advertised address and you get a
   new file next to the old one, not a new version of it. (This is why a hostname in
   `PublicHost` is kinder than a VPN address: the certificate survives renumbering.)
-* **Only the public half is shared.** The `.key` is written with owner-only
-  permissions on Unix and is never served; `GET /certificate.cer` (and
+* **Only the public half is shared.** The `.key` and the `.pfx` are written with
+  owner-only permissions on Unix and are never served; `GET /certificate.cer` (and
   `/certificate.pem`) on the operator host return the DER/PEM of the certificate,
   which is the part a player has to install anyway.
 * **Those two routes answer in the clear even with `RedirectHttpToHttps` on.**
@@ -561,6 +563,7 @@ reused on purpose, and a *new* advertised address gets a new file next to it.
 | Login works, "Enter World" hangs | UDP 25000/25001 blocked, or `MatrixPort` ≠ the MatrixServer's `Port` | Open UDP; the GameServer port itself is handed out by the MatrixServer and is hardcoded to 25001 |
 | `unable to locate server. Oracle URL http://… not configured for HTTPS (request must be secure)` | `AdvertiseHttps: false`: login and the character list work over http, the client refuses only the oracle URL, so it fails at **Enter World** | `AdvertiseHttps: true` and restart; the certificate is PIN's own ([§6.1](#61-option-a--let-pin-issue-the-certificate-recommended)) |
 | Login form flashes red and says nothing, on a server that advertises an address | The client cannot validate the certificate at the advertised address: no root trust for PIN's own, or the dev certificate for a non-`localhost` address, or a configured `.pfx` whose SAN does not name it | Install `certificate.cer` (host: `WebHostManager --trust-cert`); with your own certificate, its SAN has to contain the advertised address ([§6.2](#62-option-b--serve-a-certificate-you-made-yourself)) |
+| Login form flashes red **even with the certificate installed**, and `curl -k https://<address>:443xx/…` also fails with `schannel: failed to receive handshake` — on `localhost` too | The hosts were serving TLS from a PEM-loaded key, which Schannel on Windows cannot use to sign a handshake (a pre-PFX build): every TLS connection dies before any HTTP is exchanged, so it looks exactly like a certificate or firewall problem | Update PIN — the hosts now serve from the `certs\pin-<host>.pfx` they issue, and an old `.key`/`.crt` pair is migrated into one on the first start; no certificate reinstall needed |
 | `Could not load the TLS certificate` / `does not name … in its subject alternative name` in the log | `Certificate:Path` points at a file nobody can read, or at a certificate for another address | Fix the path/password, or drop `Certificate:Path` and let PIN issue one |
 | `Could not issue a TLS certificate … into …` in the log | The output folder is read-only, or the store path is not writable | `Certificate:StorePath` to a writable folder; nothing else about the server changes, only the fallback to the development certificate stays |
 | Requests get redirected to `https://…:443xx` and fail | `RedirectHttpToHttps` is on, and the client in front of it does not follow a 307 it cannot validate | Turn it off — both ports answer everything regardless ([§2](#2-configuration-reference)) |
@@ -586,10 +589,11 @@ people you know; it is not a service you should expose further:
   character list (the client only insists on TLS for the oracle URL). RadminVPN
   encrypts the tunnel, but other members of the same VPN network can read it.
 * **PIN's own certificate is a LAN certificate.** Its private key is
-  `certs\pin-<host>.key` next to the binary — owner-only permissions on Unix, and
-  on Windows whatever the ACL of the folder you extracted to is, so put a server
-  other people can log into somewhere they cannot read. Whoever holds that file can
-  impersonate the server to every machine that installed the matching `.cer`;
+  `certs\pin-<host>.key` and `certs\pin-<host>.pfx` next to the binary — owner-only
+  permissions on Unix, and on Windows whatever the ACL of the folder you extracted
+  to is, so put a server other people can log into somewhere they cannot read.
+  Whoever holds either file can impersonate the server to every machine that
+  installed the matching `.cer`;
   whoever holds only the `.cer` can do nothing at all, which is why it is the file
   the operator host serves. Neither is a defence against a VPN you do not control,
   and a self-signed root is not a substitute for a name you own: for anything beyond
