@@ -185,6 +185,7 @@ public class AiEngine
             IdleEmoteId = ResolveBehaviorEmote(baseParams),
             CombatEmoteId = ResolveBehaviorEmote(NpcBehaviorParams.Parse(offensiveBehavior)),
             EmoteDurationSeconds = baseParams.TryGetEmoteDurationSeconds(out int emoteSeconds) ? emoteSeconds : -1,
+            AbilityModules = ResolveAbilityModules(baseParams, offensiveBehavior),
         };
 
         return _brains.TryAdd(npc.EntityId, brain);
@@ -344,46 +345,65 @@ public class AiEngine
                 // The database's own effect says the character may not use its weapon right now - the
                 // charge-up of a charging weapon, a knock-down, a stun. The brain has already spent this
                 // attack window, so the mob does nothing until the next one, which is what the flag asks
-                // for; the effect that set the flag is what ends the restriction.
-            }
-            else if (CanFire(npc, currentTime))
-            {
-                // Run the weapon's own ability first: the database puts the attack's animation in the
-                // chains of that ability, and for some weapons the attack itself (see NpcWeaponAbilities).
-                bool abilityRan = ActivateWeaponAbility(npc, currentTime);
-
-                if (!abilityRan || profile is not { ChainDeliversDamage: true })
-                {
-                    // The chains did not run (no animating ability, no aptitude system, or the chain
-                    // rejected the activation) or they do not deliver the hit: the AI's own damage - the
-                    // monster's melee damage or its projectile - is the attack. A chain that does deliver
-                    // the hit is the attack, and the mob must not land a second one on the same target.
-                    ResolveAttack(npc, target);
-                }
-
-                StartAttackAnimation(npc, currentTime);
-
-                // One attack spends one burst's worth of rounds: ammo_per_burst when the template carries
-                // it, else rounds_per_burst - a weapon the database gives no magazine (every melee row)
-                // spends nothing, its magazine is None.
-                int magazineCost = profile?.MagazineCost ?? 0;
-                npc.Magazine = npc.Magazine.Spend(magazineCost);
-
-                // The burst left the magazine dry: reload straight away, so the template's reload_time
-                // overlaps the rest of the weapon's cadence (the wait a player has between bursts) rather
-                // than stacking on top of the next shot. A weapon the database gives no magazine - every
-                // melee row, and the ranged rows without a reload time - never gets here.
-                if (profile is { Reloads: true } && !npc.Magazine.CanFire(magazineCost, currentTime))
-                {
-                    StartReload(npc, currentTime);
-                }
+                // for; the effect that set the flag is what ends the restriction. The same flag
+                // (restrict_abilities) holds back the behaviour set's own ability module, which is why
+                // this test comes first.
             }
             else
             {
-                // The weapon was empty, so the shot waited out the reload instead of being fired. That
-                // wait is the delay: the reload does not stack on top of the cadence the brain just
-                // spent, and the mob fires the moment its magazine is full again.
-                npc.Brain.AllowAttackAt(npc.Magazine.ReloadEndTime);
+                // The behaviour set's own ability module is this window's action when it lands the hit: the
+                // module row names the ability whose chains draw the move (the dodge pair's sidestep, Move
+                // Then Fire's roar), and 12 of the build's 26 module ids deliver their own damage. A module
+                // that only animates leaves the attack to the weapon below - the melee swing modules are the
+                // mob's own hit with an animation on top - unless the module's own effect restricts the
+                // weapon meanwhile, which the dodge pair's does for the 500 ms it runs.
+                bool windowSpent = UseAbilityModule(npc, currentTime, attackDistance);
+
+                if (!windowSpent && !IsWeaponRestricted(entity))
+                {
+                    if (CanFire(npc, currentTime))
+                    {
+                        // Run the weapon's own ability first: the database puts the attack's animation in
+                        // the chains of that ability, and for some weapons the attack itself (see
+                        // NpcWeaponAbilities).
+                        bool abilityRan = ActivateWeaponAbility(npc, currentTime);
+
+                        if (!abilityRan || profile is not { ChainDeliversDamage: true })
+                        {
+                            // The chains did not run (no animating ability, no aptitude system, or the chain
+                            // rejected the activation) or they do not deliver the hit: the AI's own damage -
+                            // the monster's melee damage or its projectile - is the attack. A chain that does
+                            // deliver the hit is the attack, and the mob must not land a second one on the
+                            // same target.
+                            ResolveAttack(npc, target);
+                        }
+
+                        StartAttackAnimation(npc, currentTime);
+
+                        // One attack spends one burst's worth of rounds: ammo_per_burst when the template
+                        // carries it, else rounds_per_burst - a weapon the database gives no magazine (every
+                        // melee row) spends nothing, its magazine is None.
+                        int magazineCost = profile?.MagazineCost ?? 0;
+                        npc.Magazine = npc.Magazine.Spend(magazineCost);
+
+                        // The burst left the magazine dry: reload straight away, so the template's
+                        // reload_time overlaps the rest of the weapon's cadence (the wait a player has
+                        // between bursts) rather than stacking on top of the next shot. A weapon the
+                        // database gives no magazine - every melee row, and the ranged rows without a reload
+                        // time - never gets here.
+                        if (profile is { Reloads: true } && !npc.Magazine.CanFire(magazineCost, currentTime))
+                        {
+                            StartReload(npc, currentTime);
+                        }
+                    }
+                    else
+                    {
+                        // The weapon was empty, so the shot waited out the reload instead of being fired.
+                        // That wait is the delay: the reload does not stack on top of the cadence the brain
+                        // just spent, and the mob fires the moment its magazine is full again.
+                        npc.Brain.AllowAttackAt(npc.Magazine.ReloadEndTime);
+                    }
+                }
             }
         }
 
@@ -405,6 +425,111 @@ public class AiEngine
     private ushort ResolveBehaviorEmote(NpcBehaviorParams behavior)
     {
         return behavior.EmoteName.Length > 0 ? _emotes.ResolveEmoteName(behavior.EmoteName) : EmoteService.NoEmote;
+    }
+
+    /// <summary>
+    ///     The ability modules a behaviour set configures, resolved into the ones the engine can run. The
+    ///     base <c>behavior</c> is the set an NPC spends its life in and the one 48 monster rows configure
+    ///     their modules in; 12 more configure them only in <c>behavior_offensive</c>, so that set is read
+    ///     when the base one names none. Modules whose chains carry nothing a client draws or plays are
+    ///     dropped, exactly like a weapon's (see <see cref="NpcAbilityModuleScan.Runnable" />): one of the
+    ///     build's 26 module ids (120937) is a server-side chain alone, and running it would change the
+    ///     fight without changing what a client shows.
+    /// </summary>
+    /// <param name="baseBehavior">The monster's parsed base behaviour string.</param>
+    /// <param name="offensiveBehavior">Its raw <c>behavior_offensive</c> string.</param>
+    /// <returns>The modules to run, in the order am1, am2; empty for the 3,049 rows that configure none.</returns>
+    private List<NpcAbilityModuleState> ResolveAbilityModules(NpcBehaviorParams baseBehavior, string offensiveBehavior)
+    {
+        var scans = _monsterStats.GetAbilityModules(baseBehavior);
+        if (scans.Count == 0)
+        {
+            scans = _monsterStats.GetAbilityModules(NpcBehaviorParams.Parse(offensiveBehavior));
+        }
+
+        var modules = new List<NpcAbilityModuleState>();
+        foreach (var scan in scans)
+        {
+            if (scan.Runnable)
+            {
+                modules.Add(new NpcAbilityModuleState
+                {
+                    Params = scan.Module,
+                    AbilityId = scan.AbilityId,
+                    DeliversDamage = scan.DeliversDamage,
+                });
+            }
+        }
+
+        return modules;
+    }
+
+    /// <summary>
+    ///     Rolls the NPC's ability modules for one decision window and runs the first one that is off
+    ///     cooldown, in the module's own distance band and past its own chance roll, activating the ability
+    ///     the module row names (see <see cref="NpcBehaviorAbilities" />).
+    /// </summary>
+    /// <remarks>
+    ///     The database gives the modules' gates and no event that fires them, so the window the brain
+    ///     asked to attack in is the trigger: a module is that window's action, <c>am1</c> is preferred over
+    ///     <c>am2</c> (the order the row spells them in) and a module that ran is locked out for its own
+    ///     <c>am*Cooldown</c>. A roll that fails leaves the module available for the next window - the
+    ///     chance is per attempt, not a cooldown - and the next module in the row is offered the same
+    ///     window. Modules whose chains carry nothing a client draws or plays were dropped when the NPC was
+    ///     registered (<see cref="NpcAbilityModuleScan.Runnable" />).
+    /// </remarks>
+    /// <param name="npc">The NPC whose modules are being rolled.</param>
+    /// <param name="currentTime">The shard's current time, in milliseconds.</param>
+    /// <param name="attackDistance">The straight-line distance to the NPC's target, in metres.</param>
+    /// <returns>
+    ///     Whether the module that ran delivers the hit itself, i.e. whether this window is spent: a module
+    ///     whose chains land the damage is the attack, while one that only animates leaves the mob's own
+    ///     attack to go out with it.
+    /// </returns>
+    private bool UseAbilityModule(NpcBrain npc, ulong currentTime, float attackDistance)
+    {
+        List<NpcAbilityModuleState> modules = npc.AbilityModules;
+        if (_abilityActivator == null || modules == null || modules.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var module in modules)
+        {
+            if (currentTime < module.NextUseAt || !module.Params.AllowsDistance(attackDistance))
+            {
+                continue;
+            }
+
+            if (module.Params.Chance < 1f && !RollModuleChance(npc, module, currentTime))
+            {
+                continue;
+            }
+
+            if (!_abilityActivator.Activate(npc.Entity, module.AbilityId, (uint)currentTime, 0f))
+            {
+                continue;
+            }
+
+            module.NextUseAt = currentTime + (ulong)Math.Max(0, module.Params.CooldownMs);
+            return module.DeliversDamage;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Rolls one module's <c>am*Chance</c> with the shard's own seeded noise, keyed by the NPC, the
+    ///     module and the moment, so the same fight replays the same way.
+    /// </summary>
+    /// <param name="npc">The NPC the module belongs to.</param>
+    /// <param name="module">The module being rolled.</param>
+    /// <param name="currentTime">The shard's current time, in milliseconds.</param>
+    /// <returns>Whether the roll passed: true for a <c>Chance</c> of 1, never for 0.</returns>
+    private static bool RollModuleChance(NpcBrain npc, NpcAbilityModuleState module, ulong currentTime)
+    {
+        uint seed = AiPrng.Trace((uint)currentTime, (byte)(npc.EntityId & 0xFF)) ^ module.AbilityId;
+        return AiPrng.Float(seed) < module.Params.Chance;
     }
 
     /// <summary>
@@ -954,6 +1079,22 @@ public class AiEngine
         }
     }
 
+    /// <summary>One behaviour-set ability module and the engine's own bookkeeping for it.</summary>
+    private sealed class NpcAbilityModuleState
+    {
+        /// <summary>The module's parameters, exactly as the behaviour string stated them.</summary>
+        public NpcAbilityModule Params;
+
+        /// <summary>The <c>apt::AbilityData</c> the module runs, resolved through <c>dbitems::AbilityModule</c>.</summary>
+        public uint AbilityId;
+
+        /// <summary>Whether the module's own chains land the hit, i.e. whether a run of it spends the window.</summary>
+        public bool DeliversDamage;
+
+        /// <summary>The time (shard clock) the module may next be used, its <c>am*Cooldown</c> run out.</summary>
+        public ulong NextUseAt;
+    }
+
     private sealed class NpcBrain
     {
         public ulong EntityId;
@@ -976,6 +1117,12 @@ public class AiEngine
         ///     for a weapon that does not reload.
         /// </summary>
         public NpcWeaponMagazine Magazine;
+
+        /// <summary>
+        ///     The behaviour set's ability modules the engine runs, or an empty list for a monster whose
+        ///     behaviour names none (3,049 of the build's 3,109 rows).
+        /// </summary>
+        public List<NpcAbilityModuleState> AbilityModules;
 
         /// <summary>The emote the monster's base behaviour string names, or 0 when it names none.</summary>
         public ushort IdleEmoteId;

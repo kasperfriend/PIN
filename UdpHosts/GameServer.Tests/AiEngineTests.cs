@@ -782,6 +782,284 @@ public class AiEngineTests
 
 
     /// <summary>
+    ///     The behaviour string of the 11 monster rows that dodge with the two ability modules, spelled
+    ///     exactly as the database writes it - with the spaces around the second pair's <c>=</c>.
+    /// </summary>
+    private const string DodgeBehavior =
+        "Arch_MedRangedHumanoid_Base(triggerPullTime=5000,am1Id = 33833, am1Cooldown = 1700, am1Chance = 0.65, am2Id = 33812, am2Cooldown = 1700, am2Chance = 0.65)";
+
+    private const string DodgeSetName = "Arch_MedRangedHumanoid_Base";
+
+    /// <summary>The melee set whose module key is misspelled, as the data writes it.</summary>
+    private const string MeleeModuleSetName = "Arch_FullbodyMelee_Base";
+
+    private const string OffensiveSetName = "Arch_MedRangedAbilityUser_Attack";
+
+    [Fact]
+    public void BehaviorModuleThatDeliversTheHit_RunsTheAbilityTheModuleRowNames()
+    {
+        // 86132 is the Move Then Fire module (the data's own example: monster 548), and it is a module id,
+        // not an ability id: dbitems::AbilityModule 86132 names ability 36817, whose chains draw animation 28,
+        // perform the roar emote and land their own damage. The engine activates the ability, not the module,
+        // and that chain is the window's attack, so no volley goes out on top of it.
+        var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
+        stats.Behavior = "Arch_MoveThenFire_Base(am1Id=86132,am1Cooldown=8000,combatDist=30)";
+        stats.AbilityModulesByBehavior["Arch_MoveThenFire_Base"] = [BehaviorModule(86_132, abilityId: 36_817, deliversDamage: true)];
+        var abilities = new FakeNpcAbilityActivator();
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: shots,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        var activation = Assert.Single(abilities.Activations);
+        Assert.Same(npc, activation.Npc);
+        Assert.Equal(36_817u, activation.AbilityId);
+        Assert.Equal(60_050u, activation.Time);
+
+        // No register: the string's am*Timeout is a watchdog, while the durations the module's own effect
+        // lasts come from the database's TimeDuration commands, not from the behaviour string.
+        Assert.Equal(0f, activation.Register);
+        Assert.Empty(shots.Shots);
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
+    }
+
+    [Fact]
+    public void AnimatingOnlyBehaviorModule_LetsTheMobsOwnAttackGoOutWithIt()
+    {
+        // 82621 is the melee set's module (15 references, the second most-named): its chains draw animation 4
+        // and land no damage of their own, so the swing is what the module adds and the mob's own attack is
+        // still the hit.
+        var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
+        stats.Behavior = "Arch_FullbodyMelee_Base(combatDist=4,am1Id=82621,am1Cooldown=3000)";
+        stats.AbilityModulesByBehavior[MeleeModuleSetName] = [BehaviorModule(82_621, abilityId: 35_942)];
+        var abilities = new FakeNpcAbilityActivator();
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: shots,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        // The module, then the weapon's own ability, in the same window - and the volley fired.
+        Assert.Equal(2, abilities.Activations.Count);
+        Assert.Equal(35_942u, abilities.Activations[0].AbilityId);
+        Assert.Equal(34_894u, abilities.Activations[1].AbilityId);
+        Assert.NotEmpty(shots.Shots);
+    }
+
+    [Fact]
+    public void BehaviorModuleWhoseEffectRestrictsTheWeapon_SpendsTheWindow()
+    {
+        // The dodge pair's chains set restrict_weapon (CombatFlagsCommand) for the 500 ms they run, so the
+        // window the module took fires nothing: the engine re-reads the flag the module's own effect set.
+        var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
+        stats.Behavior = DodgeBehavior;
+        stats.AbilityModulesByBehavior[DodgeSetName] = [BehaviorModule(33_833, abilityId: 33_833)];
+        var abilities = new FakeNpcAbilityActivator();
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: shots,
+            abilityActivator: abilities);
+        abilities.OnActivate = (entity, _) => entity.SetCombatFlags(new CombatFlagsData
+        {
+            Value = CombatFlagsData.CharacterCombatFlags.restrict_weapon,
+            Time = (uint)shard.CurrentTimeLong,
+        });
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(33_833u, Assert.Single(abilities.Activations).AbilityId);
+        Assert.Empty(shots.Shots);
+        Assert.True(npc.HasCombatFlag(CombatFlagsData.CharacterCombatFlags.restrict_weapon));
+    }
+
+    [Fact]
+    public void BehaviorModuleOnCooldown_LeavesTheWindowToTheWeapon()
+    {
+        // The most-named module (88159, 26 references) lands its own damage, so a run of it spends the
+        // window. am*Cooldown is the module's own lockout: 3,000 ms against the weapon's 2,500 ms cadence
+        // means every second window is the weapon's.
+        var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
+        stats.Behavior = DodgeBehavior;
+        stats.AbilityModulesByBehavior[DodgeSetName] = [BehaviorModule(88_159, abilityId: 37_359, cooldownMs: 3000, deliversDamage: true)];
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);            // 60,050: the module, locked until 63,050
+        Tick(shard, FirstTick + 2500 + Step);     // 62,550: still locked, so the weapon fires
+        Tick(shard, FirstTick + 5000 + Step);     // 65,050: the module again
+
+        Assert.Equal(3, abilities.Activations.Count);
+        Assert.Equal(37_359u, abilities.Activations[0].AbilityId);
+        Assert.Equal(34_894u, abilities.Activations[1].AbilityId);
+        Assert.Equal(37_359u, abilities.Activations[2].AbilityId);
+    }
+
+    [Fact]
+    public void BehaviorModuleThatFailsItsChanceRoll_LeavesTheWindowToTheWeapon()
+    {
+        // am*Chance is the module's own roll and nothing is spent when it fails: a module that never
+        // passes its roll never stops the weapon from firing.
+        var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
+        stats.Behavior = DodgeBehavior;
+        stats.AbilityModulesByBehavior[DodgeSetName] = [BehaviorModule(88_159, abilityId: 37_359, chance: 0f, deliversDamage: true)];
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Tick(shard, FirstTick + 2500 + Step);
+
+        Assert.Equal(2, abilities.Activations.Count);
+        Assert.Equal(34_894u, abilities.Activations[0].AbilityId);
+        Assert.Equal(34_894u, abilities.Activations[1].AbilityId);
+    }
+
+    [Fact]
+    public void BehaviorModuleOutsideItsDistanceBand_LeavesTheWindowToTheWeapon()
+    {
+        // am*MinDist/am*MaxDist are the module's own band, measured like the attack is: a minimum of 25 m
+        // against a target 20 m away is out of it.
+        var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
+        stats.Behavior = DodgeBehavior;
+        stats.AbilityModulesByBehavior[DodgeSetName] = [BehaviorModule(88_159, abilityId: 37_359, minDistance: 25f, deliversDamage: true)];
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(34_894u, Assert.Single(abilities.Activations).AbilityId);
+    }
+
+    [Fact]
+    public void BehaviorModule_IsHeldBackWhileTheDatabaseRestrictsAbilities()
+    {
+        // A module is an ability, so the same restrict_abilities flag that holds back a weapon holds back
+        // the module: a mob under a charge-up or a stun does not dodge out of it.
+        var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
+        stats.Behavior = DodgeBehavior;
+        stats.AbilityModulesByBehavior[DodgeSetName] = [BehaviorModule(88_159, abilityId: 37_359, cooldownMs: 3000, deliversDamage: true)];
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.Equal(37_359u, Assert.Single(abilities.Activations).AbilityId);
+
+        npc.SetCombatFlags(new CombatFlagsData
+        {
+            Value = CombatFlagsData.CharacterCombatFlags.restrict_abilities,
+            Time = (uint)shard.CurrentTimeLong,
+        });
+
+        Tick(shard, FirstTick + 2500 + Step);     // the module is off cooldown, the flag is not
+
+        Assert.Single(abilities.Activations);
+    }
+
+    [Fact]
+    public void ServerSideBehaviorModule_IsNotRun()
+    {
+        // 120937 is the one module id of the build's 26 whose chains carry nothing a client draws or plays
+        // (the others reach an animation, an emote, particles or audio): the engine leaves it and fires the
+        // weapon. The module's own key here is the misspelled am1Coodown the data ships.
+        var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
+        stats.Behavior = "Arch_FullbodyMelee_Base(combatDist=4,am1Id=120937,am1Facing=true,am1Coodown=3000)";
+        stats.AbilityModulesByBehavior[MeleeModuleSetName] = [BehaviorModule(120_937, abilityId: 38_700, clientFeedback: false)];
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(34_894u, Assert.Single(abilities.Activations).AbilityId);
+    }
+
+    [Fact]
+    public void BehaviorModulesSpelledOnlyOffensively_AreResolvedFromTheOffensiveSet()
+    {
+        // 12 of the 60 module-bearing rows configure theirs only in behavior_offensive: the base set is
+        // read first, and only when it names no module does the offensive one supply them.
+        var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
+        stats.Behavior = "AggressiveWanderer";
+        stats.OffensiveBehavior = "Arch_MedRangedAbilityUser_Attack(am2Id = 86100, am2Cooldown = 20000, am2MinDist = 1.5)";
+        stats.AbilityModulesByBehavior[OffensiveSetName] =
+            [BehaviorModule(86_100, abilityId: 34_770, cooldownMs: 20_000, minDistance: 1.5f, deliversDamage: true)];
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(34_770u, Assert.Single(abilities.Activations).AbilityId);
+
+        // Both sets were asked, the base one first.
+        Assert.Equal(new[] { "AggressiveWanderer", OffensiveSetName }, stats.AbilityModuleRequests.ToArray());
+    }
+
+    /// <summary>
+    ///     One behaviour-set ability module, as the resolver reports it: the module id and gates the string
+    ///     states, the ability <c>dbitems::AbilityModule</c> resolves it to, and what the chains carry
+    ///     (see <see cref="NpcAbilityModuleScan" />).
+    /// </summary>
+    private static NpcAbilityModuleScan BehaviorModule(
+        uint moduleId,
+        uint abilityId,
+        float chance = 1f,
+        int cooldownMs = 0,
+        float minDistance = 0f,
+        float maxDistance = float.MaxValue,
+        bool clientFeedback = true,
+        bool deliversDamage = false)
+    {
+        return new NpcAbilityModuleScan(
+            new NpcAbilityModule(moduleId, chance, cooldownMs, minDistance, maxDistance),
+            abilityId,
+            clientFeedback,
+            deliversDamage);
+    }
+
+    /// <summary>
     ///     A ranged weapon whose chains carry something a client draws, like the NPC Charge Up and Channel
     ///     Fire template: the charge effect the attack ability applies is what a client draws the charge
     ///     from.

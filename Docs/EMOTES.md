@@ -67,7 +67,7 @@ is why `EmoteRecord.statuseffect` is the only emote → effect link in the datab
 
 * 359 `apt::StatusEffectData` rows contain a `PerformEmote` command in one of their four chains.
 * 3 `apt::AbilityData` rows contain one directly (no effect in between).
-* None of the 530 is reachable from a monster weapon, and no monster weapon's chains hold an emote: of
+* None of the 530 is reachable from a monster *weapon*, and no monster weapon's chains hold an emote: of
   the 19 weapon
   templates the build's 3,109 monsters use (85 templates / 1,861 slots in total) 14 carry an attack or
   burst ability id (102 slots), of which 7 (75 slots) carry client feedback the engine now runs — 2
@@ -78,14 +78,23 @@ is why `EmoteRecord.statuseffect` is the only emote → effect link in the datab
   §3 lists the same walk per template, including the seven templates whose attack/burst chains are
   server-side only.
 
-Consequence: an NPC has no **data path of its own** to an emote in this build — a mob emotes only if
-something applies one of those effects to it (a scripted encounter, a deployable, a future
-`ApplyClientStatusEffect` implementation). The general rule the walk above established is in
-`Docs/NPC_AI.md` §3: a chain is run when it carries a command the client executes (`apttf::`), which
-for a mob means the effect that holds the animation, the emote, the muzzle flash or the sound — so an
-emote effect applied to an NPC *does* animate it. NPCs do have an emote path of their own that is not a
-chain: **207 monster rows name an emote in their behaviour string** (§7), which is where an NPC's emote
-now comes from. What the data gives every NPC besides that is dialog, below.
+One of the 530 *is* reachable from a mob, just not from a weapon: the behaviour-set ability modules
+(`am1Id`/`am2Id`, walked in `Docs/NPC_AI.md` §3) are chains too, and module `86132` — the
+`Arch_MoveThenFire` set, named by 12 monster references — runs ability `36817`, whose chains perform
+the `roar` emote next to animation 28 and their own damage. It is the only emote among the 26 module
+ids (24 of them reach an animation instead), and the engine runs those modules now, so a
+`MoveThenFire` mob roars, as the data says.
+
+Consequence for the rest: apart from that one module and the behaviour string's own `emote=` below, an
+NPC has no **data path of its own** to an emote in this build — a mob emotes only if something applies
+one of those effects to it (a scripted encounter, a deployable, a future `ApplyClientStatusEffect`
+implementation). The general rule the walk above established is in `Docs/NPC_AI.md` §3: a chain is run
+when it carries a command the client executes (`apt::CommandType.environment` = `client`, the
+`apttf::` tables), which for a mob means the effect that holds the animation, the emote, the muzzle
+flash or the sound — so an emote effect applied to an NPC *does* animate it. NPCs do have an emote path
+of their own that is not a chain: **207 monster rows name an emote in their behaviour string** (§7),
+which is where an NPC's emote now comes from. What the data gives every NPC besides that is dialog,
+below.
 
 ## 4. `dbdialogdata::DialogScript` — 39,261 lines (not implemented)
 

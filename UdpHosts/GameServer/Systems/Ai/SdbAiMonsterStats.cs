@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using GameServer.StaticDB;
 
 namespace GameServer.Systems.Ai;
@@ -17,10 +18,12 @@ namespace GameServer.Systems.Ai;
 public class SdbAiMonsterStats : IAiMonsterStats
 {
     private readonly NpcAttackResolver _attackResolver;
+    private readonly SdbNpcAttackDataSource _dataSource;
 
     public SdbAiMonsterStats(IAiRules rules = null)
     {
-        _attackResolver = new NpcAttackResolver(new SdbNpcAttackDataSource(), rules);
+        _dataSource = new SdbNpcAttackDataSource();
+        _attackResolver = new NpcAttackResolver(_dataSource, rules);
     }
 
     public (float NormalSpeed, float FastSpeed) GetSpeeds(uint characterTypeId)
@@ -43,6 +46,11 @@ public class SdbAiMonsterStats : IAiMonsterStats
         }
 
         return (monster.Behavior ?? string.Empty, monster.BehaviorOffensive ?? string.Empty);
+    }
+
+    public IReadOnlyList<NpcAbilityModuleScan> GetAbilityModules(NpcBehaviorParams behavior)
+    {
+        return NpcBehaviorAbilities.Resolve(behavior, _dataSource);
     }
 
     public int GetAttackDamage(uint characterTypeId, byte level)

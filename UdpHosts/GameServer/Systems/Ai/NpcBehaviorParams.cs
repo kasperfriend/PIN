@@ -76,6 +76,40 @@ public sealed class NpcBehaviorParams
     public string EmoteName => _values.TryGetValue("emote", out string value) ? value.Trim() : string.Empty;
 
     /// <summary>
+    ///     One ability module of the behaviour, read from its parameter group (<c>am1Id</c>,
+    ///     <c>am1Cooldown</c>, <c>am1Chance</c>, <c>am1MinDist</c>, <c>am1MaxDist</c>), or false when the
+    ///     set configures none under that prefix. The database writes the pairs with spaces around the
+    ///     <c>=</c> as often as without and misspells one module's cooldown key (<c>am1Coodown</c>), which
+    ///     the parser absorbs; see <see cref="NpcAbilityModule" /> for the columns' census and what the
+    ///     engine does with them.
+    /// </summary>
+    /// <param name="prefix">The module's parameter prefix, <c>am1</c> or <c>am2</c>.</param>
+    /// <param name="module">The parsed module; the default value when the method returns false.</param>
+    /// <returns>Whether the behaviour configures that module.</returns>
+    public bool TryGetAbilityModule(string prefix, out NpcAbilityModule module)
+    {
+        module = default;
+        if (string.IsNullOrEmpty(prefix) || !TryGetInt(prefix + "Id", out int moduleId) || moduleId <= 0)
+        {
+            return false;
+        }
+
+        if (!TryGetInt(prefix + "Cooldown", out int cooldown))
+        {
+            // Nine occurrences spell it am1Coodown: the module's cooldown is the number either way.
+            TryGetInt(prefix + "Coodown", out cooldown);
+        }
+
+        module = new NpcAbilityModule(
+            (uint)moduleId,
+            TryGetFloat(prefix + "Chance", out float chance) ? chance : 1f,
+            cooldown,
+            TryGetFloat(prefix + "MinDist", out float minDistance) ? minDistance : 0f,
+            TryGetFloat(prefix + "MaxDist", out float maxDistance) ? maxDistance : float.MaxValue);
+        return true;
+    }
+
+    /// <summary>
     ///     Seconds the behaviour wants that emote to last (<c>emoteDuration</c>), or false when it does not
     ///     say. Every monster row that says it says <c>-1</c>, "until the behaviour changes": an NPC that
     ///     poses, works or dances holds the emote until its behaviour set does.

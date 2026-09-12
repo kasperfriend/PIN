@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace GameServer.Systems.Ai;
 
 /// <summary>
@@ -22,6 +24,15 @@ public interface IAiMonsterStats
     /// <param name="characterTypeId">The <c>dbcharacter::Monster</c> row id.</param>
     /// <returns>The two behaviour strings, each <c>string.Empty</c> when the row or the column is missing.</returns>
     (string Base, string Offensive) GetBehaviors(uint characterTypeId);
+
+    /// <summary>
+    ///     The ability modules a behaviour string configures (<c>am1Id</c>/<c>am2Id</c> and their gates),
+    ///     resolved into what the engine runs: see <see cref="NpcBehaviorAbilities" /> and
+    ///     <see cref="NpcAbilityModule" />.
+    /// </summary>
+    /// <param name="behavior">The behaviour string the modules are read from.</param>
+    /// <returns>One entry per configured module, in the order am1, am2; empty for most monsters.</returns>
+    IReadOnlyList<NpcAbilityModuleScan> GetAbilityModules(NpcBehaviorParams behavior);
 
     /// <summary>
     ///     The monster's <c>dbcharacter::MonsterScaling</c> damage <b>rating</b> for

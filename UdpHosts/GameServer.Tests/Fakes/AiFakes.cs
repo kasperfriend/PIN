@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 using GameServer.Entities;
@@ -71,7 +72,25 @@ public sealed class FakeAiMonsterStats : IAiMonsterStats
     /// <summary>The monster's <c>behavior_offensive</c> string, i.e. the set it fights in.</summary>
     public string OffensiveBehavior { get; set; } = string.Empty;
 
+    /// <summary>
+    ///     The ability modules <see cref="GetAbilityModules" /> hands out, per behaviour set name, so a test
+    ///     can give one behaviour string modules and another none.
+    /// </summary>
+    public Dictionary<string, IReadOnlyList<NpcAbilityModuleScan>> AbilityModulesByBehavior { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Every behaviour set <see cref="GetAbilityModules" /> was asked about, in order.</summary>
+    public List<string> AbilityModuleRequests { get; } = [];
+
     public (float NormalSpeed, float FastSpeed) GetSpeeds(uint characterTypeId) => (NormalSpeed, FastSpeed);
+
+    public IReadOnlyList<NpcAbilityModuleScan> GetAbilityModules(NpcBehaviorParams behavior)
+    {
+        string name = behavior?.Name ?? string.Empty;
+        AbilityModuleRequests.Add(name);
+        return AbilityModulesByBehavior.TryGetValue(name, out var modules)
+            ? modules
+            : Array.Empty<NpcAbilityModuleScan>();
+    }
 
     public (string Base, string Offensive) GetBehaviors(uint characterTypeId) => (Behavior, OffensiveBehavior);
 
@@ -147,9 +166,16 @@ public sealed class FakeNpcAbilityActivator : INpcAbilityActivator
     /// <summary>Every activation the engine asked for, in order.</summary>
     public List<(CharacterEntity Npc, uint AbilityId, uint Time, float Register)> Activations { get; } = [];
 
+    /// <summary>
+    ///     Run for every activation, so a test can let the chain's own effect take hold on the NPC -
+    ///     the dodge pair's effect sets <c>restrict_weapon</c> for the 500 ms it runs, for instance.
+    /// </summary>
+    public Action<CharacterEntity, uint> OnActivate { get; set; }
+
     public bool Activate(CharacterEntity npc, uint abilityId, uint time, float register)
     {
         Activations.Add((npc, abilityId, time, register));
+        OnActivate?.Invoke(npc, abilityId);
         return Result;
     }
 }

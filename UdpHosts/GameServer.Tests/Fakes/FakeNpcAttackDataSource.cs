@@ -47,6 +47,9 @@ public sealed class FakeNpcAttackDataSource : INpcAttackDataSource
 
     public Dictionary<uint, AbilityData> Abilities { get; } = [];
 
+    /// <summary><c>dbitems::AbilityModule.id</c> -> the <c>apt::AbilityData</c> id its <c>ability_chain_id</c> names.</summary>
+    public Dictionary<uint, uint> AbilityModules { get; } = [];
+
     public Dictionary<uint, BaseCommandDef> Commands { get; } = [];
 
     public Dictionary<uint, ConditionalBranchCommandDef> Branches { get; } = [];
@@ -58,6 +61,18 @@ public sealed class FakeNpcAttackDataSource : INpcAttackDataSource
     public Dictionary<uint, StatusEffectData> StatusEffects { get; } = [];
 
     public AbilityData GetAbility(uint abilityId) => Abilities.GetValueOrDefault(abilityId);
+
+    public uint ResolveAbilityModule(uint moduleId) => AbilityModules.GetValueOrDefault(moduleId);
+
+    /// <summary>Writes one <c>dbitems::AbilityModule</c> row: the module id and the ability it runs.</summary>
+    /// <param name="moduleId">The module id a behaviour string's <c>am*Id</c> names.</param>
+    /// <param name="abilityId">The <c>apt::AbilityData</c> id the module's <c>ability_chain_id</c> points at.</param>
+    /// <returns>The fake, for chaining.</returns>
+    public FakeNpcAttackDataSource WithAbilityModule(uint moduleId, uint abilityId)
+    {
+        AbilityModules[moduleId] = abilityId;
+        return this;
+    }
 
     public BaseCommandDef GetCommand(uint commandId) => Commands.GetValueOrDefault(commandId);
 
@@ -71,8 +86,8 @@ public sealed class FakeNpcAttackDataSource : INpcAttackDataSource
     public StatusEffectData GetStatusEffect(uint effectId) => StatusEffects.GetValueOrDefault(effectId);
 
     /// <summary>
-    ///     The command subtypes whose definition table is one of the client's (<c>apttf::</c> in
-    ///     <c>apt::CommandType.sdb_fullname</c>): the commands the client executes and the server does not.
+    ///     The command subtypes the client executes and the server does not (<c>apt::CommandType.environment</c>
+    ///     = <c>client</c> in the database; the <c>apttf::</c> table family).
     ///     Seeded with the client's feedback family, so a test only adds a subtype when it writes a command
     ///     the seed does not cover.
     /// </summary>

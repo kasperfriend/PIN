@@ -34,8 +34,9 @@ public readonly record struct NpcWeaponAbilityScan(bool ClientFeedback, bool Del
 ///     The walk follows what the data can reach from a weapon ability: the command <c>next</c> chain, the
 ///     <c>if</c>/<c>then</c>/<c>else</c> bodies of <c>apt::ConditionalBranchCommandDef</c>, the ability a
 ///     <c>apt::CallCommandDef</c> names, and the apply/remove/update/duration chains of every
-///     <c>apt::ImpactApplyEffectCommandDef</c> it finds - one effect level deep, which is as deep as the
-///     build's monster weapon trees nest. A node is visited once, so shared tails and cycles cannot loop.
+///     <c>apt::ImpactApplyEffectCommandDef</c> it finds, however deeply the data nests them. A command is
+///     visited once, so shared tails and cycles cannot loop, and the walk stops at
+///     <see cref="MaxCommands" /> as a guard against malformed data.
 ///     <para>
 ///         Whether a command is the client's is decided from the database, not from a list kept here: the
 ///         kind of a command instance is its <c>apt::BaseCommandDef.subtype</c>, and the table that subtype's
@@ -64,6 +65,27 @@ public static class NpcWeaponAbilities
         ScanAbility(data, attackAbilityId, visited, ref clientFeedback, ref deliversDamage);
         ScanAbility(data, burstAbilityId, visited, ref clientFeedback, ref deliversDamage);
 
+        return new NpcWeaponAbilityScan(clientFeedback, deliversDamage);
+    }
+
+    /// <summary>
+    ///     Scans one ability id with a fresh visited set: the walk a weapon hook and a behaviour set's
+    ///     ability module (<see cref="NpcBehaviorAbilities" />) both use.
+    /// </summary>
+    /// <param name="data">The database the chains are read from.</param>
+    /// <param name="abilityId">The <c>apt::AbilityData</c> id, or 0 for none.</param>
+    /// <returns>What the ability's chains carry, <see cref="NpcWeaponAbilityScan.None" /> for a missing ability.</returns>
+    public static NpcWeaponAbilityScan ScanAbility(INpcAttackDataSource data, uint abilityId)
+    {
+        if (data == null || abilityId == 0)
+        {
+            return NpcWeaponAbilityScan.None;
+        }
+
+        var visited = new HashSet<uint>();
+        bool clientFeedback = false;
+        bool deliversDamage = false;
+        ScanAbility(data, abilityId, visited, ref clientFeedback, ref deliversDamage);
         return new NpcWeaponAbilityScan(clientFeedback, deliversDamage);
     }
 

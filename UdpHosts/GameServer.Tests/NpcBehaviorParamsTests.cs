@@ -102,6 +102,65 @@ public class NpcBehaviorParamsTests
     }
 
     [Fact]
+    public void TryGetAbilityModule_ReadsTheModuleAcrossTheDatabasesSpacing()
+    {
+        // The shipped rows write the pairs both ways round - "am1Id=77721" and "am1Id = 33833," - and this
+        // is the dodge pair's row verbatim (monster 1556): the first module turns one way, the second the
+        // other, both on a 1,700 ms cooldown with a 65% chance.
+        var parsed = NpcBehaviorParams.Parse(
+            "Arch_MedRangedHumanoid_Base(triggerPullTime=5000,am1Id = 33833, am1Cooldown = 1700, am1Chance = 0.65, am1Timeout = 1000, am2Id = 33812, am2Cooldown = 1700, am2Chance = 0.65, am2Timeout = 1000)");
+
+        Assert.True(parsed.TryGetAbilityModule("am1", out var first));
+        Assert.Equal(33_833u, first.AbilityId);
+        Assert.Equal(0.65f, first.Chance);
+        Assert.Equal(1_700, first.CooldownMs);
+        Assert.Equal(0f, first.MinDistance);
+        Assert.Equal(float.MaxValue, first.MaxDistance);
+
+        Assert.True(parsed.TryGetAbilityModule("am2", out var second));
+        Assert.Equal(33_812u, second.AbilityId);
+    }
+
+    [Fact]
+    public void TryGetAbilityModule_ReadsTheMisspelledCooldownKey()
+    {
+        // Nine parameter occurrences spell it am1Coodown (the docs' own example is am1Coodown=3000).
+        var parsed = NpcBehaviorParams.Parse("Arch_FullbodyMelee_Base(combatDist=4,am1Id=82621,am1Facing=true,am1Coodown=3000)");
+
+        Assert.True(parsed.TryGetAbilityModule("am1", out var module));
+        Assert.Equal(8_2621u, module.AbilityId);
+        Assert.Equal(3_000, module.CooldownMs);
+        Assert.Equal(1f, module.Chance);
+    }
+
+    [Fact]
+    public void TryGetAbilityModule_ReadsTheDistanceBand()
+    {
+        var parsed = NpcBehaviorParams.Parse("Arch_Melee_Base(am1Id=86132,am1MinDist=10,am1MaxDist=20)");
+
+        Assert.True(parsed.TryGetAbilityModule("am1", out var module));
+        Assert.Equal(10f, module.MinDistance);
+        Assert.Equal(20f, module.MaxDistance);
+        Assert.False(module.AllowsDistance(9.9f));
+        Assert.True(module.AllowsDistance(10f));
+        Assert.True(module.AllowsDistance(20f));
+        Assert.False(module.AllowsDistance(20.1f));
+    }
+
+    [Fact]
+    public void TryGetAbilityModule_WithoutThatModule_IsFalse()
+    {
+        var wanderer = NpcBehaviorParams.Parse("AggressiveWanderer");
+        var oneModule = NpcBehaviorParams.Parse("Arch_MedRangedAbilityUser_Base(am2Id = 86100)");
+
+        Assert.False(wanderer.TryGetAbilityModule("am1", out _));
+        Assert.False(wanderer.TryGetAbilityModule("am2", out _));
+        Assert.False(oneModule.TryGetAbilityModule("am1", out _));
+        Assert.True(oneModule.TryGetAbilityModule("am2", out var module));
+        Assert.Equal(86_100u, module.AbilityId);
+    }
+
+    [Fact]
     public void TryGetInt_ReturnsFalseForNonNumbers()
     {
         var parsed = NpcBehaviorParams.Parse("Wanderer(speed=fast,count=12)");

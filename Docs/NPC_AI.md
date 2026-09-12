@@ -293,11 +293,14 @@ and stopped there, so no mob ever applied the effects its weapon's chains apply.
 things: whether the chain carries a command the **client** runs (`ChainClientFeedback`)
 and whether the chain delivers the hit itself (`ChainDeliversDamage`). The first is read
 out of the database rather than from a list kept in the code: a command instance's kind
-is its `apt::BaseCommandDef.subtype`, and the table that subtype's parameters live in
-(`apt::CommandType.sdb_fullname`) says who executes it - the `apttf::` tables are the
-client's feedback commands (animations, emotes, material switches, particles, audio),
-the `aptfs::` ones are the server's functions and the bare `apt::` ones are control flow
-both sides know. `AiEngine` runs the ability when the chain carries client feedback,
+is its `apt::BaseCommandDef.subtype`, and the row that names that subtype in
+`apt::CommandType` says who executes it: its `environment` column is `client`, `server`
+or `both` - the client's 50 types are the `apttf::` feedback commands (animations,
+emotes, material switches, particles, audio), the `aptfs::`/`aptgss::` ones are the
+server's functions and the bare `apt::` ones are control flow
+both sides know (`apt::CommandType.environment`, which the command factory keys on as
+well - the `apttf::` tables and the `client` value are the same 50 types). `AiEngine`
+runs the ability when the chain carries client feedback,
 through the shard's own `AbilitySystem.HandleActivateAbility`, which is **7 of the 14
 templates with an `attack_ability_id` / `burst_ability_id` and 75 of their 102 monster
 slots**: 2 templates (16 slots) carry a named animation, 3 (22 slots) deliver their own
@@ -389,6 +392,79 @@ Three details make that work, and each is a place the data forced a decision:
   fire. `CombatFlagsCommand` snapshots and restores those bits per effect, so the
   restriction ends exactly when the effect that set it does.
 
+**Behaviour ability modules (`am1Id` / `am2Id`).** A behaviour string can name up to two
+ability modules next to its attack timing - `am1Id` with `am1Cooldown`, `am1Chance`,
+`am1MinDist`/`am1MaxDist`, `am1Timeout`, `am1NavToDist`/`am1NavTimeout`, `am1Facing`,
+`am1FacingDuring`, `am1Targeted`, and the same group for `am2` - and 60 of the build's
+3,109 monster rows do (215 references across the three behaviour columns, 26 distinct
+ids). The database spells the pairs with spaces around the `=` as often as without, and
+the cooldown key is misspelled on nine parameter occurrences (`am1Coodown=3000`, three
+monsters' three behaviour columns each), both of which the parser absorbs. The id is a
+`dbitems::AbilityModule` id, not an ability id: the module row's
+`ability_chain_id` names the `apt::AbilityData` to run. 25 of the 26 resolve that way
+(`86132` -> `36817`, `88159` -> `37359`, `82621` -> `35942`, ...); the exception is
+`33812`, the second value of the dodge pair's 39 rows - no module row carries that id
+(the module that names ability 33812 is 77388), so that one value is read as an ability
+id, which is what the data needs.
+
+Running those chains is where most of a monster's behaviour drawing comes from: 24 of the
+26 modules reach a `tfAbilityAnimationCommandDef` in an effect their chain applies
+(animation indices 1-28), one of them - `86132`, the `Arch_MoveThenFire` module on 12
+references - also performs the `roar` emote (`tfPerformEmoteCommandDef` carries the emote
+*name*, and `EmoteRecord.name` is what turns it into an id), and 12 deliver their own
+damage.
+
+| module (`am*Id`) | ability | refs | animation | emote | delivers the hit |
+|---|---|---|---|---|---|
+| `33833` | `33833` | 43 | 10 | - | no |
+| `33812` | `33812` | 39 | 9 | - | no |
+| `88159` | `37359` | 26 | 26 | - | yes |
+| `82621` | `35942` | 15 | 4 | - | no |
+| `86132` | `36817` | 12 | 28 | `roar` | yes |
+| `86465` | `36882` | 9 | 14 | - | no |
+| `95025` | `37439` | 9 | 4 | - | no |
+| `88161` | `37362` | 8 | 25 | - | no |
+| `86474` | `36035` | 6 | 8 | - | yes |
+| `96949` | `37682` | 6 | 25 | - | no |
+| `77721` | `35511` | 5 | 14 | - | yes |
+| `95445` | `37503` | 5 | 8 | - | no |
+| `85964` | `36757` | 3 | 7 | - | yes |
+| `86055` | `34753` | 3 | 1 | - | no |
+| `86392` | `36948` | 3 | 8 | - | yes |
+| `86393` | `36949` | 3 | 2 | - | no |
+| `86461` | `37049` | 3 | none | - | no |
+| `96905` | `37659` | 3 | 3 | - | no |
+| `120937` | `38700` | 3 | none | - | no |
+| `121427` | `39066` | 3 | 28 | - | no |
+| `82610` | `35933` | 2 | 8 | - | yes |
+| `118356` | `38164` | 2 | 26 | - | yes |
+| `86100` | `34770` | 1 | 21 | - | yes |
+| `95479` | `37522` | 1 | 8 | - | yes |
+| `96478` | `37557` | 1 | 8 | - | yes |
+| `96947` | `37681` | 1 | 26 | - | yes |
+
+`NpcBehaviorAbilities.Resolve` walks them once, when the NPC is registered, through
+`INpcAttackDataSource` (`SdbAiMonsterStats.GetAbilityModules`), and reports what each
+module's chains carry the same way a weapon's ability ids are read. `AiEngine` runs a
+module in the attack decision window its brain already has: the base `behavior` supplies
+the modules, `behavior_offensive` does when the base names none (12 rows), `am1` is
+preferred over `am2`, `am*Chance` is the roll, `am*Cooldown` the lockout and
+`am*MinDist`/`am*MaxDist` the distance band. A module whose chains land the hit is that
+window's attack; one that only animates leaves the mob's own attack to go out with it,
+unless the module's own effect restricts the weapon meanwhile - the dodge pair's effect
+sets `restrict_weapon` for the 500 ms it runs, so a dodge window fires nothing. A module
+whose chains carry nothing a client draws or plays (`120937`, the only one) is left alone
+and the weapon fires as before, exactly like a server-only weapon chain.
+
+What the strings state and the engine does **not** carry: `am*Timeout` (a watchdog),
+`am*NavToDist`/`am*NavTimeout` (the module's own navigation) and
+`am*Targeted`/`am*Facing`/`am*FacingDuring` (requirements an attack window already
+meets). The database gives no event that fires a module, so the window the brain asked to
+attack in is the trigger. The module's own movement is the one part of its chains the
+server does not execute yet: the dodge pair's `MovementSlide` (667 ms, 5 m) is a
+placeholder, so the sidestep's animation plays and the displacement does not happen (see
+[Known gaps](#6-known-gaps)).
+
 **Weapon animation parameters.** `SDBUtils.GetDetailedWeaponTemplateInfo` used to
 drop the `anim_*` columns ("stuff that is presumably client side like
 animations"); they are now resolved through the same item/slot modifier cascade as
@@ -435,7 +511,7 @@ these three pieces, and the line currently sits here:
 | `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction (references the 32 directional rows) | unused - no row points at it |
 | `dbcharacter::EmoteRecord` (`animation_name`, `anim_override_id`, `head_anim_override_id`, `statuseffect`) | 382 | emotes: the animation ids the client resolves from the emote id, and on 4 rows the status effect whose chain draws the emote | used for the emote lifecycle: `PerformEmote` is validated against the table (an id outside it is ignored), emote 0 clears the emote, and the 4 rows apply their effect so the emote animates for every client watching, not only for the performer (`Docs/EMOTES.md` §1-2). An NPC's own emote does not come from a chain at all: **207 monster rows name one in their `behavior` string** (`AlertAndInteractive(emote="calm")`), which the AI now performs while the NPC is in its base behaviour set and clears when it fights (`Docs/EMOTES.md` §7); the 530 `tfPerformEmote` commands and the 359 effects holding them stay unreachable from every monster weapon |
 | `dbcharacter::MonsterMood` / `MonsterMoodName` | 2,268 / 6 | mood -> portrait id (`Neutral`, `Excited`, `Thinking`, `Angry`, `Happy`, `Sad`) | unused - a UI portrait with no field in the character views, so there is nothing for the server to replicate (`Docs/EMOTES.md` §5) |
-| `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the animation commands of the original game's chains, and the only place an animation is named | placeholder records, because the client runs them from the replicated effect they sit in; the two monster weapons below reach one through the effect their ability applies, the rest of these rows belong to player abilities, to the 359 emote effects (`Docs/EMOTES.md` §3) and to effects no monster weapon applies |
+| `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the animation commands of the original game's chains, and the only place an animation is named | placeholder records, because the client runs them from the replicated effect they sit in; the two monster weapons above reach one through the effect their ability applies, and so do 24 of the 26 behaviour ability modules (`am1Id`/`am2Id`, above); the rest of these rows belong to player abilities, to the 359 emote effects (`Docs/EMOTES.md` §3) and to effects no monster weapon applies |
 | `dbitems::Weapons.first_person_animnet_id` / `third_person_animnet_id`, `dbcharacter::Head.animnet_id`, `dbitems::BattleframeVisuals.animnetwork_id`, `dbcharacter::Deployable.animnetwork` | 6,789 / 67 / 2,786 / 3,902 | animation-network (animation graph) asset ids | client side: the client picks the graph from the item/visual id the server already replicates, so there is nothing for the server to send |
 
 **Where the animations actually live.** Probing the aptitude chains settles what
@@ -720,14 +796,20 @@ stays horizontal, exactly as before.
   draws or plays in the effect that ability applies (7 of the 14 templates with
   attack/burst ids, 75 monster slots: the Shadowstrike swing, the charge-up weapon's
   charge/release, the flamethrower's cone, and the charge sniper/phason/fluid
-  cannon/magic finger muzzle flash and sound), and it performs the emote of the
+  cannon/magic finger muzzle flash and sound), it runs a behaviour set's ability modules
+  (`am1Id`/`am2Id`: 25 of the 26 module ids the build's monsters name, of which 24 hold
+  an animation - the dodge pair's 500 ms sidestep, the Move Then Fire roar, the melee
+  swings and the rest), and it performs the emote of the
   behaviour set an NPC is in - 207 monster rows name one in `behavior`, so a guard
   guards, a citizen works and a dancer dances, and a monster that engages drops the pose
   (see [What an NPC animates](#what-an-npc-animates), which lists the animation rows
   that are and are not used, and `Docs/EMOTES.md` §7). What is still untouched: the
   engine does not run a monster's behaviour tree, so the *tree's* other actions (taunts,
-  wander idles, interaction poses) do not happen - only the emote parameter of the set
-  it is in; the 39,261 dialog rows - 356 of them with an emote - are not played because
+  wander idles, interaction poses, and the navigation the `am*NavToDist` parameters
+  describe) do not happen - the emote parameter of the set it is in and its `am1`/`am2`
+  modules do; a module's own movement is not applied either, so the dodge pair's
+  `MovementSlide` animation plays without its 5 m of displacement (both commands are
+  placeholders this build never runs); the 39,261 dialog rows - 356 of them with an emote - are not played because
   the trigger rules for them are not in the database (6 chatter rows describe the
   probabilities, not the events), and the 7 monster rows whose behaviour names a
   `dialogScript=` are dialog rather than animation; the other 7
@@ -744,10 +826,10 @@ stays horizontal, exactly as before.
 * **No accuracy model.** NPC shots aim at the target's chest with the weapon's
   own spread profile left unused: there is no per-NPC spread state, no
   `MinSpread`/`MaxSpread` handling and no aim error, so a ranged mob hits for as
-  long as line of sight holds. The database's behaviour strings also carry attack
-  *chance* parameters (`am1Chance`, `am1Cooldown`) that name aptitude abilities
-  the original game fired at intervals; those ability chains are not modelled, so
-  only the weapon's own attack is fired.
+  long as line of sight holds. The behaviour strings' `am*Chance`/`am*Cooldown`
+  gates *are* modelled now, on the ability modules they belong to (see the
+  behaviour ability modules above); what stays unmodelled is the weapon's own spread and
+  everything the AI's hits do not state.
 * **Weapon damage rows are placeholder where the data is placeholder.** A few
   templates (not per-monster items) carry `damage_per_round` 1; those rows still
   resolve through the 954/1145 chain above, so the placeholder only survives where
