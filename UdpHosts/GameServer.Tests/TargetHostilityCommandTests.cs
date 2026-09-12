@@ -1,4 +1,5 @@
 using System.Numerics;
+using AeroMessages.Common;
 using AeroMessages.GSS;
 using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.apt;

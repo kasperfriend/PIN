@@ -1,4 +1,3 @@
-using System;
 using System.Numerics;
 using GameServer.Entities;
 using GameServer.Entities.Character;
@@ -42,7 +41,7 @@ public class TargetSingleCommand : Command, ICommand
 
         if (Params.Range <= 0f)
         {
-            Logger.Debug(\"{Command} {CommandId} has range {Range}, no target can be acquired\", nameof(TargetSingleCommand), Params.Id, Params.Range);
+            Logger.Debug("{Command} {CommandId} has range {Range}, no target can be acquired", nameof(TargetSingleCommand), Params.Id, Params.Range);
             return true;
         }
 
@@ -50,7 +49,7 @@ public class TargetSingleCommand : Command, ICommand
 
         if (!TryGetForward(context.Self, out Vector3 forward))
         {
-            Logger.Debug(\"{Command} {CommandId} could not resolve forward for {Self}\", nameof(TargetSingleCommand), Params.Id, context.Self);
+            Logger.Debug("{Command} {CommandId} could not resolve forward for {Self}", nameof(TargetSingleCommand), Params.Id, context.Self);
             return true;
         }
 
@@ -110,15 +109,15 @@ public class TargetSingleCommand : Command, ICommand
         {
             if (Params.SetOffset == 1)
             {
-                Logger.Debug(\"{Command} {CommandId} SetOffset=1 requested for target {Target}, offset handling not yet implemented\", nameof(TargetSingleCommand), Params.Id, closest);
+                Logger.Debug("{Command} {CommandId} SetOffset=1 requested for target {Target}, offset handling not yet implemented", nameof(TargetSingleCommand), Params.Id, closest);
             }
 
             context.Targets.Push(closest);
-            Logger.Debug(\"{Command} {CommandId} acquired single target {Target} at {Distance}m\", nameof(TargetSingleCommand), Params.Id, closest, closestDist);
+            Logger.Debug("{Command} {CommandId} acquired single target {Target} at {Distance}m", nameof(TargetSingleCommand), Params.Id, closest, closestDist);
         }
         else
         {
-            Logger.Debug(\"{Command} {CommandId} found no target within {Range}m in front of {Self}\", nameof(TargetSingleCommand), Params.Id, Params.Range, context.Self);
+            Logger.Debug("{Command} {CommandId} found no target within {Range}m in front of {Self}", nameof(TargetSingleCommand), Params.Id, Params.Range, context.Self);
         }
 
         return true;
