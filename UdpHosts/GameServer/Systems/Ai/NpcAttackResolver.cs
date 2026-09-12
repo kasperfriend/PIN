@@ -114,6 +114,14 @@ public sealed class NpcAttackResolver
         float range = rangeAttribute > 0f ? rangeAttribute : template.Range;
         byte rounds = template.RoundsPerBurst > 0 ? template.RoundsPerBurst : (byte)1;
 
+        // The magazine the NPC fires from and the reload it performs when it is empty: the item's 956 row (else
+        // the template's base_clip_size), the rounds one attack spends (ammo_per_burst when the row carries it,
+        // else rounds_per_burst) and the template's reload_time. See NpcWeaponMagazine.
+        int magazineSize = NpcWeaponMagazine.ResolveCapacity(
+            ReadAttribute(attributes, (ushort)ItemAttributeId.WeaponMagazineSize),
+            template.BaseClipSize);
+        byte ammoPerBurst = (byte)NpcWeaponMagazine.ResolveCost(template.AmmoPerBurst, rounds);
+
         uint interval = NpcAttackDamageMath.ResolveAttackIntervalMs(
             behaviorParams.TriggerPullTimeMs,
             behaviorParams.FireRestDurationMs,
@@ -181,6 +189,9 @@ public sealed class NpcAttackResolver
             AttackRangeExit = attackRangeExit,
             StandoffRange = standoff,
             AmmoId = ranged ? template.AmmoId : (ushort)0,
+            MagazineSize = (ushort)Math.Clamp(magazineSize, 0, ushort.MaxValue),
+            AmmoPerBurst = ammoPerBurst,
+            ReloadTimeMs = template.ReloadTime,
             Ammo = ranged ? ammo : null,
             ProjectileSpeed = projectileSpeed,
             ImpactRadius = impactRadius,

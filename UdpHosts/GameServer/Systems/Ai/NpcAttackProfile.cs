@@ -124,6 +124,27 @@ public sealed record NpcAttackProfile
     /// <summary>Charge animation selector of the weapon (<c>anim_charge_type</c>).</summary>
     public byte ChargeAnimationType { get; init; }
 
+    /// <summary>
+    ///     Rounds one magazine holds: the weapon item's attribute 956 (Weapon Magazine Size) when it carries
+    ///     one, otherwise the template's <c>base_clip_size</c>. 1 or less on the rows the database gives no
+    ///     magazine (every melee row), which the engine reads as "this weapon never reloads".
+    /// </summary>
+    public ushort MagazineSize { get; init; }
+
+    /// <summary>
+    ///     Rounds one attack spends from the magazine: the template's <c>ammo_per_burst</c> when it carries it,
+    ///     otherwise <c>rounds_per_burst</c> - a shotgun fires its 16 rounds for one shell, a rifle one round
+    ///     per round. At least 1. See <see cref="NpcWeaponMagazine" />.
+    /// </summary>
+    public byte AmmoPerBurst { get; init; } = 1;
+
+    /// <summary>
+    ///     Milliseconds a reload takes (<c>dbitems::WeaponTemplates.reload_time</c>): the window the client
+    ///     plays the weapon's reload animation (<c>anim_reload_type</c>) in, and the time the NPC cannot fire
+    ///     for. 0 on a weapon the database gives no reload time.
+    /// </summary>
+    public uint ReloadTimeMs { get; init; }
+
     /// <summary>Template attack ability id (an aptitude chain in the original game), or 0.</summary>
     public uint AttackAbilityId { get; init; }
 
@@ -156,4 +177,11 @@ public sealed record NpcAttackProfile
 
     /// <summary>Whether the attack is a projectile attack.</summary>
     public bool IsRanged => Mode == NpcAttackMode.Ranged;
+
+    /// <summary>
+    ///     Whether the weapon reloads when it runs dry: a projectile weapon whose magazine holds rounds and
+    ///     that the database gives a reload time. Every melee row, and the rows the database gives neither a
+    ///     magazine nor a reload time, fire without one. See <see cref="NpcWeaponMagazine" />.
+    /// </summary>
+    public bool Reloads => NpcWeaponMagazine.Reloads(IsRanged, MagazineSize, ReloadTimeMs);
 }

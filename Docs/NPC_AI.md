@@ -218,12 +218,13 @@ every target counts as visible.
 ### What an NPC animates
 
 A mob's animation is not a server-side asset choice - the client owns the animation
-graphs and picks them from replicated state. Three pieces of that state are the
-server's job, and all three are now driven by the database:
+graphs and picks them from replicated state. Four pieces of that state are the
+server's job, and all four are now driven by the database:
 
 | What | Replicated where | Where the value comes from |
 |---|---|---|
 | Attack / fire | `CombatView.WeaponBurstFired`, then `WeaponBurstEnded` (or `WeaponBurstCancelled`) | `dbitems::WeaponTemplates.ms_burst_duration` (else `ms_per_burst`), clamped to the NPC's own attack cadence |
+| Reload | `CombatView.WeaponReloaded` (then the magazine refills, or `WeaponReloadCancelled` when it dies mid-reload) | `dbitems::WeaponTemplates.base_clip_size` (else the item's attribute 956), `ammo_per_burst` (else `rounds_per_burst`) and `reload_time`; the client plays the template's `anim_reload_type` |
 | Locomotion | `CurrentPoseUpdate` / `MovementView` movement state | `dbcharacter::Monster.normal_speed` (the walk, `0x5004`, while attacking) and `fast_speed` (the run, `0x2004`, while chasing) |
 | Armed pose + weapon animation set | `CurrentEquipment` (the weapon item's template id) | `dbitems::WeaponTemplates.anim_armed_id` / `anim_armed_priority` / `anim_fire_type` / `anim_reload_type` / `anim_charge_type` |
 
@@ -242,6 +243,39 @@ Spyder's 1,600 ms swing inside its 2,000 ms one. A monster the database gives no
 weapon at all swings with a documented 500 ms default (the only animation length
 here that is not a row), so weaponless mobs animate too.
 
+**Reload animation.** A player's reload is client driven too - the client sends
+`ReloadWeapon` (or `CancelReload` to abort), the server relays the two times and
+every watching client plays the reload of the weapon the replicated equipment says
+the character holds. An NPC has no client to send them, which is why mobs used to
+fire forever without ever reloading; `AiEngine` now keeps the weapon's magazine
+itself (`NpcWeaponMagazine`, pure and unit tested) and produces the same markers:
+`WeaponReloaded` at the moment the magazine runs dry, no fire for the template's
+`reload_time` (that window is the reload animation), and `WeaponReloadCancelled` if
+the mob dies in the middle of one. The magazine is the weapon item's attribute 956
+(`WeaponMagazineSize`) when the item carries it, else the template's
+`base_clip_size`; one attack spends `ammo_per_burst` when the template carries it,
+else `rounds_per_burst` (a shotgun's 16 pellets are one shell, not 16 reloads). The
+reload starts as soon as the burst empties the magazine, so `reload_time` overlaps
+the rest of the weapon's cadence instead of stacking on top of the next shot, and a
+shot the reload does block goes out as soon as the magazine is full. An attack wants
+a whole burst's worth of rounds, so a magazine that cannot pay for one waits for the
+reload even if it is not literally empty - which the build's data makes reachable
+once (`NPC Juggernaut Beam Cannon`: 110 rounds a burst out of a 65,535 round clip). The marker is
+also what the aptitude `RequireReload` condition tests
+(`RequireReloadCommand`: `CombatView.WeaponReloaded > InitTime`), so a mob's own
+chains can satisfy a reload check the way a player's do.
+
+80 of the 85 templates the build's monsters use reload, covering 1,510 of the 1,861
+monster weapon slots - and 747 of those slots are on templates that carry an
+`anim_reload_type` for the client to play. That includes the single-round weapons,
+which the database means to reload after every shot: the NPC Charge Sniper Rifle's
+`base_clip_size` is 1 with a 1,000 ms `reload_time` (39 monster slots), and the NPC
+Ranged Default row is the same shape (37). The five that do not reload are the rows
+that are not projectile weapons: the Spyder's melee clip (`reload_time` 0, 334
+monster slots) and four rows whose `default_ammo_id` resolves to no
+`dbitems::Ammo` row at all (visual-only and trigger-only templates). A weapon the
+database gives no magazine fires forever, exactly as it did before.
+
 **Weapon animation parameters.** `SDBUtils.GetDetailedWeaponTemplateInfo` used to
 drop the `anim_*` columns ("stuff that is presumably client side like
 animations"); they are now resolved through the same item/slot modifier cascade as
@@ -250,9 +284,10 @@ every other template field and carried on `NpcAttackProfile`
 `ReloadAnimationType`, `ChargeAnimationType`, `BurstDurationMs`). Of the 85
 templates the build's mobs actually use, all 85 carry `anim_armed_id` (1 on 76 of
 them, 4 on the other 9) and `anim_armed_priority` 100, 47 carry a non-zero
-`anim_fire_type`, 53 a `anim_reload_type` and 2 an `anim_charge_type`; the client
-gets them from the item's template id, which the equipment replication already
-carries.
+`anim_fire_type`, 53 an `anim_reload_type` (the reload animation the marker above
+plays, on 747 of the 1,510 monster weapon slots that reload) and 2 an
+`anim_charge_type`; the client gets them from the item's template id, which the
+equipment replication already carries.
 
 **Locomotion.** The database gives a mob two speeds and the client has two
 locomotion animations to match: `normal_speed` is the walk used while it
@@ -280,7 +315,7 @@ these three pieces, and the line currently sits here:
 
 | Static DB | Rows | Describes | State in PIN |
 |---|---|---|---|
-| `dbitems::WeaponTemplates` / `WeaponTemplateModifiers` `anim_*`, `ms_burst_duration`, `ms_per_burst` | 318 / 5,387 | the weapon's animation selectors and its burst timing | used (above) |
+| `dbitems::WeaponTemplates` / `WeaponTemplateModifiers` `anim_*`, `ms_burst_duration`, `ms_per_burst`, `base_clip_size`, `ammo_per_burst`, `rounds_per_burst`, `reload_time` | 318 / 5,387 | the weapon's animation selectors, its burst timing and its magazine/reload | used (above) |
 | `dbcharacter::Monster.normal_speed` / `fast_speed` | 3,109 | the two locomotion speeds the walk/run animation matches | used (above) |
 | `dbcharacter::GibVisuals` (`death_anim_index`, `blast_impulse_strength`, `direct_vrec_id`) via `dbitems::Battleframe.gibset_id` | 128 | the row a corpse reports at death: the death animation variant and the gib visuals | used: `NpcDeathService` reports the battleframe's `gibset_id` at the death time, 0 included (see below), covering the 1,137 monsters with an explicit gib set and the 1,806 whose battleframe names the default row. 112 monster rows have no battleframe to read it from (89 of them `chassis_id` 0, legacy entries), and 54 name a `GibVisuals` id this build does not ship - the id is reported as the row states it and the client resolves it against its own copy |
 | `dbcharacter::Stumble` (`anim_index`, `duration`, `cooldown_ms`, `distance`, `only_once`) | 39 | hit-reaction ("stumble") rows: which animation, which status effect, how long, how often | unused, and not implementable from this build (see below) |
@@ -561,8 +596,9 @@ stays horizontal, exactly as before.
 
 ## 6. Known gaps
 
-* **Animation is attack + locomotion + death only.** The engine drives the attack
-  burst markers, the walk/run/stand movement state and the death state (see
+* **Animation is attack + reload + locomotion + death only.** The engine drives the
+  attack burst markers, the weapon reload markers, the walk/run/stand movement state
+  and the death state (see
   [What an NPC animates](#what-an-npc-animates), which lists the animation rows
   that are and are not used), but it does not run a monster's behaviour tree, so
   there are no idle, taunt or wander animations, no per-ability animations (the

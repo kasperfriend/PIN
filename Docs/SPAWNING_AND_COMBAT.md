@@ -299,6 +299,17 @@ Two things about that gate matter in play:
   wider than either, so a mob still notices you up there and comes looking for a
   way up; there is no pathfinding, so a melee mob can only stand under you.
 
+Ranged mobs run out of rounds like anyone else: the weapon's clip
+(`dbitems::WeaponTemplates.base_clip_size`, or the item's attribute 956) is how many
+shots it holds, `ammo_per_burst` (else `rounds_per_burst`) how many one attack
+spends, and the template's `reload_time` how long the mob cannot fire once it is
+dry. It announces that window through `CombatView.WeaponReloaded` - the same marker
+a player's own reload sends, and the one the client plays the weapon's
+`anim_reload_type` from - and `WeaponReloadCancelled` if it dies mid-reload. The
+attack itself is announced the same way (`WeaponBurstFired`, then `WeaponBurstEnded`
+or `WeaponBurstCancelled`), so a mob's shooting and reloading are visible rather
+than silent; see [NPC_AI.md](NPC_AI.md) §3.
+
 Damage per hit comes from the weapon's own database rows (attribute 954, or the
 level's `MonsterScaling.damage` rating scaled by the item's attribute 1145), and
 only falls back to a **fraction** (a tenth by default) of the rating for rows

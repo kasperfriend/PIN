@@ -665,4 +665,142 @@ public class AiEngineTests
         AssertState(shard, npc, AiBrainState.Attack);
         Assert.Equal((short)0x5004, npc.MovementState);  // Walking | Movement
     }
+
+    /// <summary>A ranged monster whose weapon has a magazine: NPC Guard Rifle's 20-round clip would take far
+    /// too long to empty in a test, so this is the same shape with two rounds and a one-second reload.</summary>
+    private static NpcAttackProfile MagazineProfile() => RangedProfile() with
+    {
+        MagazineSize = 2,
+        AmmoPerBurst = 1,
+        ReloadTimeMs = 1000,
+    };
+
+    [Fact]
+    public void ArmedNpc_DryMagazine_ReloadsAndFiresItsFullBurstAgain()
+    {
+        var stats = new FakeAiMonsterStats { AttackProfile = MagazineProfile() };
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: shots);
+
+        // The values the view was built with: anything but these is a reload the engine announced.
+        uint reloadedAtSpawn = npc.Character_CombatView.WeaponReloadedProp;
+        uint cancelledAtSpawn = npc.Character_CombatView.WeaponReloadCancelledProp;
+
+        Tick(shard, FirstTick);                   // Idle -> Chase
+        Tick(shard, FirstTick + Step);            // burst 1 at 60,050: 2 rounds -> 1
+        Assert.Equal(3, shots.Shots.Count);
+        Assert.Equal(reloadedAtSpawn, npc.Character_CombatView.WeaponReloadedProp);
+
+        Tick(shard, FirstTick + 2500 + Step);     // burst 2 at 62,550: the last round -> dry
+        Assert.Equal(6, shots.Shots.Count);
+
+        // The magazine ran dry with that burst, so the reload starts at once and the client is told: the
+        // marker is the weapon's anim_reload_type, and the window it plays in is the template's reload_time.
+        Assert.Equal(62_550u, npc.Character_CombatView.WeaponReloadedProp);
+
+        Tick(shard, 63_000);                      // mid-reload: not a second marker, no shot
+        Assert.Equal(6, shots.Shots.Count);
+        Assert.Equal(62_550u, npc.Character_CombatView.WeaponReloadedProp);
+
+        Tick(shard, 63_550);                      // 62,550 + 1,000: the magazine is full again
+        Assert.Equal(6, shots.Shots.Count);
+
+        Tick(shard, 65_050);                      // the weapon's own cadence: the full burst fires again
+        Assert.Equal(9, shots.Shots.Count);
+        Assert.Equal(cancelledAtSpawn, npc.Character_CombatView.WeaponReloadCancelledProp);
+    }
+
+    [Fact]
+    public void ArmedNpc_ReloadOutlastingTheCadence_FiresAsSoonAsTheMagazineIsFull()
+    {
+        // The charge sniper rifle's shape: a single round and a reload_time (3,000 ms) longer than the
+        // 2,500 ms cadence, so the weapon is dry after every burst and the next burst waits out the reload.
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = MagazineProfile() with { MagazineSize = 1, ReloadTimeMs = 3000 },
+        };
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: shots);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);            // burst 1 at 60,050: the single round is spent
+        Assert.Equal(3, shots.Shots.Count);
+        Assert.Equal(60_050u, npc.Character_CombatView.WeaponReloadedProp);
+
+        Tick(shard, FirstTick + 2500 + Step);     // 62,550: its cadence slot, but it is still reloading
+        Assert.Equal(3, shots.Shots.Count);
+
+        // 63,050 (60,050 + 3,000): full, so the burst it could not fire goes out at once instead of
+        // waiting out another cadence - the reload was the wait.
+        Tick(shard, 63_050);
+        Assert.Equal(6, shots.Shots.Count);
+        Assert.Equal(63_050u, npc.Character_CombatView.WeaponReloadedProp);
+    }
+
+    [Fact]
+    public void ReloadingNpc_ThatDies_CancelsTheReload()
+    {
+        var stats = new FakeAiMonsterStats { AttackProfile = MagazineProfile() };
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher());
+        shard.CharacterLifecycle.OnCharacterCreated(npc);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Tick(shard, FirstTick + 2500 + Step);     // dry at 62,550, reloading until 63,550
+        Tick(shard, 63_000);                      // dies mid-reload
+        uint deathTime = unchecked((uint)shard.CurrentTimeLong);
+
+        shard.CharacterLifecycle.ForceDeath(npc);
+
+        // Cancelled, not finished: nothing is refilled and the client drops the reload animation.
+        Assert.Equal(deathTime, npc.Character_CombatView.WeaponReloadCancelledProp);
+        Assert.Equal(62_550u, npc.Character_CombatView.WeaponReloadedProp);
+    }
+
+    [Fact]
+    public void MeleeNpc_WithNoMagazine_NeverReloads()
+    {
+        // The Spyder's template is a one-round melee clip: nothing to empty, so the mob swings forever and
+        // never announces a reload it could not play.
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = new NpcAttackProfile
+            {
+                Mode = NpcAttackMode.Melee,
+                AttackRange = 3.5f,
+                AttackRangeExit = 5f,
+                StandoffRange = 2f,
+                AttackIntervalMs = 2000,
+                BurstDurationMs = 1600,
+                DamagePerRound = 697,
+                MagazineSize = 1,
+                AmmoPerBurst = 1,
+                ReloadTimeMs = 0,
+            },
+        };
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(3f, 0f, 0f), monsterStats: stats);
+        uint reloadedAtSpawn = npc.Character_CombatView.WeaponReloadedProp;
+        uint cancelledAtSpawn = npc.Character_CombatView.WeaponReloadCancelledProp;
+
+        for (ulong time = FirstTick; time < FirstTick + 10_000; time += Step)
+        {
+            Tick(shard, time);
+        }
+
+        Assert.True(player.CurrentHealth < 100_000, "the melee NPC should have kept swinging");
+        Assert.Equal(reloadedAtSpawn, npc.Character_CombatView.WeaponReloadedProp);
+        Assert.Equal(cancelledAtSpawn, npc.Character_CombatView.WeaponReloadCancelledProp);
+    }
 }

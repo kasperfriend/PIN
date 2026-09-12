@@ -26,6 +26,9 @@ public class NpcAttackResolverTests
         MsPerBurst = 100,
         RoundsPerBurst = 4,
         AmmoId = AmmoId,
+        BaseClipSize = 20,
+        AmmoPerBurst = 4,
+        ReloadTime = 700,
         AnimArmedId = 1,
         AnimArmedPriority = 100,
         AnimFireType = 1,
@@ -39,6 +42,8 @@ public class NpcAttackResolverTests
         DamagePerRound = 225,
         MsPerBurst = 1600,
         RoundsPerBurst = 1,
+        BaseClipSize = 1,
+        ReloadTime = 0,
         AmmoId = 0,
         AnimArmedId = 1,
         AnimArmedPriority = 100,
@@ -130,6 +135,13 @@ public class NpcAttackResolverTests
         Assert.Equal(1, profile.FireAnimationType);
         Assert.Equal(7, profile.ReloadAnimationType);
         Assert.Equal(0, profile.ChargeAnimationType);
+
+        // The magazine the reload animation is announced from: the template's base_clip_size, the rounds one
+        // attack spends (ammo_per_burst, not rounds_per_burst) and the reload_time the client plays it in.
+        Assert.Equal(20, profile.MagazineSize);
+        Assert.Equal(4, profile.AmmoPerBurst);
+        Assert.Equal(700u, profile.ReloadTimeMs);
+        Assert.True(profile.Reloads);
     }
 
     [Fact]
@@ -154,6 +166,28 @@ public class NpcAttackResolverTests
 
         Assert.Equal(1600u, profile.BurstDurationMs);
         Assert.Equal(2, profile.FireAnimationType);
+    }
+
+    [Fact]
+    public void Resolve_MagazineSize_PrefersTheItemsMagazineAttribute()
+    {
+        // Attribute 956 (Weapon Magazine Size) of the weapon item overrides the template's base_clip_size,
+        // the same way 957 overrides the template's range.
+        var data = DataWith(RangedTemplate());
+        data.WithAttribute(WeaponId, 956, 60);
+
+        Assert.Equal(60, CreateResolver(data).Resolve(MonsterId, 45).MagazineSize);
+    }
+
+    [Fact]
+    public void Resolve_MeleeSwing_DoesNotReload()
+    {
+        // A single-round clip without a reload_time: nothing for the NPC to announce.
+        var profile = CreateResolver(DataWith(MeleeTemplate())).Resolve(MonsterId, 45);
+
+        Assert.Equal(1, profile.MagazineSize);
+        Assert.Equal(0u, profile.ReloadTimeMs);
+        Assert.False(profile.Reloads);
     }
 
     [Fact]

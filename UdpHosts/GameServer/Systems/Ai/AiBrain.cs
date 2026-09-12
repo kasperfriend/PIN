@@ -91,6 +91,21 @@ public class AiBrain
         }
     }
 
+    /// <summary>
+    ///     Makes the next attack legal from <paramref name="now" /> on, keeping whatever is already later.
+    ///     Used when an attack could not be fired because the weapon had to reload: the reload is the wait,
+    ///     so it must not stack on top of the cadence that attempt just spent.
+    /// </summary>
+    public void AllowAttackAt(ulong now)
+    {
+        if (State == AiBrainState.Dead)
+        {
+            return;
+        }
+
+        NextAttackAt = Math.Min(NextAttackAt, now);
+    }
+
     /// <summary>Drops back to idle from a combat state. Idle and Return are left alone.</summary>
     public void OnTargetLost()
     {

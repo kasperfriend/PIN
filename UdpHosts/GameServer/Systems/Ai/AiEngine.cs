@@ -157,6 +157,11 @@ public class AiEngine
             ChaseSpeed = AiSpeeds.Resolve(fastSpeed, _rules.DefaultChaseSpeed, _rules),
             AttackDamage = attackDamage,
             Profile = attackProfile,
+            // A weapon the database gives a magazine and a reload time fires from that magazine; everything
+            // else (every melee row) has none and fires forever, exactly as before.
+            Magazine = attackProfile.Reloads
+                ? NpcWeaponMagazine.Loaded(attackProfile.MagazineSize)
+                : NpcWeaponMagazine.None,
         };
 
         return _brains.TryAdd(npc.EntityId, brain);
@@ -233,6 +238,7 @@ public class AiEngine
             // drop the attack animation and play the death (the gib visuals and corpse linger come from
             // NpcDeathService, which listens to the same event).
             CancelAttackAnimation(npc);
+            CancelReload(npc, _shard.CurrentTime);
             npc.Brain.OnDeath();
             npc.TargetId = 0;
         }
@@ -256,10 +262,11 @@ public class AiEngine
             return;
         }
 
-        // The attack animation (CombatView burst markers) is a window: close the one that has run out
-        // before deciding anything new, so a client sees Fire... then Ended in the same order the DB
-        // timing describes.
+        // The attack animation (CombatView burst markers) and the reload (CombatView reload markers) are
+        // windows: close the ones that have run out before deciding anything new, so a client sees Fire...
+        // then Ended, and Reloaded... then the magazine refilled, in the order the DB timing describes.
         EndAttackAnimationIfElapsed(npc, currentTime);
+        EndReloadIfElapsed(npc, currentTime);
 
         if (perceive)
         {
@@ -307,8 +314,33 @@ public class AiEngine
 
         if (decision.Attack && targetAlive)
         {
-            ResolveAttack(npc, target);
-            StartAttackAnimation(npc, currentTime);
+            var profile = npc.Profile;
+            if (CanFire(npc, currentTime))
+            {
+                ResolveAttack(npc, target);
+                StartAttackAnimation(npc, currentTime);
+
+                // One attack spends one burst's worth of rounds: ammo_per_burst when the template carries
+                // it, else rounds_per_burst - a weapon the database gives no magazine (every melee row)
+                // spends nothing, its magazine is None.
+                npc.Magazine = npc.Magazine.Spend(profile?.AmmoPerBurst ?? 0);
+
+                // The burst left the magazine dry: reload straight away, so the template's reload_time
+                // overlaps the rest of the weapon's cadence (the wait a player has between bursts) rather
+                // than stacking on top of the next shot. A weapon the database gives no magazine - every
+                // melee row, and the ranged rows without a reload time - never gets here.
+                if (profile is { Reloads: true } && !npc.Magazine.CanFire(profile.AmmoPerBurst, currentTime))
+                {
+                    StartReload(npc, currentTime);
+                }
+            }
+            else
+            {
+                // The weapon was empty, so the shot waited out the reload instead of being fired. That
+                // wait is the delay: the reload does not stack on top of the cadence the brain just
+                // spent, and the mob fires the moment its magazine is full again.
+                npc.Brain.AllowAttackAt(npc.Magazine.ReloadEndTime);
+            }
         }
 
         ApplyDecision(npc, decision, elapsedMs, target);
@@ -396,6 +428,70 @@ public class AiEngine
         var hit = physics.SegmentRayCast(from, to, source.EntityId);
 
         return !hit.Hit || hit.HitEntityId == target.EntityId;
+    }
+
+    /// <summary>
+    ///     Whether the NPC can fire its weapon now: a weapon the database gives no magazine (every melee row)
+    ///     always can, an armed one only while it holds the rounds an attack spends and is not reloading. An
+    ///     empty magazine whose reload has not started yet (the burst did not dry it, so nothing announced
+    ///     one) starts here, so a client sees the reload animation rather than a silent gap in the fire.
+    /// </summary>
+    private bool CanFire(NpcBrain npc, ulong currentTime)
+    {
+        var profile = npc.Profile;
+        if (profile == null || !profile.Reloads)
+        {
+            return true;
+        }
+
+        if (npc.Magazine.CanFire(profile.AmmoPerBurst, currentTime))
+        {
+            return true;
+        }
+
+        if (!npc.Magazine.IsReloading(currentTime))
+        {
+            StartReload(npc, currentTime);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Starts the weapon's reload: <c>WeaponReloaded</c> at the time it began - the marker the client plays
+    ///     <c>anim_reload_type</c> from, the same one a player's own <c>ReloadWeapon</c> command produces - and
+    ///     the template's <c>reload_time</c> as the window the NPC cannot fire in.
+    /// </summary>
+    private void StartReload(NpcBrain npc, ulong currentTime)
+    {
+        npc.Magazine = npc.Magazine.StartReload(currentTime, npc.Profile?.ReloadTimeMs ?? 0);
+        npc.Entity?.SetWeaponReloaded(unchecked((uint)currentTime));
+    }
+
+    /// <summary>Refills the magazine once the reload window the database gives the weapon has run out.</summary>
+    private void EndReloadIfElapsed(NpcBrain npc, ulong currentTime)
+    {
+        if (!npc.Magazine.HasFinishedReloading(currentTime))
+        {
+            return;
+        }
+
+        npc.Magazine = npc.Magazine.FinishReload(npc.Profile?.MagazineSize ?? 0);
+    }
+
+    /// <summary>
+    ///     Drops a reload that did not run to its end - the NPC died (or was despawned) while reloading: the
+    ///     marker is the one the client's own <c>CancelReload</c> produces, and nothing is refilled.
+    /// </summary>
+    private void CancelReload(NpcBrain npc, ulong currentTime)
+    {
+        if (!npc.Magazine.IsReloading(currentTime))
+        {
+            return;
+        }
+
+        npc.Magazine = npc.Magazine.CancelReload();
+        npc.Entity?.SetWeaponReloadCancelled(unchecked((uint)currentTime));
     }
 
     /// <summary>
@@ -704,5 +800,11 @@ public class AiEngine
 
         /// <summary>The attack animation currently being shown, or null when none is running.</summary>
         public NpcAttackAnimation? Animation;
+
+        /// <summary>
+        ///     The magazine the NPC fires from and its running reload, or <see cref="NpcWeaponMagazine.None" />
+        ///     for a weapon that does not reload.
+        /// </summary>
+        public NpcWeaponMagazine Magazine;
     }
 }
