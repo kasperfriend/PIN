@@ -53,7 +53,7 @@ public readonly record struct NpcAbilityModuleScan(
 ///         (<see cref="NpcAbilityModuleScan.Runnable" />) never fires on a shipped row. Nine of the modules
 ///         reach part of what they do only through a chain a control-flow command hands execution to - eight
 ///         get their damage from one, and 120937 its animations 22 and 26 as well as its staged attack - so
-///         <see cref="NpcWeaponAbilities.ScanAbility" /> follows them. See Docs/NPC_AI.md for the table.
+///         <c>NpcWeaponAbilities.ScanAbility</c> follows them. See Docs/NPC_AI.md for the table.
 ///     </para>
 /// </remarks>
 public static class NpcBehaviorAbilities

@@ -17,6 +17,8 @@ public class NpcBehaviorAbilitiesTests
 {
     private const ushort AbilityAnimation = (ushort)CommandType.AbilityAnimation;
     private const ushort InflictDamage = (ushort)CommandType.InflictDamage;
+    private const ushort ImpactApplyEffect = (ushort)CommandType.ImpactApplyEffect;
+    private const ushort UpdateWaitAndFireOnce = (ushort)CommandType.UpdateWaitAndFireOnce;
 
     [Fact]
     public void Resolve_FollowsTheModuleTableIntoTheAbility()
@@ -128,7 +130,7 @@ public class NpcBehaviorAbilitiesTests
             .WithAbility(38_700, 957_984)
             .WithCommand(957_984, ImpactApplyEffect, effectId: 9_920)
             .WithStatusEffect(9_920, updateChain: 1_110_491)
-            .WithCommand(1_110_491, (ushort)CommandType.UpdateWaitAndFireOnce, waitChain: 1_000_536)
+            .WithCommand(1_110_491, UpdateWaitAndFireOnce, waitChain: 1_000_536)
             .WithCommand(1_000_536, AbilityAnimation, next: 1_000_530)
             .WithCommand(1_000_530, InflictDamage);
 
