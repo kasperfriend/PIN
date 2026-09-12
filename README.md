@@ -244,6 +244,15 @@ downloading `http://<address>:4400/certificate.cer` elsewhere. Playing on the se
 machine alone: leave `PublicHost` at `localhost`, where
 `dotnet dev-certs https --trust` is all there is to it.
 
+If the login form flashes red **even after the certificate is trusted**, and
+`curl -k https://<address>:44302/api/v1/oracle/ticket -X POST` also fails with
+`schannel: failed to receive handshake` (on `localhost` too), the server was
+serving TLS from a PEM-loaded key, which Schannel on Windows cannot sign a handshake
+with — an older build's bug. Update PIN: the hosts now serve from the
+`certs\pin-<host>.pfx` they issue, and an old `.key`/`.crt` pair is migrated into one
+on first start (no certificate reinstall needed). See
+[`Docs/REMOTE_PLAY.md`](Docs/REMOTE_PLAY.md) §8.
+
 **`GameServer terminated: CodeBase is not supported on assemblies loaded from a single-file bundle`**
 
 An outdated release. GameServer used to read `App.config` through

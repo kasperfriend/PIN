@@ -104,12 +104,48 @@ public class TlsCertificateStoreTests : IDisposable
         Assert.Contains(enhancedKeyUsage.EnhancedKeyUsages.Cast<Oid>(), oid => oid.Value == TlsCertificateStore.ServerAuthenticationOid);
         Assert.True(certificate.Certificate.Extensions.OfType<X509BasicConstraintsExtension>().Single().CertificateAuthority);
 
-        // Three files, and only the public half of them is ever handed to a player.
+        // Four files, and only the public half of them is ever handed to a player: the .key/.crt pair for
+        // people and tools, the .pfx the hosts serve from, and the .cer a player installs.
         Assert.True(File.Exists(certificate.PrivateKeyPath));
+        Assert.True(File.Exists(Path.ChangeExtension(certificate.PrivateKeyPath, ".pfx")));
         Assert.Equal($"pin-{RemoteHost}.cer", Path.GetFileName(certificate.CertificatePath));
         Assert.Equal($"pin-{RemoteHost}.cer", certificate.DownloadFileName);
         Assert.EndsWith(".key", certificate.PrivateKeyPath);
         Assert.Equal(certificate.Certificate.RawData, File.ReadAllBytes(certificate.CertificatePath));
+    }
+
+    [Fact]
+    public void ResolveServesFromAPkcs12SoSchannelCanUseTheKey()
+    {
+        var certificate = Resolve();
+
+        // The hosts serve from a PKCS#12 container, not the PEM pair: on Windows, X509Certificate2
+        // .CreateFromPemFile hands Kestrel a certificate whose private key is ephemeral, and Schannel
+        // cannot sign a handshake with an ephemeral key - every TLS connection dies right after the
+        // client hello, which the game shows as a red blink at the login box.
+        var pfxPath = Path.ChangeExtension(certificate.PrivateKeyPath, ".pfx");
+        Assert.True(File.Exists(pfxPath));
+        using var serving = X509CertificateLoader.LoadPkcs12FromFile(pfxPath, TlsCertificateStore.PfxPassword);
+        Assert.True(serving.HasPrivateKey);
+        Assert.Equal(certificate.Certificate.Thumbprint, serving.Thumbprint);
+    }
+
+    [Fact]
+    public void ResolveMigratesAPemPairFromAnOlderVersionWithoutReissuing()
+    {
+        // A store written before the PFX existed: only the PEM pair. The very certificate has to keep
+        // serving - players already installed its public half - but moved into the container Schannel can use.
+        using var issued = TlsCertificateStore.CreateFor(RemoteHost);
+        using var issuedKey = issued.GetRSAPrivateKey();
+        _ = Directory.CreateDirectory(_storePath);
+        var stem = Path.Combine(_storePath, $"pin-{ServerAddress.FileNameFor(RemoteHost)}");
+        File.WriteAllText(stem + ".key", Pem.Encode(Pem.PrivateKeyLabel, issuedKey.ExportPkcs8PrivateKey()));
+        File.WriteAllText(stem + ".crt", Pem.Encode(Pem.CertificateLabel, issued.RawData));
+
+        var resolved = Resolve();
+
+        Assert.Equal(issued.Thumbprint, resolved.Certificate.Thumbprint);
+        Assert.True(File.Exists(Path.ChangeExtension(resolved.PrivateKeyPath, ".pfx")));
     }
 
     [Fact]
@@ -145,10 +181,12 @@ public class TlsCertificateStoreTests : IDisposable
 
         // The pair sitting under 10.11.12.13's file names is the one for 26.84.248.2 - what a copied-in or
         // hand-edited certificate looks like. Reusing it would advertise https on an address the certificate
-        // does not name, which every validating client refuses, so the store has to issue instead.
+        // does not name, which every validating client refuses, so the store has to issue instead. No .pfx
+        // is copied: this is a store written before the PKCS#12 existed, migrated rather than reused.
         var stem = Path.Combine(_storePath, $"pin-{ServerAddress.FileNameFor("10.11.12.13")}");
         File.Copy(Path.ChangeExtension(forRemote.CertificatePath, ".crt"), stem + ".crt", true);
         File.Copy(forRemote.PrivateKeyPath, stem + ".key", true);
+        File.Delete(stem + ".pfx");
 
         var resolved = Resolve("10.11.12.13");
 
@@ -237,8 +275,9 @@ public class TlsCertificateStoreTests : IDisposable
         Assert.Equal($"-----END {Pem.CertificateLabel}-----", lines[^1]);
         Assert.All(lines[1..^1], line => Assert.True(line.Length is > 0 and <= 64, $"PEM body line is {line.Length} characters: {line}"));
 
-        // Reading it back is the point: the hosts load the pair with X509Certificate2.CreateFromPemFile, so a
-        // document only one tool understands is a server that cannot start a second time.
+        // Reading it back is the point: the PEM is the interoperable form of the very certificate the hosts
+        // serve (from the .pfx next to it - the container Schannel on Windows can use), so a document only
+        // one tool understands is one the operator cannot inspect or reuse.
         using var reloaded = X509Certificate2.CreateFromPem(pem);
         Assert.Equal(certificate.Thumbprint, reloaded.Thumbprint);
     }
