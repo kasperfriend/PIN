@@ -52,9 +52,14 @@ public sealed class NpcAttackResolver
         // The database's own primary/secondary order: a monster fights with weapon1 when it has one.
         uint weaponId = monster.Weapon1Id != 0 ? monster.Weapon1Id : monster.Weapon2Id;
 
-        // The row stores its muzzle offset in the static database's own vector type (the fields are
-        // lower case there); the engine works in System.Numerics, so convert on the way in.
-        return ResolveWeapon(monster.Id, weaponId, level, SelectBehavior(monster), SDBUtils.Vector3FromFauFau(monster.ProjectileOffset));
+        // The row stores its muzzle offset in the static database's own vector type (a reference type
+        // whose fields are lower case); rows that carry none leave it null, and the engine works in
+        // System.Numerics, so convert on the way in.
+        Vector3 muzzleOffset = monster.ProjectileOffset != null
+            ? SDBUtils.Vector3FromFauFau(monster.ProjectileOffset)
+            : default;
+
+        return ResolveWeapon(monster.Id, weaponId, level, SelectBehavior(monster), muzzleOffset);
     }
 
     /// <summary>
