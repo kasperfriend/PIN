@@ -171,7 +171,10 @@ public class InflictDamageCommand : Command, ICommand
             damageInt = 1;
         }
 
-        context.Shard.Damage.ApplyDamage(entity, damageInt, attacker);
-        context.Shard.Combat.HitFeedback?.TookDebugHit(entity, attacker, damageInt, false, false);
+        int appliedDamage = context.Shard.Damage.ApplyDamage(entity, damageInt, attacker, Params.DamageType);
+        if (appliedDamage > 0)
+        {
+            context.Shard.Combat.HitFeedback?.TookDebugHit(entity, attacker, appliedDamage, false, false);
+        }
     }
 }

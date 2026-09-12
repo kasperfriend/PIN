@@ -8,7 +8,8 @@ public readonly record struct ProjectileHitEvent(
     ulong SourceId,
     bool HeadShot,
     bool Crit,
-    float DamageMod = -1f);
+    float DamageMod = -1f,
+    byte DamageType = 0);
 
 public readonly record struct ImpactHitEvent(
     IEntity Target,

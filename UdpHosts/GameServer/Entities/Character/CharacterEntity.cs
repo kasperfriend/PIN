@@ -44,6 +44,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     private int _movementSampleCount;
     private int _movementSampleNewest;
     private ActiveWeaponDetails[,] _weaponDetailsCache;
+    private byte? _monsterDamageResponseOverride;
 
     /// <summary>
     ///     The scope (<c>dbitems::WeaponScope.Statusfx</c>) currently held because the character is looking down
@@ -371,6 +372,19 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     /// </summary>
     public byte FrameProgressionLevel { get; set; } = 1;
 
+    /// <summary>
+    ///     The <c>dbcharacter::DamageResponse</c> row used to reduce incoming
+    ///     damage. Players get it from their battleframe; monsters override it
+    ///     with <c>Monster.damage_response_id</c> when they load.
+    /// </summary>
+    public byte DamageResponseId { get; private set; }
+
+    /// <summary>Sets the response used by the combat system and test fakes.</summary>
+    public void SetDamageResponseId(byte damageResponseId)
+    {
+        DamageResponseId = damageResponseId;
+    }
+
     public Dictionary<StatModifierIdentifier, Dictionary<uint, ActiveStatModifier>> CurrentStatModifiers { get; set; }
     public Dictionary<StatModifierIdentifier, float> BaseStatModifiers { get; set; } = new()
     {
@@ -517,6 +531,10 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             FactionId = (byte)monsterInfo.FactionId
         });
 
+        // Monster.damage_response_id is authoritative even when the monster
+        // visually wears a battleframe chassis. Keep the override so later
+        // visual/loadout refreshes cannot replace the combat response.
+        _monsterDamageResponseOverride = monsterInfo.DamageResponseId;
         ApplyLoadout(loadout);
 
         // ApplyLoadout only builds the collision component for chassis owners (players and
@@ -780,6 +798,10 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         SetScopedState(false);
         Shard.Admin?.ApplyEquipmentOverrides(Player, loadout);
         CurrentLoadout = loadout;
+        DamageResponseId = _monsterDamageResponseOverride
+            ?? (loadout.ChassisID == 0
+                ? (byte)0
+                : SDBInterface.GetBattleframe(loadout.ChassisID)?.DamageResponse ?? (byte)0);
         UpdateEnergyParamsFromBattleframe(loadout.ChassisID);
         RebuildWeaponDetailsCache(loadout);
 

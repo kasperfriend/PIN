@@ -233,6 +233,27 @@ weapon's range and then tapers linearly to `min_damage_frac` × per-round damage
 at max range (e.g. PvE assault rifle ammo: full until 70% of the range, down to
 33% at the range edge).
 
+### Damage defenses
+
+Projectile damage now carries the fired ammo's `Damagetype` all the way from
+`ProjectileSim` to `CombatSim`. `DamageSystem` resolves the target's
+`dbcharacter::DamageResponse` row and, when present, its
+`DamageResponseDamageType` override. The type-specific multiplier replaces the
+response default; a missing response or mapping defaults to `1.0` so existing
+hits keep their old behavior. The active `DamageTaken` aptitude stat is then
+applied on top of that response, which makes defensive effects and immunity
+work for both projectile and direct aptitude damage.
+
+The server publishes and displays the post-defense amount rather than the raw
+projectile amount. A response multiplier of zero (or a zero `DamageTaken` stat)
+rejects the hit without changing health and without publishing a spurious
+`EntityDamagedEvent`, so AI aggro and hit feedback only react to damage that
+actually got through. Battleframes take their response id from the equipped
+`dbitems::Battleframe`; monsters use `dbcharacter::Monster.damage_response_id`,
+and deployables use `dbcharacter::Deployable.damageresponse`. The pure
+arithmetic is in `DamageMitigationMath`, with tests for fallback,
+type-specific overrides, stacking, rounding and immunity.
+
 When an NPC's health reaches 0, `DamageSystem` publishes `EntityDamagedEvent`,
 which `CharacterLifecycleService` turns into a death transition
 (`CharacterDiedEvent`). `NpcDeathService` then applies gib visuals and a corpse

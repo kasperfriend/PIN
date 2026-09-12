@@ -2,6 +2,7 @@ using System.Threading;
 using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.Entities.Deployable;
+using GameServer.Enums;
 using GameServer.StaticDB;
 using GameServer.Systems.NpcDeath;
 using GameServer.Systems.SystemEvents;
@@ -24,11 +25,16 @@ public class DamageSystem
         _rules = rules;
     }
 
-    public void ApplyDamage(IEntity target, int amount, IEntity source = null)
+    /// <summary>
+    /// Applies incoming damage and returns the post-defense amount that reached
+    /// the target. A zero return means that the hit was rejected, ignored, or
+    /// fully mitigated.
+    /// </summary>
+    public int ApplyDamage(IEntity target, int amount, IEntity source = null, byte damageType = 0)
     {
         if (target == null || amount <= 0)
         {
-            return;
+            return 0;
         }
 
         // Debug cheats: a player-controlled source scales outgoing damage (dmg <mult>,
@@ -39,29 +45,33 @@ public class DamageSystem
             amount = _shard.Cheats.ApplyOutgoingDamage(playerSource.Player, amount);
             if (amount <= 0)
             {
-                return;
+                return 0;
             }
         }
 
-        bool applied;
+        int appliedAmount;
         if (target is CharacterEntity character)
         {
-            applied = ApplyDamageToCharacter(character, amount, source);
+            appliedAmount = ApplyDamageToCharacter(character, amount, damageType);
         }
         else if (target is DeployableEntity deployable)
         {
-            applied = ApplyDamageToDeployable(deployable, amount, source);
+            appliedAmount = ApplyDamageToDeployable(deployable, amount, damageType);
         }
         else
         {
             Logger.Warning("ApplyDamage called on non-damageable entity {EntityId}, ignoring", target.EntityId);
-            return;
+            return 0;
         }
 
-        if (applied)
+        if (appliedAmount > 0)
         {
-            _eventBus.Publish(new EntityDamagedEvent(target, amount, source));
+            // Publish the post-defense amount. AI aggro and hit feedback should
+            // agree with the damage that actually reached the target.
+            _eventBus.Publish(new EntityDamagedEvent(target, appliedAmount, source));
         }
+
+        return appliedAmount;
     }
 
     public void ApplyHeal(IEntity target, int amount, IEntity source = null)
@@ -96,7 +106,7 @@ public class DamageSystem
     {
     }
 
-    private bool ApplyDamageToCharacter(CharacterEntity character, int amount, IEntity source)
+    private int ApplyDamageToCharacter(CharacterEntity character, int amount, byte damageType)
     {
         if (!character.IsAlive)
         {
@@ -104,10 +114,23 @@ public class DamageSystem
             // not be damaged. Bleedout damage is handled by the lifecycle
             // service on its own.
             Logger.Debug("{Name} is in state {State}, ignoring damage", character, character.CharacterState.State);
-            return false;
+            return 0;
         }
 
-        int remaining = amount;
+        var response = SDBInterface.GetDamageResponse(character.DamageResponseId);
+        var typeResponse = SDBInterface.GetDamageResponseDamageType(character.DamageResponseId, damageType);
+        int mitigated = DamageMitigationMath.Apply(
+            amount,
+            character.GetCurrentStatModifierValue(StatModifierIdentifier.DamageTaken),
+            response?.DefaultMultiplier ?? 1f,
+            typeResponse?.Multiplier);
+        if (mitigated <= 0)
+        {
+            Logger.Debug("{Name} ignored {Damage} damage because its response makes it immune", character, amount);
+            return 0;
+        }
+
+        int remaining = mitigated;
 
         if (character.CurrentShields > 0)
         {
@@ -121,7 +144,7 @@ public class DamageSystem
             character.SetCurrentHealth(character.CurrentHealth - remaining);
         }
 
-        return true;
+        return mitigated;
     }
 
     private bool ApplyHealToCharacter(CharacterEntity character, int amount, IEntity source)
@@ -136,18 +159,31 @@ public class DamageSystem
         return true;
     }
 
-    private bool ApplyDamageToDeployable(DeployableEntity deployable, int amount, IEntity source)
+    private int ApplyDamageToDeployable(DeployableEntity deployable, int amount, byte damageType)
     {
         if (deployable.IsDead)
         {
-            return false;
+            return 0;
         }
 
-        deployable.SetCurrentHealth(deployable.CurrentHealth - amount);
+        var response = SDBInterface.GetDamageResponse(deployable.DamageResponseId);
+        var typeResponse = SDBInterface.GetDamageResponseDamageType(deployable.DamageResponseId, damageType);
+        int mitigated = DamageMitigationMath.Apply(
+            amount,
+            damageTakenMultiplier: 1f,
+            defaultResponseMultiplier: response?.DefaultMultiplier ?? 1f,
+            damageTypeMultiplier: typeResponse?.Multiplier);
+        if (mitigated <= 0)
+        {
+            Logger.Debug("{Name} ignored {Damage} damage because its response makes it immune", deployable, amount);
+            return 0;
+        }
+
+        deployable.SetCurrentHealth(deployable.CurrentHealth - mitigated);
 
         if (deployable.CurrentHealth > 0)
         {
-            return true;
+            return mitigated;
         }
 
         deployable.MarkDead();
@@ -157,7 +193,7 @@ public class DamageSystem
         Logger.Information("{Name} destroyed", deployable);
 
         _shard.EntityMan.SetRemainingLifetime(deployable, (uint)_rules.CorpseLingerMs);
-        return true;
+        return mitigated;
     }
 
     private bool ApplyHealToDeployable(DeployableEntity deployable, int amount, IEntity source)

@@ -31,7 +31,6 @@ public class CombatSim
 
     private void OnProjectileHit(ProjectileHitEvent evt)
     {
-        // TODO: Damage defense calcs and stuff
         _shard.Entities.TryGetValue(evt.TargetId, out IEntity target);
         _shard.Entities.TryGetValue(evt.SourceId, out IEntity source);
 
@@ -62,8 +61,10 @@ public class CombatSim
             return;
         }
 
-        var dmg = evt.DamageAmount;
-        _damage.ApplyDamage(target, dmg, source);
-        _feedback.TookDebugHit(target, source, dmg, evt.HeadShot, evt.Crit);
+        var appliedDamage = _damage.ApplyDamage(target, evt.DamageAmount, source, evt.DamageType);
+        if (appliedDamage > 0)
+        {
+            _feedback.TookDebugHit(target, source, appliedDamage, evt.HeadShot, evt.Crit);
+        }
     }
 }

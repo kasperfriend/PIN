@@ -361,7 +361,12 @@ public partial class PhysicsEngine
         return new Vector3(position.X, position.Y, hit.HitPosition.Z);
     }
 
-    public void HandleProjectileImpact(CharacterEntity source, uint trace, SegmentRaycastHit hit, int damage = ProjectileSim.LegacyPlaceholderDamage)
+    public void HandleProjectileImpact(
+        CharacterEntity source,
+        uint trace,
+        SegmentRaycastHit hit,
+        int damage = ProjectileSim.LegacyPlaceholderDamage,
+        byte damageType = 0)
     {
         DebugProjectileHitCallbacks?.SendDebugProjectileImpact(source, trace, hit.HitPosition, hit.Normal);
 
@@ -382,7 +387,7 @@ public partial class PhysicsEngine
 
                 _logger.Debug("ProjectileSim Impact on {ShapeName} (headshot={Headshot}, crit={Crit}, damageMod={DamageMod})", poseShapeData.Name, headshot, crit, damageMod);
                 _logger.Debug("You hit {ShapeName} of {EntityId}", poseShapeData.Name, hitEntityId);
-                _eventBus.Enqueue(new ProjectileHitEvent(hitEntityId, damage, source.EntityId, headshot, crit, damageMod));
+                _eventBus.Enqueue(new ProjectileHitEvent(hitEntityId, damage, source.EntityId, headshot, crit, damageMod, damageType));
                 if (source.IsPlayerControlled && source.Player.Preferences.DebugWeapon != 0)
                 {
                     _eventBus.Enqueue(new DebugChatDirectMessageEvent($"You hit {poseShapeData.Name} of {hitEntityId}", source.Player));

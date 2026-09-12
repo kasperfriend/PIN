@@ -213,8 +213,8 @@ public class ProjectileSim
                             projectile.Ammo.DamageDecay,
                             projectile.Ammo.DamageDecayRangefrac,
                             projectile.Ammo.MinDamageFrac);
-                        _logger.Debug("Projectile trace={Trace} impact damage {Damage} (base {Base}, {Distance}m travelled)", projectile.TraceId, impactDamage, projectile.DamageAmount, projectile.DistanceTravelled);
-                        _shard.Physics.HandleProjectileImpact(source, projectile.TraceId, hit, impactDamage);
+                        _logger.Debug("Projectile trace={Trace} impact damage {Damage} (base {Base}, {Distance}m travelled, type {DamageType})", projectile.TraceId, impactDamage, projectile.DamageAmount, projectile.DistanceTravelled, projectile.Ammo.Damagetype);
+                        _shard.Physics.HandleProjectileImpact(source, projectile.TraceId, hit, impactDamage, projectile.Ammo.Damagetype);
                     }
                 }
             }
