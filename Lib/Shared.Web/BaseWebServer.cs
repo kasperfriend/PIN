@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net;
 using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -36,6 +37,11 @@ public abstract class BaseWebServer
             }
 
             Log.Information($"Starting web host {serverType.FullName}");
+
+            // Optional TLS certificate, see LoadConfiguredCertificate. Null keeps Kestrel's default, the
+            // ASP.NET Core development certificate.
+            var certificate = LoadConfiguredCertificate(configuration);
+
             #pragma warning disable SYSLIB0039 // TLS 1.0 required
             var hostBuilder =
                 Host.CreateDefaultBuilder()
@@ -48,9 +54,22 @@ public abstract class BaseWebServer
                                                                                                                   opts.SslProtocols = SslProtocols.Tls | // Required by FF itself *sigh*, completely insecure
                                                                                                                                       SslProtocols.Tls12 |
                                                                                                                                       SslProtocols.Tls13;
+
+                                                                                                                  // A client connecting over an IP address (LAN, VPN) can
+                                                                                                                  // never validate the development certificate, which is
+                                                                                                                  // issued for "localhost" - serve the configured one
+                                                                                                                  // instead when there is one. See Docs/REMOTE_PLAY.md.
+                                                                                                                  if (certificate != null)
+                                                                                                                  {
+                                                                                                                      opts.ServerCertificate = certificate;
+                                                                                                                  }
                                                                                                               });
                                                                         })
                                                             .UseStartup(serverType)
+                                                            // Bind addresses come from config: "*" (the default in appsettings.json) listens on
+                                                            // every interface - IPv4 0.0.0.0 and IPv6 [::] - so a host serves both the local
+                                                            // client on "localhost" and players reaching it over LAN/VPN. Which address clients
+                                                            // are *told* to use is decided separately by Firefall:PublicHost (see PublicUrls).
                                                             .UseUrls(configuration.GetSection("Firefall")
                                                                                   .Get<Firefall>()
                                                                                   .WebHosts[serverType.FullName.Replace(".WebServer", string.Empty)]
@@ -73,7 +92,7 @@ public abstract class BaseWebServer
                                                options.ConstraintMap["ulong"] = typeof(ULongRouteConstraint));
 
                                            serviceConfigurationBuilder.AddSingleton(configuration.GetSection("Firefall")
-                                                                                                 .Get<Firefall>())
+                                                                                                 .Get<Firefall>() ?? new Firefall())
                                                                       .AddSwaggerGen()
                                                                       .AddControllers()
                                                                       .AddJsonOptions(options =>
@@ -128,8 +147,17 @@ public abstract class BaseWebServer
             _ = app.UseDeveloperExceptionPage();
         }
 
-        _ = app.UseHttpsRedirection()
-               .UseSerilogRequestLogging()
+        // Advertising plain http (Firefall:AdvertiseHttps = false) only works while the http requests are
+        // not bounced back to https: with a TLS address bound, UseHttpsRedirection answers every plain
+        // request with a 307 to the https port, and a remote client that does not trust PIN's self-signed
+        // development certificate never gets through that redirect. The hosts keep listening on both
+        // either way, so switching back to https is a configuration change and nothing more.
+        if (Configuration.GetSection("Firefall").Get<Firefall>()?.AdvertiseHttps ?? true)
+        {
+            _ = app.UseHttpsRedirection();
+        }
+
+        _ = app.UseSerilogRequestLogging()
                .UseRouting()
                .UseEndpoints(endpoints => { _ = endpoints.MapControllers(); });
 
@@ -143,5 +171,47 @@ public abstract class BaseWebServer
 
     protected virtual void ConfigureChild(IApplicationBuilder app, IWebHostEnvironment env)
     {
+    }
+
+    /// <summary>
+    ///     Loads the TLS certificate named by <c>Firefall:Certificate:Path</c> - a PKCS#12 file (.pfx/.p12),
+    ///     decrypted with <c>Firefall:Certificate:Password</c> when it has one.
+    /// </summary>
+    /// <remarks>
+    ///     Kestrel's default is the ASP.NET Core development certificate: issued for <c>localhost</c> and
+    ///     trusted only on the machine that ran <c>dotnet dev-certs https --trust</c>, so a player who
+    ///     connects over a LAN or VPN address can never validate it. Serving a certificate whose subject or
+    ///     SAN matches <c>Firefall:PublicHost</c> - and trusting that certificate on each
+    ///     player's machine - is what makes the https hosts work remotely; <c>Firefall:AdvertiseHttps</c>
+    ///     set to false is the alternative that avoids certificates altogether. An empty path (the default)
+    ///     keeps the development certificate, so a local setup is untouched. A certificate that cannot be
+    ///     loaded is reported and skipped rather than taking the hosts down. See <c>Docs/REMOTE_PLAY.md</c>.
+    /// </remarks>
+    /// <param name="configuration">The configuration the host is built from.</param>
+    /// <returns>The configured certificate, or null when none is configured or it could not be loaded.</returns>
+    private static X509Certificate2 LoadConfiguredCertificate(IConfiguration configuration)
+    {
+        var path = configuration.GetValue<string>("Firefall:Certificate:Path");
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        if (!File.Exists(path))
+        {
+            Log.Error("Firefall:Certificate:Path points at {Path}, which does not exist - serving the development certificate instead", path);
+            return null;
+        }
+
+        try
+        {
+            var password = configuration.GetValue<string>("Firefall:Certificate:Password") ?? string.Empty;
+            return X509CertificateLoader.LoadPkcs12FromFile(path, password);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Could not load the TLS certificate from {Path} - serving the development certificate instead", path);
+            return null;
+        }
     }
 }
