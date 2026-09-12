@@ -417,6 +417,10 @@ block it in practice:
   behaviour).
 * PvP remains unimplemented (see the README's limitations); co-op play,
   NPC combat and chat work per the shard's existing systems.
+* All of the above is about two clients on one server. Getting a second
+  **machine** onto that server — what the hosts bind, the `PublicHost` they
+  advertise, the firewall, and the player's own `firefall.ini` — is
+  [`REMOTE_PLAY.md`](REMOTE_PLAY.md).
 
 ---
 
@@ -441,6 +445,10 @@ block it in practice:
 The GameServer is not involved in login verification: it still receives the
 character over gRPC (`GetCharacterAndBattleframeVisuals`) after the web login
 succeeded.
+
+The same file carries the networking keys — `PublicHost`, `AdvertiseHttps`,
+`MatrixPort`, `Certificate` and the per-host `urls` — which is what a player on
+another machine needs; see [`REMOTE_PLAY.md`](REMOTE_PLAY.md) §2.
 
 ---
 
@@ -540,3 +548,11 @@ PIN is a local/LAN game-server emulator:
   PBKDF2-HMACSHA256 (10k iterations, 16-byte salt) hash.
 * The login endpoint is intentionally not hardened against internet exposure —
   don't put a PIN server on the public internet.
+* The web hosts bind every interface (`Firefall:WebHosts:<host>:urls` defaults to
+  `*`) and the UDP servers bind `IPAddress.Any`, so anything that can route to
+  the machine reaches the API — on a home LAN that is every device on it, on a
+  VPN network every member of it. That is what lets a second player join
+  ([`REMOTE_PLAY.md`](REMOTE_PLAY.md)); keep it to networks you trust, never
+  port-forward these ports, and leave the unauthenticated GRPC port 5201 closed
+  to other machines. `AdvertiseHttps: false` serves those APIs in plaintext
+  inside the VPN's own tunnel.

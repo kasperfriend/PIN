@@ -1,25 +1,37 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
+using Shared.Web.Config;
 using WebHost.OperatorApi.Exceptions;
 
 namespace WebHost.OperatorApi.Capability;
 
 public class CapabilityRepository : ICapabilityRepository
 {
+    private readonly PublicUrls _urls;
+
+    public CapabilityRepository(Firefall config)
+    {
+        _urls = new PublicUrls(config);
+    }
+
     public async Task<HostInformation> GetHostInformationAsync(string environment, int build)
     {
+        // The hosts are advertised from Firefall:PublicHost (see PublicUrls) instead of a hardcoded
+        // "localhost", so a player on another machine is sent to this server and not to himself. The
+        // catch-all host still answers for every host PIN has not implemented - frontend, store, web,
+        // market, web assets, web accounts and rhsigscan all point at it, exactly as they did before.
         return await Task.FromResult(new HostInformation
                                      {
-                                         FrontendHost = "https://localhost:44399",
-                                         StoreHost = "https://localhost:44399",
-                                         ChatServer = "https://localhost:44307",
-                                         ReplayHost = $"https://localhost:44399/{environment}-{build}",
-                                         WebHost = "https://localhost:44399",
-                                         MarketHost = "https://localhost:44399",
-                                         IngameHost = "https://localhost:44303",
-                                         ClientapiHost = "https://localhost:44302",
-                                         WebAssetHost = "https://localhost:44399",
-                                         WebAccountsHost = "https://localhost:44399",
-                                         RhsigscanHost = "https://localhost:44399"
+                                         FrontendHost = _urls.Url(PublicUrls.CatchAllHost),
+                                         StoreHost = _urls.Url(PublicUrls.CatchAllHost),
+                                         ChatServer = _urls.Url(PublicUrls.ChatHost),
+                                         ReplayHost = _urls.Url(PublicUrls.CatchAllHost, $"/{environment}-{build}"),
+                                         WebHost = _urls.Url(PublicUrls.CatchAllHost),
+                                         MarketHost = _urls.Url(PublicUrls.CatchAllHost),
+                                         IngameHost = _urls.Url(PublicUrls.InGameApiHost),
+                                         ClientapiHost = _urls.Url(PublicUrls.ClientApiHost),
+                                         WebAssetHost = _urls.Url(PublicUrls.CatchAllHost),
+                                         WebAccountsHost = _urls.Url(PublicUrls.CatchAllHost),
+                                         RhsigscanHost = _urls.Url(PublicUrls.CatchAllHost)
                                      });
     }
 

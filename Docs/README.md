@@ -11,6 +11,7 @@ PIN is split into two areas:
 - [Mobs & NPCs Catalog](MOBS_AND_NPCS.md) — every mob/NPC in `clientdb.sd2` (decoded with `Tools/SdbDump`)
 - [Health System](HEALTH_SYSTEM.md) — health, damage, death, respawn and fall damage
 - [NPC AI](NPC_AI.md) — how spawned mobs target, chase, attack and leash, and how to tune it
+- [Remote Play & Networking](REMOTE_PLAY.md) — what the servers bind to, what they advertise to clients, and how to let a second player in over LAN / RadminVPN (config, firewall, TLS, ports, troubleshooting)
 
 ## UdpHosts
 
@@ -69,6 +70,17 @@ PIN implements some of those end points and has split them into the following pr
 - WebHost.Replay - Handling of replay actions
 - WebHost.Store - RedBean store information
 - WebHost.WebAsset - Assets of all sorts, from icons, to JavaScript, to streamed audio or textures
+
+### Binding and advertised hosts
+
+Every host listens on the addresses its `Firefall:WebHosts:<host>:urls` entry in
+`WebHostManager/config/appsettings.json` names — `*` by default, i.e. every
+interface, IPv4 and IPv6 — which `Lib/Shared.Web/BaseWebServer.cs` applies
+through `UseUrls`. Which address the *client* is told to use is decided
+separately, by `Firefall:PublicHost`: the capability response (`/check`) and the
+oracle ticket build their URLs through `Lib/Shared.Web/Config/PublicUrls.cs`, so
+the servers can listen everywhere while still advertising `localhost`, or
+advertise a LAN/VPN address instead. See [Remote Play & Networking](REMOTE_PLAY.md).
 
 ### References
 
