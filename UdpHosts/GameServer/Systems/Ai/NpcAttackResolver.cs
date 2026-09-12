@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using GameServer.Enums;
 using GameServer.StaticDB;
+using GameServer.StaticDB.Records.dbcharacter;
 using GameServer.StaticDB.Records.dbitems;
 
 namespace GameServer.Systems.Ai;
