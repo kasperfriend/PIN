@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using GameServer.StaticDB.Records.apt;
 using GameServer.Systems.Aptitude;
 
 namespace GameServer.Systems.Ai;

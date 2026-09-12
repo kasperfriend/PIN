@@ -4,7 +4,8 @@ using GameServer.StaticDB.Records.apt;
 using GameServer.StaticDB.Records.dbcharacter;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;
-using GameServer.Systems.Aptitude;
+// The enum that names a command's kind, not the apt::CommandType table's row record of the same name.
+using AptCommandType = GameServer.Systems.Aptitude.CommandType;
 
 namespace GameServer.Tests.Fakes;
 
@@ -85,15 +86,15 @@ public sealed class FakeNpcAttackDataSource : INpcAttackDataSource
     {
         Commands[commandId] = new BaseCommandDef { Id = commandId, Subtype = subtype, Next = next };
 
-        switch ((CommandType)subtype)
+        switch ((AptCommandType)subtype)
         {
-            case CommandType.ImpactApplyEffect:
+            case AptCommandType.ImpactApplyEffect:
                 ImpactApplyEffects[commandId] = new ImpactApplyEffectCommandDef { Id = commandId, EffectId = effectId };
                 break;
-            case CommandType.Call:
+            case AptCommandType.Call:
                 Calls[commandId] = new CallCommandDef { Id = commandId, AbilityId = calledAbilityId };
                 break;
-            case CommandType.ConditionalBranch:
+            case AptCommandType.ConditionalBranch:
                 Branches[commandId] = new ConditionalBranchCommandDef
                 {
                     Id = commandId,
