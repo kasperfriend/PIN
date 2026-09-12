@@ -283,12 +283,54 @@ these three pieces, and the line currently sits here:
 | `dbitems::WeaponTemplates` / `WeaponTemplateModifiers` `anim_*`, `ms_burst_duration`, `ms_per_burst` | 318 / 5,387 | the weapon's animation selectors and its burst timing | used (above) |
 | `dbcharacter::Monster.normal_speed` / `fast_speed` | 3,109 | the two locomotion speeds the walk/run animation matches | used (above) |
 | `dbcharacter::GibVisuals` (`death_anim_index`, `blast_impulse_strength`, `direct_vrec_id`) via `dbitems::Battleframe.gibset_id` | 128 | the row a corpse reports at death: the death animation variant and the gib visuals | used: `NpcDeathService` reports the battleframe's `gibset_id` at the death time, 0 included (see below), covering the 1,137 monsters with an explicit gib set and the 1,806 whose battleframe names the default row. 112 monster rows have no battleframe to read it from (89 of them `chassis_id` 0, legacy entries), and 54 name a `GibVisuals` id this build does not ship - the id is reported as the row states it and the client resolves it against its own copy |
-| `dbcharacter::Stumble` (`anim_index`, `duration`, `cooldown_ms`, `distance`, `only_once`) | 39 | hit-reaction ("stumble") animations | unused |
-| `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction | unused |
+| `dbcharacter::Stumble` (`anim_index`, `duration`, `cooldown_ms`, `distance`, `only_once`) | 39 | hit-reaction ("stumble") rows: which animation, which status effect, how long, how often | unused, and not implementable from this build (see below) |
+| `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction (references the 32 directional rows) | unused - no row points at it |
 | `dbcharacter::EmoteRecord` (`animation_name`, `anim_override_id`, `head_anim_override_id`) | 382 | emotes | player-only (`PerformEmote`); NPCs never emote |
 | `dbcharacter::MonsterMood` / `MonsterMoodName` | 2,268 / 6 | mood -> portrait id | unused (a UI portrait, not a world animation) |
-| `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the per-ability animation commands of the original game's chains | placeholder records: PIN does not execute ability chains for NPCs, so no `AttackSingle`/`Shoot`/`Injured`/`roar` animation is ever triggered |
+| `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the animation commands of the original game's chains, and the only place an animation is named | placeholder records; they carry an NPC's animation only through the status-effect chains that hold them (see below), and none of them is reachable from a monster weapon's own attack ability |
 | `dbitems::Weapons.first_person_animnet_id` / `third_person_animnet_id`, `dbcharacter::Head.animnet_id`, `dbitems::BattleframeVisuals.animnetwork_id`, `dbcharacter::Deployable.animnetwork` | 6,789 / 67 / 2,786 / 3,902 | animation-network (animation graph) asset ids | client side: the client picks the graph from the item/visual id the server already replicates, so there is nothing for the server to send |
+
+**Where the animations actually live.** Probing the aptitude chains settles what
+the database can and cannot drive for a mob, and why the two pieces above are
+documented rather than wired:
+
+- *Animations ride status effects.* A `tfPlayAnimationCommandDef` is a node in a
+  chain, and the chains that hold animations are the ones under
+  `apt::StatusEffectData.apply_chain` / `remove_chain` / `duration_chain`: applying
+  the effect is what plays the animation, for every client that has the same
+  database. Effects are replicated on the character (`CombatView.StatusEffects_*`),
+  so this is the one DB-declared animation path that reaches an observer of an NPC.
+  The 2,540 animation commands are owned by status effects, `dbitems::AbilityModule`
+  chains, one `WeaponTemplateModifiers.burst_ability_id`, one `Ammo.ability_id`, one
+  `Ammo.touch_ability_id` and one `dbcharacter::Deployable.spawn_abilityid`; only
+  **7** abilities in the whole build have a chain that reaches an animation command.
+- *Monster weapons barely have abilities at all.* Of the 85 weapon templates the
+  build's monsters use, 19 carry any ability id, their chains total 63 commands,
+  and **not one** of them contains an animation command - even following
+  `apt::CallCommandDef` into called abilities. Two of them apply a status effect
+  whose chain does carry an animation: effect 176 (animation `MeleeAttack`, applied
+  by template 21 "Melee - Shadowstrike", used by 2 monsters) and effect 10496
+  (`tfAbilityAnimationCommandDef` + `FireProjectileCommandDef`, applied by template
+  12143 "NPC Charge Up and Channel Fire", used by 14 monsters). Applying those
+  effects is the faithful way to animate those 16 mobs, but it is not a local
+  change: effect 10496's chain also sets `restrict_movement`/`restrict_abilities`/
+  `restrict_melee` and ends in a `ReplenishableDurationCommandDef`, so the server
+  has to honour and expire the restrictions it turns on, which PIN's NPC path does
+  not do today.
+- *Hit reactions have no trigger in this build.* The stumble data is complete -
+  `dbcharacter::Stumble` 9452 is the effect a stumble applies, and that effect's
+  own chain is a stumble in full: `RequireHasEffectTag`, then
+  `tfPlayAnimationCommandDef` `DamageHeavy`, then `CombatFlagsCommandDef` with
+  `restrict_movement` + `restrict_weapon` + `restrict_abilities` + `restrict_melee`
+  + `restrict_interaction`, for `TimeDurationCommandDef` 2,000 ms. The one table
+  that says *when* it fires is the hardpoint table (`hardpoint_name`,
+  `pfx_asset_id`, `stumble_id`) and it has **0 rows**, no weapon, ammo, damage type
+  or ability row references a stumble id, and the only other chain in the build
+  that applies a stumble effect is ability 34039 ("on impact, apply 901 to self"),
+  granted by a single `WeaponTemplateModifiers.burst_ability_id` - player gear.
+  The victim-facing event is BaseController-scoped too (`Stumble`: `ushort`,
+  `ushort`, `byte`), so an NPC's stumble has no observer channel but the effect.
+  Picking a trigger would mean inventing the rule, so it is left out.
 
 The protocol's only animation-specific observer message is the GSS character
 event `AnimationUpdated` (`ushort` + `byte`, both fields unnamed in
@@ -527,9 +569,12 @@ stays horizontal, exactly as before.
   `apttf::tfPlayAnimationCommandDef` / `tfAbilityAnimationCommandDef` chain
   commands are placeholders, and the protocol's `AnimationUpdated` observer event
   is never sent), no stumble/hit-reaction animations (`dbcharacter::Stumble`,
-  `dbcharacter::StumbleDirection`) and no NPC emotes (`dbcharacter::EmoteRecord`
-  is only wired to the player's `PerformEmote` and to dialog rows PIN does not
-  run).
+  `dbcharacter::StumbleDirection` - and for those the build has no trigger at all:
+  the one table that links a stumble to what causes it has 0 rows, and no weapon,
+  ammo, damage type or ability row references a stumble id; see
+  [What an NPC animates](#what-an-npc-animates)) and no NPC emotes
+  (`dbcharacter::EmoteRecord` is only wired to the player's `PerformEmote` and to
+  dialog rows PIN does not run).
 * **No accuracy model.** NPC shots aim at the target's chest with the weapon's
   own spread profile left unused: there is no per-NPC spread state, no
   `MinSpread`/`MaxSpread` handling and no aim error, so a ranged mob hits for as
