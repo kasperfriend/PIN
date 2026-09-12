@@ -26,7 +26,7 @@ public class SDBInterface
     private static List<FactionRelations> _factionRelations;
     private static Dictionary<uint, List<FactionReputations>> _factionReputations;
     private static Dictionary<uint, Monster> _monster;
-    private static Dictionary<uint, MonsterAttributeRange> _monsterAttributeRange;
+    private static Dictionary<KeyValuePair<uint, ushort>, MonsterAttributeRange> _monsterAttributeRange;
     private static Dictionary<uint, MonsterScaling> _monsterScaling;
     private static Dictionary<uint, Turret> _turret;
     private static Dictionary<uint, PoseType> _poseType;
