@@ -164,13 +164,11 @@ next to `GameServer.exe` as `GameServer.dll.config`. GameServer parses that file
 directly from disk, so editing it works the same way in a local build and in the
 single-file release build.
 
-### Playing with others (LAN / RadminVPN)
+### Connecting with friends
 
-The servers bind every interface by default, and the address the client is told
-to connect to is a single setting — so letting a friend in is configuration, not
-code. Set `PublicHost` in `config\appsettings.json` (next to `WebHostManager.exe`)
-to the address players reach you on, open the firewall, and have them put that
-same address in their `firefall.ini`:
+**You (the host)** — put the address friends reach you on (your RadminVPN,
+Hamachi or LAN IP) into `config\appsettings.json` next to `WebHostManager.exe`,
+and restart it:
 
 ```json
 "Firefall": {
@@ -179,21 +177,38 @@ same address in their `firefall.ini`:
 }
 ```
 
-`PublicHost` drives the capability response and the oracle ticket — including the
-matrix address the client dials for the UDP handshake, which is also the address
-it uses for the GameServer (the handshake reply carries a port, not an IP).
-`AdvertiseHttps: false` serves the plain http endpoints that are bound anyway and
-skips the https redirect, so no player has to trust PIN's self-signed development
-certificate; keeping https works too with a certificate that matches your
-address.
+`AdvertiseHttps: false` serves the plain http endpoints, so no friend has to
+trust PIN's self-signed certificate. Then click **Allow access** — with *both*
+Private and Public ticked — when Windows Defender Firewall asks about
+WebHostManager, MatrixServer and GameServer. That is the whole host setup: no
+port forwarding, no router changes, the VPN tunnels through NAT by itself.
 
-Binding and advertising are independent: `Firefall:WebHosts:<host>:urls` decides
-where Kestrel listens (`*` = every interface), `PublicHost` decides what clients
-are handed. Both UDP servers have always bound `IPAddress.Any`.
+**Your friends** — put that same address in their own
+`steamapps\common\Firefall\firefall.ini`:
 
-> **Full guide:** See [`Docs/REMOTE_PLAY.md`](Docs/REMOTE_PLAY.md) for the
-> RadminVPN walkthrough, the port/firewall table, both TLS options, verification
-> commands, troubleshooting (including the MTU trap) and what to keep closed.
+```ini
+[Config]
+OperatorHost = "26.11.22.33:4400"
+
+[FilePaths]
+AssetStreamPath = "http://26.11.22.33:4401/AssetStream/%ENVMNEMONIC%-%BUILDNUM%/"
+VTRemotePath = "http://26.11.22.33:4401/vtex/%ENVMNEMONIC%-%BUILDNUM%/static.vtex"
+
+[UI]
+PlayIntroMovie = false
+```
+
+…plus the patched `FirefallClient.exe` and an account of their own, created on
+first launch (or with `POST api/v2/accounts`). Nothing else: every other address
+— the API hosts, the MatrixServer, and the GameServer behind it — is handed to
+their client by your server, because `PublicHost` is what the capability response
+and the oracle ticket advertise. The client finds the game server through the
+MatrixServer, so there is no second address to configure.
+
+> **Full guide:** [`Docs/REMOTE_PLAY.md`](Docs/REMOTE_PLAY.md) — what binds where,
+> the firewall and port table, staying on https with a certificate that matches
+> your address, `curl` checks that prove the setup, and troubleshooting
+> (including the MTU trap over a VPN tunnel).
 
 ### Troubleshooting
 
@@ -228,7 +243,7 @@ PlayIntroMovie = false
 
 This is per-player client configuration: when you play with others, every player
 replaces `localhost` in his own `firefall.ini` with the address of the machine
-running the servers — see [`Docs/REMOTE_PLAY.md`](Docs/REMOTE_PLAY.md).
+running the servers — see [Connecting with friends](#connecting-with-friends).
 
 ### Features
 
