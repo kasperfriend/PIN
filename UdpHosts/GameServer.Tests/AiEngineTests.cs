@@ -630,7 +630,7 @@ public class AiEngineTests
 
         Tick(shard, FirstTick);
         Tick(shard, FirstTick + Step);        // burst at 60,050, ends 60,150
-        uint deathTime = shard.CurrentTime;
+        uint deathTime = unchecked((uint)shard.CurrentTimeLong);
 
         shard.CharacterLifecycle.ForceDeath(npc);
 

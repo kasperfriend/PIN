@@ -750,9 +750,11 @@ public class WeaponInfoResult
 
 public class WeaponTemplateResult
 {
-    // There's a few more props that we aren't bothering with atm
-    // This includes the stuff that is presumably client side like animations and first person offsets.
-    // We also ignore everything related to Slide, Rise, Jitter. We assume we can live with the client side work here.
+    // There's a few more props that we aren't bothering with atm.
+    // The animation selectors are no longer among them: Anim* below carries what the client's weapon
+    // animation state machine reads, and the AI times its attack animation from MsPerBurst/MsBurstDuration.
+    // We still ignore the first person offsets and everything related to Slide, Rise, Jitter: we assume
+    // we can live with the client side work there.
     // Not sure about agility...
 
     // Debug
