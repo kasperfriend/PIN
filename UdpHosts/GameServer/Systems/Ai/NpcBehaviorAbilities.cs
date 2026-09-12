@@ -77,9 +77,10 @@ public static class NpcBehaviorAbilities
             }
 
             // The module table first, the id itself second: 33812 is the one value the build's strings
-            // write as an ability id rather than a module id (see the remarks).
+            // write as an ability id rather than a module id (see the remarks). An id that resolves to
+            // neither is reported as 0 - there is no ability behind it to run or to name.
             uint abilityId = data.ResolveAbilityModule(module.ModuleId);
-            if (abilityId == 0)
+            if (abilityId == 0 && data.GetAbility(module.ModuleId) != null)
             {
                 abilityId = module.ModuleId;
             }
