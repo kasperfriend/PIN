@@ -122,3 +122,23 @@ public sealed class RecordingAiProjectileLauncher : IAiProjectileLauncher
         float MaxRadius,
         int Damage);
 }
+
+/// <summary>
+///     Records the weapon abilities an NPC runs, and pretends the shard's aptitude system accepted them.
+///     The AI's own attack stands down for a chain that delivers its own damage, so the result is what
+///     decides whether an NPC an engine has no ability system for still swings.
+/// </summary>
+public sealed class FakeNpcAbilityActivator : INpcAbilityActivator
+{
+    /// <summary>Whether <see cref="Activate" /> reports the chain ran, i.e. what an aptitude system says.</summary>
+    public bool Result { get; set; } = true;
+
+    /// <summary>Every activation the engine asked for, in order.</summary>
+    public List<(CharacterEntity Npc, uint AbilityId, uint Time, float Register)> Activations { get; } = [];
+
+    public bool Activate(CharacterEntity npc, uint abilityId, uint time, float register)
+    {
+        Activations.Add((npc, abilityId, time, register));
+        return Result;
+    }
+}

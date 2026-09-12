@@ -145,8 +145,38 @@ public sealed record NpcAttackProfile
     /// </summary>
     public uint ReloadTimeMs { get; init; }
 
-    /// <summary>Template attack ability id (an aptitude chain in the original game), or 0.</summary>
+    /// <summary>
+    ///     Template attack ability id (<c>attack_ability_id</c>) - the aptitude chain the weapon runs before
+    ///     a burst (a charge-up), or 0. <see cref="NpcWeaponAbilities" /> walks it, and
+    ///     <see cref="AiEngine" /> runs it for the weapons whose chains carry an animation.
+    /// </summary>
     public uint AttackAbilityId { get; init; }
+
+    /// <summary>Template burst ability id (<c>burst_ability_id</c>) - the chain the weapon runs as it fires, or 0.</summary>
+    public uint BurstAbilityId { get; init; }
+
+    /// <summary>
+    ///     Milliseconds the weapon charges before it fires (<c>ms_chargeup</c>). The ability chains of a
+    ///     charging weapon apply a "replenishable" effect whose length lives in a server-only table this
+    ///     build does not ship, so the weapon's own charge time is what an NPC's activation gives it: the
+    ///     effect lasts as long as the charge the row describes (the chain's
+    ///     <c>ReplenishEffectDurationCommandDef</c> hands it over). 0 on the weapons that do not charge.
+    /// </summary>
+    public uint ChargeUpMs { get; init; }
+
+    /// <summary>
+    ///     Whether the weapon's ability chains reach an animation command (<c>tfPlayAnimationCommandDef</c>
+    ///     or <c>tfAbilityAnimationCommandDef</c>). See <see cref="NpcWeaponAbilities" />: those commands are
+    ///     client-side, so the animation only happens if the server applies the effect that carries them.
+    /// </summary>
+    public bool ChainAnimates { get; init; }
+
+    /// <summary>
+    ///     Whether the weapon's ability chains deliver the hit themselves (<c>InflictDamageCommandDef</c> or
+    ///     <c>FireProjectileCommandDef</c>). The chain is then the attack, and the AI's own direct hit -
+    ///     melee damage or a projectile volley - must stand down so the target is not hit twice.
+    /// </summary>
+    public bool ChainDeliversDamage { get; init; }
 
     /// <summary>Template melee ability id, or 0.</summary>
     public uint MeleeAbilityId { get; init; }
@@ -184,4 +214,11 @@ public sealed record NpcAttackProfile
     ///     magazine nor a reload time, fire without one. See <see cref="NpcWeaponMagazine" />.
     /// </summary>
     public bool Reloads => NpcWeaponMagazine.Reloads(IsRanged, MagazineSize, ReloadTimeMs);
+
+    /// <summary>
+    ///     Rounds one attack takes out of the magazine: <c>ammo_per_burst</c> when the template carries it,
+    ///     else <c>rounds_per_burst</c>, never less than one round. A weapon the database gives no magazine
+    ///     - every melee row - costs nothing, its magazine is <see cref="NpcWeaponMagazine.None" />.
+    /// </summary>
+    public int MagazineCost => NpcWeaponMagazine.ResolveCost(AmmoPerBurst, RoundsPerBurst);
 }

@@ -11,6 +11,7 @@ using GameServer.Systems.CharacterLifecycle;
 using GameServer.Systems.SystemEvents;
 using Serilog;
 using AiPrng = GameServer.Systems.PRNG.PRNG;
+using CharacterCombatFlags = AeroMessages.GSS.Character.CombatFlagsData.CharacterCombatFlags;
 
 namespace GameServer.Systems.Ai;
 
@@ -79,6 +80,7 @@ public class AiEngine
     private readonly IAiAttackFeedback _feedback;
     private readonly IAiMonsterStats _monsterStats;
     private readonly IAiProjectileLauncher _projectiles;
+    private readonly INpcAbilityActivator _abilityActivator;
     private readonly IShard _shard;
     private ulong _lastPerceptionAt;
     private ulong _lastMovementAt;
@@ -90,7 +92,8 @@ public class AiEngine
         IAiHostility hostility = null,
         IAiAttackFeedback feedback = null,
         IAiMonsterStats monsterStats = null,
-        IAiProjectileLauncher projectileLauncher = null)
+        IAiProjectileLauncher projectileLauncher = null,
+        INpcAbilityActivator abilityActivator = null)
     {
         _shard = shard ?? throw new ArgumentNullException(nameof(shard));
         _rules = rules ?? new StandardAiRules();
@@ -102,6 +105,11 @@ public class AiEngine
         // the profile.
         _monsterStats = monsterStats ?? new SdbAiMonsterStats(_rules);
         _projectiles = projectileLauncher ?? new ShardAiProjectileLauncher(shard);
+
+        // Weapon abilities run through the shard's own aptitude system: it is the only thing that can
+        // apply a status effect, and the animation of an attack lives in the effect's chains. A shard
+        // without an ability system (a test shard) simply never activates one.
+        _abilityActivator = abilityActivator ?? (_shard.Abilities != null ? new ShardAbilityActivator(_shard) : null);
         _logger = shard.Logger?.ForContext<AiEngine>() ?? Log.ForContext<AiEngine>();
 
         // The bus is injected like every other system's: IShard does not expose it.
@@ -315,21 +323,41 @@ public class AiEngine
         if (decision.Attack && targetAlive)
         {
             var profile = npc.Profile;
-            if (CanFire(npc, currentTime))
+            if (IsWeaponRestricted(entity))
             {
-                ResolveAttack(npc, target);
+                // The database's own effect says the character may not use its weapon right now - the
+                // charge-up of a charging weapon, a knock-down, a stun. The brain has already spent this
+                // attack window, so the mob does nothing until the next one, which is what the flag asks
+                // for; the effect that set the flag is what ends the restriction.
+            }
+            else if (CanFire(npc, currentTime))
+            {
+                // Run the weapon's own ability first: the database puts the attack's animation in the
+                // chains of that ability, and for some weapons the attack itself (see NpcWeaponAbilities).
+                bool abilityRan = ActivateWeaponAbility(npc, currentTime);
+
+                if (!abilityRan || profile is not { ChainDeliversDamage: true })
+                {
+                    // The chains did not run (no animating ability, no aptitude system, or the chain
+                    // rejected the activation) or they do not deliver the hit: the AI's own damage - the
+                    // monster's melee damage or its projectile - is the attack. A chain that does deliver
+                    // the hit is the attack, and the mob must not land a second one on the same target.
+                    ResolveAttack(npc, target);
+                }
+
                 StartAttackAnimation(npc, currentTime);
 
                 // One attack spends one burst's worth of rounds: ammo_per_burst when the template carries
                 // it, else rounds_per_burst - a weapon the database gives no magazine (every melee row)
                 // spends nothing, its magazine is None.
-                npc.Magazine = npc.Magazine.Spend(profile?.AmmoPerBurst ?? 0);
+                int magazineCost = profile?.MagazineCost ?? 0;
+                npc.Magazine = npc.Magazine.Spend(magazineCost);
 
                 // The burst left the magazine dry: reload straight away, so the template's reload_time
                 // overlaps the rest of the weapon's cadence (the wait a player has between bursts) rather
                 // than stacking on top of the next shot. A weapon the database gives no magazine - every
                 // melee row, and the ranged rows without a reload time - never gets here.
-                if (profile is { Reloads: true } && !npc.Magazine.CanFire(profile.AmmoPerBurst, currentTime))
+                if (profile is { Reloads: true } && !npc.Magazine.CanFire(magazineCost, currentTime))
                 {
                     StartReload(npc, currentTime);
                 }
@@ -431,6 +459,67 @@ public class AiEngine
     }
 
     /// <summary>
+    ///     Runs the weapon ability whose chains carry the attack's animation (and, for the weapons the data
+    ///     gives one, the attack's own damage). Nothing else in the server executes an NPC's weapon
+    ///     abilities: a weapon template's ability ids reach <see cref="NpcAttackProfile" /> and stop there,
+    ///     which is exactly why the status effects those chains apply - the replicated data a client plays
+    ///     an animation from - never reached a mob before.
+    /// </summary>
+    /// <remarks>
+    ///     A charging weapon hands the chain its charge time as the register, in seconds: the database's
+    ///     duration commands read a value below 1000 as seconds (see <c>ReplenishableDurationCommand</c>),
+    ///     and the charge effect's own duration chain is a replenishable duration - so the charge the
+    ///     weapon's row describes is how long its charge state lasts, it is released when it runs out, and
+    ///     the weapon's <c>restrict_movement</c>/<c>restrict_abilities</c>/<c>restrict_melee</c> flags hold
+    ///     the mob for exactly that long. A weapon with no charge time runs the ability at the shot, with no
+    ///     register, and every command that reads one falls back to the database's own default.
+    /// </remarks>
+    private bool ActivateWeaponAbility(NpcBrain npc, ulong currentTime)
+    {
+        var profile = npc.Profile;
+        if (_abilityActivator == null || profile == null)
+        {
+            return false;
+        }
+
+        // Only the abilities the data animates are run for now. The other weapon abilities apply effects
+        // that carry no animation (stat modifiers, charge states, audio) and are a separate change: they
+        // alter combat numbers rather than what a client draws, and their own duration semantics would have
+        // to be verified with them.
+        if (!profile.ChainAnimates)
+        {
+            return false;
+        }
+
+        uint abilityId = profile.BurstAbilityId != 0 ? profile.BurstAbilityId : profile.AttackAbilityId;
+        if (abilityId == 0)
+        {
+            return false;
+        }
+
+        float register = profile.ChargeUpMs > 0 ? profile.ChargeUpMs / 1000f : float.NaN;
+        return _abilityActivator.Activate(npc.Entity, abilityId, (uint)currentTime, register);
+    }
+
+    /// <summary>
+    ///     Whether the database's own combat flags say the character may not use its weapon: a charge-up
+    ///     effect sets <c>restrict_abilities</c> and <c>restrict_melee</c> while it lasts, and other effects
+    ///     set <c>restrict_weapon</c> (see <c>CombatFlagsCommand</c>, which snapshots and restores them per
+    ///     effect).
+    /// </summary>
+    private static bool IsWeaponRestricted(CharacterEntity entity)
+    {
+        return entity.HasCombatFlag(CharacterCombatFlags.restrict_weapon)
+               || entity.HasCombatFlag(CharacterCombatFlags.restrict_abilities);
+    }
+
+    /// <summary>Whether the database's own combat flags pin the character in place (a charge-up, a knock-down).</summary>
+    private static bool IsMovementRestricted(CharacterEntity entity)
+    {
+        return entity.HasCombatFlag(CharacterCombatFlags.restrict_movement);
+    }
+
+    /// <summary>
     ///     Whether the NPC can fire its weapon now: a weapon the database gives no magazine (every melee row)
     ///     always can, an armed one only while it holds the rounds an attack spends and is not reloading. An
     ///     empty magazine whose reload has not started yet (the burst did not dry it, so nothing announced
@@ -444,7 +533,7 @@ public class AiEngine
             return true;
         }
 
-        if (npc.Magazine.CanFire(profile.AmmoPerBurst, currentTime))
+        if (npc.Magazine.CanFire(profile.MagazineCost, currentTime))
         {
             return true;
         }
@@ -639,7 +728,7 @@ public class AiEngine
         };
 
         bool moved = false;
-        if (goal.HasValue)
+        if (goal.HasValue && !IsMovementRestricted(entity))
         {
             moved = MoveToward(npc, goal.Value, decision.State, elapsedMs);
         }

@@ -423,6 +423,14 @@ public class AbilitySystem
 
         var applyContext = Context.CopyContext(context);
         applyContext.Self = target;
+
+        // A chain that ran ReplenishEffectDuration (see the command) asked for the effect it applies to
+        // live for the value the activation carries - a charge-up weapon's charge time. Without one the
+        // effect's own duration chain decides, exactly as the ImpactApplyEffect row's PassRegister says.
+        if (!float.IsNaN(context.AppliedEffectDuration))
+        {
+            applyContext.Register = context.AppliedEffectDuration;
+        }
         applyContext.InitTime = context.EffectApplicationTime ?? context.InitTime;
         applyContext.EffectApplicationTime = null;
         applyContext.ExecutionHint = ExecutionHint.ApplyEffect;
@@ -750,7 +758,7 @@ public class AbilitySystem
     /// Executes the chain of an activated ability and returns whether the whole
     /// chain succeeded (requirements like cooldowns or energy can fail it).
     /// </summary>
-    public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId, uint activationTime, AptitudeTargets targets, Guid? executionId = null, uint abilityModuleId = 0, List<AppliedEffectRecord> appliedEffects = null)
+    public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId, uint activationTime, AptitudeTargets targets, Guid? executionId = null, uint abilityModuleId = 0, List<AppliedEffectRecord> appliedEffects = null, float register = float.NaN)
     {
         var execId = executionId ?? Guid.NewGuid();
         using var logContext = Serilog.Context.LogContext.PushProperty("ExecutionId", execId);
@@ -777,6 +785,11 @@ public class AbilitySystem
             InitTime = activationTime,
             ExecutionHint = ExecutionHint.Ability,
             AppliedEffects = appliedEffects,
+
+            // The value the chain's commands read, when the caller has one: a player's activation comes from
+            // the client (no register), an NPC's from the AI, which hands a charging weapon its own charge
+            // time so the effect the chain applies lasts as long as the charge the data describes.
+            Register = register,
         };
 
         return ExecuteAbilityActivation(context, abilityId, ability.Chain, isRootActivation: true);

@@ -122,6 +122,12 @@ public sealed class NpcAttackResolver
             template.BaseClipSize);
         byte ammoPerBurst = (byte)NpcWeaponMagazine.ResolveCost(template.AmmoPerBurst, rounds);
 
+        // What the weapon's own ability chains do, walked once here so the engine needs no statement
+        // database at runtime: whether they carry the animation of the attack (they are client-side
+        // commands, so applying the effect is what animates the mob) and whether they deliver the hit
+        // themselves (in which case the AI must not land its own on top).
+        var abilities = NpcWeaponAbilities.Scan(_data, template.AttackAbility, template.BurstAbility);
+
         uint interval = NpcAttackDamageMath.ResolveAttackIntervalMs(
             behaviorParams.TriggerPullTimeMs,
             behaviorParams.FireRestDurationMs,
@@ -204,6 +210,10 @@ public sealed class NpcAttackResolver
             ReloadAnimationType = template.AnimReloadType,
             ChargeAnimationType = template.AnimChargeType,
             AttackAbilityId = template.AttackAbility,
+            BurstAbilityId = template.BurstAbility,
+            ChargeUpMs = template.MsChargeUp,
+            ChainAnimates = abilities.Animates,
+            ChainDeliversDamage = abilities.DeliversDamage,
             MeleeAbilityId = template.MeleeAbility,
             MuzzleOffset = muzzleOffset,
             CreatureDamageModifier = creatureDamageModifier,

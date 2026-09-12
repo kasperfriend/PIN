@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using GameServer.StaticDB;
+using GameServer.StaticDB.Records.apt;
 using GameServer.StaticDB.Records.dbcharacter;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;
+using GameServer.Systems.Aptitude;
 
 namespace GameServer.Tests.Fakes;
 
@@ -41,6 +43,96 @@ public sealed class FakeNpcAttackDataSource : INpcAttackDataSource
         ItemAttributes.TryGetValue(itemId, out var rows) ? rows : [];
 
     public Ammo GetAmmo(uint ammoId) => Ammos.GetValueOrDefault(ammoId);
+
+    public Dictionary<uint, AbilityData> Abilities { get; } = [];
+
+    public Dictionary<uint, BaseCommandDef> Commands { get; } = [];
+
+    public Dictionary<uint, ConditionalBranchCommandDef> Branches { get; } = [];
+
+    public Dictionary<uint, CallCommandDef> Calls { get; } = [];
+
+    public Dictionary<uint, ImpactApplyEffectCommandDef> ImpactApplyEffects { get; } = [];
+
+    public Dictionary<uint, StatusEffectData> StatusEffects { get; } = [];
+
+    public AbilityData GetAbility(uint abilityId) => Abilities.GetValueOrDefault(abilityId);
+
+    public BaseCommandDef GetCommand(uint commandId) => Commands.GetValueOrDefault(commandId);
+
+    public ConditionalBranchCommandDef GetConditionalBranch(uint commandId) => Branches.GetValueOrDefault(commandId);
+
+    public CallCommandDef GetCall(uint commandId) => Calls.GetValueOrDefault(commandId);
+
+    public ImpactApplyEffectCommandDef GetImpactApplyEffect(uint commandId) =>
+        ImpactApplyEffects.GetValueOrDefault(commandId);
+
+    public StatusEffectData GetStatusEffect(uint effectId) => StatusEffects.GetValueOrDefault(effectId);
+
+    /// <summary>
+    ///     Writes one command of <paramref name="subtype" /> into the fake's tables: the shared
+    ///     <c>apt::BaseCommandDef</c> row plus whatever the walker needs from the command's own type.
+    /// </summary>
+    public FakeNpcAttackDataSource WithCommand(
+        uint commandId,
+        ushort subtype,
+        uint next = 0,
+        uint effectId = 0,
+        uint calledAbilityId = 0,
+        uint ifChain = 0,
+        uint thenChain = 0,
+        uint elseChain = 0)
+    {
+        Commands[commandId] = new BaseCommandDef { Id = commandId, Subtype = subtype, Next = next };
+
+        switch ((CommandType)subtype)
+        {
+            case CommandType.ImpactApplyEffect:
+                ImpactApplyEffects[commandId] = new ImpactApplyEffectCommandDef { Id = commandId, EffectId = effectId };
+                break;
+            case CommandType.Call:
+                Calls[commandId] = new CallCommandDef { Id = commandId, AbilityId = calledAbilityId };
+                break;
+            case CommandType.ConditionalBranch:
+                Branches[commandId] = new ConditionalBranchCommandDef
+                {
+                    Id = commandId,
+                    IfChain = ifChain,
+                    ThenChain = thenChain,
+                    ElseChain = elseChain,
+                };
+                break;
+        }
+
+        return this;
+    }
+
+    /// <summary>Writes an <c>apt::AbilityData</c> row pointing at <paramref name="chainId" />.</summary>
+    public FakeNpcAttackDataSource WithAbility(uint abilityId, uint chainId)
+    {
+        Abilities[abilityId] = new AbilityData { Id = abilityId, Chain = chainId };
+        return this;
+    }
+
+    /// <summary>Writes an <c>apt::StatusEffectData</c> row with the chains the scan follows.</summary>
+    public FakeNpcAttackDataSource WithStatusEffect(
+        uint effectId,
+        uint applyChain = 0,
+        uint removeChain = 0,
+        uint updateChain = 0,
+        uint durationChain = 0)
+    {
+        StatusEffects[effectId] = new StatusEffectData
+        {
+            Id = effectId,
+            ApplyChain = applyChain,
+            RemoveChain = removeChain,
+            UpdateChain = updateChain,
+            DurationChain = durationChain,
+        };
+
+        return this;
+    }
 
     /// <summary>Adds an item attribute row (creates the item's dictionary on first use).</summary>
     public FakeNpcAttackDataSource WithAttribute(uint itemId, ushort attributeId, float value)

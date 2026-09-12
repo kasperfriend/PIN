@@ -22,10 +22,11 @@ public class AiEngineTests
         IAiRules rules = null,
         FakeAiMonsterStats monsterStats = null,
         byte npcLevel = 0,
-        IAiProjectileLauncher projectileLauncher = null)
+        IAiProjectileLauncher projectileLauncher = null,
+        INpcAbilityActivator abilityActivator = null)
     {
         var shard = new FakeShard();
-        if (rules != null || monsterStats != null || projectileLauncher != null)
+        if (rules != null || monsterStats != null || projectileLauncher != null || abilityActivator != null)
         {
             shard.AI = new AiEngine(
                 shard,
@@ -34,7 +35,8 @@ public class AiEngineTests
                 new AlwaysHostileAiHostility(),
                 shard.AiAttackFeedback,
                 monsterStats ?? new FakeAiMonsterStats(),
-                projectileLauncher);
+                projectileLauncher,
+                abilityActivator);
         }
 
         var npc = CreateLivingCharacter(shard, npcPosition);
@@ -767,6 +769,170 @@ public class AiEngineTests
         // Cancelled, not finished: nothing is refilled and the client drops the reload animation.
         Assert.Equal(deathTime, npc.Character_CombatView.WeaponReloadCancelledProp);
         Assert.Equal(62_550u, npc.Character_CombatView.WeaponReloadedProp);
+    }
+
+
+    /// <summary>
+    ///     A ranged weapon whose chains carry an animation, like the NPC Charge Up and Channel Fire
+    ///     template: the charge effect the attack ability applies is what a client draws the charge from.
+    /// </summary>
+    private static NpcAttackProfile AnimatingProfile() => RangedProfile() with
+    {
+        AttackAbilityId = 39_249,
+        ChargeUpMs = 2_000,
+        ChainAnimates = true,
+        ChainDeliversDamage = true,
+    };
+
+    /// <summary>
+    ///     A melee weapon whose chain is the swing itself, like Melee - Shadowstrike: the chain lands the
+    ///     damage, so the AI must not add its own on the same target.
+    /// </summary>
+    private static NpcAttackProfile AnimatingMeleeProfile() => new()
+    {
+        Mode = NpcAttackMode.Melee,
+        AttackRange = 3.5f,
+        AttackRangeExit = 5f,
+        StandoffRange = 2f,
+        AttackIntervalMs = 2000,
+        BurstDurationMs = 1600,
+        DamagePerRound = 697,
+        BurstAbilityId = 188,
+        ChainAnimates = true,
+        ChainDeliversDamage = true,
+    };
+
+    [Fact]
+    public void AnimatingNpc_RunsItsWeaponAbility_AndHandsItsChargeTimeToTheChain()
+    {
+        // The template's ms_chargeup is the charge the weapon describes, and the database's duration
+        // commands read the register in seconds: 2,000 ms goes in as 2.0 so the charge effect the chain
+        // applies lasts 2,000 ms rather than the command's fallback.
+        var stats = new FakeAiMonsterStats { AttackProfile = AnimatingProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        var activation = Assert.Single(abilities.Activations);
+        Assert.Same(npc, activation.Npc);
+        Assert.Equal(39_249u, activation.AbilityId);
+        Assert.Equal(60_050u, activation.Time);
+        Assert.Equal(2f, activation.Register);
+    }
+
+    [Fact]
+    public void WeaponChainThatDeliversTheHit_ReplacesTheAiHit()
+    {
+        // The chain applies the effect and inflicts its own damage, so the AI's direct hit would be a
+        // second one on the same target: the mob's damage is the DB chain's, not the engine's.
+        var stats = new FakeAiMonsterStats { AttackProfile = AnimatingMeleeProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, player) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(3f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(188u, Assert.Single(abilities.Activations).AbilityId);
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
+        Assert.Equal(100_000, player.CurrentHealth);
+    }
+
+    [Fact]
+    public void WeaponChainThatFailsToRun_LeavesTheAiItsOwnHit()
+    {
+        // A shard whose aptitude system rejects the ability (or no ability system at all) must not turn
+        // the mob harmless: the engine falls back to the damage it would have applied on its own.
+        var stats = new FakeAiMonsterStats { AttackProfile = AnimatingMeleeProfile() };
+        var abilities = new FakeNpcAbilityActivator { Result = false };
+        var (shard, _, player) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(3f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Single(abilities.Activations);
+        Assert.Equal(100_000 - 697, player.CurrentHealth);
+        Assert.Equal(697, Assert.Single(shard.AiAttackFeedback.Attacks).Damage);
+    }
+
+    [Fact]
+    public void WeaponWithoutAnAnimatingChain_RunsNoAbility()
+    {
+        // The rest of the weapon database carries no animation in its chains, and their functional
+        // effects are not this engine's business yet - the AI's own attack stays exactly as it was.
+        var stats = new FakeAiMonsterStats { AttackProfile = RangedProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, _, player) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: shots,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Empty(abilities.Activations);
+        Assert.Equal(3, shots.Shots.Count);
+        Assert.Equal(100_000 - (302 * 3), player.CurrentHealth);
+    }
+
+    [Fact]
+    public void RestrictedCharacter_DoesNotMoveOrUseItsWeapon()
+    {
+        // A charge-up effect sets restrict_movement, restrict_abilities and restrict_melee while it
+        // lasts, and the AI reads those replicated flags rather than inventing a charge state of its own:
+        // the mob holds position (inside its range but past its standoff, so it was walking) and the
+        // attack window that comes up while it is restricted does not fire.
+        var stats = new FakeAiMonsterStats { AttackProfile = AnimatingProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(24f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: shots,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);            // first attack at 60,050, then walking to the standoff
+        var walkingPosition = npc.Position;
+        Assert.Equal((short)0x5004, npc.MovementState); // Walking | Movement
+        Assert.Single(abilities.Activations);
+
+        npc.SetCombatFlags(new CombatFlagsData
+        {
+            Value = CombatFlagsData.CharacterCombatFlags.restrict_movement
+                    | CombatFlagsData.CharacterCombatFlags.restrict_abilities
+                    | CombatFlagsData.CharacterCombatFlags.restrict_melee,
+            Time = (uint)shard.CurrentTimeLong,
+        });
+
+        Tick(shard, FirstTick + (Step * 2));
+        Assert.Equal(walkingPosition, npc.Position);
+        Assert.Equal((short)0x1000, npc.MovementState); // Standing: held in place by the effects
+
+        Tick(shard, FirstTick + 2_500 + Step);    // the weapon's next cadence: still restricted
+        Assert.Equal(walkingPosition, npc.Position);
+
+        // The attack it could not fire is gone, not queued: the flags are the only thing stopping it,
+        // exactly as they stop a player.
+        Assert.Single(abilities.Activations);
+        Assert.Empty(shots.Shots);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using GameServer.StaticDB;
 using GameServer.StaticDB.Records.dbcharacter;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;
+using GameServer.Systems.Aptitude;
 using GameServer.Tests.Fakes;
 using Xunit;
 
@@ -328,5 +329,44 @@ public class NpcAttackResolverTests
         var profile = CreateResolver(data).Resolve(MonsterId, 45);
 
         Assert.Equal(Vector3.Zero, profile.MuzzleOffset);
+    }
+
+    [Fact]
+    public void Resolve_WalksTheWeaponsAbilityChainsIntoTheProfile()
+    {
+        // NPC Charge Up and Channel Fire's shape: the attack ability applies the charge effect, whose
+        // apply chain is the animation. The profile has to carry that, or the engine would never run the
+        // ability and the mob would charge (and animate) nothing.
+        var template = RangedTemplate();
+        template.AttackAbility = 39_249;
+        template.MsChargeUp = 2_000;
+        var data = DataWith(template)
+            .WithAbility(39_249, 1_038_403)
+            .WithCommand(1_038_403, (ushort)CommandType.ImpactApplyEffect, next: 1_038_402, effectId: 10_496)
+            .WithCommand(1_038_402, (ushort)CommandType.ReplenishEffectDuration)
+            .WithStatusEffect(10_496, applyChain: 1_274_905, removeChain: 1_274_909)
+            .WithCommand(1_274_905, (ushort)CommandType.AbilityAnimation)
+            .WithCommand(1_274_909, (ushort)CommandType.FireProjectile);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(39_249u, profile.AttackAbilityId);
+        Assert.Equal(2_000u, profile.ChargeUpMs);
+        Assert.True(profile.ChainAnimates);
+        Assert.True(profile.ChainDeliversDamage);
+    }
+
+    [Fact]
+    public void Resolve_WeaponWithoutAbilities_ReportsNoChainBehaviour()
+    {
+        // The Spyder's row (and every other weapon without ability ids): nothing to run, so the AI's own
+        // attack stays the mob's only one.
+        var profile = CreateResolver(DataWith(MeleeTemplate())).Resolve(MonsterId, 45);
+
+        Assert.Equal(0u, profile.AttackAbilityId);
+        Assert.Equal(0u, profile.BurstAbilityId);
+        Assert.Equal(0u, profile.ChargeUpMs);
+        Assert.False(profile.ChainAnimates);
+        Assert.False(profile.ChainDeliversDamage);
     }
 }

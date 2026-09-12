@@ -623,8 +623,12 @@ public class Factory
                                        ?? new ReplenishableDurationCommandDef { Id = commandId };
                 return new ReplenishableDurationCommand(replenishableDef);
             }
-            // case CommandType.ReplenishEffectDuration:
-            //     return new ReplenishEffectDurationCommand(CustomDBInterface.GetReplenishEffectDurationCommandDef(commandId));
+            case CommandType.ReplenishEffectDuration:
+            {
+                var replenishDef = CustomDBInterface.GetReplenishEffectDurationCommandDef(commandId)
+                                   ?? new ReplenishEffectDurationCommandDef { Id = commandId };
+                return new ReplenishEffectDurationCommand(replenishDef);
+            }
             case CommandType.ConsumeSuperCharge:
                 return new ConsumeSuperChargeCommand(SDBInterface.GetConsumeSuperChargeCommandDef(commandId));
             // case CommandType.RequireSuperCharge:
