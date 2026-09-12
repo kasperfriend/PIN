@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Threading;
 using AeroMessages.GSS.Character;
 using GameServer.Entities.Character;
+using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;
 using GameServer.Tests.Fakes;
 using Xunit;
@@ -20,10 +21,11 @@ public class AiEngineTests
         Vector3 playerPosition,
         IAiRules rules = null,
         FakeAiMonsterStats monsterStats = null,
-        byte npcLevel = 0)
+        byte npcLevel = 0,
+        IAiProjectileLauncher projectileLauncher = null)
     {
         var shard = new FakeShard();
-        if (rules != null || monsterStats != null)
+        if (rules != null || monsterStats != null || projectileLauncher != null)
         {
             shard.AI = new AiEngine(
                 shard,
@@ -31,7 +33,8 @@ public class AiEngineTests
                 rules ?? new StandardAiRules(),
                 new AlwaysHostileAiHostility(),
                 shard.AiAttackFeedback,
-                monsterStats ?? new FakeAiMonsterStats());
+                monsterStats ?? new FakeAiMonsterStats(),
+                projectileLauncher);
         }
 
         var npc = CreateLivingCharacter(shard, npcPosition);
@@ -429,5 +432,237 @@ public class AiEngineTests
 
         Assert.Equal(0, shard.AI.TrackedCount);
         Assert.Empty(shard.AI.GetTrackedEntityIds());
+    }
+
+    /// <summary>A ranged monster profile, as <c>NpcAttackResolver</c> would build it from the database.</summary>
+    private static NpcAttackProfile RangedProfile(ushort ammoId = 922, int damage = 302) => new()
+    {
+        Mode = NpcAttackMode.Ranged,
+        MonsterId = 276,
+        WeaponId = 30_025,
+        Range = 25f,
+        AttackRange = 25f,
+        AttackRangeExit = 28.75f,
+        StandoffRange = 20f,
+        AttackIntervalMs = 2500,
+        BurstDurationMs = 100,
+        DamagePerRound = damage,
+        RoundsPerBurst = 3,
+        AmmoId = ammoId,
+        Ammo = new Ammo { Id = ammoId, ProjectileSpeed = 40f, ImpactRadius = 0.5f, MaxRadius = 1.5f, Flags = 1 },
+        ProjectileSpeed = 40f,
+        ImpactRadius = 0.5f,
+        MaxRadius = 1.5f,
+    };
+
+    [Fact]
+    public void RangedNpc_FiresItsWeaponsProjectilesInsteadOfApplyingDamage()
+    {
+        var stats = new FakeAiMonsterStats { AttackProfile = RangedProfile() };
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f), monsterStats: stats, projectileLauncher: shots);
+
+        Tick(shard, FirstTick);              // Idle -> Chase, closes on the player
+        Tick(shard, FirstTick + Step);       // in weapon range -> Attack, first burst
+
+        AssertState(shard, npc, AiBrainState.Attack);
+        Assert.Equal(3, shots.Shots.Count);  // rounds_per_burst
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
+
+        var burst = shots.Shots[0];
+        Assert.Equal(npc.EntityId, burst.SourceId);
+        Assert.Equal(922u, burst.AmmoId);
+        Assert.Equal(302, burst.Damage);
+        Assert.Equal(25f, burst.Range);
+        Assert.Equal(40f, burst.ProjectileSpeed);
+        Assert.Equal(0.5f, burst.ImpactRadius);
+        Assert.Equal(1.5f, burst.MaxRadius);
+
+        // The muzzle is the character's chest offset when the monster row has none.
+        Assert.Equal(npc.Position.X, burst.Origin.X, 3);
+        Assert.Equal(npc.Position.Y, burst.Origin.Y, 3);
+        Assert.Equal(npc.Position.Z + 1.62f, burst.Origin.Z, 3);
+
+        // Aimed at the player's chest.
+        Assert.True(burst.Direction.X > 0.9f, "an NPC should aim at its target, not at the floor");
+        Assert.Equal(100_000, player.CurrentHealth);
+
+        // A burst is one attack: the weapon's own cadence, not one attack per tick.
+        Tick(shard, FirstTick + (Step * 2));
+        Assert.Equal(3, shots.Shots.Count);
+        Tick(shard, FirstTick + 2500 + Step);
+        Assert.Equal(6, shots.Shots.Count);
+    }
+
+    [Fact]
+    public void RangedNpc_DoesNotCloseToMeleeRangeWhileItCanShoot()
+    {
+        var stats = new FakeAiMonsterStats { AttackProfile = RangedProfile() };
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f), monsterStats: stats, projectileLauncher: new RecordingAiProjectileLauncher());
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        // standoff 20 m: the NPC is already at its preferred distance and holds position.
+        Assert.Equal(0f, npc.Position.X, 3);
+    }
+
+    [Fact]
+    public void MeleeNpc_SwingsWithItsWeaponsDamageInsteadOfTheRating()
+    {
+        var stats = new FakeAiMonsterStats(attackDamage: 13_934)
+        {
+            AttackProfile = new NpcAttackProfile
+            {
+                Mode = NpcAttackMode.Melee,
+                MonsterId = 279,
+                WeaponId = 85_189,
+                Range = 2.6f,
+                AttackRange = 3.5f,
+                AttackRangeExit = 5f,
+                StandoffRange = 2f,
+                AttackIntervalMs = 2000,
+                BurstDurationMs = 1600,
+                DamagePerRound = 697,
+                RoundsPerBurst = 1,
+                FireAnimationType = 2,
+            },
+        };
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, _, player) = CreateWorld(Vector3.Zero, new Vector3(3f, 0f, 0f), monsterStats: stats, projectileLauncher: shots);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);       // first swing
+
+        Assert.Empty(shots.Shots);
+        Assert.Equal(100_000 - 697, player.CurrentHealth);
+
+        Tick(shard, FirstTick + (Step * 2)); // weapon cadence 2000 ms, still resting
+        Assert.Equal(100_000 - 697, player.CurrentHealth);
+        Tick(shard, FirstTick + 2000 + Step);
+        Assert.Equal(100_000 - (697 * 2), player.CurrentHealth);
+    }
+
+    [Fact]
+    public void MeleeNpc_AttackAnimation_RunsForTheWeaponsBurstCycle()
+    {
+        // The melee Spyder's template: ms_per_burst 1,600 (its swing) against a 2,000 ms behaviour
+        // cadence, so the animation is the shorter of the two.
+        var stats = new FakeAiMonsterStats(attackDamage: 13_934)
+        {
+            AttackProfile = new NpcAttackProfile
+            {
+                Mode = NpcAttackMode.Melee,
+                AttackRange = 3.5f,
+                AttackRangeExit = 5f,
+                StandoffRange = 2f,
+                AttackIntervalMs = 2000,
+                BurstDurationMs = 1600,
+                DamagePerRound = 697,
+            },
+        };
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(3f, 0f, 0f), monsterStats: stats);
+        uint untouched = npc.Character_CombatView.WeaponBurstEndedProp;
+
+        Tick(shard, FirstTick);               // Idle -> Chase
+        Tick(shard, FirstTick + Step);        // swing at 60,050
+
+        Assert.Equal(60_050u, npc.Character_CombatView.WeaponBurstFiredProp);
+        Assert.Equal(untouched, npc.Character_CombatView.WeaponBurstEndedProp);
+
+        Tick(shard, 61_600);                  // still inside the swing
+        Assert.Equal(untouched, npc.Character_CombatView.WeaponBurstEndedProp);
+
+        Tick(shard, 61_650);                  // 60,050 + 1,600
+        Assert.Equal(61_650u, npc.Character_CombatView.WeaponBurstEndedProp);
+    }
+
+    [Fact]
+    public void RangedNpc_BurstAnimation_UsesTheWeaponsBurstTiming()
+    {
+        // NPC Guard Rifle: ms_per_burst 100 while the behaviour's cycle is 2,500 ms.
+        var stats = new FakeAiMonsterStats { AttackProfile = RangedProfile() };
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher());
+        uint untouched = npc.Character_CombatView.WeaponBurstEndedProp;
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);        // burst at 60,050
+
+        Assert.Equal(60_050u, npc.Character_CombatView.WeaponBurstFiredProp);
+        Tick(shard, 60_100);
+        Assert.Equal(untouched, npc.Character_CombatView.WeaponBurstEndedProp);
+
+        Tick(shard, 60_150);                  // 60,050 + 100
+        Assert.Equal(60_150u, npc.Character_CombatView.WeaponBurstEndedProp);
+    }
+
+    [Fact]
+    public void WeaponlessNpc_SwingsWithTheUnarmedAnimation()
+    {
+        // No weapon row at all: the swing is the AI's documented default, clamped by the 1,000 ms
+        // rules cadence it fights on.
+        var rules = new StandardAiRules { AttackDamage = 100, AttackCooldownMs = 1000 };
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(3f, 0f, 0f), rules);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(60_050u, npc.Character_CombatView.WeaponBurstFiredProp);
+
+        Tick(shard, 60_550);                  // 60,050 + NpcAttackAnimation.DefaultDurationMs
+        Assert.Equal(60_550u, npc.Character_CombatView.WeaponBurstEndedProp);
+    }
+
+    [Fact]
+    public void NpcKilledMidBurst_CancelsTheAttackAnimation()
+    {
+        var stats = new FakeAiMonsterStats { AttackProfile = RangedProfile() };
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher());
+        shard.CharacterLifecycle.OnCharacterCreated(npc);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);        // burst at 60,050, ends 60,150
+        uint deathTime = unchecked((uint)shard.CurrentTimeLong);
+
+        shard.CharacterLifecycle.ForceDeath(npc);
+
+        // Cancelled, not ended: the client drops the attack animation for the death.
+        Assert.Equal(deathTime, npc.Character_CombatView.WeaponBurstCancelledProp);
+        Assert.NotEqual(60_150u, npc.Character_CombatView.WeaponBurstEndedProp);
+    }
+
+    [Fact]
+    public void ChasingNpcRuns_AttackingNpcWalks()
+    {
+        // The two locomotion animations are the database's two speeds: the chase runs at fast_speed,
+        // the Attack state repositions at normal_speed.
+        var (chasing, chasingNpc, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f));
+
+        Tick(chasing, FirstTick);
+
+        Assert.Equal((short)0x2004, chasingNpc.MovementState);  // Running | Movement
+
+        var stats = new FakeAiMonsterStats { AttackProfile = RangedProfile() };
+        var (shard, npc, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(25f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher());
+
+        Tick(shard, FirstTick);               // Idle -> Chase, still running
+        Assert.Equal((short)0x2004, npc.MovementState);
+
+        Tick(shard, FirstTick + Step);        // in range but past the standoff: Attack, walking
+
+        AssertState(shard, npc, AiBrainState.Attack);
+        Assert.Equal((short)0x5004, npc.MovementState);  // Walking | Movement
     }
 }

@@ -26,6 +26,7 @@ public class SDBInterface
     private static List<FactionRelations> _factionRelations;
     private static Dictionary<uint, List<FactionReputations>> _factionReputations;
     private static Dictionary<uint, Monster> _monster;
+    private static Dictionary<KeyValuePair<uint, ushort>, MonsterAttributeRange> _monsterAttributeRange;
     private static Dictionary<uint, MonsterScaling> _monsterScaling;
     private static Dictionary<uint, Turret> _turret;
     private static Dictionary<uint, PoseType> _poseType;
@@ -291,6 +292,7 @@ public class SDBInterface
         _factionRelations = loader.LoadFactionRelations();
         _factionReputations = loader.LoadFactionReputations();
         _monster = loader.LoadMonster();
+        _monsterAttributeRange = loader.LoadMonsterAttributeRange();
         _monsterScaling = loader.LoadMonsterScaling();
         _turret = loader.LoadTurret();
         _poseType = loader.LoadPoseType();
@@ -603,6 +605,16 @@ public class SDBInterface
 
     public static Monster GetMonster(uint id) => _monster.GetValueOrDefault(id);
     public static IReadOnlyDictionary<uint, Monster> GetMonsters() => _monster;
+    /// <summary>
+    ///     One <c>dbcharacter::MonsterAttributeRange</c> row of a monster (attribute 1143 Creature HP
+    ///     Modifier, 1144 Creature Damage Modifier, ...), or null when that monster has no row for it.
+    ///     Only 81 monsters in build prod-1962 carry any.
+    /// </summary>
+    public static MonsterAttributeRange GetMonsterAttributeRange(uint monsterId, ushort attributeId) =>
+        _monsterAttributeRange != null && _monsterAttributeRange.TryGetValue(new KeyValuePair<uint, ushort>(monsterId, attributeId), out var row)
+            ? row
+            : null;
+
     public static MonsterScaling GetMonsterScaling(uint level) => _monsterScaling?.GetValueOrDefault(level);
     public static IReadOnlyDictionary<uint, MonsterScaling> GetMonsterScalings() => _monsterScaling;
     public static Turret GetTurret(uint id) => _turret.GetValueOrDefault(id);

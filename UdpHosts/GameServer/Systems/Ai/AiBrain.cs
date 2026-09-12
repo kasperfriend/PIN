@@ -16,13 +16,45 @@ namespace GameServer.Systems.Ai;
 public class AiBrain
 {
     private readonly IAiRules _rules;
+    private readonly float _attackRange;
+    private readonly float _attackRangeExit;
+    private readonly float _standoffRange;
+    private readonly int _attackCooldownMs;
+    private readonly float _maxAttackHeightDelta;
 
-    public AiBrain(IAiRules rules, ulong now)
+    /// <param name="rules">The shard's tuning, used for everything the profile does not override.</param>
+    /// <param name="now">Server time the brain starts at.</param>
+    /// <param name="combat">
+    ///     The NPC's own weapon reach, cadence and standoff (see <see cref="AiCombatTuning" />), or
+    ///     <see cref="AiCombatTuning.None" /> to fight on the rules values alone.
+    /// </param>
+    public AiBrain(IAiRules rules, ulong now, AiCombatTuning combat = default)
     {
         _rules = rules ?? throw new ArgumentNullException(nameof(rules));
+
+        // A mob whose weapon row resolves fights with that weapon's reach and cadence instead of the
+        // generic rules values; a mob without one (rules melee, no weapon in the database) keeps the
+        // rules behaviour the tests and the docs describe.
+        _attackRange = combat.AttackRange > 0f ? combat.AttackRange : _rules.AttackRange;
+        _attackRangeExit = combat.AttackRangeExit > 0f ? combat.AttackRangeExit : _rules.AttackRangeExit;
+        _standoffRange = combat.StandoffRange > 0f ? combat.StandoffRange : _rules.StandoffRange;
+        _attackCooldownMs = combat.AttackCooldownMs > 0 ? combat.AttackCooldownMs : _rules.AttackCooldownMs;
+
+        // A melee swing cannot cross a floor, but a projectile weapon can shoot at anything it can
+        // reach: for ranged weapons the height gate is the weapon's own range.
+        _maxAttackHeightDelta = combat.Ranged
+            ? MathF.Max(_rules.MaxAttackHeightDelta, _attackRange)
+            : _rules.MaxAttackHeightDelta;
+
         LastTargetSeenAt = now;
         NextAttackAt = now;
     }
+
+    /// <summary>Reach in metres this NPC attacks at (its weapon's, or the rules value).</summary>
+    public float AttackRange => _attackRange;
+
+    /// <summary>Milliseconds between this NPC's attacks (its weapon's cadence, or the rules value).</summary>
+    public int AttackCooldownMs => _attackCooldownMs;
 
     /// <summary>Current behaviour state.</summary>
     public AiBrainState State { get; private set; } = AiBrainState.Idle;
@@ -116,19 +148,19 @@ public class AiBrain
             AiBrainState.Idle when engaged && perception.TargetVisible && perception.DistanceToTarget <= _rules.AggroRadius
                 => AiBrainState.Chase,
             // An attack is measured over the straight-line distance, so a target standing on the
-            // ledge above the NPC is not "in range" because it is over its head, and it is measured
-            // against a melee reach: as long as PIN has no NPC projectiles, a monster that cannot
-            // walk up to you cannot hit you either.
+            // ledge above the NPC is not "in range" because it is over its head. The reach itself is
+            // the NPC's own weapon's (see AiCombatTuning): a mob with a rifle engages from its weapon's
+            // range, and only a weaponless or melee mob has to walk up to you.
             AiBrainState.Chase when perception.TargetVisible && InAttackVolume(perception)
                 => AiBrainState.Attack,
-            AiBrainState.Attack when !perception.TargetVisible || perception.AttackDistance > _rules.AttackRangeExit || TooHighOrLow(perception)
+            AiBrainState.Attack when !perception.TargetVisible || perception.AttackDistance > _attackRangeExit || TooHighOrLow(perception)
                 => AiBrainState.Chase,
             AiBrainState.Return when perception.DistanceToHome <= _rules.HomeArrivalRadius
                 => AiBrainState.Idle,
             _ => State,
         };
 
-        bool wantsToClose = perception.DistanceToTarget > _rules.StandoffRange;
+        bool wantsToClose = perception.DistanceToTarget > _standoffRange;
         var movement = State switch
         {
             AiBrainState.Chase when wantsToClose => AiMovementIntent.TowardTarget,
@@ -142,7 +174,7 @@ public class AiBrain
         bool attack = false;
         if (State == AiBrainState.Attack && engaged && perception.TargetVisible && InAttackVolume(perception) && now >= NextAttackAt)
         {
-            NextAttackAt = now + (ulong)_rules.AttackCooldownMs;
+            NextAttackAt = now + (ulong)_attackCooldownMs;
             attack = true;
         }
 
@@ -156,12 +188,12 @@ public class AiBrain
     /// </summary>
     private bool InAttackVolume(in AiPerception perception)
     {
-        return perception.AttackDistance <= _rules.AttackRange && !TooHighOrLow(perception);
+        return perception.AttackDistance <= _attackRange && !TooHighOrLow(perception);
     }
 
     /// <summary>Whether the height difference to the target is more than an attack may span.</summary>
     private bool TooHighOrLow(in AiPerception perception)
     {
-        return perception.HeightDeltaToTarget > _rules.MaxAttackHeightDelta;
+        return perception.HeightDeltaToTarget > _maxAttackHeightDelta;
     }
 }
