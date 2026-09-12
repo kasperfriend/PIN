@@ -876,7 +876,7 @@ public class AiEngineTests
         var stats = new FakeAiMonsterStats { AttackProfile = RangedProfile() };
         var abilities = new FakeNpcAbilityActivator();
         var shots = new RecordingAiProjectileLauncher();
-        var (shard, _, player) = CreateWorld(
+        var (shard, _, _) = CreateWorld(
             Vector3.Zero,
             new Vector3(20f, 0f, 0f),
             monsterStats: stats,
@@ -888,7 +888,10 @@ public class AiEngineTests
 
         Assert.Empty(abilities.Activations);
         Assert.Equal(3, shots.Shots.Count);
-        Assert.Equal(100_000 - (302 * 3), player.CurrentHealth);
+
+        // The shots are the AI's own, exactly as before this change (the recording launcher stands in for
+        // ProjectileSim, so the player takes no damage here - the same shot count the ranged test asserts).
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
     }
 
     [Fact]

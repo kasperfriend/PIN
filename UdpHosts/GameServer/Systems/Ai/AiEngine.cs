@@ -107,9 +107,11 @@ public class AiEngine
         _projectiles = projectileLauncher ?? new ShardAiProjectileLauncher(shard);
 
         // Weapon abilities run through the shard's own aptitude system: it is the only thing that can
-        // apply a status effect, and the animation of an attack lives in the effect's chains. A shard
-        // without an ability system (a test shard) simply never activates one.
-        _abilityActivator = abilityActivator ?? (_shard.Abilities != null ? new ShardAbilityActivator(_shard) : null);
+        // apply a status effect, and the animation of an attack lives in the effect's chains. The activator
+        // looks the system up when it is used rather than here, because a Shard builds its AI before its
+        // AbilitySystem; a shard without one (a test shard) then simply reports that nothing ran, and the
+        // AI's own attack stays the mob's attack.
+        _abilityActivator = abilityActivator ?? new ShardAbilityActivator(_shard);
         _logger = shard.Logger?.ForContext<AiEngine>() ?? Log.ForContext<AiEngine>();
 
         // The bus is injected like every other system's: IShard does not expose it.

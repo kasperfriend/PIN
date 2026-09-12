@@ -18,7 +18,11 @@ public interface INpcAbilityActivator
     bool Activate(CharacterEntity npc, uint abilityId, uint time, float register);
 }
 
-/// <summary>The production <see cref="INpcAbilityActivator" />: the shard's aptitude system.</summary>
+/// <summary>
+///     The production <see cref="INpcAbilityActivator" />: the shard's aptitude system, looked up per call
+///     (<c>Shard</c> constructs its AI before its <c>AbilitySystem</c>). A shard that has none reports that
+///     nothing ran, and the engine falls back to its own attack.
+/// </summary>
 public sealed class ShardAbilityActivator : INpcAbilityActivator
 {
     private readonly IShard _shard;
