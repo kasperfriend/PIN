@@ -205,6 +205,7 @@ public class EntityManager
         deployableEntity.SetOrientation(orientation);
         deployableEntity.SetAimDirection(aimDirection);
         deployableEntity.Scale = deployableInfo.Scale;
+        deployableEntity.SetDamageResponseId(deployableInfo.Damageresponse);
         deployableEntity.SetMaxHealth(deployableInfo.StartHitpoints);
         deployableEntity.SetCurrentHealth(deployableInfo.StartHitpoints);
 

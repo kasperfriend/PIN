@@ -580,10 +580,22 @@ public class SDBInterface
     public static IReadOnlyDictionary<uint, Deployable> GetDeployables() => _deployable;
     public static DeployableFunction GetDeployableFunction(uint id) => _deployableFunction.GetValueOrDefault(id);
     public static DeployableCategory GetDeployableCategory(uint id) => _deployableCategory.GetValueOrDefault(id);
-    public static DamageType GetDamageType(byte id) => _damageType.GetValueOrDefault(id);
-    public static DamageResponse GetDamageResponse(byte id) => _damageResponse.GetValueOrDefault(id);
-    public static DamageResponseDamageType GetDamageResponseDamageType(uint id) => _damageResponseDamageType.GetValueOrDefault(id);
-    public static TinyObject GetTinyObject(uint id) => _tinyObject.GetValueOrDefault(id);
+    public static DamageType GetDamageType(byte id) => _damageType?.GetValueOrDefault(id);
+    public static DamageResponse GetDamageResponse(byte id) => _damageResponse?.GetValueOrDefault(id);
+    public static DamageResponseDamageType GetDamageResponseDamageType(uint id) => _damageResponseDamageType?.GetValueOrDefault(id);
+
+    /// <summary>
+    /// Finds the response row for a target response and incoming damage type.
+    /// The SDB row id is not the pair key, so callers should not have to know
+    /// how the loader numbered these rows.
+    /// </summary>
+    public static DamageResponseDamageType GetDamageResponseDamageType(byte damageResponse, byte damageType)
+    {
+        return _damageResponseDamageType?.Values.FirstOrDefault(row =>
+            row.Damageresponse == damageResponse && row.Damagetype == damageType);
+    }
+
+    public static TinyObject GetTinyObject(uint id) => _tinyObject?.GetValueOrDefault(id);
     public static Faction GetFaction(uint id) => _faction.GetValueOrDefault(id);
     public static List<Faction> GetFactions() => [.. _faction.Select(pair => pair.Value)];
     public static List<FactionRelations> GetFactionRelations() => _factionRelations;
@@ -612,7 +624,7 @@ public class SDBInterface
     // dbitems
     public static RootItem GetRootItem(uint id) => _rootItem.GetValueOrDefault(id);
     public static AbilityModule GetAbilityModule(uint id) => _abilityModule.GetValueOrDefault(id);
-    public static Battleframe GetBattleframe(uint id) => _battleframe.GetValueOrDefault(id);
+    public static Battleframe GetBattleframe(uint id) => _battleframe?.GetValueOrDefault(id);
     public static CarryableObject GetCarryableObject(uint id) => _carryableObject.GetValueOrDefault(id);
     public static IReadOnlyDictionary<uint, CarryableObject> GetCarryableObjects() => _carryableObject;
     public static Weapons GetWeapon(uint id) => _weapons.GetValueOrDefault(id);

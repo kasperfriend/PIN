@@ -1,5 +1,6 @@
 using GameServer.Entities.Character;
 using GameServer.Entities.Deployable;
+using GameServer.Enums;
 using GameServer.Systems.SystemEvents;
 using GameServer.Tests.Fakes;
 using Xunit;
@@ -60,6 +61,47 @@ public class DamageSystemTests
 
         Assert.Equal(200, character.CurrentShields);
         Assert.Equal(1000, character.CurrentHealth);
+    }
+
+    [Fact]
+    public void ApplyDamage_UsesTheActiveDamageTakenModifier()
+    {
+        var (shard, character) = CreateCharacter();
+        character.AddStatModifier(123, new CharacterEntity.ActiveStatModifier
+        {
+            Stat = StatModifierIdentifier.DamageTaken,
+            Op = 2,
+            Value = 50,
+        });
+
+        EntityDamagedEvent received = default;
+        shard.EventBus.Subscribe<EntityDamagedEvent>(evt => received = evt);
+
+        int applied = shard.Damage.ApplyDamage(character, 301);
+
+        Assert.Equal(151, applied);
+        Assert.Equal(849, character.CurrentHealth);
+        Assert.Equal(151, received.DamageAmount);
+    }
+
+    [Fact]
+    public void ApplyDamage_AnImmunityModifierPublishesNoDamageEvent()
+    {
+        var (shard, character) = CreateCharacter();
+        character.AddStatModifier(123, new CharacterEntity.ActiveStatModifier
+        {
+            Stat = StatModifierIdentifier.DamageTaken,
+            Op = 2,
+            Value = 0,
+        });
+        var eventCount = 0;
+        shard.EventBus.Subscribe<EntityDamagedEvent>(_ => ++eventCount);
+
+        int applied = shard.Damage.ApplyDamage(character, 301);
+
+        Assert.Equal(0, applied);
+        Assert.Equal(1000, character.CurrentHealth);
+        Assert.Equal(0, eventCount);
     }
 
     [Fact]
@@ -175,8 +217,9 @@ public class DamageSystemTests
         deployable.SetMaxHealth(100);
         deployable.SetCurrentHealth(100);
 
-        shard.Damage.ApplyDamage(deployable, 150);
+        int applied = shard.Damage.ApplyDamage(deployable, 150);
 
+        Assert.Equal(150, applied);
         Assert.True(deployable.IsDead);
         Assert.Equal(0, deployable.CurrentHealth);
         Assert.True(shard.EntityMan.HasRemainingLifetime(deployable));

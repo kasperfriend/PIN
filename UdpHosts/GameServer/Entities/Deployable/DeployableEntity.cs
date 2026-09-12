@@ -35,6 +35,18 @@ public sealed class DeployableEntity : BaseAptitudeEntity, IAptitudeTarget
     public uint AbilitySrcId { get; set; }
     public uint GibVisualsID { get; set; }
     public float Scale { get; set; }
+
+    /// <summary>
+    ///     The <c>dbcharacter::DamageResponse</c> row used by this deployable.
+    /// </summary>
+    public byte DamageResponseId { get; private set; }
+
+    /// <summary>Sets the response used by the combat system and test fakes.</summary>
+    public void SetDamageResponseId(byte damageResponseId)
+    {
+        DamageResponseId = damageResponseId;
+    }
+
     public int MaxHealth { get; private set; }
     public int CurrentHealth { get; private set; }
     public bool IsDead { get; private set; }
