@@ -45,6 +45,7 @@ UdpHosts/GameServer/Systems/Ai/
 ├── AiSpeeds.cs                 monster row speed -> metres per second
 ├── AiAttackDamage.cs           monster damage rating -> what one swing is worth (fallback)
 ├── AiVectors.cs                horizontal / straight-line distance + character facing maths
+├── NpcPathfinder.cs             local collision-driven A* routes around static geometry
 ├── NpcAttackProfile.cs         everything one NPC attack needs, resolved from the DB
 ├── NpcAttackResolver.cs        monster -> weapon -> template/attributes/ammo -> profile
 │                               (ResolveWeapon is also how a turret fires: dbcharacter::TurretWeapon)
@@ -235,10 +236,12 @@ hittable where it now stands) and broadcasting a
 `AeroMessages.GSS.Character.Event.CurrentPoseUpdate` on the unreliable GSS channel
 - the same message `MovementRelay` uses to show one player's movement to another.
 
-Before stepping, a short forward ray cast checks for a wall; if the way is
-blocked the NPC holds position instead of walking through it. With no collision
-data loaded (`LoadMapsCollision` off) nothing can block and nothing occludes, so
-every target counts as visible.
+Before stepping, the NPC follows a local collision-driven A* route. A direct segment is
+used when clear; otherwise a bounded 2 m grid searches around the static obstacle, with
+an NPC-sized corridor probe at torso height on every edge. If no route exists, the NPC
+holds position instead of walking through geometry. With no collision data loaded
+(`LoadMapsCollision` off) the sampler is flat and nothing can block or occlude, so every
+target counts as visible.
 
 ### What an NPC animates
 
@@ -945,11 +948,12 @@ sinking. Spawned mobs are snapped the same way before they are scoped in
 (`PhysicsEngine.FindGround`), so zone entries with a placeholder `Z` of `0` land
 on the ground instead of spawning deep under it.
 
-The probe only tests static geometry (a nearby player or mob cannot be mistaken
-for the ground), and the wall check ray is raised to torso height so it does not
-graze the terrain the mob is standing on. When no zone collision data is loaded
-(`LoadMapsCollision` off, or no map files) both probes are no-ops and movement
-stays horizontal, exactly as before.
+The ground sampler only tests static geometry (a nearby player or mob cannot be mistaken
+for the ground). Navigation uses the same static geometry for a small, NPC-sized corridor
+probe at two torso heights and routes around blocked cells with `NpcPathfinder`; a direct
+route remains the fast path. When no zone collision data is loaded (`LoadMapsCollision`
+off, or no map files), both probes are no-ops and movement stays horizontal, exactly as
+before.
 
 ---
 
@@ -1010,12 +1014,18 @@ stays horizontal, exactly as before.
   templates (not per-monster items) carry `damage_per_round` 1; those rows still
   resolve through the 954/1145 chain above, so the placeholder only survives where
   a weapon item has neither attribute row - the rating share covers it.
-* **No pathfinding, no climbing.** Movement is a straight line towards the goal
-  plus a wall check, always at the spawn's own height band. A mob behind a low
-  obstacle will stand there until the leash or the give-up timer fires, and a mob
-  you are standing over - on a roof, on a ledge, on top of a vehicle - simply
-  cannot reach you. It does not jump, climb or walk around the height difference;
-  it circles at its own ground level until the leash drags it home.
+* **Navigation is local and collision-driven; climbing and jumping are still out.** When
+  zone collision data is loaded, a mob first tries the direct route and then searches a
+  bounded 2 m grid with A*. Every cell is grounded against the same static Bepu geometry
+  used by line of sight, and every edge checks the NPC-sized corridor at torso height, so
+  walls and low obstacles are routed around instead of making the mob walk into them.
+  Routes are refreshed when the target moves, when collision changes or after 750 ms, and
+  the movement state is `Running` while chasing, `Walking` while repositioning in attack
+  range, and `Standing` when no route is available. A step higher than 1.25 m is not
+  traversable: the engine does not invent jumps, ladders or climbing, and a player on a
+  separate roof/floor remains unreachable. With maps collision disabled the sampler falls
+  back to the current plane and navigation is intentionally a direct no-op for test and
+  development shards.
 * **No SDB behaviour trees.** `Monster.Behavior`, `BehaviorOffensive` and
   `BehaviorDefensive` name the live game's AI behaviour assets; PIN ignores them
   and runs one state machine for every monster type.

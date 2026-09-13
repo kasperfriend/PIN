@@ -51,18 +51,27 @@ public class AiEngine
     /// </summary>
     private const float _groundProbeDown = 100f;
 
-    /// <summary>
-    ///     Height above the feet used for the wall/obstacle ray. Keeping the ray off the
-    ///     ground stops it from grazing the terrain the mob is standing on and reporting a
-    ///     false "blocked" every step.
-    /// </summary>
-    private const float _wallCheckHeight = 1f;
-
     /// <summary>Chest height, used for both the line of sight trace and the aim direction.</summary>
     private const float _eyeHeight = 1.4f;
 
     /// <summary>Chest height a shot leaves from when the monster row carries no muzzle offset.</summary>
     private const float _muzzleHeight = 1.62f;
+
+    /// <summary>Radius reserved for a character while the navigation probe tests a corridor.</summary>
+    private const float _navigationAgentRadius = 0.7f;
+
+    /// <summary>Do not rebuild a path for every 20 Hz movement update.</summary>
+    private const ulong _navigationReplanIntervalMs = 750;
+
+    /// <summary>Replan when a moving target has made the current endpoint stale.</summary>
+    private const float _navigationGoalRefreshDistance = 2.5f;
+
+    private static readonly NpcPathfinder.Options _navigationOptions = new(
+        CellSize: 2f,
+        MaxStepHeight: 1.25f,
+        MaxSearchDistance: 64f,
+        MaxExpandedNodes: 4096,
+        WaypointTolerance: 0.35f);
 
     private static readonly short _movementStateIdle = (short)((ushort)Movestate.Standing << 8);
 
@@ -76,6 +85,9 @@ public class AiEngine
 
     /// <summary>Moving state a NPC carries while it runs its target down: the chase speed's animation.</summary>
     private static readonly short _movementStateRunning = (short)(((ushort)Movestate.Running << 8) | (ushort)MovementFlags.Movement);
+
+    /// <summary>State used while a database movement slide owns the NPC's displacement.</summary>
+    private static readonly short _movementStateSliding = (short)(((ushort)Movestate.Sliding << 8) | (ushort)MovementFlags.Movement);
 
     private readonly ConcurrentDictionary<ulong, NpcBrain> _brains = new();
     private readonly ILogger _logger;
@@ -321,8 +333,15 @@ public class AiEngine
 
         if (npc.Brain.State == AiBrainState.Dead || !entity.IsAlive)
         {
+            // Death can be observed here before the event bus flushes its
+            // CharacterDiedEvent. Close both client animation windows on this
+            // defensive path as well, so a corpse never keeps a fire or reload
+            // pose alive until the next network update.
+            CancelAttackAnimation(npc);
+            CancelReload(npc, currentTime);
             npc.Brain.OnDeath();
             npc.TargetId = 0;
+            npc.Navigation.Reset();
             SyncBehaviorEmote(npc, currentTime);
             return;
         }
@@ -452,7 +471,7 @@ public class AiEngine
             }
         }
 
-        ApplyDecision(npc, decision, elapsedMs, target);
+        ApplyDecision(npc, decision, elapsedMs, currentTime, target);
 
         // The emote belongs to the behaviour set the brain is running: the base behaviour while it has no
         // target, the offensive one while it fights (see NpcBehaviorParams.EmoteName). The walk back home
@@ -632,11 +651,19 @@ public class AiEngine
             return;
         }
 
-        // Keep the current target while it still exists. Re-scanning every perception pass
-        // would make a mob ping pong between two players standing side by side.
-        if (npc.TargetId != 0 && _shard.Entities.ContainsKey(npc.TargetId))
+        // Keep a combat target while it still exists. Re-scanning every perception pass
+        // would make a mob ping pong between two players standing side by side. An idle
+        // NPC is different: acquisition requires a sighting, so do not pin an unseen
+        // candidate into the brain before it has ever engaged it.
+        if (npc.TargetId != 0 && _shard.Entities.TryGetValue(npc.TargetId, out var currentTarget))
         {
-            return;
+            if (npc.Brain.WantsTarget ||
+                (currentTarget is CharacterEntity currentCharacter &&
+                 currentCharacter.IsAlive &&
+                 HasLineOfSight(npc.Entity, currentCharacter)))
+            {
+                return;
+            }
         }
 
         npc.TargetId = 0;
@@ -668,11 +695,19 @@ public class AiEngine
             }
 
             // A player directly above or below the mob is inside a flat radius but outside the
-            // volume an NPC can actually fight in - and with no pathfinding the mob would stand
-            // under them forever. Zones the designers wanted vertical about (a mob guarding the
-            // ramp below a platform) set a bigger band; 0 turns the test off entirely.
+            // volume an NPC can actually fight in - and without a climb/jump the mob would
+            // stand under them forever. Zones the designers wanted vertical about (a mob
+            // guarding the ramp below a platform) set a bigger band; 0 turns the test off entirely.
             float heightDelta = AiVectors.HeightDelta(origin, candidate.Position);
             if (_rules.MaxAcquisitionHeightDelta > 0f && heightDelta > _rules.MaxAcquisitionHeightDelta)
+            {
+                continue;
+            }
+
+            // The brain intentionally requires a sighting when it acquires from Idle. Keep
+            // that rule at the scan boundary too; otherwise an unseen player would become a
+            // sticky target and could never be reconsidered after the first failed decision.
+            if (!HasLineOfSight(npc.Entity, candidate))
             {
                 continue;
             }
@@ -1069,7 +1104,7 @@ public class AiEngine
         return QuaternionEx.Transform(offset, QuaternionEx.Inverse(entity.Orientation));
     }
 
-    private void ApplyDecision(NpcBrain npc, in AiDecision decision, ulong elapsedMs, CharacterEntity target)
+    private void ApplyDecision(NpcBrain npc, in AiDecision decision, ulong elapsedMs, ulong currentTime, CharacterEntity target)
     {
         var entity = npc.Entity;
 
@@ -1081,6 +1116,7 @@ public class AiEngine
         };
 
         bool moved = false;
+        bool sliding = goal.HasValue && IsSliding(entity);
 
         // A database slide owns the character's position while it runs (the dodge pair's 667 ms sidestep, the
         // Move Then Fire lunge): the AI must not drag the mob off the displacement the row declared, exactly
@@ -1088,7 +1124,12 @@ public class AiEngine
         // against 500 ms), so this reads the ability system's own slide state rather than a combat flag.
         if (goal.HasValue && !IsMovementRestricted(entity) && !IsSliding(entity))
         {
-            moved = MoveToward(npc, goal.Value, decision.State, elapsedMs);
+            moved = MoveToward(npc, goal.Value, decision.State, elapsedMs, currentTime);
+        }
+        else if (!goal.HasValue)
+        {
+            // A stale route must not be reused when a target is lost or the NPC reaches home.
+            npc.Navigation.Reset();
         }
 
         if (decision.FaceTarget && target != null)
@@ -1099,7 +1140,7 @@ public class AiEngine
                 entity.SetOrientation(AiVectors.OrientationFacing(facing));
 
                 // Only update the aim when the horizontal projection is
-                // non-degenerate.  When the target is directly above or
+                // non-degenerate. When the target is directly above or
                 // below the NPC the XY vector has near-zero length and
                 // Normalize would produce NaN, which later crashes the
                 // pose serializer with ArithmeticException.
@@ -1113,39 +1154,96 @@ public class AiEngine
 
         // Two locomotion animations come straight from the database's two speeds: the walk while the
         // NPC repositions at combat speed (normal_speed, the Attack state's MoveSpeed) and the run
-        // while it runs a target down (fast_speed, the Chase/Return speed).
-        short movementState = !moved
-            ? _movementStateIdle
-            : decision.State == AiBrainState.Attack ? _movementStateWalking : _movementStateRunning;
-        entity.MovementState = movementState;
+        // while it runs a target down (fast_speed, the Chase/Return speed). A database slide
+        // owns its own Sliding state. A failed route reports Standing rather than a movement
+        // state, so the client does not play a walk cycle against a wall.
+        short movementState = sliding
+            ? _movementStateSliding
+            : !moved
+                ? _movementStateIdle
+                : decision.State == AiBrainState.Attack ? _movementStateWalking : _movementStateRunning;
+        entity.SetMovementState(movementState);
         BroadcastPose(entity, movementState);
     }
 
-    private bool MoveToward(NpcBrain npc, Vector3 goal, AiBrainState state, ulong elapsedMs)
+    private bool MoveToward(NpcBrain npc, Vector3 goal, AiBrainState state, ulong elapsedMs, ulong currentTime)
     {
         var entity = npc.Entity;
-
-        var delta = goal - entity.Position;
-        delta.Z = 0f;
-
-        float horizontal = delta.Length();
-        if (horizontal < 0.05f)
+        var waypoint = GetNavigationWaypoint(npc, goal, state, currentTime);
+        if (!waypoint.HasValue)
         {
             return false;
+        }
+
+        var delta = waypoint.Value - entity.Position;
+        delta.Z = 0f;
+        float horizontal = delta.Length();
+        if (horizontal <= _navigationOptions.WaypointTolerance)
+        {
+            npc.Navigation.Advance();
+            waypoint = GetNavigationWaypoint(npc, goal, state, currentTime, forceReplan: false);
+            if (!waypoint.HasValue)
+            {
+                return false;
+            }
+
+            delta = waypoint.Value - entity.Position;
+            delta.Z = 0f;
+            horizontal = delta.Length();
+            if (horizontal <= _navigationOptions.WaypointTolerance)
+            {
+                return false;
+            }
         }
 
         var direction = delta / horizontal;
         float speed = state == AiBrainState.Attack ? npc.MoveSpeed : npc.ChaseSpeed;
         float step = speed * (elapsedMs / 1000f);
-        if (step > horizontal)
+
+        // The path ends at the target's ground point, but combat movement must stop at the
+        // weapon's standoff distance. Clamping here avoids stepping through a target on the
+        // final tick and keeps ranged NPCs at their database-defined combat distance.
+        if (state != AiBrainState.Return)
         {
-            step = horizontal;
+            float targetDistance = AiVectors.HorizontalDistance(entity.Position, goal);
+            step = MathF.Min(step, MathF.Max(0f, targetDistance - npc.Brain.StandoffRange));
+        }
+
+        step = MathF.Min(step, horizontal);
+        if (step <= 0.001f)
+        {
+            return false;
         }
 
         var candidate = entity.Position + (direction * step);
         if (IsBlocked(entity.Position, candidate, entity.EntityId))
         {
-            return false;
+            // A moving target, a newly streamed chunk or a changed collision pose can
+            // invalidate a route between replans. Rebuild once before giving the NPC a
+            // stationary tick; never walk through the obstruction as a fallback.
+            npc.Navigation.Reset();
+            waypoint = GetNavigationWaypoint(npc, goal, state, currentTime, forceReplan: true);
+            if (!waypoint.HasValue)
+            {
+                return false;
+            }
+
+            delta = waypoint.Value - entity.Position;
+            delta.Z = 0f;
+            horizontal = delta.Length();
+            if (horizontal <= _navigationOptions.WaypointTolerance)
+            {
+                npc.Navigation.Advance();
+                return false;
+            }
+
+            direction = delta / horizontal;
+            step = MathF.Min(step, horizontal);
+            candidate = entity.Position + (direction * step);
+            if (IsBlocked(entity.Position, candidate, entity.EntityId))
+            {
+                return false;
+            }
         }
 
         candidate = ProbeGround(entity, candidate);
@@ -1158,6 +1256,71 @@ public class AiEngine
         return true;
     }
 
+    private Vector3? GetNavigationWaypoint(
+        NpcBrain npc,
+        Vector3 goal,
+        AiBrainState state,
+        ulong currentTime,
+        bool forceReplan = false)
+    {
+        var intent = state == AiBrainState.Return ? AiMovementIntent.TowardHome : AiMovementIntent.TowardTarget;
+        var navigation = npc.Navigation;
+        bool goalMoved = navigation.HasGoal &&
+            AiVectors.HorizontalDistance(navigation.Goal, goal) > _navigationGoalRefreshDistance;
+        bool expired = currentTime >= navigation.NextReplanAt;
+        if (forceReplan || !navigation.HasAttempted || navigation.Intent != intent || goalMoved || expired)
+        {
+            navigation.Reset();
+            navigation.Intent = intent;
+            navigation.Goal = goal;
+            navigation.HasAttempted = true;
+
+            // Without collision data the adapter returns a flat fallback for every sample and
+            // the pathfinder immediately returns the direct point. That preserves the useful
+            // no-map development mode without manufacturing an obstacle map.
+            var path = NpcPathfinder.FindPath(
+                npc.Entity.Position,
+                goal,
+                point => GroundForNavigation(npc.Entity, point),
+                (from, to) => IsBlocked(from, to, npc.Entity.EntityId),
+                _navigationOptions);
+
+            if (path.Count == 0)
+            {
+                navigation.NextReplanAt = currentTime + _navigationReplanIntervalMs;
+                return null;
+            }
+
+            navigation.Waypoints.AddRange(path);
+            navigation.NextReplanAt = currentTime + _navigationReplanIntervalMs;
+        }
+
+        while (navigation.WaypointIndex < navigation.Waypoints.Count &&
+               AiVectors.HorizontalDistance(npc.Entity.Position, navigation.Waypoints[navigation.WaypointIndex]) <= _navigationOptions.WaypointTolerance)
+        {
+            navigation.WaypointIndex++;
+        }
+
+        return navigation.WaypointIndex < navigation.Waypoints.Count
+            ? navigation.Waypoints[navigation.WaypointIndex]
+            : null;
+    }
+
+    private Vector3? GroundForNavigation(CharacterEntity entity, Vector3 point)
+    {
+        var physics = _shard.Physics;
+        if (physics == null)
+        {
+            return new Vector3(point.X, point.Y, entity.Position.Z);
+        }
+
+        // FindGround uses static geometry only. If maps are configured but a chunk has not
+        // loaded (or the point is outside the loaded zone), retain the current plane rather
+        // than making the entire route unusable.
+        var ground = physics.FindGround(point, entity.EntityId);
+        return ground ?? new Vector3(point.X, point.Y, entity.Position.Z);
+    }
+
     private bool IsBlocked(Vector3 from, Vector3 to, ulong selfEntityId)
     {
         var physics = _shard.Physics;
@@ -1166,17 +1329,38 @@ public class AiEngine
             return false;
         }
 
-        // Raise the ray to torso height so it does not graze the ground the NPC is
-        // standing on (which would read as an obstacle after ground snapping).
-        var raised = new Vector3(0f, 0f, _wallCheckHeight);
-        var hit = physics.SegmentRayCast(from + raised, to + raised, selfEntityId);
-        if (!hit.Hit)
+        var delta = to - from;
+        delta.Z = 0f;
+        float distance = delta.Length();
+        if (distance <= 0.01f)
         {
             return false;
         }
 
-        // A graze right at the destination should not stop the NPC dead in its tracks.
-        return hit.T < (Vector3.Distance(from, to) - 0.05f);
+        var direction = delta / distance;
+        var side = new Vector3(-direction.Y, direction.X, 0f) * _navigationAgentRadius;
+        // Static geometry is the navigation world. Dynamic characters are deliberately not
+        // obstacles: a crowd must not deadlock because each NPC sees the other NPC's kinematic
+        // hitbox, and the target's body must not block the last step into melee range.
+        float[] probeHeights = [0.85f, 1.45f];
+        Vector3[] lateralOffsets = [Vector3.Zero, side, -side];
+        foreach (var height in probeHeights)
+        {
+            foreach (var offset in lateralOffsets)
+            {
+                var hit = physics.SegmentRayCast(
+                    from + offset + new Vector3(0f, 0f, height),
+                    to + offset + new Vector3(0f, 0f, height),
+                    selfEntityId,
+                    staticOnly: true);
+                if (hit.Hit && hit.T < distance - 0.05f)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private Vector3 ProbeGround(CharacterEntity entity, Vector3 candidate)
@@ -1247,6 +1431,36 @@ public class AiEngine
         public ulong NextUseAt;
     }
 
+    private sealed class NpcNavigationState
+    {
+        public readonly List<Vector3> Waypoints = [];
+        public AiMovementIntent Intent;
+        public Vector3 Goal;
+        public ulong NextReplanAt;
+        public int WaypointIndex;
+        public bool HasAttempted;
+
+        public bool HasGoal => Intent != AiMovementIntent.None;
+
+        public void Advance()
+        {
+            if (WaypointIndex < Waypoints.Count)
+            {
+                WaypointIndex++;
+            }
+        }
+
+        public void Reset()
+        {
+            Waypoints.Clear();
+            WaypointIndex = 0;
+            Intent = AiMovementIntent.None;
+            Goal = Vector3.Zero;
+            NextReplanAt = 0;
+            HasAttempted = false;
+        }
+    }
+
     private sealed class NpcBrain
     {
         public ulong EntityId;
@@ -1275,6 +1489,9 @@ public class AiEngine
         ///     behaviour names none (3,049 of the build's 3,109 rows).
         /// </summary>
         public List<NpcAbilityModuleState> AbilityModules;
+
+        /// <summary>The current collision-aware route, retained between movement ticks.</summary>
+        public NpcNavigationState Navigation = new();
 
         /// <summary>The emote the monster's base behaviour string names, or 0 when it names none.</summary>
         public ushort IdleEmoteId;

@@ -5,9 +5,9 @@ namespace GameServer.Systems.Ai;
 ///     custom <see cref="IAiRules" /> to <see cref="AiEngine" />.
 /// </summary>
 /// <remarks>
-///     The attack numbers are melee on purpose: PIN has no NPC projectiles yet (an attack is a
-///     direct <c>IShard.Damage</c> call, see <c>Docs/NPC_AI.md</c> §3), so a mob may only swing
-///     once it is next to you, and it may not swing through a floor.
+///     These are the fallback melee numbers for a mob with no resolvable weapon row. Database
+///     weapon profiles override the reach, cadence, damage and ranged/projectile mode; the
+///     fallback mob may only swing once it is next to you and may not swing through a floor.
 /// </remarks>
 public class StandardAiRules : IAiRules
 {

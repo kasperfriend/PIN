@@ -1481,6 +1481,19 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         RefreshMovementView();
     }
 
+    /// <summary>
+    ///     Updates the server-side movement state and the replicated movement view together. NPCs
+    ///     do not submit MovementInput like players do, so their locomotion animation state must be
+    ///     written to both the state container used by combat systems and the movement view used by
+    ///     late scope-ins.
+    /// </summary>
+    public void SetMovementState(short movementState)
+    {
+        MovementState = movementState;
+        MovementStateContainer.MovementStateValue = unchecked((ushort)movementState);
+        RefreshMovementView();
+    }
+
     public void SetWeaponReloaded(uint time)
     {
         Character_CombatView.WeaponReloadedProp = time;
