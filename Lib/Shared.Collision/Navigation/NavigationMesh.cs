@@ -413,7 +413,7 @@ public sealed class NavigationMesh
 
     private static SpatialKey ToSpatialKey(Vector3 point) => new(FloorCell(point.X), FloorCell(point.Y));
 
-    private readonly class NavFace
+    private sealed class NavFace
     {
         public NavFace(NavigationTriangle triangle, Vector3 centroid, float cost)
         {
