@@ -183,6 +183,12 @@ keyed by zone (`zone_id`):
   zone via `CustomDBInterface.GetZoneCharacterSpawns(zoneId)`.
 - This is what the `character_spawn.json` added in this branch does for zones
   `12` and `1003`.
+- Authored entries are for *specific* NPCs at *specific* spots. The zone's
+  ambient population - every `dbcharacter::Monster` row that belongs to the
+  loaded zone, placed on the zone's own walkable ground and streamed around the
+  players in it - is spawned by the world population system instead, on by
+  default and alongside these entries: see
+  [WORLD_POPULATION.md](WORLD_POPULATION.md).
 
 Known monster type ids used during testing (each verified against the SDB —
 see the [Mobs & NPCs Catalog](MOBS_AND_NPCS.md) for the full database listing):
@@ -448,6 +454,7 @@ Player faction defaults to `1` (Accord). So:
 | Look up any spawnable id/name    | [Docs/SpawnReference/](SpawnReference/README.md) |
 | List chat commands               | `\help`                                  |
 | Spawn mob automatically per zone | add a row to `CustomData/character_spawn.json` |
+| Fill the zone with its own mobs and NPCs | on by default; `\population status` (see [WORLD_POPULATION.md](WORLD_POPULATION.md)) |
 | Show your vitals                 | `\health`                                |
 | Damage / heal yourself           | `\hurt 5000` / `\heal 5000`              |
 | Simulate a fall landing          | `\fall 30`                               |

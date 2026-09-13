@@ -84,7 +84,7 @@ names are the snake_case forms PIN's loader looks up):
 ## 3. How PIN turns a row into an entity
 
 ```
-CustomData/character_spawn.json | \npc 290 | admin "npc 290"
+CustomData/character_spawn.json | \npc 290 | admin "npc 290" | world population
   -> EntityManager.SpawnCharacter(typeId, position)
        -> CharacterEntity.LoadMonster(typeId)        (CharacterEntity.cs)
             SDBInterface.GetMonster(typeId)          (dbcharacter::Monster row)
