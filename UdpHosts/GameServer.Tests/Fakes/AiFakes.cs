@@ -40,16 +40,27 @@ public sealed class RecordingAiAttackFeedback : IAiAttackFeedback
 /// <summary>Hands out fixed monster stats instead of reading the static database.</summary>
 public sealed class FakeAiMonsterStats : IAiMonsterStats
 {
-    public FakeAiMonsterStats(float normalSpeed = 0f, float fastSpeed = 0f, int attackDamage = 0)
+    public FakeAiMonsterStats(
+        float normalSpeed = 0f,
+        float fastSpeed = 0f,
+        int attackDamage = 0,
+        float bodyRadius = 0f,
+        float bodyHeight = 0f)
     {
         NormalSpeed = normalSpeed;
         FastSpeed = fastSpeed;
         AttackDamage = attackDamage;
+        BodyRadius = bodyRadius;
+        BodyHeight = bodyHeight;
     }
 
     public float NormalSpeed { get; }
 
     public float FastSpeed { get; }
+
+    public float BodyRadius { get; }
+
+    public float BodyHeight { get; }
 
     /// <summary>Damage GetAttackDamage returns; 0 simulates a monster/level the DB has no row for.</summary>
     public int AttackDamage { get; }
@@ -82,6 +93,9 @@ public sealed class FakeAiMonsterStats : IAiMonsterStats
     public List<string> AbilityModuleRequests { get; } = [];
 
     public (float NormalSpeed, float FastSpeed) GetSpeeds(uint characterTypeId) => (NormalSpeed, FastSpeed);
+
+    public (float BodyRadius, float BodyHeight) GetBodyDimensions(uint characterTypeId)
+        => (BodyRadius, BodyHeight);
 
     public IReadOnlyList<NpcAbilityModuleScan> GetAbilityModules(NpcBehaviorParams behavior)
     {

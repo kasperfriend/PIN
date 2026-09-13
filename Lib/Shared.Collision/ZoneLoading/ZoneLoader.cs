@@ -5,6 +5,7 @@ using BepuUtilities;
 using BepuUtilities.Memory;
 using Serilog;
 using Shared.Collision.Layers;
+using Shared.Collision.Navigation;
 using Shared.Collision.Zone;
 
 namespace Shared.Collision.ZoneLoading;
@@ -20,6 +21,7 @@ public class ZoneLoader
     private readonly string _cachePath;
     private readonly Func<uint, ulong?>? _chunkPathingFlags;
     private readonly List<ZoneNavigationRegion> _excludedRegions = [];
+    private readonly List<NavigationTriangle> _navigationTriangles = [];
 
     public ZoneLoader(
         Simulation simulation,
@@ -40,6 +42,9 @@ public class ZoneLoader
     /// <summary>Whether the loaded zone supplied at least one excluded pathing chunk.</summary>
     public bool HasNavigationExclusions => _excludedRegions.Count > 0;
 
+    /// <summary>Collision surfaces retained for building the zone navigation mesh.</summary>
+    public IReadOnlyList<NavigationTriangle> NavigationTriangles => _navigationTriangles;
+
     /// <summary>Returns true when the original zone metadata excludes this point from AI pathing.</summary>
     public bool IsNavigationExcluded(Vector3 point)
     {
@@ -57,6 +62,7 @@ public class ZoneLoader
     public long? LoadZone(uint zoneId, bool forceReload = false)
     {
         _excludedRegions.Clear();
+        _navigationTriangles.Clear();
         var stopwatch = Stopwatch.StartNew();
 
         var zoneFilePath = Path.Combine(_mapsPath, $"{zoneId}.zone");
@@ -98,7 +104,24 @@ public class ZoneLoader
             _logger.Information("Loading chunk ({CurrentCount}/{TotalCount}) {ChunkName}", chunkRefs.IndexOf(chunkRef) + 1, chunkRefs.Length, chunkRef.Name);
             var chunkPath = Path.Combine(_mapsPath, "chunks", $"{chunkRef.Name}.gtchunk");
 
-            var statics = ChunkProcessor.ProcessChunk(chunkPath, _cachePath, _simulation, _pool, _dispatcher, forceReload);
+            var statics = ChunkProcessor.ProcessChunk(
+                chunkPath,
+                _cachePath,
+                _simulation,
+                _pool,
+                _dispatcher,
+                forceReload,
+                triangles =>
+                {
+                    foreach (var triangle in triangles)
+                    {
+                        _navigationTriangles.Add(new NavigationTriangle(
+                            triangle.A + chunkRef.Origin,
+                            triangle.B + chunkRef.Origin,
+                            triangle.C + chunkRef.Origin,
+                            triangle.PhysicsMaterialId));
+                    }
+                });
 
             if (statics.Length == 0)
             {

@@ -57,8 +57,11 @@ public class AiEngine
     /// <summary>Chest height a shot leaves from when the monster row carries no muzzle offset.</summary>
     private const float _muzzleHeight = 1.62f;
 
-    /// <summary>Radius reserved for a character while the navigation probe tests a corridor.</summary>
+    /// <summary>Fallback radius when a monster row does not provide its body radius.</summary>
     private const float _navigationAgentRadius = 0.7f;
+
+    /// <summary>Fallback body height when a monster row does not provide its body height.</summary>
+    private const float _navigationAgentHeight = 1.8f;
 
     /// <summary>Do not rebuild a path for every 20 Hz movement update.</summary>
     private const ulong _navigationReplanIntervalMs = 750;
@@ -185,6 +188,7 @@ public class AiEngine
         }
 
         var (normalSpeed, fastSpeed) = _monsterStats.GetSpeeds(npc.StaticInfo.CharacterTypeId);
+        var (bodyRadius, bodyHeight) = _monsterStats.GetBodyDimensions(npc.StaticInfo.CharacterTypeId);
         var (baseBehavior, offensiveBehavior) = _monsterStats.GetBehaviors(npc.StaticInfo.CharacterTypeId);
         var baseParams = NpcBehaviorParams.Parse(baseBehavior);
         int dbDamageRating = _monsterStats.GetAttackDamage(npc.StaticInfo.CharacterTypeId, npc.MonsterLevel);
@@ -206,6 +210,12 @@ public class AiEngine
             Brain = new AiBrain(_rules, _shard.CurrentTimeLong, AiCombatTuning.FromProfile(attackProfile)),
             MoveSpeed = AiSpeeds.Resolve(normalSpeed, _rules.DefaultMoveSpeed, _rules),
             ChaseSpeed = AiSpeeds.Resolve(fastSpeed, _rules.DefaultChaseSpeed, _rules),
+            NavigationRadius = float.IsFinite(bodyRadius) && bodyRadius > 0f
+                ? bodyRadius
+                : _navigationAgentRadius,
+            NavigationHeight = float.IsFinite(bodyHeight) && bodyHeight > 0f
+                ? bodyHeight
+                : _navigationAgentHeight,
             AttackDamage = attackDamage,
             Profile = attackProfile,
             // A weapon the database gives a magazine and a reload time fires from that magazine; everything
@@ -1346,16 +1356,35 @@ public class AiEngine
             // the pathfinder immediately returns the direct point. That preserves the useful
             // no-map development mode without manufacturing an obstacle map.
             var physics = _shard.Physics;
-            var path = NpcPathfinder.FindPath(
-                npc.Entity.Position,
-                goal,
-                point => GroundForNavigation(npc.Entity, point),
-                (from, to) => IsBlocked(from, to, npc.Entity.EntityId),
-                _navigationOptions,
-                pathingCostAt: null,
-                excludedAt: physics?.HasNavigationExclusions == true
-                    ? physics.IsNavigationExcluded
-                    : null);
+            var blocked = new Func<Vector3, Vector3, bool>(
+                (from, to) => IsBlocked(from, to, npc.Entity.EntityId));
+            IReadOnlyList<Vector3> path;
+            if (physics?.HasNavigationMesh == true)
+            {
+                // The collision-derived mesh is the authoritative route once a zone has
+                // supplied its surfaces. Do not silently fall back to the old local grid when
+                // the mesh says the endpoints are disconnected: the original CAIS query also
+                // reports an unreachable request rather than inventing a new map.
+                path = physics.FindNavigationPath(
+                    npc.Entity.Position,
+                    goal,
+                    blocked,
+                    _navigationOptions.MaxStepHeight,
+                    _navigationOptions.MaxSearchDistance) ?? Array.Empty<Vector3>();
+            }
+            else
+            {
+                path = NpcPathfinder.FindPath(
+                    npc.Entity.Position,
+                    goal,
+                    point => GroundForNavigation(npc.Entity, point),
+                    blocked,
+                    _navigationOptions,
+                    pathingCostAt: null,
+                    excludedAt: physics?.HasNavigationExclusions == true
+                        ? physics.IsNavigationExcluded
+                        : null);
+            }
 
             if (path.Count == 0)
             {
@@ -1410,11 +1439,19 @@ public class AiEngine
         }
 
         var direction = delta / distance;
-        var side = new Vector3(-direction.Y, direction.X, 0f) * _navigationAgentRadius;
+        float radius = _navigationAgentRadius;
+        float height = _navigationAgentHeight;
+        if (_brains.TryGetValue(selfEntityId, out var npc))
+        {
+            radius = npc.NavigationRadius;
+            height = npc.NavigationHeight;
+        }
+
+        var side = new Vector3(-direction.Y, direction.X, 0f) * radius;
         // Static geometry is the navigation world. Dynamic characters are deliberately not
         // obstacles: a crowd must not deadlock because each NPC sees the other NPC's kinematic
         // hitbox, and the target's body must not block the last step into melee range.
-        float[] probeHeights = [0.85f, 1.45f];
+        float[] probeHeights = [height * 0.45f, height * 0.8f];
         Vector3[] lateralOffsets = [Vector3.Zero, side, -side];
         foreach (var height in probeHeights)
         {
@@ -1554,6 +1591,8 @@ public class AiEngine
         public Vector3 Home;
         public float MoveSpeed;
         public float ChaseSpeed;
+        public float NavigationRadius;
+        public float NavigationHeight;
         public int AttackDamage;
 
         /// <summary>The weapon this NPC attacks with, as the static database describes it.</summary>

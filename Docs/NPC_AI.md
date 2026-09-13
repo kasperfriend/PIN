@@ -45,7 +45,8 @@ UdpHosts/GameServer/Systems/Ai/
 ├── AiSpeeds.cs                 monster row speed -> metres per second
 ├── AiAttackDamage.cs           monster damage rating -> what one swing is worth (fallback)
 ├── AiVectors.cs                horizontal / straight-line distance + character facing maths
-├── NpcPathfinder.cs             collision routes with original pathing-cost/exclusion hooks
+├── NpcPathfinder.cs             compatibility routes with original pathing-cost/exclusion hooks
+├── NavigationMesh.cs             collision-derived weighted triangle navigation graph
 ├── NpcAttackProfile.cs         everything one NPC attack needs, resolved from the DB
 ├── NpcAttackResolver.cs        monster -> weapon -> template/attributes/ammo -> profile
 │                               (ResolveWeapon is also how a turret fires: dbcharacter::TurretWeapon)
@@ -236,25 +237,26 @@ hittable where it now stands) and broadcasting a
 `AeroMessages.GSS.Character.Event.CurrentPoseUpdate` on the unreliable GSS channel
 - the same message `MovementRelay` uses to show one player's movement to another.
 
-Before stepping, the NPC follows a collision-aware navigation query. A direct segment is
-used when clear; otherwise a bounded 2 m grid searches around static geometry, with an
-NPC-sized corridor probe at torso height on every edge. The query also accepts the original
-zone navigation inputs: excluded regions are rejected and `AIPathingCost` is used as a
-weighted route cost. If no route exists, the NPC holds position instead of walking through
-geometry. With no collision data loaded (`LoadMapsCollision` off) the sampler is flat and
-nothing can block or occlude, so every target counts as visible.
+Before stepping, the NPC follows a collision-derived navigation query. The loaded zone
+collision surfaces are filtered into walkable faces and connected into a material-weighted
+triangle graph. A direct segment is used only when the graph route can be safely simplified;
+otherwise graph waypoints are followed, with an NPC-sized corridor probe at torso height on
+every edge. If no route exists, the NPC holds position instead of walking through geometry.
+When a zone has no usable navigation mesh, the bounded collision grid remains as a
+compatibility fallback. With no collision data loaded (`LoadMapsCollision` off) the sampler
+is flat and nothing can block or occlude, so every target counts as visible.
 
 **Original-game parity status.** This is not a claim that the planner is the original
 Firefall implementation. The repository contains the inputs (`dbphysicsmaterials`
 `AIPathingCost`, `dbzonemetadata` chunk `ExcludeFromPathing`, CAIS
 `am*NavToDist`/`am*NavTimeout`, and zone `ZonePathLayer` records), but it does not contain
-the original runtime navmesh/query implementation, nor enough metadata to connect every
-static collision triangle to its physics material at runtime. The engine now preserves and
-uses the CAIS navigation distance/timeout and the pathfinder has explicit weighted/excluded
-query hooks; the live collision adapter now applies chunk-level `ExcludeFromPathing` when
-that static table is loaded, but still uses cost 1 because the original triangle-to-material
-binding is not loaded. Therefore navigation should be described as original-input-compatible,
-not as byte-for-byte original-game parity.
+the original runtime navmesh/query implementation. The engine now extracts collision triangles,
+retains their physics-material ids where the Havok data exposes them, builds a static
+material-weighted triangle graph per loaded zone, applies chunk-level exclusions, and uses
+CAIS navigation distance/timeout requests. A compatibility grid remains only when no
+collision-derived mesh can be built. This is the closest data-driven reconstruction currently
+possible from the repository, but it is not byte-for-byte original-game parity until the
+original baked navmesh/query rules are recovered.
 
 ### What an NPC animates
 
@@ -1028,21 +1030,21 @@ before.
   templates (not per-monster items) carry `damage_per_round` 1; those rows still
   resolve through the 954/1145 chain above, so the placeholder only survives where
   a weapon item has neither attribute row - the rating share covers it.
-* **Navigation is collision-aware but not yet the original runtime navmesh.** When zone
-  collision data is loaded, a mob first tries the direct route and then searches a bounded
-  2 m grid with A*. Every cell is grounded against the same static Bepu geometry used by
-  line of sight, and every edge checks the NPC-sized corridor at torso height. The query
-  API now models the original `AIPathingCost` and `ExcludeFromPathing` inputs, while the
-  current zone adapter has no triangle-material/navmesh binding and therefore uses cost 1;
-  it applies chunk-level exclusions when `ChunkRecord` data is available. Routes are
-  refreshed when the target moves, when collision changes
-  or after 750 ms, and the movement state is `Running` while chasing, `Walking` while
-  repositioning in attack range, and `Standing` when no route is available. A step higher
-  than 1.25 m is not traversable: the engine does not invent jumps, ladders or climbing,
-  and a player on a separate roof/floor remains unreachable. With maps collision disabled
-  the sampler falls back to the current plane and navigation is intentionally a direct
-  no-op for test and development shards. This is an explicit parity limitation, not a
-  claim that the local planner is the original game's planner.
+* **Navigation is collision-derived and material-weighted, but not yet the original runtime
+  navmesh.** When a zone loads, its collision triangles are retained as walkable faces,
+  adjacent faces form a graph, `AIPathingCost` weights graph edges, and chunk
+  `ExcludeFromPathing` removes excluded faces. NPCs query that graph first; the old bounded
+  collision grid is only the fallback when no mesh can be built. Runtime corridor probes
+  still use the same static Bepu geometry as line of sight, with body radius and height taken
+  from `dbcharacter::Monster` when available. Routes are refreshed when the target moves,
+  when collision changes or after 750 ms, and the movement state is `Running` while chasing,
+  `Walking` while repositioning in attack range, and `Standing` when no route is available.
+  A step higher than 1.25 m is not traversable: the engine does not invent jumps, ladders or
+  climbing, and a player on a separate roof/floor remains unreachable. The triangle graph is
+  the closest reconstruction possible with the checked-in assets; exact original polygon
+  generation, off-mesh links, tie-breaking and dynamic avoidance still require original
+  navmesh/runtime evidence. With maps collision disabled the sampler falls back to the current
+  plane and navigation is intentionally a direct no-op for test and development shards.
 * **No SDB behaviour trees.** `Monster.Behavior`, `BehaviorOffensive` and
   `BehaviorDefensive` name the live game's AI behaviour assets; PIN ignores them
   and runs one state machine for every monster type.
