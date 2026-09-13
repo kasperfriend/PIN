@@ -1517,6 +1517,12 @@ public class StaticDBLoader : ISDBLoader
             .ToDictionary(row => row.Id);
     }
 
+    public Dictionary<uint, ChunkRecord> LoadChunkRecord()
+    {
+        return LoadStaticDB<ChunkRecord>("dbzonemetadata::ChunkRecord")
+            .ToDictionary(row => row.Id);
+    }
+
     public Dictionary<uint, ResourceNodeBeacon> LoadResourceNodeBeacon()
     {
         return LoadStaticDB<ResourceNodeBeacon>("dbitems::ResourceNodeBeacon")

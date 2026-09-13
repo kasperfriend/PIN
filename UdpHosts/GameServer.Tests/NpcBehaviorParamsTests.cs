@@ -159,6 +159,17 @@ public class NpcBehaviorParamsTests
     }
 
     [Fact]
+    public void TryGetAbilityModule_ReadsOriginalNavigationFields()
+    {
+        var parsed = NpcBehaviorParams.Parse(
+            "Arch_MoveThenFire_Base(am1Id=86132,am1NavToDist=6.5,am1NavTimeout=2400)");
+
+        Assert.True(parsed.TryGetAbilityModule("am1", out var module));
+        Assert.Equal(6.5f, module.NavToDistance);
+        Assert.Equal(2400, module.NavTimeoutMs);
+    }
+
+    [Fact]
     public void TryGetAbilityModule_WithoutThatModule_IsFalse()
     {
         var wanderer = NpcBehaviorParams.Parse("AggressiveWanderer");

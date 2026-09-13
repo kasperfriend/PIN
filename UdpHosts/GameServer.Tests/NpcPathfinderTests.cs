@@ -59,6 +59,38 @@ public class NpcPathfinderTests
         Assert.Empty(path);
     }
 
+    [Fact]
+    public void PathingCostPrefersAnUnblockedLongerRoute()
+    {
+        var path = NpcPathfinder.FindPath(
+            Vector3.Zero,
+            new Vector3(10f, 0f, 0f),
+            FlatGround,
+            (_, _) => false,
+            new NpcPathfinder.Options(CellSize: 2f, MaxSearchDistance: 20f),
+            point => point.X is >= 3f and <= 7f && MathF.Abs(point.Y) < 0.1f ? 100f : 1f,
+            null);
+
+        Assert.NotEmpty(path);
+        Assert.Contains(path, point => MathF.Abs(point.Y) > 0.1f);
+    }
+
+    [Fact]
+    public void ExcludedPathingRegionIsNeverUsed()
+    {
+        var path = NpcPathfinder.FindPath(
+            Vector3.Zero,
+            new Vector3(10f, 0f, 0f),
+            FlatGround,
+            (_, _) => false,
+            new NpcPathfinder.Options(CellSize: 2f, MaxSearchDistance: 20f),
+            null,
+            point => point.X is >= 3f and <= 7f && MathF.Abs(point.Y) < 0.1f);
+
+        Assert.NotEmpty(path);
+        Assert.Contains(path, point => MathF.Abs(point.Y) > 0.1f);
+    }
+
     private static bool WallBlocksCenterLine(Vector3 from, Vector3 to)
     {
         // A four-metre-wide wall spanning the centre lane. The two-metre grid can route

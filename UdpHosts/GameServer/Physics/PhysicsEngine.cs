@@ -92,7 +92,13 @@ public partial class PhysicsEngine
 
         _fallbackShape = Simulation.Shapes.Add(new Sphere(0.9f));
 
-        _zoneLoader = new ZoneLoader(Simulation, BufferPool, ThreadDispatcher, mapsPath, cachePath);
+        _zoneLoader = new ZoneLoader(
+            Simulation,
+            BufferPool,
+            ThreadDispatcher,
+            mapsPath,
+            cachePath,
+            chunkId => SDBInterface.GetChunkRecord(chunkId)?.ExcludeFromPathing);
         _rigidBodyLoader = new RigidBodyLoader(Simulation, BufferPool, ThreadDispatcher, assetDBPath, cachePath);
         PoseLoader = new PoseLoader.PoseLoader(assetDBPath);
 
@@ -122,6 +128,12 @@ public partial class PhysicsEngine
             ZoneFileTimestamp = ts.Value;
         }
     }
+
+    /// <summary>Whether the loaded zone supplied original chunk exclusions for AI pathing.</summary>
+    public bool HasNavigationExclusions => _zoneLoader.HasNavigationExclusions;
+
+    /// <summary>Tests the original zone chunk metadata's excluded-from-pathing regions.</summary>
+    public bool IsNavigationExcluded(Vector3 point) => _zoneLoader.IsNavigationExcluded(point);
 
     public StaticDescription[] LoadRigidBody(string assetId)
     {

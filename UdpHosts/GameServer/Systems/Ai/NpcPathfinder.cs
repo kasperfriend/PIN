@@ -5,18 +5,26 @@ using System.Numerics;
 namespace GameServer.Systems.Ai;
 
 /// <summary>
-///     A small, deterministic grid pathfinder used by NPCs. The grid is deliberately local to one
-///     request: the zone collision data is the source of truth, so a path never depends on a stale
-///     copy of a map or on a second navigation mesh that can disagree with the hitbox the physics
-///     engine uses for line of sight.
+///     Deterministic navigation over the walkable surfaces supplied by the caller. This models the
+///     original CAIS navigation contract: a ground sample says whether a cell exists, a collision
+///     probe supplies the agent clearance, and the optional pathing-cost/exclusion queries carry
+///     the zone's navigation metadata.
 /// </summary>
 /// <remarks>
-///     This class has no server or physics dependency. Callers provide a ground sampler and a
-///     collision probe, which keeps the A* search testable and lets the game server use its Bepu
-///     static geometry. A missing ground sample means that the cell is not walkable. The game-server
-///     adapter supplies the current position as a fallback when maps collision is disabled, making
-///     pathfinding a no-op in the same configuration in which the old straight-line movement was a
-///     no-op.
+///     <para>
+///     The original game's runtime navmesh is not present in this repository. It must not be
+///     described as reproduced by a generic straight-line fallback. This class therefore keeps the
+///     original inputs explicit: excluded cells are never considered and a positive pathing cost is
+///     part of A*'s edge cost. The game-server adapter can supply those values when its zone loader
+///     has them; tests and collision-only deployments use the two-argument overload, which is the
+///     unweighted compatibility path.
+///     </para>
+///     <para>
+///     This class has no server or physics dependency. A missing ground sample means that the cell is
+///     not walkable. The game-server adapter supplies the current position as a fallback when maps
+///     collision is disabled, making pathfinding a no-op in the same configuration in which the old
+///     straight-line movement was a no-op.
+///     </para>
 /// </remarks>
 public static class NpcPathfinder
 {
@@ -33,18 +41,41 @@ public static class NpcPathfinder
     }
 
     /// <summary>
-    ///     Finds a path from <paramref name="start"/> to <paramref name="goal"/>. The returned points
-    ///     are ground positions, do not include the start point and always use the sampler's Z value.
-    ///     An empty result means that no path was found; a one-point result is a direct path.
+    ///     Finds an unweighted path from <paramref name="start"/> to <paramref name="goal"/>. This
+    ///     overload is retained for collision-only callers; use the metadata overload when loading
+    ///     original zone pathing data.
     /// </summary>
-    /// <param name="groundAt">Returns the walkable ground below a point, or null for an unusable cell.</param>
-    /// <param name="blocked">Returns true when an agent cannot traverse the segment.</param>
     public static IReadOnlyList<Vector3> FindPath(
         Vector3 start,
         Vector3 goal,
         Func<Vector3, Vector3?> groundAt,
         Func<Vector3, Vector3, bool> blocked,
         Options options = default)
+    {
+        return FindPath(start, goal, groundAt, blocked, options, null, null);
+    }
+
+    /// <summary>
+    ///     Finds a path from <paramref name="start"/> to <paramref name="goal"/>. The returned points
+    ///     are ground positions, do not include the start point and always use the sampler's Z value.
+    ///     An empty result means that no path was found; a one-point result is a direct path.
+    /// </summary>
+    /// <param name="groundAt">Returns the walkable ground below a point, or null for an unusable cell.</param>
+    /// <param name="blocked">Returns true when an agent cannot traverse the segment.</param>
+    /// <param name="options">The query limits and agent step constraints.</param>
+    /// <param name="pathingCostAt">
+    ///     Returns the original zone's AI pathing cost at a ground point. Values must be finite and
+    ///     non-negative; a null callback means every walkable cell has cost 1.
+    /// </param>
+    /// <param name="excludedAt">Returns true for a zone region excluded from AI pathing.</param>
+    public static IReadOnlyList<Vector3> FindPath(
+        Vector3 start,
+        Vector3 goal,
+        Func<Vector3, Vector3?> groundAt,
+        Func<Vector3, Vector3, bool> blocked,
+        Options options,
+        Func<Vector3, float>? pathingCostAt,
+        Func<Vector3, bool>? excludedAt)
     {
         if (groundAt == null)
         {
@@ -57,6 +88,7 @@ public static class NpcPathfinder
         }
 
         options = Sanitize(options);
+        bool weighted = pathingCostAt != null || excludedAt != null;
 
         var startGround = groundAt(start);
         var goalGround = groundAt(goal);
@@ -67,13 +99,20 @@ public static class NpcPathfinder
 
         var startPoint = startGround.Value;
         var goalPoint = goalGround.Value;
+        if (IsExcluded(startPoint, excludedAt) || IsExcluded(goalPoint, excludedAt))
+        {
+            return Array.Empty<Vector3>();
+        }
+
         if (AiVectors.HorizontalDistance(startPoint, goalPoint) <= options.WaypointTolerance &&
             AiVectors.HeightDelta(startPoint, goalPoint) <= options.MaxStepHeight)
         {
             return [goalPoint];
         }
 
-        if (CanTraverse(startPoint, goalPoint, blocked, options))
+        // A weighted query must be searched even when the direct segment is clear. Returning it
+        // immediately would make AIPathingCost have no effect on route selection.
+        if (!weighted && CanTraverse(startPoint, goalPoint, blocked, options))
         {
             return [goalPoint];
         }
@@ -92,6 +131,22 @@ public static class NpcPathfinder
         var startKey = new GridKey(0, 0);
         groundCache[startKey] = startPoint;
 
+        float CostFor(Vector3 point)
+        {
+            if (pathingCostAt == null)
+            {
+                return 1f;
+            }
+
+            float cost = pathingCostAt(point);
+            return float.IsFinite(cost) && cost >= 0f ? cost : float.PositiveInfinity;
+        }
+
+        if (float.IsPositiveInfinity(CostFor(startPoint)) || float.IsPositiveInfinity(CostFor(goalPoint)))
+        {
+            return Array.Empty<Vector3>();
+        }
+
         Vector3? GroundFor(GridKey key)
         {
             if (groundCache.TryGetValue(key, out var cached))
@@ -103,7 +158,18 @@ public static class NpcPathfinder
                 startPoint.X + (key.X * options.CellSize),
                 startPoint.Y + (key.Y * options.CellSize),
                 startPoint.Z);
+            if (IsExcluded(sample, excludedAt))
+            {
+                groundCache[key] = null;
+                return null;
+            }
+
             var result = groundAt(sample);
+            if (result.HasValue && float.IsPositiveInfinity(CostFor(result.Value)))
+            {
+                result = null;
+            }
+
             groundCache[key] = result;
             return result;
         }
@@ -112,7 +178,7 @@ public static class NpcPathfinder
         var cameFrom = new Dictionary<GridKey, GridKey>();
         var costSoFar = new Dictionary<GridKey, float> { [startKey] = 0f };
         var closed = new HashSet<GridKey>();
-        open.Enqueue(startKey, Heuristic(startKey, goalKey));
+        open.Enqueue(startKey, weighted ? 0f : Heuristic(startKey, goalKey));
 
         int expanded = 0;
         bool reached = false;
@@ -161,7 +227,18 @@ public static class NpcPathfinder
                     }
                 }
 
-                float stepCost = diagonal ? 1.4142135f : 1f;
+                float stepDistance = diagonal ? 1.4142135f : 1f;
+                float fromCost = CostFor(from.Value);
+                float toCost = CostFor(to.Value);
+                if (float.IsPositiveInfinity(fromCost) || float.IsPositiveInfinity(toCost))
+                {
+                    continue;
+                }
+
+                // AIPathingCost is an edge weight, not a cosmetic preference. Dijkstra is used
+                // for weighted queries rather than applying the unweighted heuristic, which may
+                // otherwise prefer a short but deliberately expensive surface.
+                float stepCost = stepDistance * ((fromCost + toCost) * 0.5f);
                 float newCost = costSoFar[current] + stepCost;
                 if (costSoFar.TryGetValue(neighbor, out var oldCost) && newCost >= oldCost)
                 {
@@ -170,7 +247,8 @@ public static class NpcPathfinder
 
                 cameFrom[neighbor] = current;
                 costSoFar[neighbor] = newCost;
-                open.Enqueue(neighbor, newCost + Heuristic(neighbor, goalKey));
+                float priority = weighted ? newCost : newCost + Heuristic(neighbor, goalKey);
+                open.Enqueue(neighbor, priority);
             }
         }
 
@@ -212,7 +290,15 @@ public static class NpcPathfinder
             }
         }
 
-        return Simplify(raw, blocked, options);
+        // A shortcut is safe for an unweighted collision query. In the weighted/original-data
+        // mode it could cut across a high-cost surface and silently discard the route the
+        // pathing-cost field selected, so preserve the searched route.
+        return weighted ? raw : Simplify(raw, blocked, options);
+    }
+
+    private static bool IsExcluded(Vector3 point, Func<Vector3, bool>? excludedAt)
+    {
+        return excludedAt?.Invoke(point) == true;
     }
 
     private static Options Sanitize(Options options)

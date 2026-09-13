@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Numerics;
 using BepuPhysics;
 using BepuUtilities;
 using BepuUtilities.Memory;
@@ -17,18 +18,45 @@ public class ZoneLoader
     private readonly ThreadDispatcher _dispatcher;
     private readonly string _mapsPath;
     private readonly string _cachePath;
+    private readonly Func<uint, ulong?>? _chunkPathingFlags;
+    private readonly List<ZoneNavigationRegion> _excludedRegions = [];
 
-    public ZoneLoader(Simulation simulation, BufferPool pool, ThreadDispatcher dispatcher, string mapsPath, string cachePath)
+    public ZoneLoader(
+        Simulation simulation,
+        BufferPool pool,
+        ThreadDispatcher dispatcher,
+        string mapsPath,
+        string cachePath,
+        Func<uint, ulong?>? chunkPathingFlags = null)
     {
         _simulation = simulation;
         _pool = pool;
         _dispatcher = dispatcher;
         _mapsPath = mapsPath;
         _cachePath = cachePath;
+        _chunkPathingFlags = chunkPathingFlags;
+    }
+
+    /// <summary>Whether the loaded zone supplied at least one excluded pathing chunk.</summary>
+    public bool HasNavigationExclusions => _excludedRegions.Count > 0;
+
+    /// <summary>Returns true when the original zone metadata excludes this point from AI pathing.</summary>
+    public bool IsNavigationExcluded(Vector3 point)
+    {
+        foreach (var region in _excludedRegions)
+        {
+            if (region.Contains(point))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public long? LoadZone(uint zoneId, bool forceReload = false)
     {
+        _excludedRegions.Clear();
         var stopwatch = Stopwatch.StartNew();
 
         var zoneFilePath = Path.Combine(_mapsPath, $"{zoneId}.zone");
@@ -48,6 +76,20 @@ public class ZoneLoader
         }
 
         var chunkRefs = ChunkOriginCalculator.ExtractChunks(rootLayer, zoneId);
+        if (_chunkPathingFlags != null)
+        {
+            foreach (var chunkRef in chunkRefs)
+            {
+                if (chunkRef.ChunkRecordId == 0 || _chunkPathingFlags(chunkRef.ChunkRecordId) is not ulong flags || flags == 0)
+                {
+                    continue;
+                }
+
+                var min = chunkRef.Origin;
+                var max = min + new Vector3(ChunkOriginCalculator.ChunkSize, ChunkOriginCalculator.ChunkSize, 0f);
+                _excludedRegions.Add(new ZoneNavigationRegion(min, max, flags));
+            }
+        }
 
         _logger.Information($"Zone {{ZoneId}} ({{ZoneName}}): References {{Count}} {(chunkRefs.Length == 1 ? "chunk" : "chunks")}", zoneId, zone.Name, chunkRefs.Length);
 

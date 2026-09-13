@@ -45,7 +45,7 @@ UdpHosts/GameServer/Systems/Ai/
 ├── AiSpeeds.cs                 monster row speed -> metres per second
 ├── AiAttackDamage.cs           monster damage rating -> what one swing is worth (fallback)
 ├── AiVectors.cs                horizontal / straight-line distance + character facing maths
-├── NpcPathfinder.cs             local collision-driven A* routes around static geometry
+├── NpcPathfinder.cs             collision routes with original pathing-cost/exclusion hooks
 ├── NpcAttackProfile.cs         everything one NPC attack needs, resolved from the DB
 ├── NpcAttackResolver.cs        monster -> weapon -> template/attributes/ammo -> profile
 │                               (ResolveWeapon is also how a turret fires: dbcharacter::TurretWeapon)
@@ -236,12 +236,25 @@ hittable where it now stands) and broadcasting a
 `AeroMessages.GSS.Character.Event.CurrentPoseUpdate` on the unreliable GSS channel
 - the same message `MovementRelay` uses to show one player's movement to another.
 
-Before stepping, the NPC follows a local collision-driven A* route. A direct segment is
-used when clear; otherwise a bounded 2 m grid searches around the static obstacle, with
-an NPC-sized corridor probe at torso height on every edge. If no route exists, the NPC
-holds position instead of walking through geometry. With no collision data loaded
-(`LoadMapsCollision` off) the sampler is flat and nothing can block or occlude, so every
-target counts as visible.
+Before stepping, the NPC follows a collision-aware navigation query. A direct segment is
+used when clear; otherwise a bounded 2 m grid searches around static geometry, with an
+NPC-sized corridor probe at torso height on every edge. The query also accepts the original
+zone navigation inputs: excluded regions are rejected and `AIPathingCost` is used as a
+weighted route cost. If no route exists, the NPC holds position instead of walking through
+geometry. With no collision data loaded (`LoadMapsCollision` off) the sampler is flat and
+nothing can block or occlude, so every target counts as visible.
+
+**Original-game parity status.** This is not a claim that the planner is the original
+Firefall implementation. The repository contains the inputs (`dbphysicsmaterials`
+`AIPathingCost`, `dbzonemetadata` chunk `ExcludeFromPathing`, CAIS
+`am*NavToDist`/`am*NavTimeout`, and zone `ZonePathLayer` records), but it does not contain
+the original runtime navmesh/query implementation, nor enough metadata to connect every
+static collision triangle to its physics material at runtime. The engine now preserves and
+uses the CAIS navigation distance/timeout and the pathfinder has explicit weighted/excluded
+query hooks; the live collision adapter now applies chunk-level `ExcludeFromPathing` when
+that static table is loaded, but still uses cost 1 because the original triangle-to-material
+binding is not loaded. Therefore navigation should be described as original-input-compatible,
+not as byte-for-byte original-game parity.
 
 ### What an NPC animates
 
@@ -534,11 +547,12 @@ before, exactly like a server-only weapon chain - no behaviour string in the bui
 such a module (all 26 reach a client command once every chain the engine runs is followed,
 `120937` included), so the gate protects against a data change rather than a shipped row.
 
-What the strings state and the engine does **not** carry: `am*Timeout` (a watchdog),
-`am*NavToDist`/`am*NavTimeout` (the module's own navigation) and
-`am*Targeted`/`am*Facing`/`am*FacingDuring` (requirements an attack window already
-meets). The database gives no event that fires a module, so the window the brain asked to
-attack in is the trigger.
+The module's navigation fields are carried as well: `am*NavToDist` becomes the
+requested approach distance and `am*NavTimeout` ends that request if the NPC cannot
+reach it. `am*Timeout` and `am*Targeted`/`am*Facing`/`am*FacingDuring` still are not
+full behaviour-tree gates; an attack window has a live target and the server does not
+possess the original CAIS tree runner. The database gives no independent event that
+fires a module, so the window the brain asked to attack in remains the trigger.
 
 **The displacement a chain declares now happens (`MovementSlide`).** The one part of a
 module's chains the engine did not execute was their movement: `aptfs::MovementSlideCommandDef`
@@ -978,9 +992,9 @@ before.
   (see [What an NPC animates](#what-an-npc-animates), which lists the animation rows
   that are and are not used, and `Docs/EMOTES.md` §7). What is still untouched: the
   engine does not run a monster's behaviour tree, so the *tree's* other actions (taunts,
-  wander idles, interaction poses, and the navigation the `am*NavToDist` parameters
-  describe) do not happen - the emote parameter of the set it is in and its `am1`/`am2`
-  modules do; a module's own movement *is* applied now (`MovementSlide`, above - the dodge
+  wander idles and interaction poses) do not happen - the emote parameter of the set it is in,
+  its `am1`/`am2` modules and their `am*NavToDist`/`am*NavTimeout` approach request do;
+  a module's own movement *is* applied now (`MovementSlide`, above - the dodge
   pair's 5 m in 667 ms, the Move Then Fire lunge's 20 m in 1 s, 39066's rise), so the only
   placeholders left on the animation paths are the ones whose semantics this build cannot
   establish from the database (`aptgss::AbilityFinished`, which the dodge's own remove
@@ -1014,18 +1028,21 @@ before.
   templates (not per-monster items) carry `damage_per_round` 1; those rows still
   resolve through the 954/1145 chain above, so the placeholder only survives where
   a weapon item has neither attribute row - the rating share covers it.
-* **Navigation is local and collision-driven; climbing and jumping are still out.** When
-  zone collision data is loaded, a mob first tries the direct route and then searches a
-  bounded 2 m grid with A*. Every cell is grounded against the same static Bepu geometry
-  used by line of sight, and every edge checks the NPC-sized corridor at torso height, so
-  walls and low obstacles are routed around instead of making the mob walk into them.
-  Routes are refreshed when the target moves, when collision changes or after 750 ms, and
-  the movement state is `Running` while chasing, `Walking` while repositioning in attack
-  range, and `Standing` when no route is available. A step higher than 1.25 m is not
-  traversable: the engine does not invent jumps, ladders or climbing, and a player on a
-  separate roof/floor remains unreachable. With maps collision disabled the sampler falls
-  back to the current plane and navigation is intentionally a direct no-op for test and
-  development shards.
+* **Navigation is collision-aware but not yet the original runtime navmesh.** When zone
+  collision data is loaded, a mob first tries the direct route and then searches a bounded
+  2 m grid with A*. Every cell is grounded against the same static Bepu geometry used by
+  line of sight, and every edge checks the NPC-sized corridor at torso height. The query
+  API now models the original `AIPathingCost` and `ExcludeFromPathing` inputs, while the
+  current zone adapter has no triangle-material/navmesh binding and therefore uses cost 1;
+  it applies chunk-level exclusions when `ChunkRecord` data is available. Routes are
+  refreshed when the target moves, when collision changes
+  or after 750 ms, and the movement state is `Running` while chasing, `Walking` while
+  repositioning in attack range, and `Standing` when no route is available. A step higher
+  than 1.25 m is not traversable: the engine does not invent jumps, ladders or climbing,
+  and a player on a separate roof/floor remains unreachable. With maps collision disabled
+  the sampler falls back to the current plane and navigation is intentionally a direct
+  no-op for test and development shards. This is an explicit parity limitation, not a
+  claim that the local planner is the original game's planner.
 * **No SDB behaviour trees.** `Monster.Behavior`, `BehaviorOffensive` and
   `BehaviorDefensive` name the live game's AI behaviour assets; PIN ignores them
   and runs one state machine for every monster type.

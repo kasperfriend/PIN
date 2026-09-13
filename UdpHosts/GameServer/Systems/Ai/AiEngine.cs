@@ -514,13 +514,17 @@ public class AiEngine
         var modules = new List<NpcAbilityModuleState>();
         foreach (var scan in scans)
         {
-            if (scan.Runnable)
+            // A module may have no client-visible chain and still own a CAIS navigation
+            // request. Keep that request even though it is not an activatable ability; dropping
+            // it here was the reason am*NavToDist/am*NavTimeout had no runtime effect.
+            if (scan.Runnable || scan.Module.NavToDistance > 0f)
             {
                 modules.Add(new NpcAbilityModuleState
                 {
                     Params = scan.Module,
                     AbilityId = scan.AbilityId,
                     DeliversDamage = scan.DeliversDamage,
+                    Runnable = scan.Runnable,
                 });
             }
         }
@@ -560,7 +564,8 @@ public class AiEngine
 
         foreach (var module in modules)
         {
-            if (currentTime < module.NextUseAt || !module.Params.AllowsDistance(attackDistance))
+            if (!module.Runnable || module.AbilityId == 0 ||
+                currentTime < module.NextUseAt || !module.Params.AllowsDistance(attackDistance))
             {
                 continue;
             }
@@ -1108,12 +1113,21 @@ public class AiEngine
     {
         var entity = npc.Entity;
 
-        Vector3? goal = decision.Movement switch
-        {
-            AiMovementIntent.TowardTarget => new Vector3?(target?.Position ?? npc.Home),
-            AiMovementIntent.TowardHome => new Vector3?(npc.Home),
-            _ => null,
-        };
+        float navigationStopDistance = target != null
+            ? ResolveNavigationStopDistance(npc, currentTime)
+            : npc.Brain.StandoffRange;
+        bool moduleWantsApproach = target != null &&
+            (decision.State is AiBrainState.Chase or AiBrainState.Attack) &&
+            AiVectors.HorizontalDistance(entity.Position, target.Position) > navigationStopDistance;
+
+        Vector3? goal = moduleWantsApproach
+            ? new Vector3?(target.Position)
+            : decision.Movement switch
+            {
+                AiMovementIntent.TowardTarget => new Vector3?(target?.Position ?? npc.Home),
+                AiMovementIntent.TowardHome => new Vector3?(npc.Home),
+                _ => null,
+            };
 
         bool moved = false;
         bool sliding = goal.HasValue && IsSliding(entity);
@@ -1206,7 +1220,8 @@ public class AiEngine
         if (state != AiBrainState.Return)
         {
             float targetDistance = AiVectors.HorizontalDistance(entity.Position, goal);
-            step = MathF.Min(step, MathF.Max(0f, targetDistance - npc.Brain.StandoffRange));
+            float stopDistance = ResolveNavigationStopDistance(npc, currentTime);
+            step = MathF.Min(step, MathF.Max(0f, targetDistance - stopDistance));
         }
 
         step = MathF.Min(step, horizontal);
@@ -1256,6 +1271,58 @@ public class AiEngine
         return true;
     }
 
+    /// <summary>
+    ///     Resolves the CAIS module's requested navigation stop distance. The old implementation
+    ///     parsed <c>am*NavToDist</c>/<c>am*NavTimeout</c> and then silently ignored both fields,
+    ///     which made a module's movement disagree with its original data. A timed request owns the
+    ///     approach until its watchdog expires; after that the normal weapon standoff is restored.
+    /// </summary>
+    private float ResolveNavigationStopDistance(NpcBrain npc, ulong currentTime)
+    {
+        if (npc.TargetId == 0 || npc.AbilityModules == null)
+        {
+            npc.Navigation.NavModuleId = 0;
+            npc.Navigation.NavTargetId = 0;
+            npc.Navigation.NavDeadline = 0;
+            return npc.Brain.StandoffRange;
+        }
+
+        NpcAbilityModuleState requested = null;
+        foreach (var module in npc.AbilityModules)
+        {
+            if (module.Params.NavToDistance > 0f &&
+                (requested == null || module.Params.NavToDistance < requested.Params.NavToDistance))
+            {
+                requested = module;
+            }
+        }
+
+        if (requested == null)
+        {
+            npc.Navigation.NavModuleId = 0;
+            npc.Navigation.NavTargetId = 0;
+            npc.Navigation.NavDeadline = 0;
+            return npc.Brain.StandoffRange;
+        }
+
+        if (npc.Navigation.NavModuleId != requested.Params.ModuleId ||
+            npc.Navigation.NavTargetId != npc.TargetId)
+        {
+            npc.Navigation.NavModuleId = requested.Params.ModuleId;
+            npc.Navigation.NavTargetId = npc.TargetId;
+            npc.Navigation.NavDeadline = requested.Params.NavTimeoutMs > 0
+                ? currentTime + (ulong)requested.Params.NavTimeoutMs
+                : 0;
+        }
+
+        if (npc.Navigation.NavDeadline != 0 && currentTime >= npc.Navigation.NavDeadline)
+        {
+            return npc.Brain.StandoffRange;
+        }
+
+        return requested.Params.NavToDistance;
+    }
+
     private Vector3? GetNavigationWaypoint(
         NpcBrain npc,
         Vector3 goal,
@@ -1278,12 +1345,17 @@ public class AiEngine
             // Without collision data the adapter returns a flat fallback for every sample and
             // the pathfinder immediately returns the direct point. That preserves the useful
             // no-map development mode without manufacturing an obstacle map.
+            var physics = _shard.Physics;
             var path = NpcPathfinder.FindPath(
                 npc.Entity.Position,
                 goal,
                 point => GroundForNavigation(npc.Entity, point),
                 (from, to) => IsBlocked(from, to, npc.Entity.EntityId),
-                _navigationOptions);
+                _navigationOptions,
+                pathingCostAt: null,
+                excludedAt: physics?.HasNavigationExclusions == true
+                    ? physics.IsNavigationExcluded
+                    : null);
 
             if (path.Count == 0)
             {
@@ -1427,6 +1499,9 @@ public class AiEngine
         /// <summary>Whether the module's own chains land the hit, i.e. whether a run of it spends the window.</summary>
         public bool DeliversDamage;
 
+        /// <summary>Whether its ability chain has a client-visible action and may be activated.</summary>
+        public bool Runnable;
+
         /// <summary>The time (shard clock) the module may next be used, its <c>am*Cooldown</c> run out.</summary>
         public ulong NextUseAt;
     }
@@ -1439,6 +1514,15 @@ public class AiEngine
         public ulong NextReplanAt;
         public int WaypointIndex;
         public bool HasAttempted;
+
+        /// <summary>The CAIS module whose navigation request currently owns the stop distance.</summary>
+        public uint NavModuleId;
+
+        /// <summary>The target for which that request was started.</summary>
+        public ulong NavTargetId;
+
+        /// <summary>Absolute shard time at which that request's <c>am*NavTimeout</c> expires.</summary>
+        public ulong NavDeadline;
 
         public bool HasGoal => Intent != AiMovementIntent.None;
 
