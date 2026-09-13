@@ -22,6 +22,7 @@ public class ZoneLoader
     private readonly Func<uint, ulong?>? _chunkPathingFlags;
     private readonly List<ZoneNavigationRegion> _excludedRegions = [];
     private readonly List<NavigationTriangle> _navigationTriangles = [];
+    private readonly List<ZoneChunkRef> _chunkRefs = [];
 
     public ZoneLoader(
         Simulation simulation,
@@ -45,6 +46,12 @@ public class ZoneLoader
     /// <summary>Collision surfaces retained for building the zone navigation mesh.</summary>
     public IReadOnlyList<NavigationTriangle> NavigationTriangles => _navigationTriangles;
 
+    /// <summary>
+    ///     The chunks the loaded zone references, each with its world origin (the chunk's minimum
+    ///     corner) and its <c>dbzonemetadata::ChunkRecord</c> id. Empty when no zone was loaded.
+    /// </summary>
+    public IReadOnlyList<ZoneChunkRef> ChunkRefs => _chunkRefs;
+
     /// <summary>Returns true when the original zone metadata excludes this point from AI pathing.</summary>
     public bool IsNavigationExcluded(Vector3 point)
     {
@@ -63,6 +70,7 @@ public class ZoneLoader
     {
         _excludedRegions.Clear();
         _navigationTriangles.Clear();
+        _chunkRefs.Clear();
         var stopwatch = Stopwatch.StartNew();
 
         var zoneFilePath = Path.Combine(_mapsPath, $"{zoneId}.zone");
@@ -82,6 +90,7 @@ public class ZoneLoader
         }
 
         var chunkRefs = ChunkOriginCalculator.ExtractChunks(rootLayer, zoneId);
+        _chunkRefs.AddRange(chunkRefs);
         if (_chunkPathingFlags != null)
         {
             foreach (var chunkRef in chunkRefs)

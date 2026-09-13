@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -128,6 +129,42 @@ public class GameServerModule : Module
                 else
                 {
                     Log.Error($"Cannot parse LoadZoneEntities setting value");
+                }
+            }
+
+            if (appSettings["SpawnWorldPopulation"] != null)
+            {
+                if (bool.TryParse(appSettings["SpawnWorldPopulation"], out bool spawnWorldPopulation))
+                {
+                    settings.SpawnWorldPopulation = spawnWorldPopulation;
+                }
+                else
+                {
+                    Log.Error($"Cannot parse SpawnWorldPopulation setting value");
+                }
+            }
+
+            if (appSettings["WorldPopulationMaxLiveNpcs"] != null)
+            {
+                if (int.TryParse(appSettings["WorldPopulationMaxLiveNpcs"], NumberStyles.Integer, CultureInfo.InvariantCulture, out int maxLiveNpcs))
+                {
+                    settings.WorldPopulationMaxLiveNpcs = maxLiveNpcs;
+                }
+                else
+                {
+                    Log.Error($"Cannot parse WorldPopulationMaxLiveNpcs setting value");
+                }
+            }
+
+            if (appSettings["WorldPopulationActivationRadius"] != null)
+            {
+                if (float.TryParse(appSettings["WorldPopulationActivationRadius"], NumberStyles.Float, CultureInfo.InvariantCulture, out float activationRadius))
+                {
+                    settings.WorldPopulationActivationRadius = activationRadius;
+                }
+                else
+                {
+                    Log.Error($"Cannot parse WorldPopulationActivationRadius setting value");
                 }
             }
 

@@ -108,6 +108,31 @@ public class GameServerSettings
     public bool LoadZoneEntities { get; set; } = true;
 
     /// <summary>
+    ///    Populate the zone with the monsters and NPCs the database says belong there, around the
+    ///    players that are in it. Placement comes from the zone's own walkable collision, its
+    ///    outposts/deployables/Melding perimeters and its chunk metadata; the roster is every
+    ///    <c>dbcharacter::Monster</c> row that has something to render and a behaviour that is a
+    ///    world inhabitant. Turn it off for an empty zone (only the authored
+    ///    <c>character_spawn.json</c> entities remain), or at runtime with <c>\population off</c>.
+    ///    See <c>Docs/WORLD_POPULATION.md</c>.
+    /// </summary>
+    public bool SpawnWorldPopulation { get; set; } = true;
+
+    /// <summary>
+    ///    Hard ceiling on how many world population NPCs are alive at once, whatever the zone's plan
+    ///    could hold. This is the setting that bounds what the feature costs the server: every live
+    ///    NPC is an entity, a physics body, an AI brain and a stream of keyframes.
+    /// </summary>
+    public int WorldPopulationMaxLiveNpcs { get; set; } = 600;
+
+    /// <summary>
+    ///    Metres from a player within which world population is spawned. NPCs are removed again
+    ///    beyond 1.5x this distance, so the value also decides how much of the zone is populated at
+    ///    any moment; nothing is spawned at all in a zone without players.
+    /// </summary>
+    public float WorldPopulationActivationRadius { get; set; } = 200f;
+
+    /// <summary>
     ///    Force reload zone from source files, bypassing cache.
     /// </summary>
     public bool ForceReloadZone { get; set; }

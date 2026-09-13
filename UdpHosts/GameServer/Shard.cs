@@ -23,6 +23,7 @@ using GameServer.Systems.MovementRelay;
 using GameServer.Systems.NpcDeath;
 using GameServer.Systems.PlayerRespawn;
 using GameServer.Systems.ProjectileSim;
+using GameServer.Systems.Spawning.Population;
 using GameServer.Systems.SystemEvents;
 using GameServer.Systems.WeaponSim;
 using Shared.Common;
@@ -101,6 +102,17 @@ public class Shard : IShard
         CharacterLifecycle = new CharacterLifecycleService(this, EventBus, new StandardCharacterLifecycleRules());
         PlayerRespawn = new PlayerRespawnService(this, EventBus, new StandardPlayerRespawnRules(), CharacterLifecycle);
         NpcDeath = new NpcDeathService(this, EventBus, npcDeathRules);
+
+        // World population: the zone's own monsters and NPCs, placed from the database and streamed
+        // around the players. Built even when the setting is off - constructing it is one object and
+        // no work, and having it is what lets \population on turn the feature on at runtime.
+        var populationRules = StandardWorldPopulationRules.FromSettings(settings);
+        WorldPopulation = new WorldPopulationService(
+            this,
+            populationRules,
+            new SdbWorldPopulationDataSource(),
+            new PhysicsWorldPopulationTerrain(Physics, populationRules),
+            new EntityManagerWorldPopulationSpawner(this));
     }
 
     public DateTime StartTime => DateTimeExtensions.Epoch.AddSeconds(_startTime);
@@ -127,6 +139,7 @@ public class Shard : IShard
     public CharacterLifecycleService CharacterLifecycle { get; }
     public PlayerRespawnService PlayerRespawn { get; }
     public NpcDeathService NpcDeath { get; }
+    public WorldPopulationService WorldPopulation { get; }
     public ulong InstanceId { get; }
     public uint ZoneId { get; private set; }
     public ulong CurrentTimeLong { get; private set; }
@@ -169,6 +182,12 @@ public class Shard : IShard
         AI.Tick(deltaTime, currentTime, ct);
         Physics.Tick(deltaTime, currentTime, ct);
         EntityMan.Tick(deltaTime, currentTime, ct);
+
+        // After the entity manager's tick: that is where the zone's own entities are spawned on the
+        // first tick, and world population plans around them, seeds its placement grid from them and
+        // spawns through them. Its own NPCs get their first AI update on the next tick.
+        WorldPopulation.Tick(deltaTime, currentTime, ct);
+
         EncounterMan.Tick(deltaTime, currentTime, ct);
         Abilities.Tick(deltaTime, currentTime, ct);
         WeaponSim.Tick(deltaTime, currentTime, ct);

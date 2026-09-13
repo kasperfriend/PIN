@@ -25,6 +25,7 @@ using GameServer.Systems.MovementRelay;
 using GameServer.Systems.NpcDeath;
 using GameServer.Systems.PlayerRespawn;
 using GameServer.Systems.ProjectileSim;
+using GameServer.Systems.Spawning.Population;
 using GameServer.Systems.SystemEvents;
 using GameServer.Systems.WeaponSim;
 using Serilog;
@@ -112,6 +113,12 @@ public sealed class FakeShard : IShard
     public CombatSim Combat { get; } = null;
 
     public PlayerRespawnService PlayerRespawn { get; } = null;
+
+    /// <summary>
+    ///     World population is only constructed by the tests that exercise it, because it needs a
+    ///     terrain and a spawner the minimal fake shard has neither of.
+    /// </summary>
+    public WorldPopulationService WorldPopulation { get; set; } = null;
 
     private ulong _nextGuid = 0x1000;
 

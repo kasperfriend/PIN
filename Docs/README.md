@@ -11,6 +11,7 @@ PIN is split into two areas:
 - [Mobs & NPCs Catalog](MOBS_AND_NPCS.md) — every mob/NPC in `clientdb.sd2` (decoded with `Tools/SdbDump`)
 - [Health System](HEALTH_SYSTEM.md) — health, damage, death, respawn and fall damage
 - [NPC AI](NPC_AI.md) — how spawned mobs target, chase, attack and leash, and how to tune it
+- [World Population](WORLD_POPULATION.md) — how a zone gets filled with every mob/NPC the database puts there: where the positions come from, what the two collision checks are, what bounds the cost, and the `\population` command
 - [Remote Play & Networking](REMOTE_PLAY.md) — what the servers bind to, what they advertise to clients, and how to let a second player in over LAN / RadminVPN (config, firewall, TLS, ports, troubleshooting)
 
 ## UdpHosts

@@ -43,6 +43,28 @@ public partial class PhysicsEngine
     /// </summary>
     private const int MaxCatchUpStepsPerTick = 8;
 
+    /// <summary>
+    ///     Metres of slack the <see cref="IsStandingVolumeClear" /> probes leave around a body, so a
+    ///     mob is not placed with its surface exactly touching a wall it then has to path out of.
+    /// </summary>
+    private const float ClearanceMargin = 0.1f;
+
+    /// <summary>
+    ///     Metres of headroom <see cref="IsStandingVolumeClear" /> requires above a body's height.
+    /// </summary>
+    private const float HeadroomMargin = 0.2f;
+
+    /// <summary>
+    ///     Fractions of the body height the clearance probes are fired at: ankle, waist, shoulder.
+    ///     Three heights catch both a low crate the body would stand inside and a barrier it would
+    ///     poke its head through.
+    /// </summary>
+    private static readonly float[] ClearanceProbeHeightFractions = [0.15f, 0.5f, 0.85f];
+
+    /// <summary>The horizontal directions the clearance probes are fired in.</summary>
+    private static readonly Vector3[] ClearanceProbeDirections =
+        [Vector3.UnitX, -Vector3.UnitX, Vector3.UnitY, -Vector3.UnitY];
+
     private readonly ILogger _logger;
     private readonly EventBus _eventBus;
     private readonly ZoneLoader _zoneLoader;
@@ -154,6 +176,37 @@ public partial class PhysicsEngine
 
     /// <summary>Whether a collision-derived, material-weighted navigation mesh is available.</summary>
     public bool HasNavigationMesh => _navigationMesh != null && _navigationMesh.FaceCount > 0;
+
+    /// <summary>
+    ///     Whether the zone's static geometry is loaded, i.e. whether a ground probe can hit
+    ///     anything at all. Distinct from <see cref="HasNavigationMesh"/>: a zone can have collision
+    ///     without a single walkable face in it.
+    /// </summary>
+    public bool HasZoneCollision => Simulation.Statics.Count > 0;
+
+    /// <summary>How many walkable faces the loaded zone's navigation mesh has; 0 when there is none.</summary>
+    public int WalkableFaceCount => _navigationMesh?.FaceCount ?? 0;
+
+    /// <summary>
+    ///     The centroid of one walkable face of the loaded navigation mesh: a spot the zone's own
+    ///     baked collision considers standable (walkable slope, not excluded from pathing by the
+    ///     chunk metadata). Enumerating them gives the set of every place an NPC could be put,
+    ///     which is what world population plans against. Returns false when the index is outside
+    ///     the mesh or no mesh is loaded.
+    /// </summary>
+    public bool TryGetWalkableFaceCentroid(int faceIndex, out Vector3 centroid)
+    {
+        centroid = default;
+        return _navigationMesh != null && _navigationMesh.TryGetFaceCentroid(faceIndex, out centroid);
+    }
+
+    /// <summary>
+    ///     The chunks the loaded zone was built from, with each chunk's world origin and its
+    ///     <c>dbzonemetadata::ChunkRecord</c> id. Empty when no zone collision is loaded. World
+    ///     population uses it to ask the database whether a chunk is one the server simulates at
+    ///     all before placing an NPC in it.
+    /// </summary>
+    public IReadOnlyList<ZoneChunkRef> ZoneChunks => _zoneLoader.ChunkRefs;
 
     /// <summary>Queries the loaded collision-derived navigation mesh, if one is available.</summary>
     public IReadOnlyList<Vector3>? FindNavigationPath(
@@ -404,6 +457,114 @@ public partial class PhysicsEngine
         return new Vector3(position.X, position.Y, hit.HitPosition.Z);
     }
 
+    /// <summary>
+    ///     The static ground surface under <paramref name="position" /> and the normal it faces,
+    ///     found by the same straight down probe <see cref="FindGround" /> uses. Returns false when
+    ///     nothing is hit - typically because no zone collision data is loaded, or because the point
+    ///     is over a void.
+    /// </summary>
+    /// <remarks>
+    ///     The normal is what tells walkable ground from a cliff face: the zone's navigation mesh is
+    ///     baked with a minimum walkable normal Z of 0.35, so a surface steeper than that is one no
+    ///     NPC could stand on even though the ray hit something. Callers that only need the height
+    ///     keep using <see cref="FindGround" />.
+    /// </remarks>
+    /// <param name="position">The point to look under.</param>
+    /// <param name="ground">The surface position, keeping <paramref name="position" />'s X and Y.</param>
+    /// <param name="normal">The normal of the surface that was hit.</param>
+    /// <param name="searchUp">How far above <paramref name="position" /> the probe starts.</param>
+    /// <param name="searchDown">How far below <paramref name="position" /> the probe reaches.</param>
+    /// <returns>Whether a surface was hit.</returns>
+    public bool TryGetGroundSurface(
+        Vector3 position,
+        out Vector3 ground,
+        out Vector3 normal,
+        float searchUp = 10_000f,
+        float searchDown = 10_000f)
+    {
+        ground = position;
+        normal = default;
+
+        var from = new Vector3(position.X, position.Y, position.Z + searchUp);
+        var to = new Vector3(position.X, position.Y, position.Z - searchDown);
+        var hit = SegmentRayCast(from, to, 0, staticOnly: true);
+        if (!hit.Hit)
+        {
+            return false;
+        }
+
+        ground = new Vector3(position.X, position.Y, hit.HitPosition.Z);
+        normal = hit.Normal;
+        return true;
+    }
+
+    /// <summary>
+    ///     Whether an upright body of the given size can occupy the volume whose bottom centre is
+    ///     <paramref name="feet" /> without ending up inside the world or inside another entity:
+    ///     horizontal static probes at ankle, waist and shoulder height along both axes, one
+    ///     vertical probe for headroom, and a broad phase query for the non-static bodies (players,
+    ///     mobs, vehicles, deployables) that already overlap the box.
+    /// </summary>
+    /// <remarks>
+    ///     This is the physical half of spawn placement validation. The other half - two NPCs
+    ///     planned into the same patch of ground that neither has occupied yet - is bookkeeping the
+    ///     spawning system does itself, because no ray can see a body that is not there yet. Both
+    ///     are needed, and neither is sufficient alone.
+    /// </remarks>
+    /// <param name="feet">Bottom centre of the volume, on the ground surface.</param>
+    /// <param name="radius">Body radius in metres.</param>
+    /// <param name="height">Body height in metres.</param>
+    /// <param name="ignoreEntityId">Entity whose own body does not count as an obstruction.</param>
+    /// <returns>True when the volume is free.</returns>
+    public bool IsStandingVolumeClear(Vector3 feet, float radius, float height, ulong ignoreEntityId = 0)
+    {
+        if (radius <= 0f || height <= 0f || !float.IsFinite(radius) || !float.IsFinite(height))
+        {
+            return false;
+        }
+
+        if (!float.IsFinite(feet.X) || !float.IsFinite(feet.Y) || !float.IsFinite(feet.Z))
+        {
+            return false;
+        }
+
+        float reach = radius + ClearanceMargin;
+        foreach (float heightFraction in ClearanceProbeHeightFractions)
+        {
+            var origin = new Vector3(feet.X, feet.Y, feet.Z + (height * heightFraction));
+            foreach (var direction in ClearanceProbeDirections)
+            {
+                if (SegmentRayCast(origin, origin + (direction * reach), ignoreEntityId, staticOnly: true).Hit)
+                {
+                    return false;
+                }
+            }
+        }
+
+        // Headroom: a body under a low overhang or a ledge is a body stuck in the world. Started
+        // just above the feet so a body that sank a hair into the surface does not report itself.
+        var headFrom = new Vector3(feet.X, feet.Y, feet.Z + 0.05f);
+        var headTo = new Vector3(feet.X, feet.Y, feet.Z + height + HeadroomMargin);
+        if (SegmentRayCast(headFrom, headTo, ignoreEntityId, staticOnly: true).Hit)
+        {
+            return false;
+        }
+
+        // Everything that is not the world's own geometry: players, mobs, vehicles, deployables.
+        var min = new Vector3(feet.X - radius, feet.Y - radius, feet.Z);
+        var max = new Vector3(feet.X + radius, feet.Y + radius, feet.Z + height);
+        var overlapEnumerator = default(BodyOverlapEnumerator);
+        if (ignoreEntityId != 0 && _entityIdToBody.TryGetValue(ignoreEntityId, out var ignoreHandle))
+        {
+            overlapEnumerator.HasIgnore = true;
+            overlapEnumerator.Ignore = ignoreHandle;
+        }
+
+        Simulation.BroadPhase.GetOverlaps(min, max, BufferPool, ref overlapEnumerator);
+
+        return !overlapEnumerator.Found;
+    }
+
     public void HandleProjectileImpact(
         CharacterEntity source,
         uint trace,
@@ -494,6 +655,42 @@ public partial class PhysicsEngine
         bulletDescription.Pose.Position = pos;
         Simulation.Bodies.Add(bulletDescription);
         return bulletDescription;
+    }
+
+    /// <summary>
+    ///     Broad phase enumerator that stops at the first non-static collidable overlapping the
+    ///     queried box. Statics are the world's own geometry, which
+    ///     <see cref="IsStandingVolumeClear" /> already probed with rays; what is left is the bodies
+    ///     that occupy the volume.
+    /// </summary>
+    /// <remarks>
+    ///     Never stored into unmanaged memory by the broad phase, so the struct can be as small as
+    ///     the answer needs it to be; the same shape the collision query demo collects its overlaps
+    ///     with, minus the list - here one hit is the whole answer.
+    /// </remarks>
+    private struct BodyOverlapEnumerator : IBreakableForEach<CollidableReference>
+    {
+        public bool Found;
+        public bool HasIgnore;
+        public BodyHandle Ignore;
+
+        public bool LoopBody(CollidableReference reference)
+        {
+            if (reference.Mobility == CollidableMobility.Static)
+            {
+                return true;
+            }
+
+            if (HasIgnore && reference.BodyHandle.Equals(Ignore))
+            {
+                return true;
+            }
+
+            Found = true;
+
+            // Breaking out is the point: the caller only asks whether anything is in the way.
+            return false;
+        }
     }
 
     private struct RayHitHandler : IRayHitHandler
