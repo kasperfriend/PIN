@@ -134,7 +134,7 @@ public static class VirtualTextureChunks
         var parts = Split(subpath);
 
         // i + 1 has to leave at least one segment after the build folder: the file.
-        for (var i = 0; i < parts.Length - 2; i++)
+        for (var i = 0; i < parts.Count - 2; i++)
         {
             if (string.Equals(parts[i], BuildFolder, StringComparison.OrdinalIgnoreCase))
             {

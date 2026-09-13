@@ -32,7 +32,7 @@ public class CapabilityRepository : ICapabilityRepository
                                          MarketHost = _urls.Url(PublicUrls.CatchAllHost),
                                          IngameHost = _urls.Url(PublicUrls.InGameApiHost),
                                          ClientapiHost = _urls.Url(PublicUrls.ClientApiHost),
-                                         WebAssetHost = _urls.Url(PublicUrls.CatchAllHost),
+                                         WebAssetHost = _urls.Url(PublicUrls.WebAssetHost),
                                          WebAccountsHost = _urls.Url(PublicUrls.CatchAllHost),
                                          RhsigscanHost = _urls.Url(PublicUrls.CatchAllHost)
                                      });

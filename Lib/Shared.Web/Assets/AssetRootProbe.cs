@@ -208,11 +208,26 @@ public static class AssetRootProbe
             return lines;
         }
 
-        var served = (statuses ?? Array.Empty<AssetRootStatus>())
-                     .Where(s => s != null && s.Exists)
-                     .SelectMany(s => s.Chunks.Values)
-                     .Select(file => Path.GetFileName(file))
-                     .ToList();
+        // A plain loop rather than SelectMany over Values: the values are themselves lists, and the query
+        // operators would have to choose between reading a chunk list and reading the characters of a file
+        // name - a choice this code should not be leaving to inference.
+        var served = new List<string>();
+
+        foreach (var status in statuses ?? Array.Empty<AssetRootStatus>())
+        {
+            if (status == null || !status.Exists)
+            {
+                continue;
+            }
+
+            foreach (var list in status.Chunks.Values)
+            {
+                foreach (var file in list)
+                {
+                    served.Add(Path.GetFileName(file));
+                }
+            }
+        }
 
         var missing = wanted.Where(chunk => !served.Any(name => string.Equals(name, Path.GetFileName(chunk), StringComparison.OrdinalIgnoreCase)))
                             .ToList();
@@ -289,11 +304,6 @@ public static class AssetRootProbe
         }
     }
 
-    /// <summary>
-    ///     Drops the chunks a looser scan only re-found: a leftover copy of a file the host already answers by
-    ///     its real path is not a second answer to the client's question, and reporting it reads like one.
-    /// </summary>
-    /// <param name="chunks">The scan result, edited in place.</param>
     /// <summary>
     ///     Drops the chunks a looser scan only re-found: a leftover copy of a file the host already answers by
     ///     its real path is not a second answer to the client's question, and reporting it reads like one.
