@@ -345,6 +345,7 @@ public class EntityManager
         var turretEntity = new TurretEntity(_shard, _shard.GetNextGuid(), typeId, parent, parentChildIndex, posture, gunnerPoseId, gunnerPoseOffset);
 
         Add(turretEntity.EntityId, turretEntity);
+        _shard.AI?.RegisterTurret(turretEntity);
 
         return turretEntity;
     }
@@ -2023,7 +2024,7 @@ public class EntityManager
         }
     }
 
-    public void SendToScoped<TNormal>(IEntity entity, TNormal message)
+    public void SendToScoped<TNormal>(IEntity entity, TNormal message, INetworkPlayer except = null)
     where TNormal : class, IAero
     {
         var entityId = entity.EntityId;
@@ -2034,6 +2035,11 @@ public class EntityManager
 
         foreach (var client in scopedPlayers)
         {
+            if (except != null && ReferenceEquals(client, except))
+            {
+                continue;
+            }
+
             if (client.CanReceiveGSS)
             {
                 client.NetChannels[ChannelType.UnreliableGss].SendMessage(message, entityId);

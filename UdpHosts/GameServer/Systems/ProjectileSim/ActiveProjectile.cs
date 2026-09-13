@@ -28,6 +28,12 @@ public struct ActiveProjectile
     public uint StartTime;
     public uint LifetimeMs;
 
+    /// <summary>
+    ///     Elapsed milliseconds at the last <c>period_ability_id</c> tick (0 until the first one
+    ///     fires). The ammo's <c>period_ability_ms</c> is measured from this, not from the muzzle.
+    /// </summary>
+    public uint LastPeriodElapsedMs;
+
     public float Range;
     public byte BouncesRemaining;
     public byte HitsRemaining;

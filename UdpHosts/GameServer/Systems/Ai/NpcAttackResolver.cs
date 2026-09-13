@@ -126,12 +126,22 @@ public sealed class NpcAttackResolver
         // database at runtime: whether they carry the animation of the attack (they are client-side
         // commands, so applying the effect is what animates the mob) and whether they deliver the hit
         // themselves (in which case the AI must not land its own on top).
-        var abilities = NpcWeaponAbilities.Scan(_data, template.AttackAbility, template.BurstAbility);
+        var abilities = NpcWeaponAbilities.Scan(_data, template.AttackAbility, template.BurstAbility, template.MeleeAbility);
 
         // The hook the weapon fires when the magazine runs dry is a separate ability from the burst's, with a
         // chain of its own, so it is scanned separately (a fresh visited set): whether anything in it is
         // something a client draws or plays decides whether the engine activates it at all.
         var emptyAbility = NpcWeaponAbilities.ScanAbility(_data, template.EmptyAbility);
+
+        // The reload hook is a separate ability from the burst's and the empty click, with a chain of its
+        // own, so it is scanned separately (a fresh visited set): whether anything in it is something a
+        // client draws or plays decides whether the engine activates it when the reload starts.
+        var reloadAbility = NpcWeaponAbilities.ScanAbility(_data, template.ReloadAbility);
+
+        // The overcharge hook is a separate ability from the burst's, the empty click and the reload,
+        // with a chain of its own: whether anything in it is something a client draws or plays decides
+        // whether the engine activates it when the charge has crossed ms_overcharge_delay.
+        var overchargeAbility = NpcWeaponAbilities.ScanAbility(_data, template.OverchargeAbility);
 
         uint interval = NpcAttackDamageMath.ResolveAttackIntervalMs(
             behaviorParams.TriggerPullTimeMs,
@@ -185,6 +195,15 @@ public sealed class NpcAttackResolver
 
         float standoff = ranged ? ResolveRangedStandoff(behaviorParams) : _rules.StandoffRange;
 
+        // The cone a standing NPC fires at: the template's min/max/starting_spread, scaled by the
+        // item's attribute 958 when it carries one. Melee rows resolve to 0 (they have no projectile
+        // to scatter) and a ranged row the database gives no spread fires along the aim, which is
+        // what those rows asked for. See NpcAttackSpreadMath.
+        float itemSpread = ReadAttribute(attributes, (ushort)ItemAttributeId.WeaponSpread);
+        float spreadPct = ranged
+            ? NpcAttackSpreadMath.ResolveSpreadPct(template.MinSpread, template.MaxSpread, template.StartingSpread, itemSpread)
+            : 0f;
+
         return new NpcAttackProfile
         {
             Mode = ranged ? NpcAttackMode.Ranged : NpcAttackMode.Melee,
@@ -208,6 +227,11 @@ public sealed class NpcAttackResolver
             ImpactRadius = impactRadius,
             MaxRadius = maxRadius,
             FireType = template.FireType,
+            SlotIndex = template.SlotIndex,
+            MinSpread = template.MinSpread,
+            MaxSpread = template.MaxSpread,
+            StartingSpread = template.StartingSpread,
+            SpreadPct = spreadPct,
             BurstDurationMs = burstDuration,
             ArmedAnimationId = template.AnimArmedId,
             ArmedAnimationPriority = template.AnimArmedPriority,
@@ -222,6 +246,11 @@ public sealed class NpcAttackResolver
             MeleeAbilityId = template.MeleeAbility,
             ClipEmptyAbilityId = template.EmptyAbility,
             ClipEmptyClientFeedback = emptyAbility.ClientFeedback,
+            ReloadAbilityId = template.ReloadAbility,
+            ReloadClientFeedback = reloadAbility.ClientFeedback,
+            OverchargeAbilityId = template.OverchargeAbility,
+            MsOverchargeDelay = template.MsOverchargeDelay,
+            OverchargeClientFeedback = overchargeAbility.ClientFeedback,
             MuzzleOffset = muzzleOffset,
             CreatureDamageModifier = creatureDamageModifier,
             CreatureWeaponDamageModifier = weaponModifier,

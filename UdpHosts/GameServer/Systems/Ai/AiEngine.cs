@@ -7,7 +7,10 @@ using System.Threading;
 using BepuUtilities;
 using GameServer.Entities;
 using GameServer.Entities.Character;
+using GameServer.Entities.Turret;
+using GameServer.StaticDB;
 using GameServer.Systems.CharacterLifecycle;
+using GameServer.Systems.Combat;
 using GameServer.Systems.Emotes;
 using GameServer.Systems.SystemEvents;
 using Serilog;
@@ -96,7 +99,8 @@ public class AiEngine
         IAiMonsterStats monsterStats = null,
         IAiProjectileLauncher projectileLauncher = null,
         INpcAbilityActivator abilityActivator = null,
-        EmoteService emotes = null)
+        EmoteService emotes = null,
+        TurretWeaponFire turretFire = null)
     {
         _shard = shard ?? throw new ArgumentNullException(nameof(shard));
         _rules = rules ?? new StandardAiRules();
@@ -122,10 +126,25 @@ public class AiEngine
         _emotes = emotes ?? new EmoteService(new SdbEmoteDataSource(), new AbilitySystemEmoteEffectApplier());
         _logger = shard.Logger?.ForContext<AiEngine>() ?? Log.ForContext<AiEngine>();
 
+        // Unmanned turrets share the engine's hostility and the injected projectile launcher (so a
+        // test that records NPC shots also records turret shots). Production looks the turret's
+        // weapons up from the static database; a test injects TurretWeaponFire instead.
+        Turrets = new TurretAi(
+            shard,
+            _hostility,
+            turretFire ?? new TurretWeaponFire(
+                SDBInterface.GetTurretWeapons,
+                new NpcAttackResolver(new SdbNpcAttackDataSource()),
+                _projectiles,
+                SDBInterface.GetHardpointOffset));
+
         // The bus is injected like every other system's: IShard does not expose it.
         eventBus?.Subscribe<EntityDamagedEvent>(OnEntityDamaged);
         eventBus?.Subscribe<CharacterDiedEvent>(OnCharacterDied);
     }
+
+    /// <summary>Unmanned turret fire, ticked with the rest of the engine.</summary>
+    public TurretAi Turrets { get; }
 
     /// <summary>Runtime kill switch, toggled by the <c>ai</c> chat/admin command.</summary>
     public bool Enabled { get; set; } = true;
@@ -191,8 +210,16 @@ public class AiEngine
         return _brains.TryAdd(npc.EntityId, brain);
     }
 
-    /// <summary>Stops simulating an NPC. Safe to call for unknown ids.</summary>
-    public bool Unregister(ulong entityId) => _brains.TryRemove(entityId, out _);
+    /// <summary>Starts simulating a turret. Safe to call twice for the same id.</summary>
+    public bool RegisterTurret(TurretEntity turret) => Turrets.Register(turret);
+
+    /// <summary>Stops simulating an NPC or turret. Safe to call for unknown ids.</summary>
+    public bool Unregister(ulong entityId)
+    {
+        bool npc = _brains.TryRemove(entityId, out _);
+        bool turret = Turrets.Unregister(entityId);
+        return npc || turret;
+    }
 
     /// <summary>Forces an NPC to engage whoever shot it.</summary>
     public void Aggro(ulong npcEntityId, ulong attackerEntityId)
@@ -206,17 +233,30 @@ public class AiEngine
         npc.Brain.Aggro(_shard.CurrentTimeLong);
     }
 
-    /// <summary>Drops every brain. Used when a zone is torn down.</summary>
-    public void Clear() => _brains.Clear();
+    /// <summary>Drops every brain and turret. Used when a zone is torn down.</summary>
+    public void Clear()
+    {
+        _brains.Clear();
+        Turrets.Clear();
+    }
 
     public void Tick(double deltaTime, ulong currentTime, CancellationToken ct)
     {
-        if (_brains.IsEmpty || ct.IsCancellationRequested)
+        if (ct.IsCancellationRequested)
         {
             return;
         }
 
         if (!Enabled || !_rules.Enabled)
+        {
+            return;
+        }
+
+        // Unmanned turrets are not NPC brains: a shard with no mobs still has to fire them, so
+        // this runs before the empty-brains early return and before the movement-interval gate.
+        Turrets.Tick(currentTime);
+
+        if (_brains.IsEmpty)
         {
             return;
         }
@@ -367,6 +407,7 @@ public class AiEngine
                         // the chains of that ability, and for some weapons the attack itself (see
                         // NpcWeaponAbilities).
                         bool abilityRan = ActivateWeaponAbility(npc, currentTime);
+                        ActivateOverchargeAbility(npc, currentTime);
 
                         if (!abilityRan || profile is not { ChainDeliversDamage: true })
                         {
@@ -670,10 +711,11 @@ public class AiEngine
 
     /// <summary>
     ///     Runs the weapon ability whose chains carry the attack's animation (and, for the weapons the data
-    ///     gives one, the attack's own damage). Nothing else in the server executes an NPC's weapon
-    ///     abilities: a weapon template's ability ids reach <see cref="NpcAttackProfile" /> and stop there,
-    ///     which is exactly why the status effects those chains apply - the replicated data a client plays
-    ///     an animation from - never reached a mob before.
+    ///     gives one, the attack's own damage). The id is <see cref="NpcAttackProfile.AttackChainAbilityId" />:
+    ///     burst, else attack, else melee - the three columns the template names for this window. Nothing
+    ///     else in the server executes an NPC's weapon abilities: a weapon template's ability ids reach
+    ///     <see cref="NpcAttackProfile" /> and stop there, which is exactly why the status effects those
+    ///     chains apply - the replicated data a client plays an animation from - never reached a mob before.
     /// </summary>
     /// <remarks>
     ///     A charging weapon hands the chain its charge time as the register, in seconds: the database's
@@ -701,7 +743,11 @@ public class AiEngine
             return false;
         }
 
-        uint abilityId = profile.BurstAbilityId != 0 ? profile.BurstAbilityId : profile.AttackAbilityId;
+        // Burst, then attack, then melee: the three ids the weapon template names for this window, in
+        // the order a player weapon already prefers. A melee row that only fills melee_ability_id still
+        // animates; a ranged row that fills burst (Shadowstrike) still prefers that over a leftover melee
+        // id. See NpcAttackProfile.AttackChainAbilityId.
+        uint abilityId = profile.AttackChainAbilityId;
         if (abilityId == 0)
         {
             return false;
@@ -793,6 +839,47 @@ public class AiEngine
     {
         npc.Magazine = npc.Magazine.StartReload(currentTime, npc.Profile?.ReloadTimeMs ?? 0);
         npc.Entity?.SetWeaponReloaded(unchecked((uint)currentTime));
+        ActivateReloadAbility(npc, currentTime);
+    }
+
+    /// <summary>
+    ///     Runs the weapon's own reload ability, the hook the database gives the moment a reload starts
+    ///     (<c>dbitems::WeaponTemplates.reload_ability</c>). Gated exactly like the empty-clip hook: a chain
+    ///     that carries nothing a client executes is left alone, and a shard with no aptitude system simply
+    ///     does not run it. The <c>WeaponReloaded</c> marker above is still what the client plays
+    ///     <c>anim_reload_type</c> from; this is the extra chain the row names for that same window.
+    /// </summary>
+    private void ActivateReloadAbility(NpcBrain npc, ulong currentTime)
+    {
+        var profile = npc.Profile;
+        if (profile == null || !profile.ReloadClientFeedback || profile.ReloadAbilityId == 0)
+        {
+            return;
+        }
+
+        _abilityActivator.Activate(npc.Entity, profile.ReloadAbilityId, (uint)currentTime, float.NaN);
+    }
+
+    /// <summary>
+    ///     Runs the weapon's own overcharge ability, the hook the database gives a charge that has
+    ///     been held past <c>ms_overcharge_delay</c> (<c>dbitems::WeaponTemplates.overcharge_ability</c>).
+    ///     Gated exactly like the empty-clip hook: a chain that carries nothing a client executes is
+    ///     left alone, and there is no hold-past-max event in this build — an NPC charges for
+    ///     <c>ms_chargeup</c> and then fires, so the hook runs with the attack when that charge is
+    ///     long enough. Nothing is passed as the register; the overcharge VFX effect carries its own
+    ///     duration.
+    /// </summary>
+    private void ActivateOverchargeAbility(NpcBrain npc, ulong currentTime)
+    {
+        var profile = npc.Profile;
+        if (profile == null
+            || !profile.OverchargeClientFeedback
+            || !NpcWeaponOvercharge.ShouldActivate(profile.OverchargeAbilityId, profile.MsOverchargeDelay, profile.ChargeUpMs))
+        {
+            return;
+        }
+
+        _abilityActivator.Activate(npc.Entity, profile.OverchargeAbilityId, (uint)currentTime, float.NaN);
     }
 
     /// <summary>Refills the magazine once the reload window the database gives the weapon has run out.</summary>
@@ -841,6 +928,11 @@ public class AiEngine
             (uint)Math.Max(0, npc.Brain.AttackCooldownMs));
 
         entity.SetFireBurst(unchecked((uint)currentTime));
+        AnimationUpdatedAnnouncement.SendToWatchers(
+            entity.Shard,
+            entity,
+            npc.Profile?.FireAnimationType ?? 0,
+            AnimationUpdatedAnnouncement.BurstStarted);
         npc.Animation = NpcAttackAnimation.Start(currentTime, duration);
     }
 
@@ -855,6 +947,11 @@ public class AiEngine
 
         npc.Animation = null;
         npc.Entity?.SetFireEnd(unchecked((uint)animation.Value.EndTime));
+        AnimationUpdatedAnnouncement.SendToWatchers(
+            npc.Entity?.Shard,
+            npc.Entity,
+            npc.Profile?.FireAnimationType ?? 0,
+            AnimationUpdatedAnnouncement.BurstEnded);
     }
 
     /// <summary>
@@ -918,15 +1015,33 @@ public class AiEngine
 
         direction = Vector3.Normalize(direction);
 
+        // The weapon's own first-shot cone, applied once per round so a shotgun's pellets scatter
+        // instead of stacking on a single chest-aimed ray. A 0 cone (every melee row, and the ranged
+        // rows the database gives no spread) is a no-op and the shot stays on the aim. There is no
+        // per-NPC heat to keep: the behaviour's fireRestDuration outlasts the weapon's spread return,
+        // so each burst opens at the standing first-shot cone. See NpcAttackSpreadMath.
+        uint time = _shard.CurrentTime;
+        float spreadPct = profile.SpreadPct;
+        Vector3 lastSpreadDirection = Vector3.Zero;
         byte rounds = profile.RoundsPerBurst > 0 ? profile.RoundsPerBurst : (byte)1;
         for (byte round = 0; round < rounds; round++)
         {
-            uint trace = AiPrng.Trace(_shard.CurrentTime, round);
+            Vector3 shotDirection = NpcAttackSpreadMath.Apply(
+                direction,
+                spreadPct,
+                time,
+                profile.SlotIndex,
+                round,
+                lastSpreadDirection,
+                time);
+            lastSpreadDirection = shotDirection;
+
+            uint trace = AiPrng.Trace(time, round);
             _projectiles.FireRangedAttack(
                 entity,
                 trace,
                 origin,
-                direction,
+                shotDirection,
                 profile.Ammo,
                 profile.Range,
                 profile.ProjectileSpeed,

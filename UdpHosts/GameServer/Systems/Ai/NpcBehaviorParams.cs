@@ -63,6 +63,13 @@ public sealed class NpcBehaviorParams
     public bool HasAttackTiming => TriggerPullTimeMs > 0 || FireRestDurationMs > 0;
 
     /// <summary>
+    ///     The <c>dbdialogdata::DialogScript</c> id the behaviour names (<c>dialogScript=10551</c>),
+    ///     or 0 when it names none. Seven monster rows in prod-1962 carry one; it is the line those
+    ///     interactive NPCs say, not an animation.
+    /// </summary>
+    public uint DialogScriptId => TryGetInt("dialogScript", out int value) && value > 0 ? (uint)value : 0;
+
+    /// <summary>
     ///     The emote the behaviour has the NPC hold (<c>emote="calm"</c>, <c>emote="townstand4"</c>,
     ///     <c>emote="dance"</c>, ...), or an empty string when it names none. It is a
     ///     <c>dbcharacter::EmoteRecord.name</c>, never an id, and 207 of the build's 3,109 monster rows

@@ -74,6 +74,83 @@ public class NpcAttackResolverTests
     }
 
     [Fact]
+    public void Resolve_MeleeAbility_IsWalkedWithTheAttackIds()
+    {
+        // A melee weapon that only fills melee_ability_id: the chain is still the attack's animation,
+        // so the walk includes it. Shadowstrike's shape lives on burst_ability_id 188 in the build;
+        // putting the same chain on melee_ability_id is the fallback the column is named for.
+        var template = MeleeTemplate();
+        template.MeleeAbility = 188;
+        var data = DataWith(template)
+            .WithAbility(188, 48_922)
+            .WithCommand(48_922, (ushort)CommandType.ImpactApplyEffect, effectId: 176)
+            .WithStatusEffect(176, applyChain: 109_904)
+            .WithCommand(109_904, (ushort)CommandType.PlayAnimation);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(188u, profile.MeleeAbilityId);
+        Assert.Equal(188u, profile.AttackChainAbilityId);
+        Assert.True(profile.ChainClientFeedback);
+    }
+
+    [Fact]
+    public void Resolve_AttackChainPrefersBurstOverMelee()
+    {
+        // Burst, then attack, then melee: a leftover melee id must not steal the window from the
+        // burst the template names as the attack (Shadowstrike's 188).
+        var template = MeleeTemplate();
+        template.BurstAbility = 188;
+        template.MeleeAbility = 999;
+        var data = DataWith(template)
+            .WithAbility(188, 48_922)
+            .WithCommand(48_922, (ushort)CommandType.PlayAnimation);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(188u, profile.BurstAbilityId);
+        Assert.Equal(999u, profile.MeleeAbilityId);
+        Assert.Equal(188u, profile.AttackChainAbilityId);
+        Assert.True(profile.ChainClientFeedback);
+    }
+
+    [Fact]
+    public void Resolve_CarriesTheWeaponsReloadAbilityAndWhatItsChainDoes()
+    {
+        // reload_ability is the hook the database names for the moment a reload starts, the sibling
+        // of clip_empty_ability. A chain that carries something a client plays is runnable; the
+        // engine activates it from StartReload. No census of which templates fill the column is
+        // claimed here: the trigger is the column name and the reload the AI already starts.
+        var template = RangedTemplate();
+        template.ReloadAbility = 40_001;
+        var data = DataWith(template)
+            .WithAbility(40_001, 2_000)
+            .WithCommand(2_000, (ushort)CommandType.ImpactApplyEffect, effectId: 10_001)
+            .WithStatusEffect(10_001, applyChain: 2_100)
+            .WithCommand(2_100, (ushort)CommandType.AudioFeedback);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(40_001u, profile.ReloadAbilityId);
+        Assert.True(profile.ReloadClientFeedback);
+    }
+
+    [Fact]
+    public void Resolve_AServerOnlyReloadAbility_IsCarriedButNotRunnable()
+    {
+        var template = RangedTemplate();
+        template.ReloadAbility = 40_002;
+        var data = DataWith(template)
+            .WithAbility(40_002, 2_000)
+            .WithCommand(2_000, (ushort)CommandType.RegisterTimedTrigger);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(40_002u, profile.ReloadAbilityId);
+        Assert.False(profile.ReloadClientFeedback);
+    }
+
+    [Fact]
     public void Resolve_CarriesTheWeaponsEmptyClipAbilityAndWhatItsChainDoes()
     {
         // Template 12132 (Tesla Rifle 2.0) names 39239 as its clip_empty_ability; that ability applies effect
@@ -113,6 +190,47 @@ public class NpcAttackResolverTests
 
         Assert.Equal(35_842u, profile.ClipEmptyAbilityId);
         Assert.False(profile.ClipEmptyClientFeedback);
+    }
+
+    [Fact]
+    public void Resolve_CarriesTheWeaponsOverchargeAbilityAndWhatItsChainDoes()
+    {
+        // Template 12129 (plasma) names an overcharge_ability with ms_overcharge_delay 2500 against
+        // ms_chargeup 4000: the charge the NPC holds is long enough, so the engine runs the hook with
+        // the attack. A chain that carries something a client plays is runnable.
+        var template = RangedTemplate();
+        template.OverchargeAbility = 12_129;
+        template.MsOverchargeDelay = 2500;
+        template.MsChargeUp = 4000;
+        var data = DataWith(template)
+            .WithAbility(12_129, 2_000)
+            .WithCommand(2_000, (ushort)CommandType.ImpactApplyEffect, effectId: 10_001)
+            .WithStatusEffect(10_001, applyChain: 2_100)
+            .WithCommand(2_100, (ushort)CommandType.AudioFeedback);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(12_129u, profile.OverchargeAbilityId);
+        Assert.Equal(2500u, profile.MsOverchargeDelay);
+        Assert.Equal(4000u, profile.ChargeUpMs);
+        Assert.True(profile.OverchargeClientFeedback);
+    }
+
+    [Fact]
+    public void Resolve_AServerOnlyOverchargeAbility_IsCarriedButNotRunnable()
+    {
+        var template = RangedTemplate();
+        template.OverchargeAbility = 12_130;
+        template.MsOverchargeDelay = 2500;
+        template.MsChargeUp = 4000;
+        var data = DataWith(template)
+            .WithAbility(12_130, 2_000)
+            .WithCommand(2_000, (ushort)CommandType.RegisterTimedTrigger);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(12_130u, profile.OverchargeAbilityId);
+        Assert.False(profile.OverchargeClientFeedback);
     }
 
     [Fact]
@@ -185,6 +303,46 @@ public class NpcAttackResolverTests
         Assert.Equal(4, profile.AmmoPerBurst);
         Assert.Equal(700u, profile.ReloadTimeMs);
         Assert.True(profile.Reloads);
+
+        // A template the test does not give a spread: the cone is 0 and the burst stays on the aim.
+        Assert.Equal(0f, profile.SpreadPct);
+        Assert.Equal(0f, profile.MinSpread);
+        Assert.Equal(0f, profile.MaxSpread);
+        Assert.Equal(0f, profile.StartingSpread);
+    }
+
+    [Fact]
+    public void Resolve_RangedWeapon_CarriesTheWeaponsFirstShotCone()
+    {
+        // NPC Guard Rifle shape: min 2, max 8, starting 0.5, no attribute 958. The standing first-shot
+        // cone is the midpoint of the band, the same number a player would get from the same row.
+        var template = RangedTemplate();
+        template.MinSpread = 2f;
+        template.MaxSpread = 8f;
+        template.StartingSpread = 0.5f;
+        template.SlotIndex = 2;
+
+        var profile = CreateResolver(DataWith(template)).Resolve(MonsterId, 45);
+
+        Assert.Equal(2, profile.SlotIndex);
+        Assert.Equal(2f, profile.MinSpread);
+        Assert.Equal(8f, profile.MaxSpread);
+        Assert.Equal(0.5f, profile.StartingSpread);
+        Assert.Equal(5f, profile.SpreadPct);
+    }
+
+    [Fact]
+    public void Resolve_WeaponSpreadAttribute_ScalesTheCone()
+    {
+        // Attribute 958 (Weapon Spread) of the weapon item scales both terms the way
+        // WeaponSpreadProfile.Build scales them for a player: attr 4 against max 8 is a 0.5 scale.
+        var template = RangedTemplate();
+        template.MinSpread = 2f;
+        template.MaxSpread = 8f;
+        template.StartingSpread = 0.5f;
+        var data = DataWith(template).WithAttribute(WeaponId, 958, 4f);
+
+        Assert.Equal(2.5f, CreateResolver(data).Resolve(MonsterId, 45).SpreadPct);
     }
 
     [Fact]
@@ -250,6 +408,7 @@ public class NpcAttackResolverTests
         Assert.Equal(2000u, profile.AttackIntervalMs);
         Assert.Equal(0u, profile.AmmoId);
         Assert.Null(profile.Ammo);
+        Assert.Equal(0f, profile.SpreadPct);                       // a melee row has no projectile to scatter
     }
 
     [Fact]
@@ -407,8 +566,15 @@ public class NpcAttackResolverTests
 
         Assert.Equal(0u, profile.AttackAbilityId);
         Assert.Equal(0u, profile.BurstAbilityId);
+        Assert.Equal(0u, profile.MeleeAbilityId);
+        Assert.Equal(0u, profile.AttackChainAbilityId);
+        Assert.Equal(0u, profile.ReloadAbilityId);
+        Assert.Equal(0u, profile.OverchargeAbilityId);
+        Assert.Equal(0u, profile.MsOverchargeDelay);
         Assert.Equal(0u, profile.ChargeUpMs);
         Assert.False(profile.ChainClientFeedback);
         Assert.False(profile.ChainDeliversDamage);
+        Assert.False(profile.ReloadClientFeedback);
+        Assert.False(profile.OverchargeClientFeedback);
     }
 }

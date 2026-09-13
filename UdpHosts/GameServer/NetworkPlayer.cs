@@ -11,6 +11,7 @@ using AeroMessages.Matrix;
 using GameServer.Data;
 using GameServer.GRPC;
 using GameServer.StaticDB.Records.customdata;
+using GameServer.Systems.Combat;
 using GameServer.Test;
 using GrpcGameServerAPIClient;
 using Serilog;
@@ -255,6 +256,11 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
 
     public void HandleFireWeaponProjectile(uint time, Vector3 aim, Vector3? shooterVelocity = null)
     {
+        if (!CharacterWeaponFire.ShouldFireEquippedWeapon(CharacterEntity))
+        {
+            return;
+        }
+
         AssignedShard.WeaponSim.OnFireWeaponProjectile(CharacterEntity, time, aim, shooterVelocity);
     }
 

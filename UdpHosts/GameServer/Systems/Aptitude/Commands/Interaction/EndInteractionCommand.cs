@@ -2,6 +2,7 @@ using AeroMessages.GSS.Character.Event;
 using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.Entities.Vehicle;
+using GameServer.Systems.Dialog;
 using GameServer.Systems.Encounters;
 
 namespace GameServer.Systems.Aptitude.Commands.Interaction;
@@ -38,6 +39,13 @@ public class EndInteractionCommand : ICommand
         if (interactionEntity.Encounter is { SpawnDef: { } spawnData })
         {
             context.Shard.EncounterMan.Factory.SpawnEncounter(spawnData, character);
+        }
+
+        // Seven monster rows name a dialogScript= in their behaviour string; that line is the
+        // conversation the interaction starts, not an animation the AI plays on register.
+        if (interactionEntity is CharacterEntity npc)
+        {
+            DialogService.Production.TryPlayBehaviorDialog(npc, character, context.InitTime);
         }
 
         var abilityId = interactionEntity.Interaction.CompletedAbilityId;

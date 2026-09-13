@@ -10,6 +10,7 @@ using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.Enums;
 using GameServer.StaticDB;
+using GameServer.Systems.Combat;
 using GameServer.Systems.ProjectileSim;
 using Serilog;
 

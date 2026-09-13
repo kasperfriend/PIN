@@ -46,6 +46,24 @@ public class NpcWeaponAbilitiesTests
     }
 
     [Fact]
+    public void AMeleeAbilityAlone_IsScanned()
+    {
+        // melee_ability_id is the third attack hook: a weapon that only fills it still has to animate,
+        // so the walk includes it with attack and burst. Shadowstrike's shape (ability 188 -> effect 176
+        // -> PlayAnimation) is the same chain whether the row names it as burst or as melee.
+        var data = new FakeNpcAttackDataSource()
+            .WithAbility(188, 48_922)
+            .WithCommand(48_922, ImpactApplyEffect, effectId: 176)
+            .WithStatusEffect(176, applyChain: 109_904)
+            .WithCommand(109_904, PlayAnimation);
+
+        var scan = NpcWeaponAbilities.Scan(data, 0, 0, 188);
+
+        Assert.True(scan.ClientFeedback);
+        Assert.False(scan.DeliversDamage);
+    }
+
+    [Fact]
     public void AnAnimationInTheChains_IsClientFeedback()
     {
         // Melee - Shadowstrike's shape: the burst ability applies the swing effect, whose apply chain is

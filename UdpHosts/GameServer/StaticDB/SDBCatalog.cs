@@ -196,7 +196,7 @@ public static class SDBCatalog
 
                         // Turret rows carry a plain-text name instead of a localization id.
                         Name = string.IsNullOrWhiteSpace(row.Name) ? null : row.Name,
-                        Summary = $"posture={row.Posture}",
+                        Summary = DescribeTurretSummary(id, row.Posture),
                     };
                 }
 
@@ -363,6 +363,7 @@ public static class SDBCatalog
                 sb.AppendLine($"  posture        : {row.Posture}   attack type: {row.AttackType}");
                 sb.AppendLine($"  pitch          : {row.MinPitch} .. {row.MaxPitch}");
                 sb.AppendLine($"  yaw            : {row.MinYaw} .. {row.MaxYaw}");
+                sb.AppendLine($"  weapons        : {DescribeTurretWeaponIds(id)}");
                 sb.AppendLine($"  behavior       : {Or(row.Behavior)}   visual record: {row.Visualrec}");
                 sb.AppendLine("  spawn with     : turret <turretTypeId> (attaches to your character)");
                 break;
@@ -399,6 +400,20 @@ public static class SDBCatalog
     }
 
     private static string Or(string value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string DescribeTurretWeaponIds(uint turretTypeId)
+    {
+        var weapons = SDBInterface.GetTurretWeapons(turretTypeId);
+        return weapons.Count == 0 ? "-" : string.Join(" / ", weapons.Select(weapon => weapon.WeaponId));
+    }
+
+    private static string DescribeTurretSummary(uint turretTypeId, byte posture)
+    {
+        var weapons = SDBInterface.GetTurretWeapons(turretTypeId);
+        return weapons.Count == 0
+            ? $"posture={posture}"
+            : $"posture={posture} weapons={string.Join("/", weapons.Select(weapon => weapon.WeaponId))}";
+    }
 
     private static IEnumerable<(uint Id, T Row)> Ordered<TKey, T>(IReadOnlyDictionary<TKey, T> source)
         where TKey : struct, IConvertible

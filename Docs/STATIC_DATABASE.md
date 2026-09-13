@@ -55,16 +55,16 @@ Generated with `python3 Tools/SdbDump/sdb_dump.py coverage clientdb.sd2`:
 ```
 tables in file : 575
 identified     : 255      (names recovered by hashing candidates)
-loaded by PIN  : 240
+loaded by PIN  : 241
 unidentified   : 320      (name unknown; content still decodable by hash)
-rows           : 814,339 of 1,523,277 (53.5%) in PIN-loaded tables
+rows           : 814,488 of 1,523,277 (53.5%) in PIN-loaded tables
 ```
 
 | Schema | Tables loaded / identified | Rows |
 |--------|---------------------------|------|
 | `apt` (aptitude/abilities) | 59 / 59 | 237,835 |
 | `aptfs` (aptitude command defs) | 121 / 121 | 31,027 |
-| `dbcharacter` | 17 / 31 | 32,247 |
+| `dbcharacter` | 18 / 31 | 32,396 |
 | `dbencounterdata` | 2 / 2 | 1,002 |
 | `dbitems` | 23 / 23 | 341,569 |
 | `dblocalization` | 1 / 2 | 182,958 |
@@ -78,14 +78,11 @@ targets, all mob-related:
 
 | Table | Rows | What it would give us |
 |-------|------|-----------------------|
-| `dbcharacter::MonsterVisualOption` | 15,230 | Random visual variants per monster (the `visual_options_id` PIN currently TODOs in `CharacterEntity.LoadMonster`). |
-| `dbcharacter::MonsterVisualOptions` | 153 | The variant set headers. |
 | `dbcharacter::MonsterMood` | 2,268 | Ambient mood/animation sets for idle NPCs. |
 | `dbcharacter::MonsterMoodName` | 6 | Mood name lookup. |
 | `dbcharacter::MonsterItemTags` | 1,032 | Item tags used by loot rolls. |
 | `dbcharacter::MonsterTitle` | 419 | Titles shown above an NPC's name. |
 | `dbcharacter::MonsterAttributeRange` | 167 | Per-level attribute curves for NPCs. |
-| `dbcharacter::TurretWeapon` | 149 | The guns a `dbcharacter::Turret` fires. |
 | `dbcharacter::VoiceSet` | 463 | NPC voice sets (`voice_set` column). |
 | `dbcharacter::EmoteRecord` | 382 | Emote definitions. |
 | `dbcharacter::FactionGroup(Members)` | 97 / 146 | Faction groupings above the flat faction list. |
@@ -98,16 +95,18 @@ The remaining 320 tables are decodable but nobody has guessed their names yet;
 
 ### 2.1 New in this change
 
-Two tables were previously listed in the docs but not actually loaded; PIN now
-reads both:
+PIN now loads the monster visual-variant tables and the hardpoint transforms
+that turret muzzles name:
 
 | Table | Rows | Exposed as |
 |-------|------|-----------|
-| `dblocalization::LocalizedText` | 175,293 | `SDBInterface.GetLocalizedText(id)` / `GetLocalizedString(id)` |
-| `dbcharacter::MonsterScaling` | 80 | `SDBInterface.GetMonsterScaling(level)` |
+| `dbcharacter::MonsterVisualOptions` | 153 | `SDBInterface.GetMonsterVisualOptions(id)` |
+| `dbcharacter::MonsterVisualOption` | 15,230 | `SDBInterface.GetMonsterVisualOption(parent)` |
+| `dbvisualrecords::Hardpoints` | (named by `TurretWeapon.MuzzleHardpoint`) | `SDBInterface.GetHardpointOffset(name)` |
 
-Localization is what makes the new commands able to say *"Aranha Queen"*
-instead of *"2435"*.
+`CharacterEntity.LoadMonster` picks one option of each type from the entity id
+and applies type 0 as `HeadMain` and type 1 as skin color. Turret fire adds the
+hardpoint translation to `PhysicalOrigin` before rotating by the turret pose.
 
 ## 3. The spawnable catalog
 
@@ -249,7 +248,8 @@ dbcharacter::Monster #2435: Aranha Queen
 
 Each kind prints the fields that matter for it (deployables show health,
 category and build time; vehicles show class and race; carryables show pickup
-radii; turrets show posture and pitch/yaw limits).
+radii; turrets show posture, pitch/yaw limits and the `dbcharacter::TurretWeapon`
+ids they fire).
 
 ### 4.4 Relationship to the older commands
 

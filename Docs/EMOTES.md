@@ -96,7 +96,7 @@ of their own that is not a chain: **207 monster rows name an emote in their beha
 which is where an NPC's emote now comes from. What the data gives every NPC besides that is dialog,
 below.
 
-## 4. `dbdialogdata::DialogScript` — 39,261 lines (not implemented)
+## 4. `dbdialogdata::DialogScript` — 39,261 lines
 
 The NPC voice/emote line table. Columns: `character_type`, `text_id`, `sound_event_id`, `emote_id`,
 `voice_set`, `mood`, `delay_ms`, `next_id`, `trigger`, `display_mode`, `look_at_target`, `is_public`,
@@ -117,17 +117,20 @@ The NPC voice/emote line table. Columns: `character_type`, `text_id`, `sound_eve
 | `priority` | 4 (×14,500), 0 (×9,002), 9 (×5,276), 7 (×4,787), 10 (×2,431), 8 (×2,135), ... resolved through `dbdialogdata::DialogPriority` (10 rows: `level` + `interrupts` + `sin_imprint`) |
 
 `PlayDialogScriptMessage { DialogId, Unk1 }` is the wire message (the id is an `AeroSdb` reference,
-so the client resolves text, sound, emote and mouth movement itself), and it is already sent —
-`Systems/Encounters/BaseEncounter.PlayDialog` has the helper (encounters hold dialog ids in
-`dbencounterdata::MapMarkerInfo.introRadioId` / `stage2..4RadioId` and `dbcharacter::Deployable.dialog_script_id`),
-but nothing calls it yet, so no NPC ever speaks. `PrivateDialog { Time, Entity, DialogId }` is the
-per-player variant, `PublicDialog` a parameterless broadcast, `NotifyDialogScriptComplete` the
-client's "line finished" command (the natural way to walk `next_id`), and `PerformDialog` /
-`SetDialogTag` the client-side equivalents.
+so the client resolves text, sound, emote and mouth movement itself). Encounters already have
+`Systems/Encounters/BaseEncounter.PlayDialog` (dialog ids in
+`dbencounterdata::MapMarkerInfo.introRadioId` / `stage2..4RadioId` and `dbcharacter::Deployable.dialog_script_id`).
+`DialogService` now plays a line: a public script is `PlayDialogScriptMessage` on ReliableGss to
+every client the speaker is scoped into; a private script is `PrivateDialog { Time, Entity, DialogId }`
+to the listener. `NotifyDialogScriptComplete { Unk1, Unk2 }` on Character BaseController walks
+`next_id` (the first non-zero of the two unnamed uints is the completed line). The seven monster
+rows that name `dialogScript=` in their behaviour string (10551 on 612/620/621/622, 39340 on vendors
+2118/3013/3096) play that line when a player finishes interacting with them
+(`EndInteractionCommand`) — they are not auto-played when the AI registers the NPC.
 
-**Not implemented because the trigger rules are not in the database:** which of the 6
-`dbdialogdata::BattleChatterDescriptions` rows applies to which event, and what `trigger` 1/2 mean.
-The tables themselves are clear:
+**Battle chatter is loaded and resolved, but not mapped onto combat events:** which of the 6
+`dbdialogdata::BattleChatterDescriptions` rows applies to which event, and what `trigger` 1/2 mean,
+are not in the database, so a caller has to name a description id. The tables themselves are clear:
 
 * `BattleChatterDescriptions` (6 rows): `spread_meters` (5-50), `duration_ms` (2,000-10,000),
   `memoryless`, `default_dialog_script_id` (44,931), `dialog_script_set_id` (1417/1418/1421/1422),
@@ -163,7 +166,7 @@ Documented, not implemented.
 | `dbcharacter::TinyObject` (`posefile_id`), `dbcharacter::Deployable` (`animnetwork`) | 379 / 3,902 | Client-side |
 | `vcs::*` pose files (`driver_pose_file`, `gunner_pose_file`, ...) | 73/24/22/7 | Client-side (vehicles) |
 | `dbitems::Weapons` (`first_person_animnet_id`, `third_person_animnet_id`) | 6,789 | Client-side |
-| `dbcharacter::Stumble` (`anim_index`, `statusfx_id`, `duration`, `cooldown_ms`, `distance`, `only_once`, 39 rows), `dbcharacter::StumbleDirection` (`stumble_id`, `anim_substate`, 120 rows) and `dbcharacter::GibVisuals.death_anim_index` (128 rows) | 39/120/128 | Hit reactions and death animations: the server reports the damage response and the gib visuals, the client picks the animation. No row links a stumble to what causes it (see `Docs/NPC_AI.md` §6) |
+| `dbcharacter::Stumble` (`anim_index`, `statusfx_id`, `duration`, `cooldown_ms`, `distance`, `only_once`, 39 rows), `dbcharacter::StumbleDirection` (`stumble_id`, `anim_substate`, 120 rows) and `dbcharacter::GibVisuals.death_anim_index` (128 rows) | 39/120/128 | Hit reactions and death animations. Stumble is applied by an explicit id (`StumbleService.TryStumble`): the victim gets BaseController `Stumble` (ushort, ushort, byte) and the row's `statusfx_id`; `restrict_stumble` / `only_once` / `cooldown_ms` are honoured. Damage does not pick a stumble id — no weapon, ammo or damage-type row names one (see `Docs/NPC_AI.md` §6). Gib visuals are still the death path |
 | `aptfs::ForcePushCommandDef.do_animation`, `aptfs::SwitchWeaponCommandDef.play_animation` | 632 / 343 | Server commands with a client feedback flag; their defs are already loaded, the flags are not acted on |
 | `aptfs::ApplyClientStatusEffectCommandDef` / `RemoveClientStatusEffectCommandDef` | 3 / 8 | Server → client "apply/remove this effect **on your side**" commands. `Commands/Effect/Todo/ApplyClientStatusEffectCommand.cs` exists but is not wired into `Factory`, which is the remaining path by which a server-side rule could start a client-only animation without a replicated effect |
 
@@ -205,7 +208,8 @@ then keeps the NPC's emote in step with its brain:
   id on every tick and sends nothing.
 
 `behavior_defensive` is not read, because the emulator's brain has no defensive state to run it in,
-and the `dialogScript=` parameters on seven of these rows are dialog rather than animation (see §4).
+and the `dialogScript=` parameters on seven of these rows are dialog rather than animation: they
+play on interaction, not when the AI registers the NPC (see §4).
 
 Feature coverage: `NpcBehaviorParamsTests` (the `emote`/`emoteDuration` parameters, including a
 behaviour that names none) and four `AiEngineTests` cases - the pose a `calm` NPC takes, its removal

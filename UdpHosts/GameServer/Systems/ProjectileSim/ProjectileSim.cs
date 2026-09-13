@@ -6,6 +6,7 @@ using GameServer.Entities.Character;
 using GameServer.Enums;
 using GameServer.Physics;
 using GameServer.StaticDB.Records.dbitems;
+using GameServer.Systems.Aptitude;
 using GameServer.Systems.WeaponSim;
 
 namespace GameServer.Systems.ProjectileSim;
@@ -180,6 +181,12 @@ public class ProjectileSim
 
             projectile.CurrentPosition = basePosition + projectile.DrunkOffset;
 
+            var source = GetSourceEntity(projectile);
+            while (projectile.IsAlive && AmmoAbilityHooks.TryPeriod(projectile.Ammo, elapsedMs, ref projectile.LastPeriodElapsedMs, out uint periodAbility))
+            {
+                AmmoAbilityHooks.Activate(_shard, source, periodAbility);
+            }
+
             var hit = _shard.Physics.SegmentRayCast(projectile.PreviousPosition, projectile.CurrentPosition, projectile.EntityId);
 
             if (hit.Hit)
@@ -192,18 +199,20 @@ public class ProjectileSim
                 // Distance travelled up to the impact point (the segment past the hit does not count).
                 projectile.DistanceTravelled += Vector3.Distance(projectile.PreviousPosition, hit.HitPosition);
 
+                IAptitudeTarget hitTarget = ResolveHitTarget(hit.HitEntityId);
+
                 if (TryBounce(ref projectile, hit))
                 {
                     projectile.PreviousPosition = hit.HitPosition;
                     _logger.Debug("Projectile trace={Trace} bounced off entity={Entity} at {Pos}", projectile.TraceId, hit.HitEntityId, hit.HitPosition);
                     SendDebugBounce(projectile, hit.HitPosition, hit.Normal);
+                    AmmoAbilityHooks.Activate(_shard, source, AmmoAbilityHooks.TouchAbility(projectile.Ammo), hitTarget);
                 }
                 else
                 {
                     projectile.IsAlive = false;
                     projectile.HitsRemaining = 0;
                     _logger.Debug("Projectile trace={Trace} impact entity={Entity} at {Pos} after {Distance}m", projectile.TraceId, hit.HitEntityId, hit.HitPosition, projectile.DistanceTravelled);
-                    var source = GetSourceEntity(projectile);
                     if (source != null)
                     {
                         int impactDamage = WeaponDamageMath.ApplyDamageFalloff(
@@ -216,6 +225,9 @@ public class ProjectileSim
                         _logger.Debug("Projectile trace={Trace} impact damage {Damage} (base {Base}, {Distance}m travelled, type {DamageType})", projectile.TraceId, impactDamage, projectile.DamageAmount, projectile.DistanceTravelled, projectile.Ammo.Damagetype);
                         _shard.Physics.HandleProjectileImpact(source, projectile.TraceId, hit, impactDamage, projectile.Ammo.Damagetype);
                     }
+
+                    AmmoAbilityHooks.Activate(_shard, source, AmmoAbilityHooks.TouchAbility(projectile.Ammo), hitTarget);
+                    AmmoAbilityHooks.Activate(_shard, source, AmmoAbilityHooks.ImpactAbility(projectile.Ammo), hitTarget);
                 }
             }
             else
@@ -226,6 +238,11 @@ public class ProjectileSim
 
             if (elapsedMs >= projectile.LifetimeMs)
             {
+                if (projectile.IsAlive)
+                {
+                    AmmoAbilityHooks.Activate(_shard, source, AmmoAbilityHooks.AirburstAbility(projectile.Ammo));
+                }
+
                 _activeProjectiles.TryRemove(key, out _);
                 _logger.Debug("Projectile trace={Trace} expired at {Elapsed}/{Lifetime}ms", projectile.TraceId, elapsedMs, projectile.LifetimeMs);
                 SendDebugTimeout(projectile, projectile.CurrentPosition);
@@ -335,6 +352,16 @@ public class ProjectileSim
         }
 
         return null;
+    }
+
+    private IAptitudeTarget ResolveHitTarget(ulong hitEntityId)
+    {
+        if (hitEntityId == 0 || !_shard.Entities.TryGetValue(hitEntityId, out var entity))
+        {
+            return null;
+        }
+
+        return entity as IAptitudeTarget;
     }
 
     private void SendDebugSpawn(CharacterEntity entity, uint traceId, Vector3 origin, Vector3 direction, float speed)
