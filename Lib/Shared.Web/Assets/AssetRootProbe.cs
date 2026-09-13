@@ -248,10 +248,12 @@ public static class AssetRootProbe
             return null;
         }
 
-        return "Put the chunk files under " + Path.Combine(VirtualTextureChunks.BuildFolder, build) +
-               " inside an asset root, or name a folder that already holds them in Firefall:Assets:Paths (the " +
-               "client's own system" + Path.DirectorySeparatorChar + "vt does). Until one of those answers, the " +
-               "client renders the low-resolution mips packed in its own archives, which is what a blurry Firefall is.";
+        return "Put " + string.Join(", ", VirtualTextureChunks.ChunkNames()) +
+               " straight at the top of an asset root, or under " + Path.Combine(VirtualTextureChunks.BuildFolder, build) +
+               " to answer this client's path exactly, or name a folder that already holds them in " +
+               "Firefall:Assets:Paths (the client's own system" + Path.DirectorySeparatorChar + "vt does). Until one " +
+               "of those answers, the client renders the low-resolution mips packed in its own archives, which is " +
+               "what a blurry Firefall is.";
     }
 
     /// <summary>
