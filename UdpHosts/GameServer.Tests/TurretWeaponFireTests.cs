@@ -173,7 +173,8 @@ public class TurretWeaponFireTests
         // so the muzzle is always the pose-rotated offset (the same path an aimed turret uses).
         Assert.Equal(
             TurretPosition + TurretWeaponFire.RotateByPose(new Vector3(0.2f, 0f, 1.3f), turret),
-            Assert.Single(launcher.Shots).Origin);
+            Assert.Single(launcher.Shots).Origin,
+            new Vector3Comparer());
     }
 
     [Fact]
@@ -193,7 +194,8 @@ public class TurretWeaponFireTests
 
         Assert.Equal(
             TurretPosition + TurretWeaponFire.RotateByPose(new Vector3(0.3f, 0.2f, 1.6f), turret),
-            Assert.Single(launcher.Shots).Origin);
+            Assert.Single(launcher.Shots).Origin,
+            new Vector3Comparer());
     }
 
     [Fact]
@@ -212,8 +214,8 @@ public class TurretWeaponFireTests
         fire.Fire(turret, gunner, Time, Aim);
 
         Vector3 expected = TurretPosition + TurretWeaponFire.RotateByPose(new Vector3(0.2f, 0f, 1.3f), turret);
-        Assert.Equal(expected, Assert.Single(launcher.Shots).Origin);
-        Assert.NotEqual(TurretPosition + new Vector3(0.2f, 0f, 1.3f), launcher.Shots[0].Origin);
+        Assert.Equal(expected, Assert.Single(launcher.Shots).Origin, new Vector3Comparer());
+        Assert.NotEqual(TurretPosition + new Vector3(0.2f, 0f, 1.3f), launcher.Shots[0].Origin, new Vector3Comparer());
     }
 
     [Fact]
