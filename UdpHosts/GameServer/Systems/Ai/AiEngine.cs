@@ -726,6 +726,15 @@ public class AiEngine
     }
 
     /// <summary>
+    ///     Whether the ability system is currently moving this character along a slide an aptitude row
+    ///     declared. Resolved per call: a shard builds its ability system after the AI engine.
+    /// </summary>
+    private bool IsSliding(CharacterEntity entity)
+    {
+        return _shard.Abilities?.IsMovementSliding(entity.EntityId) == true;
+    }
+
+    /// <summary>
     ///     Whether the NPC can fire its weapon now: a weapon the database gives no magazine (every melee row)
     ///     always can, an armed one only while it holds the rounds an attack spends and is not reloading. An
     ///     empty magazine whose reload has not started yet (the burst did not dry it, so nothing announced
@@ -934,7 +943,12 @@ public class AiEngine
         };
 
         bool moved = false;
-        if (goal.HasValue && !IsMovementRestricted(entity))
+
+        // A database slide owns the character's position while it runs (the dodge pair's 667 ms sidestep, the
+        // Move Then Fire lunge): the AI must not drag the mob off the displacement the row declared, exactly
+        // as it must not push against restrict_movement. The slide outlives the effect that declared it (667 ms
+        // against 500 ms), so this reads the ability system's own slide state rather than a combat flag.
+        if (goal.HasValue && !IsMovementRestricted(entity) && !IsSliding(entity))
         {
             moved = MoveToward(npc, goal.Value, decision.State, elapsedMs);
         }

@@ -468,9 +468,36 @@ What the strings state and the engine does **not** carry: `am*Timeout` (a watchd
 `am*NavToDist`/`am*NavTimeout` (the module's own navigation) and
 `am*Targeted`/`am*Facing`/`am*FacingDuring` (requirements an attack window already
 meets). The database gives no event that fires a module, so the window the brain asked to
-attack in is the trigger. The module's own movement is the one part of its chains the
-server does not execute yet: the dodge pair's `MovementSlide` (667 ms, 5 m) is a
-placeholder, so the sidestep's animation plays and the displacement does not happen (see
+attack in is the trigger.
+
+**The displacement a chain declares now happens (`MovementSlide`).** The one part of a
+module's chains the engine did not execute was their movement: `aptfs::MovementSlideCommandDef`
+was a placeholder the command factory never even constructed, so the shapes that carry it
+animated in place. Three mob-facing chains do, and they are where a monster's own motion
+comes from: the dodge pair's `offset_x -5` / `+5` over **667 ms** (effects 1247/1282,
+applied by abilities 33812/33833 - a 5 m sidestep at 7.5 m/s, the animation is 9/10 of the
+same effect), the Move Then Fire module's `offset_y 20` over 1000 ms toward its current
+target (`offset_target 1`; ability 36817 roars for 3.5 s, then lunges 20 m into a 2.65 m
+cone that pushes and damages what it hits every 100 ms), and ability 39066's `offset_z 20`
+over 2400 ms with a 0.1 m drift every 600 ms from its update loop. `MovementSlideCommand`
+reads the row, resolves the offsets into one world displacement and hands it to
+`AbilitySystem`, which moves the character along it on the effect sweep and applies the
+row's endpoint exactly when the slide ends. The offsets are measured in the character's
+own axes - `offset_x` right, `offset_y` forward, `offset_z` up, the frame
+`CharacterEntity` rotates its muzzle and its aim in - with the forward axis taken from the
+direction the row asks for (`offset_target` toward the context's target, `along_velocity`,
+`offset_aim`, each falling back to the caster's facing), `fixed_speed` deriving the
+duration from the distance when a row states one (187880 states a 2 ms duration next to a
+speed of 10), and `offset_regop` / `move_duration_regop` / `fixed_speed_regop` reading the
+activation's register. `AiEngine` leaves the character to the slide while it runs, exactly
+as it does under `restrict_movement`, so the mob completes the displacement the row
+declared instead of walking out of it - necessary because the sidestep outlives its effect
+(667 ms against 500 ms). A player-controlled character is not moved (its position is the
+client's to report, and the client runs the slide it predicted - `allow_prediction`), and
+neither is a corpse: the dodge's duration chain ends on `RequireCState(living=1)` while its
+slide runs 167 ms longer. What the build records but does not apply from the row:
+`velocity_type`, `orientation_type`, `initiation_position`, `rollback` and the
+`rand_offset_*` spread - none of them is set on a mob-facing row (see
 [Known gaps](#6-known-gaps)).
 
 **Weapon animation parameters.** `SDBUtils.GetDetailedWeaponTemplateInfo` used to
@@ -827,9 +854,13 @@ stays horizontal, exactly as before.
   engine does not run a monster's behaviour tree, so the *tree's* other actions (taunts,
   wander idles, interaction poses, and the navigation the `am*NavToDist` parameters
   describe) do not happen - the emote parameter of the set it is in and its `am1`/`am2`
-  modules do; a module's own movement is not applied either, so the dodge pair's
-  `MovementSlide` animation plays without its 5 m of displacement (both commands are
-  placeholders this build never runs); the 39,261 dialog rows - 356 of them with an emote - are not played because
+  modules do; a module's own movement *is* applied now (`MovementSlide`, above - the dodge
+  pair's 5 m in 667 ms, the Move Then Fire lunge's 20 m in 1 s, 39066's rise), so the only
+  placeholders left on the animation paths are the ones whose semantics this build cannot
+  establish from the database (`aptgss::AbilityFinished`, which the dodge's own remove
+  chain ends on, `ActiveInitiation`, whose `AbilityActivated` payload is player-facing, and
+  `apt::Return`, whose `return_status`/`return_halt` flags have no documented meaning here);
+  the 39,261 dialog rows - 356 of them with an emote - are not played because
   the trigger rules for them are not in the database (6 chatter rows describe the
   probabilities, not the events), and the 7 monster rows whose behaviour names a
   `dialogScript=` are dialog rather than animation; the other 7

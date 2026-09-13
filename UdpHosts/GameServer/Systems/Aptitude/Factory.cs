@@ -477,8 +477,8 @@ public class Factory
                 return new PeekRegisterCommand(SDBInterface.GetPeekRegisterCommandDef(commandId));
             case CommandType.WhileLoop:
                 return new WhileLoopCommand(SDBInterface.GetWhileLoopCommandDef(commandId));
-            // case CommandType.MovementSlide:
-            //     return new MovementSlideCommand(SDBInterface.GetMovementSlideCommandDef(commandId));
+            case CommandType.MovementSlide:
+                return new MovementSlideCommand(SDBInterface.GetMovementSlideCommandDef(commandId));
             case CommandType.RequireEnergyByRange:
                 return new RequireEnergyByRangeCommand(SDBInterface.GetRequireEnergyByRangeCommandDef(commandId));
             // case CommandType.NetworkStealth:

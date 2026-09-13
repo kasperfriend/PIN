@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Threading;
 using AeroMessages.GSS.Character.Command;
 using GameServer.Entities.Character;
@@ -50,6 +51,15 @@ public class AbilitySystem
     /// effect is applied, and the moment it leaves that state (or the carrying effect ends) it is removed.
     /// </summary>
     private readonly Dictionary<ulong, List<MovementEffectRegistration>> _movementEffectRegistrations = [];
+
+    /// <summary>
+    ///     The displacement a database command (<c>aptfs::MovementSlideCommandDef</c>) asked each character to
+    ///     make, per character. At most one slide per character: the command states a displacement, not a
+    ///     queue, so a second slide that starts while one is running restarts the motion from wherever the
+    ///     character is now. Advanced on the effect sweep (<see cref="ProcessTarget" />) and dropped when the
+    ///     character leaves the shard or stops living.
+    /// </summary>
+    private readonly Dictionary<ulong, MovementSlide> _movementSlides = [];
 
     private uint _proximityActivationsPruneAt;
 
@@ -212,8 +222,17 @@ public class AbilitySystem
 
             // A character that left the shard cannot leave its movement-state bindings behind either: the
             // bindings are keyed by entity id and would otherwise leak (and could apply effects to an entity
-            // id the shard later reuses).
+            // id the shard later reuses). The slides a database command started are keyed the same way and
+            // would leak the same way - and would move whatever entity the shard next gives that id to.
             foreach (var pair in _movementEffectRegistrations)
+            {
+                if (!_shard.Entities.ContainsKey(pair.Key))
+                {
+                    (stale ??= []).Add(pair.Key);
+                }
+            }
+
+            foreach (var pair in _movementSlides)
             {
                 if (!_shard.Entities.ContainsKey(pair.Key))
                 {
@@ -226,6 +245,7 @@ public class AbilitySystem
                 foreach (var entityId in stale)
                 {
                     _movementEffectRegistrations.Remove(entityId);
+                    _movementSlides.Remove(entityId);
                 }
             }
 
@@ -315,6 +335,69 @@ public class AbilitySystem
         }
 
         ReevaluateMovementEffects(entity, currentTime);
+        AdvanceMovementSlide(entity, currentTime);
+    }
+
+    /// <summary>
+    ///     Starts the displacement a <c>MovementSlideCommand</c> declares: the character moves along
+    ///     <paramref name="offset" /> over <paramref name="durationMs" /> from where it stands now.
+    /// </summary>
+    /// <param name="character">The character to move (the server only moves characters it simulates).</param>
+    /// <param name="durationMs">How long the displacement takes, in milliseconds.</param>
+    /// <param name="offset">The world-space displacement the row's offsets resolve to.</param>
+    /// <returns>The slide that was started.</returns>
+    public MovementSlide RegisterMovementSlide(CharacterEntity character, uint durationMs, Vector3 offset)
+    {
+        var slide = new MovementSlide(character.EntityId, _shard.CurrentTime, durationMs, character.Position, offset);
+        _movementSlides[character.EntityId] = slide;
+        return slide;
+    }
+
+    /// <summary>Whether a database slide is moving the entity right now.</summary>
+    /// <param name="entityId">The character's entity id.</param>
+    /// <returns>Whether a slide is still running at the current server time.</returns>
+    public bool IsMovementSliding(ulong entityId)
+    {
+        return _movementSlides.TryGetValue(entityId, out var slide) && slide.IsActive(_shard.CurrentTimeLong);
+    }
+
+    /// <summary>
+    ///     Advances one entity's slide to <paramref name="currentTime" />, applying the row's endpoint exactly
+    ///     when the slide ends (the last tick before the end would otherwise leave the character up to a tick
+    ///     short of the offset the database states).
+    /// </summary>
+    private void AdvanceMovementSlide(IAptitudeTarget entity, ulong currentTime)
+    {
+        if (!_movementSlides.TryGetValue(entity.EntityId, out var slide))
+        {
+            return;
+        }
+
+        if (entity is not CharacterEntity character)
+        {
+            _movementSlides.Remove(entity.EntityId);
+            return;
+        }
+
+        // A corpse does not dodge: the row's displacement belongs to a living caster (the dodge's own
+        // duration chain ends on RequireCState(living=1), and the slide may outlive that effect).
+        if (!character.IsAlive)
+        {
+            _movementSlides.Remove(entity.EntityId);
+            return;
+        }
+
+        if (slide.IsActive(currentTime))
+        {
+            character.SetPosition(slide.PositionAt(currentTime));
+        }
+        else
+        {
+            character.SetPosition(slide.EndPosition);
+            _movementSlides.Remove(entity.EntityId);
+        }
+
+        _shard.Physics?.UpdateEntity(character);
     }
 
     /// <summary>
