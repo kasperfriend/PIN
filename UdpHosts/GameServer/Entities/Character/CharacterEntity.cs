@@ -1486,6 +1486,16 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         Character_CombatView.WeaponReloadedProp = time;
     }
 
+    /// <summary>
+    /// Writes the equip timestamp of the combat view: the field the client can time a weapon draw/swap
+    /// animation from. Written once at spawn and by <c>SwitchWeapon</c> when the row asks for the swap
+    /// to animate; there is no client command that carries it, so the timestamp is the whole feedback.
+    /// </summary>
+    public void SetEquipmentLoadTime(uint time)
+    {
+        Character_CombatView.EquipmentLoadTimeProp = time;
+    }
+
     public void SetWeaponReloadCancelled(uint time)
     {
         Character_CombatView.WeaponReloadCancelledProp = time;
