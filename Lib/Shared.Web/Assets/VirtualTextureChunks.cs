@@ -157,9 +157,15 @@ public static class VirtualTextureChunks
             return Array.Empty<string>();
         }
 
+        // Both separators are named explicitly rather than taken from Path, because on Unix the backslash is
+        // a legal character in a file name and AltDirectorySeparatorChar is therefore '/' as well: asked about
+        // a path written the Windows way, code that trusted Path would see one long file name instead of a
+        // path. A request path always uses '/' (the middleware hands subpaths over in URL form) and a path read
+        // off the disk uses whatever the platform uses - Windows both, so both are separators here everywhere.
         var separators = new[]
                          {
                              '/',
+                             '\\',
                              Path.DirectorySeparatorChar,
                              Path.AltDirectorySeparatorChar,
                          };
