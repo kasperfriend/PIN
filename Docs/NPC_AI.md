@@ -190,7 +190,7 @@ AiEngine.UpdateBrain
                          (ProjectileFiredAnnouncement: ProjectileSim is server-only,
                           so without this event the damage arrives with no tracer
                           and no muzzle - the same event a player's fire path
-                          echoes to the shooter)
+                          echoes to the shooter and announces to other watchers)
        -> IAiAttackFeedback.OnAttack                       (melee only)
             -> CombatSim.HitFeedback.TookDebugHit -> TookHit to scoped clients
 ```

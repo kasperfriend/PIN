@@ -11,6 +11,7 @@ using GameServer.Extensions;
 using GameServer.Packets;
 using GameServer.StaticDB;
 using GameServer.Systems.Aptitude;
+using GameServer.Systems.Combat;
 using Serilog;
 
 namespace GameServer.Controllers.Character;
@@ -55,6 +56,16 @@ public class CombatController : Base
         };
 
         client.NetChannels[ChannelType.ReliableGss].SendMessage(weaponProjectileFired, player.CharacterEntity.EntityId);
+
+        // The shooter already has the echo above. Other clients scoped into this character
+        // only draw the tracer if they get WeaponProjectileFired too - the same event NPC
+        // fire announces to every watcher. exceptOwner keeps the gunner from receiving it
+        // twice (SendToScoped includes the character's own client).
+        ProjectileFiredAnnouncement.SendToWatchers(
+            player.CharacterEntity.Shard,
+            player.CharacterEntity,
+            weaponProjectileFired,
+            exceptOwner: true);
     }
 
     [MessageID(GssCharacterCommand.FireEnd)]

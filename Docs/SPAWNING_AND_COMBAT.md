@@ -214,6 +214,10 @@ CombatController.FireWeaponProjectile      (client fire packet)
               -> CombatSim.OnProjectileHit  (hostility gate)
                 -> DamageSystem.ApplyDamage (reduces health / shields)
                   -> HitFeedback.TookDebugHit (DealtHit / TookHit to clients)
+  -> WeaponProjectileFired echo to the shooter (ReliableGss)
+  -> WeaponProjectileFired to other watching clients
+       (ProjectileFiredAnnouncement.SendToWatchers, exceptOwner: the shooter
+        already has the echo; a second UnreliableGss copy would double the tracer)
 ```
 
 When a player fires a turret they are seated on, the shot is the turret's own
