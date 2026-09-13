@@ -27,6 +27,7 @@ public interface ISDBLoader
     Dictionary<ushort, EmoteRecord> LoadEmoteRecord();
     Dictionary<uint, MonsterScaling> LoadMonsterScaling();
     Dictionary<uint, Turret> LoadTurret();
+    Dictionary<uint, List<TurretWeapon>> LoadTurretWeapon();
     Dictionary<uint, PoseType> LoadPoseType();
     Dictionary<uint, CharInfo> LoadCharInfo();
     Dictionary<byte, DamageType> LoadDamageType();

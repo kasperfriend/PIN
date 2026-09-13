@@ -36,6 +36,7 @@ public class SDBInterface
     private static Dictionary<KeyValuePair<uint, ushort>, MonsterAttributeRange> _monsterAttributeRange;
     private static Dictionary<uint, MonsterScaling> _monsterScaling;
     private static Dictionary<uint, Turret> _turret;
+    private static Dictionary<uint, List<TurretWeapon>> _turretWeaponByType;
     private static Dictionary<uint, PoseType> _poseType;
     private static Dictionary<uint, CharInfo> _charInfo;
     private static Dictionary<byte, DamageType> _damageType;
@@ -304,6 +305,7 @@ public class SDBInterface
         _monsterAttributeRange = loader.LoadMonsterAttributeRange();
         _monsterScaling = loader.LoadMonsterScaling();
         _turret = loader.LoadTurret();
+        _turretWeaponByType = loader.LoadTurretWeapon();
         _poseType = loader.LoadPoseType();
         _charInfo = loader.LoadCharInfo();
         _damageType = loader.LoadDamageType();
@@ -645,6 +647,21 @@ public class SDBInterface
     public static IReadOnlyDictionary<uint, MonsterScaling> GetMonsterScalings() => _monsterScaling;
     public static Turret GetTurret(uint id) => _turret.GetValueOrDefault(id);
     public static IReadOnlyDictionary<uint, Turret> GetTurrets() => _turret;
+
+    /// <summary>
+    ///     The <c>dbcharacter::TurretWeapon</c> rows of a turret type, ordered by <c>Id</c>.
+    ///     Empty when the type has none or the table is not loaded yet.
+    /// </summary>
+    public static IReadOnlyList<TurretWeapon> GetTurretWeapons(uint turretTypeId)
+    {
+        if (_turretWeaponByType != null && _turretWeaponByType.TryGetValue(turretTypeId, out var rows) && rows != null)
+        {
+            return rows;
+        }
+
+        return [];
+    }
+
     public static PoseType GetPoseType(uint id) => _poseType.GetValueOrDefault(id);
     public static CharInfo GetCharInfo(uint id) => _charInfo.GetValueOrDefault(id);
 

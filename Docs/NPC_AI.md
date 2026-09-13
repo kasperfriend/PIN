@@ -46,6 +46,7 @@ UdpHosts/GameServer/Systems/Ai/
 ├── AiVectors.cs                horizontal / straight-line distance + character facing maths
 ├── NpcAttackProfile.cs         everything one NPC attack needs, resolved from the DB
 ├── NpcAttackResolver.cs        monster -> weapon -> template/attributes/ammo -> profile
+│                               (ResolveWeapon is also how a seated turret fires: dbcharacter::TurretWeapon)
 ├── NpcAttackDamageMath.cs      the pure damage + cadence rules
 ├── NpcAttackSpreadMath.cs      the standing first-shot cone (min/max/starting_spread + attr 958)
 ├── NpcAttackAnimation.cs       the attack animation window (burst markers)
@@ -875,6 +876,18 @@ so guards stop at the distance the data gives them instead of walking into melee
 **Muzzle.** The shot leaves from `dbcharacter::Monster.projectile_offset` rotated
 into world space the same way `CharacterEntity.CalculateProjectileOrigin` rotates
 a character's own muzzle; a row with no offset uses the chest height (1.62 m).
+
+**Turrets.** A seated turret reuses the same `ResolveWeapon` - the method is
+public because deployables and turrets carry their weapon ids in other tables
+but share the whole weapon/attribute/modifier chain below it.
+`TurretWeaponFire` looks up `dbcharacter::TurretWeapon` by turret type, takes
+the first row by `Id`, and calls `ResolveWeapon(monsterId: 0, weaponId, level: 1,
+NpcBehaviorParams.Empty, Vector3.Zero)`. `monsterId` 0 means there is no
+creature damage modifier (the lookup returns null and the modifier stays 1);
+the muzzle offset the resolver stores is unused because the shot leaves from
+`TurretWeapon.PhysicalOrigin` rather than a monster `projectile_offset`. The
+gunner is the projectile source. One packet is one round; the gunner's equipped
+weapon is not fired. Unmanned turrets still do not shoot.
 
 **Spread.** A ranged row fires inside the weapon's own first-shot cone, the same
 number a standing player would get from the same template on their first trigger

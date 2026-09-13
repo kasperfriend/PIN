@@ -216,6 +216,30 @@ CombatController.FireWeaponProjectile      (client fire packet)
                   -> HitFeedback.TookDebugHit (DealtHit / TookHit to clients)
 ```
 
+When a player fires a turret they are seated on, the shot is the turret's own
+weapon, not the gunner's equipped one:
+
+```
+Turret.BaseController.FireWeaponProjectile   (client fire packet, ControllingPlayer only)
+  -> TurretWeaponFire
+    -> dbcharacter::TurretWeapon             (first row of the turret type, by Id)
+    -> NpcAttackResolver.ResolveWeapon       (monsterId 0, level 1, NpcBehaviorParams.Empty)
+    -> IAiProjectileLauncher.FireRangedAttack  (ShardAiProjectileLauncher)
+      -> ProjectileSim.FireProjectile        (one round per packet)
+      -> WeaponProjectileFired to watchers   (the launcher announcement only)
+```
+
+The gunner is the projectile source (hostility, combat log, the watching-client
+announcement); the turret is only where the shot leaves from
+(`TurretWeapon.PhysicalOrigin` as a world-axis offset, falling back to the
+gunner's own projectile origin when the row has none). One packet is one round:
+the client already sends `FireWeaponProjectile` once per projectile, so spending
+`RoundsPerBurst` here would fire a burst per packet. Dual-weapon turrets fire
+the first barrel only - the packet does not name a hardpoint. A melee or
+unresolved row, a degenerate aim, and an unmanned turret all no-op. The burst
+markers (`FireBurst` / `FireEnd`) were already replicated; this is the missing
+server half that can actually hit.
+
 The per-round damage is the weapon's database value, not a constant: the weapon
 item's own `Damage Per Round` attribute (954) when it has one, else the resolved
 weapon template's `damage_per_round` — see [NPC_AI.md](NPC_AI.md) §5 for the

@@ -116,6 +116,17 @@ public class StaticDBLoader : ISDBLoader
             .ToDictionary(row => row.Id);
     }
 
+    /// <summary>
+    ///     The guns a <c>dbcharacter::Turret</c> fires, grouped by turret type and ordered by
+    ///     <c>Id</c> so a seated fire takes the first barrel without inventing a second shot.
+    /// </summary>
+    public Dictionary<uint, List<TurretWeapon>> LoadTurretWeapon()
+    {
+        return LoadStaticDB<TurretWeapon>("dbcharacter::TurretWeapon")
+            .GroupBy(row => row.TurretTypeId)
+            .ToDictionary(group => group.Key, group => group.OrderBy(row => row.Id).ToList());
+    }
+
     public Dictionary<uint, MapMarkerInfo> LoadMapMarkerInfo()
     {
         return LoadStaticDB<MapMarkerInfo>("dbencounterdata::MapMarkerInfo")
