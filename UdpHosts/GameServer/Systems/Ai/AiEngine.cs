@@ -1453,13 +1453,13 @@ public class AiEngine
         // hitbox, and the target's body must not block the last step into melee range.
         float[] probeHeights = [height * 0.45f, height * 0.8f];
         Vector3[] lateralOffsets = [Vector3.Zero, side, -side];
-        foreach (var height in probeHeights)
+        foreach (var probeHeight in probeHeights)
         {
             foreach (var offset in lateralOffsets)
             {
                 var hit = physics.SegmentRayCast(
-                    from + offset + new Vector3(0f, 0f, height),
-                    to + offset + new Vector3(0f, 0f, height),
+                    from + offset + new Vector3(0f, 0f, probeHeight),
+                    to + offset + new Vector3(0f, 0f, probeHeight),
                     selfEntityId,
                     staticOnly: true);
                 if (hit.Hit && hit.T < distance - 0.05f)
