@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Reflection;
+using AeroMessages.GSS.Turret.View;
 using GameServer.Entities.Turret;
 using GameServer.StaticDB.Records.dbcharacter;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;
 using GameServer.Systems.Combat;
+using GameServer.Systems.WeaponSim;
 using GameServer.Tests.Fakes;
 using Xunit;
 
@@ -154,14 +156,35 @@ public class TurretWeaponFireTests
     [Fact]
     public void Fire_PhysicalOrigin_IsTurretPositionPlusTheRowOffset()
     {
-        // PhysicalOrigin is used as a world-axis offset, not rotated by the turret pose and not
-        // looked up as a hardpoint. The gunner standing somewhere else must not move the muzzle.
+        // Identity pose leaves PhysicalOrigin on the world axes (MuzzleHardpoint is unused:
+        // dbvisualrecords::Hardpoints.Transform is not loaded). The gunner standing somewhere
+        // else must not move the muzzle.
         var data = DataWith(RangedTemplate());
         var (fire, launcher, turret, gunner) = Create(data, [Row(WeaponId, id: 1, originX: 0.2f, originY: 0f, originZ: 1.3f)]);
 
         fire.Fire(turret, gunner, Time, Aim);
 
         Assert.Equal(TurretPosition + new Vector3(0.2f, 0f, 1.3f), Assert.Single(launcher.Shots).Origin);
+    }
+
+    [Fact]
+    public void Fire_PoseRotation_RotatesPhysicalOrigin()
+    {
+        // The same Inverse(pose) convention CharacterEntity uses for a muzzle offset. Identity
+        // is the case above; a yaw of 90° must move the offset off the world axes.
+        var data = DataWith(RangedTemplate());
+        var (fire, launcher, turret, gunner) = Create(data, [Row(WeaponId, id: 1, originX: 0.2f, originY: 0f, originZ: 1.3f)]);
+        turret.Turret_ObserverView.CurrentPoseProp = new CurrentPoseStruct
+        {
+            Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI / 2f),
+            ShortTime = 0,
+        };
+
+        fire.Fire(turret, gunner, Time, Aim);
+
+        Vector3 expected = TurretPosition + TurretWeaponFire.RotateByPose(new Vector3(0.2f, 0f, 1.3f), turret);
+        Assert.Equal(expected, Assert.Single(launcher.Shots).Origin);
+        Assert.NotEqual(TurretPosition + new Vector3(0.2f, 0f, 1.3f), launcher.Shots[0].Origin);
     }
 
     [Fact]
@@ -176,15 +199,39 @@ public class TurretWeaponFireTests
     }
 
     [Fact]
-    public void Fire_DualWeaponTurret_FiresOnlyTheFirstRow()
+    public void Fire_DualWeaponTurret_FiresEachRangedRow()
     {
         // 21 turret types in prod-1962 carry two weapon rows. The packet does not name a
-        // hardpoint, so firing both would invent the extra round. Different ammo on the
-        // second row is how the test proves the first barrel is the one that left.
+        // hardpoint, so every ranged row of the type fires once, each from its own
+        // PhysicalOrigin. Different ammo on the second row is how the test proves both left.
         const ushort secondAmmoId = 923;
         var secondTemplate = RangedTemplate();
         secondTemplate.AmmoId = secondAmmoId;
         var data = DataWith(RangedTemplate()).WithWeapon(SecondWeaponId, secondTemplate);
+        data.Ammos[secondAmmoId] = new Ammo { Id = secondAmmoId, ProjectileSpeed = 50f, ImpactRadius = 1f, MaxRadius = 2f };
+        var weapons = new List<TurretWeapon>
+        {
+            Row(WeaponId, id: 1, originX: 0.2f, originY: 0f, originZ: 1.3f),
+            Row(SecondWeaponId, id: 2, originX: -0.2f, originY: 0f, originZ: 1.3f),
+        };
+        var (fire, launcher, turret, gunner) = Create(data, weapons);
+
+        fire.Fire(turret, gunner, Time, Aim);
+
+        Assert.Equal(2, launcher.Shots.Count);
+        Assert.Equal(AmmoId, launcher.Shots[0].AmmoId);
+        Assert.Equal(secondAmmoId, launcher.Shots[1].AmmoId);
+        Assert.Equal(TurretPosition + new Vector3(0.2f, 0f, 1.3f), launcher.Shots[0].Origin);
+        Assert.Equal(TurretPosition + new Vector3(-0.2f, 0f, 1.3f), launcher.Shots[1].Origin);
+    }
+
+    [Fact]
+    public void Fire_MeleeThenRanged_FiresOnlyTheRangedRow()
+    {
+        const ushort secondAmmoId = 923;
+        var secondTemplate = RangedTemplate();
+        secondTemplate.AmmoId = secondAmmoId;
+        var data = DataWith(MeleeTemplate()).WithWeapon(SecondWeaponId, secondTemplate);
         data.Ammos[secondAmmoId] = new Ammo { Id = secondAmmoId, ProjectileSpeed = 50f, ImpactRadius = 1f, MaxRadius = 2f };
         var weapons = new List<TurretWeapon>
         {
@@ -195,7 +242,47 @@ public class TurretWeaponFireTests
 
         fire.Fire(turret, gunner, Time, Aim);
 
-        Assert.Equal(AmmoId, Assert.Single(launcher.Shots).AmmoId);
+        Assert.Equal(secondAmmoId, Assert.Single(launcher.Shots).AmmoId);
+    }
+
+    [Fact]
+    public void Fire_GunnerLevel_ScalesDamagePerRound()
+    {
+        // The resolver stays at level 1 / monsterId 0; the gunner's battleframe progression
+        // grows the per-round number through the same curve a handheld shot uses.
+        var data = DataWith(RangedTemplate()).WithAttribute(WeaponId, 954, 50f);
+        var (fire, launcher, turret, gunner) = Create(data, [Row(WeaponId, id: 1)]);
+        gunner.FrameProgressionLevel = 10;
+
+        fire.Fire(turret, gunner, Time, Aim);
+
+        int expected = WeaponDamageMath.RoundDamage(50f * WeaponDamageMath.DamageLevelScale(10));
+        Assert.Equal(expected, Assert.Single(launcher.Shots).Damage);
+        Assert.NotEqual(50, expected);
+    }
+
+    [Fact]
+    public void Fire_Ammo_ReplicatesRemainingAndIndices()
+    {
+        // Controller AmmoData.Ammo is remaining rounds; observer AmmoIndex is the slot
+        // indices. The turret protocol has no ReloadWeapon, so an empty clip refills
+        // before the round rather than blocking the packet.
+        var data = DataWith(RangedTemplate());
+        var (fire, launcher, turret, gunner) = Create(data, [Row(WeaponId, id: 1)]);
+
+        fire.Fire(turret, gunner, Time, Aim);
+
+        Assert.Equal(new ushort[] { 19 }, turret.AmmoRemaining);
+        Assert.Equal(new ushort[] { 19 }, turret.Turret_BaseController.AmmoProp.Ammo);
+        Assert.Equal(new ushort[] { 0 }, turret.Turret_ObserverView.AmmoProp.AmmoIndex);
+
+        turret.SetAmmo([1]);
+        fire.Fire(turret, gunner, Time, Aim);
+        Assert.Equal((ushort)0, turret.AmmoRemaining[0]);
+
+        fire.Fire(turret, gunner, Time, Aim);
+        Assert.Equal((ushort)19, turret.AmmoRemaining[0]);
+        Assert.Equal(3, launcher.Shots.Count);
     }
 
     [Fact]

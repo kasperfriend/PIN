@@ -33,7 +33,8 @@ give up when they are dragged too far from where they spawned.
 
 ```
 UdpHosts/GameServer/Systems/Ai/
-├── AiEngine.cs                 shard integration: targets, movement, attacks, events
+├── AiEngine.cs                 shard integration: targets, movement, attacks, events, unmanned turrets
+├── TurretAi.cs                 unmanned turret fire (range/cadence from the lead TurretWeapon row)
 ├── AiBrain.cs                  the state machine (no shard/entity/physics dependency)
 ├── AiBrainState.cs             Idle / Chase / Attack / Return / Dead
 ├── AiPerception.cs             what the engine tells a brain about the world
@@ -46,7 +47,7 @@ UdpHosts/GameServer/Systems/Ai/
 ├── AiVectors.cs                horizontal / straight-line distance + character facing maths
 ├── NpcAttackProfile.cs         everything one NPC attack needs, resolved from the DB
 ├── NpcAttackResolver.cs        monster -> weapon -> template/attributes/ammo -> profile
-│                               (ResolveWeapon is also how a seated turret fires: dbcharacter::TurretWeapon)
+│                               (ResolveWeapon is also how a turret fires: dbcharacter::TurretWeapon)
 ├── NpcAttackDamageMath.cs      the pure damage + cadence rules
 ├── NpcAttackSpreadMath.cs      the standing first-shot cone (min/max/starting_spread + attr 958)
 ├── NpcAttackAnimation.cs       the attack animation window (burst markers)
@@ -63,9 +64,11 @@ UdpHosts/GameServer/Systems/Ai/
 
 `Shard` owns the engine as `Shard.AI` and ticks it first in `Shard.Tick`, before
 `Physics` and `EntityManager`. Every character that goes through
-`EntityManager.SpawnCharacter` is registered automatically, and
-`EntityManager.Remove` unregisters it. Player controlled characters are refused by
-`AiEngine.Register`.
+`EntityManager.SpawnCharacter` is registered automatically, every turret that
+goes through `EntityManager.SpawnTurret` is registered with `TurretAi`, and
+`EntityManager.Remove` unregisters both. Player controlled characters are refused by
+`AiEngine.Register`. Unmanned turrets tick **before** the empty-brains early
+return, so a shard with no NPCs still fires them.
 
 The split matters for testing: `AiBrain` is pure decision logic fed an
 `AiPerception` snapshot, so the whole state machine is covered by unit tests in
@@ -877,17 +880,33 @@ so guards stop at the distance the data gives them instead of walking into melee
 into world space the same way `CharacterEntity.CalculateProjectileOrigin` rotates
 a character's own muzzle; a row with no offset uses the chest height (1.62 m).
 
-**Turrets.** A seated turret reuses the same `ResolveWeapon` - the method is
+**Turrets.** A turret reuses the same `ResolveWeapon` - the method is
 public because deployables and turrets carry their weapon ids in other tables
 but share the whole weapon/attribute/modifier chain below it.
-`TurretWeaponFire` looks up `dbcharacter::TurretWeapon` by turret type, takes
-the first row by `Id`, and calls `ResolveWeapon(monsterId: 0, weaponId, level: 1,
-NpcBehaviorParams.Empty, Vector3.Zero)`. `monsterId` 0 means there is no
-creature damage modifier (the lookup returns null and the modifier stays 1);
-the muzzle offset the resolver stores is unused because the shot leaves from
-`TurretWeapon.PhysicalOrigin` rather than a monster `projectile_offset`. The
-gunner is the projectile source. One packet is one round; the gunner's equipped
-weapon is not fired. Unmanned turrets still do not shoot.
+`TurretWeaponFire` looks up `dbcharacter::TurretWeapon` by turret type and
+calls `ResolveWeapon(monsterId: 0, weaponId, level: 1, NpcBehaviorParams.Empty,
+Vector3.Zero)` for every ranged row (21 dual-weapon types in prod-1962; melee
+or unresolved rows are skipped). `monsterId` 0 means there is no creature
+damage modifier (the lookup returns null and the modifier stays 1); the muzzle
+offset the resolver stores is unused because the shot leaves from
+`TurretWeapon.PhysicalOrigin` rotated by the current pose
+(`QuaternionEx.Transform(offset, Inverse(rotation))`), not from a monster
+`projectile_offset`. `MuzzleHardpoint` is unused (`dbvisualrecords::Hardpoints.Transform`
+is not loaded). The gunner (or unmanned owner) is the projectile source; damage
+is then scaled by that character's `FrameProgressionLevel` through
+`WeaponDamageMath.DamageLevelScale`. One packet is one round per barrel; the
+gunner's equipped weapon is not fired. Remaining ammo replicates as `ushort[]`
+on the controller (`AmmoData.Ammo`) with slot indices on the observer
+(`AmmoStruct.AmmoIndex`); the turret protocol has no `ReloadWeapon`, so an
+empty clip refills before the round.
+Unmanned fire lives in `TurretAi` (ticked by `AiEngine` before the empty-brains
+return): a seated turret (`ControllingPlayer != null`) is left to the gunner's
+packets; an unmanned one picks the closest hostile player inside the lead
+weapon's `AttackRange` (not the NPC `AggroRadius`) and fires at
+`AttackIntervalMs`. The source is the parent `CharacterEntity`, else the parent
+`BaseAptitudeEntity.Owner`. `dbcharacter::Turret.Behavior` is a numeric flag
+(`"1"` or `-`), not a CAIS behaviour string. `AnimationUpdated` and overcharge
+are not invented (see [Known gaps](#6-known-gaps)).
 
 **Spread.** A ranged row fires inside the weapon's own first-shot cone, the same
 number a standing player would get from the same template on their first trigger

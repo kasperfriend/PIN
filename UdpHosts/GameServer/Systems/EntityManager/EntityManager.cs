@@ -345,6 +345,7 @@ public class EntityManager
         var turretEntity = new TurretEntity(_shard, _shard.GetNextGuid(), typeId, parent, parentChildIndex, posture, gunnerPoseId, gunnerPoseOffset);
 
         Add(turretEntity.EntityId, turretEntity);
+        _shard.AI?.RegisterTurret(turretEntity);
 
         return turretEntity;
     }

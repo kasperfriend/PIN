@@ -43,6 +43,12 @@ public sealed class TurretEntity : BaseEntity
     public uint GunnerPoseId { get; set; }
     public Vector3 GunnerPoseOffset { get; set; }
 
+    /// <summary>
+    ///     Rounds remaining in each <c>dbcharacter::TurretWeapon</c> row, replicated on
+    ///     <c>AmmoProp</c>. Null until the first shot fills it from the weapons' magazine sizes.
+    /// </summary>
+    public ushort[] AmmoRemaining { get; private set; }
+
     public void SetControllingPlayer(INetworkPlayer player)
     {
         if (player == null)
@@ -93,6 +99,34 @@ public sealed class TurretEntity : BaseEntity
         HostilityInfo = newValue;
         Turret_ObserverView.HostilityInfoProp = HostilityInfo;
         Turret_BaseController?.HostilityInfoProp = HostilityInfo;
+    }
+
+    /// <summary>
+    ///     Replicates remaining ammo on the gunner's controller (<c>AmmoData.Ammo</c>, one
+    ///     <c>ushort</c> per weapon row) and slot indices on the observer view
+    ///     (<c>AmmoStruct.AmmoIndex</c>). The turret protocol has no <c>ReloadWeapon</c> command,
+    ///     so an empty clip is refilled by <c>TurretWeaponFire</c> rather
+    ///     than by a client packet.
+    /// </summary>
+    public void SetAmmo(ushort[] remaining)
+    {
+        var ammo = remaining ?? [];
+        AmmoRemaining = ammo;
+        var indices = new ushort[ammo.Length];
+        for (int i = 0; i < indices.Length; i++)
+        {
+            indices[i] = (ushort)i;
+        }
+
+        if (Turret_BaseController != null)
+        {
+            Turret_BaseController.AmmoProp = new AmmoData() { Ammo = ammo };
+        }
+
+        if (Turret_ObserverView != null)
+        {
+            Turret_ObserverView.AmmoProp = new AmmoStruct() { AmmoIndex = indices };
+        }
     }
 
     private void InitControllers()

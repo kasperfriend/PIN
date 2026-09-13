@@ -7,7 +7,10 @@ using System.Threading;
 using BepuUtilities;
 using GameServer.Entities;
 using GameServer.Entities.Character;
+using GameServer.Entities.Turret;
+using GameServer.StaticDB;
 using GameServer.Systems.CharacterLifecycle;
+using GameServer.Systems.Combat;
 using GameServer.Systems.Emotes;
 using GameServer.Systems.SystemEvents;
 using Serilog;
@@ -96,7 +99,8 @@ public class AiEngine
         IAiMonsterStats monsterStats = null,
         IAiProjectileLauncher projectileLauncher = null,
         INpcAbilityActivator abilityActivator = null,
-        EmoteService emotes = null)
+        EmoteService emotes = null,
+        TurretWeaponFire turretFire = null)
     {
         _shard = shard ?? throw new ArgumentNullException(nameof(shard));
         _rules = rules ?? new StandardAiRules();
@@ -122,10 +126,24 @@ public class AiEngine
         _emotes = emotes ?? new EmoteService(new SdbEmoteDataSource(), new AbilitySystemEmoteEffectApplier());
         _logger = shard.Logger?.ForContext<AiEngine>() ?? Log.ForContext<AiEngine>();
 
+        // Unmanned turrets share the engine's hostility and the injected projectile launcher (so a
+        // test that records NPC shots also records turret shots). Production looks the turret's
+        // weapons up from the static database; a test injects TurretWeaponFire instead.
+        Turrets = new TurretAi(
+            shard,
+            _hostility,
+            turretFire ?? new TurretWeaponFire(
+                SDBInterface.GetTurretWeapons,
+                new NpcAttackResolver(new SdbNpcAttackDataSource()),
+                _projectiles));
+
         // The bus is injected like every other system's: IShard does not expose it.
         eventBus?.Subscribe<EntityDamagedEvent>(OnEntityDamaged);
         eventBus?.Subscribe<CharacterDiedEvent>(OnCharacterDied);
     }
+
+    /// <summary>Unmanned turret fire, ticked with the rest of the engine.</summary>
+    public TurretAi Turrets { get; }
 
     /// <summary>Runtime kill switch, toggled by the <c>ai</c> chat/admin command.</summary>
     public bool Enabled { get; set; } = true;
@@ -191,8 +209,16 @@ public class AiEngine
         return _brains.TryAdd(npc.EntityId, brain);
     }
 
-    /// <summary>Stops simulating an NPC. Safe to call for unknown ids.</summary>
-    public bool Unregister(ulong entityId) => _brains.TryRemove(entityId, out _);
+    /// <summary>Starts simulating a turret. Safe to call twice for the same id.</summary>
+    public bool RegisterTurret(TurretEntity turret) => Turrets.Register(turret);
+
+    /// <summary>Stops simulating an NPC or turret. Safe to call for unknown ids.</summary>
+    public bool Unregister(ulong entityId)
+    {
+        bool npc = _brains.TryRemove(entityId, out _);
+        bool turret = Turrets.Unregister(entityId);
+        return npc || turret;
+    }
 
     /// <summary>Forces an NPC to engage whoever shot it.</summary>
     public void Aggro(ulong npcEntityId, ulong attackerEntityId)
@@ -206,17 +232,30 @@ public class AiEngine
         npc.Brain.Aggro(_shard.CurrentTimeLong);
     }
 
-    /// <summary>Drops every brain. Used when a zone is torn down.</summary>
-    public void Clear() => _brains.Clear();
+    /// <summary>Drops every brain and turret. Used when a zone is torn down.</summary>
+    public void Clear()
+    {
+        _brains.Clear();
+        Turrets.Clear();
+    }
 
     public void Tick(double deltaTime, ulong currentTime, CancellationToken ct)
     {
-        if (_brains.IsEmpty || ct.IsCancellationRequested)
+        if (ct.IsCancellationRequested)
         {
             return;
         }
 
         if (!Enabled || !_rules.Enabled)
+        {
+            return;
+        }
+
+        // Unmanned turrets are not NPC brains: a shard with no mobs still has to fire them, so
+        // this runs before the empty-brains early return and before the movement-interval gate.
+        Turrets.Tick(currentTime);
+
+        if (_brains.IsEmpty)
         {
             return;
         }

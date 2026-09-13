@@ -222,23 +222,31 @@ weapon, not the gunner's equipped one:
 ```
 Turret.BaseController.FireWeaponProjectile   (client fire packet, ControllingPlayer only)
   -> TurretWeaponFire
-    -> dbcharacter::TurretWeapon             (first row of the turret type, by Id)
+    -> dbcharacter::TurretWeapon             (every ranged row of the turret type)
     -> NpcAttackResolver.ResolveWeapon       (monsterId 0, level 1, NpcBehaviorParams.Empty)
+    -> DamageLevelScale(gunner.FrameProgressionLevel)
     -> IAiProjectileLauncher.FireRangedAttack  (ShardAiProjectileLauncher)
-      -> ProjectileSim.FireProjectile        (one round per packet)
+      -> ProjectileSim.FireProjectile        (one round per ranged row per packet)
       -> WeaponProjectileFired to watchers   (the launcher announcement only)
 ```
 
 The gunner is the projectile source (hostility, combat log, the watching-client
 announcement); the turret is only where the shot leaves from
-(`TurretWeapon.PhysicalOrigin` as a world-axis offset, falling back to the
-gunner's own projectile origin when the row has none). One packet is one round:
-the client already sends `FireWeaponProjectile` once per projectile, so spending
-`RoundsPerBurst` here would fire a burst per packet. Dual-weapon turrets fire
-the first barrel only - the packet does not name a hardpoint. A melee or
-unresolved row, a degenerate aim, and an unmanned turret all no-op. The burst
-markers (`FireBurst` / `FireEnd`) were already replicated; this is the missing
-server half that can actually hit.
+(`TurretWeapon.PhysicalOrigin` rotated by the current pose, falling back to the
+gunner's own projectile origin when the row has none). One packet is one round
+per barrel: the client already sends `FireWeaponProjectile` once per projectile,
+so spending `RoundsPerBurst` here would fire a burst per packet. Dual-weapon
+turrets (21 types in prod-1962) fire every ranged row; a melee or unresolved
+row and a degenerate aim no-op. Remaining ammo replicates on both turret views;
+the protocol has no `ReloadWeapon`, so an empty clip refills rather than
+blocking. The burst markers (`FireBurst` / `FireEnd`) were already replicated
+for a seated gunner; this is the missing server half that can actually hit.
+
+An unmanned turret (`ControllingPlayer == null`) is fired by `TurretAi` on the
+shard tick, with the same `TurretWeaponFire` path. Range and cadence come from
+the first ranged row; the source is the parent character or the parent
+deployable/vehicle `Owner`. A seated turret is left to the gunner's packets.
+See [NPC_AI.md](NPC_AI.md) §5.
 
 The per-round damage is the weapon's database value, not a constant: the weapon
 item's own `Damage Per Round` attribute (954) when it has one, else the resolved
