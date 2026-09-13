@@ -12,7 +12,7 @@ VTRemotePath    = "http://localhost:4401/vtex/%ENVMNEMONIC%-%BUILDNUM%/static.vt
 
 Nothing about the assets is in the repository, on purpose: they are several
 gigabytes of Red5's game data, and `.gitignore` keeps `Assets/` empty except for
-a `.gitkeep` and this document's signpost. A server that ships with an empty
+a `.gitkeep` and the `README.md` that points here. A server that ships with an empty
 asset folder is therefore *normal* — and it is also the reason the game looks the
 way it does out of the box.
 
@@ -47,7 +47,7 @@ What the client does at startup is a probe, and the probe is what you see in the
 `WebHostManager` log:
 
 ```
-[12:54:06 ERR] NotFound: [http://localhost:4401/vtex/prod-1962/static.vtex0](http://localhost:4401/vtex/prod-1962/static.vtex0) ;; HEAD ;;
+[12:54:06 ERR] NotFound: http://localhost:4401/vtex/prod-1962/static.vtex0 ;; HEAD ;;
 [12:54:06 ERR] NotFound: ... static.vtex1 ...
 [12:54:06 ERR] NotFound: ... static.vtex2 ...
 ```
