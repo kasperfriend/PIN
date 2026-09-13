@@ -103,7 +103,9 @@ public class TurretAiTests
         Assert.Equal(50, shot.Damage);
         Assert.True(shot.Direction.X > 0.9f, "the turret should aim at the target, not at the floor");
         Assert.Equal(FirstTick, turret.Turret_ObserverView.WeaponBurstFiredProp);
-        Assert.NotEqual(Quaternion.Identity, turret.Turret_ObserverView.CurrentPoseProp.Rotation);
+        Assert.True(
+            turret.Turret_ObserverView.CurrentPoseProp.Rotation != Quaternion.Identity,
+            "the turret should yaw toward the target");
         Assert.Equal(100_000, target.CurrentHealth);
     }
 
