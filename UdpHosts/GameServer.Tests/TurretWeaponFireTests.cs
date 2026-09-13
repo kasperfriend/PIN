@@ -169,7 +169,11 @@ public class TurretWeaponFireTests
 
         fire.Fire(turret, gunner, Time, Aim);
 
-        Assert.Equal(TurretPosition + new Vector3(0.2f, 0f, 1.3f), Assert.Single(launcher.Shots).Origin);
+        // CurrentPoseStruct.Rotation is a QuantisedQuaternion: Identity does not round-trip,
+        // so the muzzle is always the pose-rotated offset (the same path an aimed turret uses).
+        Assert.Equal(
+            TurretPosition + TurretWeaponFire.RotateByPose(new Vector3(0.2f, 0f, 1.3f), turret),
+            Assert.Single(launcher.Shots).Origin);
     }
 
     [Fact]
@@ -187,7 +191,9 @@ public class TurretWeaponFireTests
 
         fire.Fire(turret, gunner, Time, Aim);
 
-        Assert.Equal(TurretPosition + new Vector3(0.3f, 0.2f, 1.6f), Assert.Single(launcher.Shots).Origin);
+        Assert.Equal(
+            TurretPosition + TurretWeaponFire.RotateByPose(new Vector3(0.3f, 0.2f, 1.6f), turret),
+            Assert.Single(launcher.Shots).Origin);
     }
 
     [Fact]
