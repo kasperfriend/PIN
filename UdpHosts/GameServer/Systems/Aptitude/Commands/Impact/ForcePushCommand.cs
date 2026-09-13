@@ -23,6 +23,16 @@ public class ForcePushCommand : Command, ICommand
     // effects before reaching ForcePush), so ADD can only make the launch stronger, never weaker; an
     // unset register (NaN) is treated as zero. Loft and impact_position affect direction and impact details
     // that are not read yet either.
+    //
+    // DoAnimation stays unread, and that is now a finding rather than a gap: 355 of the 632 rows carry it
+    // (including boost-pad rows 558451/692194, strength 30 with strength_regop 1 - the sibling of the
+    // verified row 1509142, which carries 0). The protocol does have an animated-movement type
+    // (ForcedMovementType.Bullrush, 6: Velocity/StartTime/EndTime/Speed, "uses bullrush cvars"), so the
+    // flag looks like the switch between a silent impulse and an animated punt - but the one launch whose
+    // packet was captured and pinned here is a plain Type 5 impulse, and the verified pad rows carry both
+    // values of the flag. Flipping the packet type on the flag would gamble a verified launch on a client
+    // behaviour nobody has observed, so the flag stays documented the way #82 and #83 left their
+    // unestablishable fields: the impulse itself is what every row gets.
     public bool Execute(Context context)
     {
         float strength = Params.Strength;
