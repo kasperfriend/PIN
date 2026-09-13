@@ -74,6 +74,83 @@ public class NpcAttackResolverTests
     }
 
     [Fact]
+    public void Resolve_MeleeAbility_IsWalkedWithTheAttackIds()
+    {
+        // A melee weapon that only fills melee_ability_id: the chain is still the attack's animation,
+        // so the walk includes it. Shadowstrike's shape lives on burst_ability_id 188 in the build;
+        // putting the same chain on melee_ability_id is the fallback the column is named for.
+        var template = MeleeTemplate();
+        template.MeleeAbility = 188;
+        var data = DataWith(template)
+            .WithAbility(188, 48_922)
+            .WithCommand(48_922, (ushort)CommandType.ImpactApplyEffect, effectId: 176)
+            .WithStatusEffect(176, applyChain: 109_904)
+            .WithCommand(109_904, (ushort)CommandType.PlayAnimation);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(188u, profile.MeleeAbilityId);
+        Assert.Equal(188u, profile.AttackChainAbilityId);
+        Assert.True(profile.ChainClientFeedback);
+    }
+
+    [Fact]
+    public void Resolve_AttackChainPrefersBurstOverMelee()
+    {
+        // Burst, then attack, then melee: a leftover melee id must not steal the window from the
+        // burst the template names as the attack (Shadowstrike's 188).
+        var template = MeleeTemplate();
+        template.BurstAbility = 188;
+        template.MeleeAbility = 999;
+        var data = DataWith(template)
+            .WithAbility(188, 48_922)
+            .WithCommand(48_922, (ushort)CommandType.PlayAnimation);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(188u, profile.BurstAbilityId);
+        Assert.Equal(999u, profile.MeleeAbilityId);
+        Assert.Equal(188u, profile.AttackChainAbilityId);
+        Assert.True(profile.ChainClientFeedback);
+    }
+
+    [Fact]
+    public void Resolve_CarriesTheWeaponsReloadAbilityAndWhatItsChainDoes()
+    {
+        // reload_ability is the hook the database names for the moment a reload starts, the sibling
+        // of clip_empty_ability. A chain that carries something a client plays is runnable; the
+        // engine activates it from StartReload. No census of which templates fill the column is
+        // claimed here: the trigger is the column name and the reload the AI already starts.
+        var template = RangedTemplate();
+        template.ReloadAbility = 40_001;
+        var data = DataWith(template)
+            .WithAbility(40_001, 2_000)
+            .WithCommand(2_000, (ushort)CommandType.ImpactApplyEffect, effectId: 10_001)
+            .WithStatusEffect(10_001, applyChain: 2_100)
+            .WithCommand(2_100, (ushort)CommandType.AudioFeedback);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(40_001u, profile.ReloadAbilityId);
+        Assert.True(profile.ReloadClientFeedback);
+    }
+
+    [Fact]
+    public void Resolve_AServerOnlyReloadAbility_IsCarriedButNotRunnable()
+    {
+        var template = RangedTemplate();
+        template.ReloadAbility = 40_002;
+        var data = DataWith(template)
+            .WithAbility(40_002, 2_000)
+            .WithCommand(2_000, (ushort)CommandType.RegisterTimedTrigger);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(40_002u, profile.ReloadAbilityId);
+        Assert.False(profile.ReloadClientFeedback);
+    }
+
+    [Fact]
     public void Resolve_CarriesTheWeaponsEmptyClipAbilityAndWhatItsChainDoes()
     {
         // Template 12132 (Tesla Rifle 2.0) names 39239 as its clip_empty_ability; that ability applies effect
@@ -448,8 +525,12 @@ public class NpcAttackResolverTests
 
         Assert.Equal(0u, profile.AttackAbilityId);
         Assert.Equal(0u, profile.BurstAbilityId);
+        Assert.Equal(0u, profile.MeleeAbilityId);
+        Assert.Equal(0u, profile.AttackChainAbilityId);
+        Assert.Equal(0u, profile.ReloadAbilityId);
         Assert.Equal(0u, profile.ChargeUpMs);
         Assert.False(profile.ChainClientFeedback);
         Assert.False(profile.ChainDeliversDamage);
+        Assert.False(profile.ReloadClientFeedback);
     }
 }

@@ -804,6 +804,76 @@ public class AiEngineTests
         Assert.Equal(2, abilities.Activations.Count);
     }
 
+    /// <summary>
+    ///     A magazine profile whose weapon names a reload ability with client feedback: the sibling of
+    ///     the empty-clip hook, fired when the reload starts rather than when the magazine runs dry.
+    /// </summary>
+    private static NpcAttackProfile ReloadAbilityProfile() => MagazineProfile() with
+    {
+        ReloadAbilityId = 40_001,
+        ReloadClientFeedback = true,
+    };
+
+    [Fact]
+    public void ArmedNpc_StartingAReload_RunsTheWeaponsReloadAbility()
+    {
+        // The template's reload_ability is the chain the database names for the reload window. The
+        // WeaponReloaded marker is still what the client plays anim_reload_type from; this is the extra
+        // chain the row names for that same moment, gated like clip_empty (client feedback, once per
+        // reload).
+        var stats = new FakeAiMonsterStats { AttackProfile = ReloadAbilityProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);                   // Idle -> Chase
+        Tick(shard, FirstTick + Step);            // burst 1: 2 rounds -> 1
+
+        Assert.Empty(abilities.Activations);
+
+        Tick(shard, FirstTick + 2500 + Step);     // burst 2 empties the magazine and starts the reload
+
+        var reload = Assert.Single(abilities.Activations);
+        Assert.Equal(40_001u, reload.AbilityId);
+        Assert.Equal(62_550u, reload.Time);
+
+        Tick(shard, 63_000);
+        Tick(shard, 63_550);
+        Assert.Single(abilities.Activations);
+
+        Tick(shard, 65_050);
+        Assert.Single(abilities.Activations);
+
+        Tick(shard, 67_550);
+        Assert.Equal(2, abilities.Activations.Count);
+    }
+
+    [Fact]
+    public void ReloadAbilityThatCarriesNoClientCommand_IsNotRun()
+    {
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = MagazineProfile() with { ReloadAbilityId = 40_002, ReloadClientFeedback = false },
+        };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Tick(shard, FirstTick + 2500 + Step);
+
+        Assert.Empty(abilities.Activations);
+    }
+
     [Fact]
     public void EmptyClipAbilityThatCarriesNoClientCommand_IsNotRun()
     {
@@ -1230,6 +1300,50 @@ public class AiEngineTests
         Assert.Equal(39_249u, activation.AbilityId);
         Assert.Equal(60_050u, activation.Time);
         Assert.Equal(2f, activation.Register);
+    }
+
+    [Fact]
+    public void MeleeNpc_WithOnlyAMeleeAbility_RunsThatAbility()
+    {
+        // melee_ability_id is the fallback of the attack chain: a weapon that fills neither burst nor
+        // attack still animates from the melee hook, and a chain that delivers the hit still replaces
+        // the AI's own swing.
+        var stats = new FakeAiMonsterStats { AttackProfile = MeleeOnlyAbilityProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, player) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(3f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(188u, Assert.Single(abilities.Activations).AbilityId);
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
+        Assert.Equal(100_000, player.CurrentHealth);
+    }
+
+    [Fact]
+    public void MeleeNpc_PrefersBurstOverMelee()
+    {
+        // A leftover melee id must not steal the window from the burst the template names as the
+        // attack (Shadowstrike's 188). Burst, then attack, then melee.
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = AnimatingMeleeProfile() with { MeleeAbilityId = 999 },
+        };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(3f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(188u, Assert.Single(abilities.Activations).AbilityId);
     }
 
     [Fact]

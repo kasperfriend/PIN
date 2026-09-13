@@ -126,12 +126,17 @@ public sealed class NpcAttackResolver
         // database at runtime: whether they carry the animation of the attack (they are client-side
         // commands, so applying the effect is what animates the mob) and whether they deliver the hit
         // themselves (in which case the AI must not land its own on top).
-        var abilities = NpcWeaponAbilities.Scan(_data, template.AttackAbility, template.BurstAbility);
+        var abilities = NpcWeaponAbilities.Scan(_data, template.AttackAbility, template.BurstAbility, template.MeleeAbility);
 
         // The hook the weapon fires when the magazine runs dry is a separate ability from the burst's, with a
         // chain of its own, so it is scanned separately (a fresh visited set): whether anything in it is
         // something a client draws or plays decides whether the engine activates it at all.
         var emptyAbility = NpcWeaponAbilities.ScanAbility(_data, template.EmptyAbility);
+
+        // The reload hook is a separate ability from the burst's and the empty click, with a chain of its
+        // own, so it is scanned separately (a fresh visited set): whether anything in it is something a
+        // client draws or plays decides whether the engine activates it when the reload starts.
+        var reloadAbility = NpcWeaponAbilities.ScanAbility(_data, template.ReloadAbility);
 
         uint interval = NpcAttackDamageMath.ResolveAttackIntervalMs(
             behaviorParams.TriggerPullTimeMs,
@@ -236,6 +241,8 @@ public sealed class NpcAttackResolver
             MeleeAbilityId = template.MeleeAbility,
             ClipEmptyAbilityId = template.EmptyAbility,
             ClipEmptyClientFeedback = emptyAbility.ClientFeedback,
+            ReloadAbilityId = template.ReloadAbility,
+            ReloadClientFeedback = reloadAbility.ClientFeedback,
             MuzzleOffset = muzzleOffset,
             CreatureDamageModifier = creatureDamageModifier,
             CreatureWeaponDamageModifier = weaponModifier,

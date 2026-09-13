@@ -236,7 +236,7 @@ server's job, and all five are now driven by the database:
 | Reload | `CombatView.WeaponReloaded` (then the magazine refills, or `WeaponReloadCancelled` when it dies mid-reload) | `dbitems::WeaponTemplates.base_clip_size` (else the item's attribute 956), `ammo_per_burst` (else `rounds_per_burst`) and `reload_time`; the client plays the template's `anim_reload_type` |
 | Locomotion | `CurrentPoseUpdate` / `MovementView` movement state | `dbcharacter::Monster.normal_speed` (the walk, `0x5004`, while attacking) and `fast_speed` (the run, `0x2004`, while chasing) |
 | Armed pose + weapon animation set | `CurrentEquipment` (the weapon item's template id) | `dbitems::WeaponTemplates.anim_armed_id` / `anim_armed_priority` / `anim_fire_type` / `anim_reload_type` / `anim_charge_type` |
-| Charge / swing animation (a named animation from a chain) | the character's `StatusEffects_0..31` fields (`EffectApply` / `EffectRemove`), which the client plays the effect's own `tf*` commands from | `dbitems::WeaponTemplates.attack_ability_id` / `burst_ability_id` -> `apt::AbilityData.chain` -> `apt::ImpactApplyEffectCommandDef.effect_id` -> `apt::StatusEffectData.apply_chain` / `remove_chain` |
+| Charge / swing animation (a named animation from a chain) | the character's `StatusEffects_0..31` fields (`EffectApply` / `EffectRemove`), which the client plays the effect's own `tf*` commands from | `dbitems::WeaponTemplates.attack_ability_id` / `burst_ability_id` / `melee_ability_id` -> `apt::AbilityData.chain` -> `apt::ImpactApplyEffectCommandDef.effect_id` -> `apt::StatusEffectData.apply_chain` / `remove_chain` |
 
 **Attack animation.** A player's is driven by the client itself: it sends
 `FireBurst` when a burst starts and `FireEnd`/`FireCancel` when it stops, and the
@@ -294,7 +294,7 @@ status effect, so applying the effect is what makes every client with the same
 database play it. Those commands are client-side by design - `Factory.LoadCommand`
 turns them into `CustomNOOPCommand`, because the client runs them from the replicated
 effect - which means the server's whole job is to apply the effect. Nothing did: a
-weapon template's `attack_ability_id` / `burst_ability_id` reached `NpcAttackProfile`
+weapon template's `attack_ability_id` / `burst_ability_id` / `melee_ability_id` reached `NpcAttackProfile`
 and stopped there, so no mob ever applied the effects its weapon's chains apply.
 
 `NpcWeaponAbilities.Scan` now walks those chains once, at profile resolution (through
@@ -335,6 +335,25 @@ other two rows (11975 and 11971, 2 slots) name 35842, whose chain is a
 `RegisterTimedTriggerCommandDef` and nothing else: server-side, so the engine leaves it
 alone exactly like a server-only burst chain - the same `ClientFeedback` gate, read off
 the hook's own chain.
+
+The **melee hook** (`melee_ability_id`) is the third attack id, not a separate event. A
+player weapon already prefers burst, then attack, then melee for the same window; the
+engine does the same (`NpcAttackProfile.AttackChainAbilityId`). `NpcWeaponAbilities.Scan`
+walks all three together so a weapon that only fills `melee_ability_id` still reports
+client feedback, and `ActivateWeaponAbility` runs that id when burst and attack are 0.
+Shadowstrike's swing lives on `burst_ability_id` 188 in this build - putting the same
+chain on `melee_ability_id` is the fallback the column is named for, not a new trigger.
+`restrict_melee` is not a second gate: it is one of the combat flags a charge-up already
+sets, and the engine already honours `restrict_weapon` / `restrict_abilities`.
+
+The **reload hook** (`reload_ability`) is the sibling of the empty click: the empty
+ability is the moment the magazine runs dry, this is the reload that follows. The AI
+already starts that reload (`StartReload` sets `WeaponReloaded`, which is still what the
+client plays `anim_reload_type` from); the extra chain the row names for that same window
+is now activated there, gated exactly like `clip_empty_ability` - a hook whose chains
+carry nothing a client executes is left alone. Both the dry-after-burst path and the
+`CanFire` path that starts a reload that was never announced go through `StartReload`,
+so one empty magazine is one reload ability.
 
 Two templates (23 slots) carry an **`overcharge_ability`** (39467, on the plasma cannon
 12129 and the fusion cannon 60) and the engine does **not** run it, because the event that
@@ -888,7 +907,10 @@ stays horizontal, exactly as before.
   draws or plays in the effect that ability applies (7 of the 14 templates with
   attack/burst ids, 75 monster slots: the Shadowstrike swing, the charge-up weapon's
   charge/release, the flamethrower's cone, and the charge sniper/phason/fluid
-  cannon/magic finger muzzle flash and sound), it runs a behaviour set's ability modules
+  cannon/magic finger muzzle flash and sound - and `melee_ability_id` is now the
+  fallback of that same attack chain, so a weapon that only fills the melee column still
+  animates), it runs the weapon's `reload_ability` when a reload starts (the sibling of
+  the empty-clip hook, gated the same way), it runs a behaviour set's ability modules
   (`am1Id`/`am2Id`: all 26 module ids the build's monsters name, 25 of them holding an
   animation and 20 landing their own damage - the dodge pair's 500 ms sidestep, the Move
   Then Fire roar, the melee swings and the rest), and it performs the emote of the

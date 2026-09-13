@@ -209,7 +209,12 @@ public sealed record NpcAttackProfile
     /// </summary>
     public bool ChainDeliversDamage { get; init; }
 
-    /// <summary>Template melee ability id, or 0.</summary>
+    /// <summary>
+    ///     Template melee ability id (<c>melee_ability_id</c>) - the chain a melee weapon runs as its
+    ///     attack when it has no burst/attack ability, or 0. Walked with the other two attack ids (see
+    ///     <see cref="NpcWeaponAbilities.Scan" />) and run as the fallback of
+    ///     <see cref="AttackChainAbilityId" /> when the chain carries client feedback.
+    /// </summary>
     public uint MeleeAbilityId { get; init; }
 
     /// <summary>
@@ -227,6 +232,28 @@ public sealed record NpcAttackProfile
     ///     nothing a client shows, exactly like a server-only burst chain.
     /// </summary>
     public bool ClipEmptyClientFeedback { get; init; }
+
+    /// <summary>
+    ///     The ability the weapon fires when a reload starts (<c>dbitems::WeaponTemplates.reload_ability</c>),
+    ///     or 0. The sibling of <see cref="ClipEmptyAbilityId" />: the empty click is the moment the magazine
+    ///     runs dry, this is the reload that follows. Gated the same way - a hook whose chains carry nothing
+    ///     a client executes is left alone.
+    /// </summary>
+    public uint ReloadAbilityId { get; init; }
+
+    /// <summary>
+    ///     Whether the reload ability's chains carry a command a client executes. A server-only reload hook
+    ///     is not activated, exactly like a server-only empty-clip or burst chain.
+    /// </summary>
+    public bool ReloadClientFeedback { get; init; }
+
+    /// <summary>
+    ///     The ability id one attack actually runs: burst when the template names one, else attack, else
+    ///     melee. The three columns are the database's own attack hooks; the engine picks one so a weapon
+    ///     that only fills <c>melee_ability_id</c> still animates.
+    /// </summary>
+    public uint AttackChainAbilityId =>
+        BurstAbilityId != 0 ? BurstAbilityId : AttackAbilityId != 0 ? AttackAbilityId : MeleeAbilityId;
 
     /// <summary>
     ///     Local-space muzzle offset (<c>dbcharacter::Monster.projectile_offset</c>). When it is

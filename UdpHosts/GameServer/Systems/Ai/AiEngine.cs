@@ -670,10 +670,11 @@ public class AiEngine
 
     /// <summary>
     ///     Runs the weapon ability whose chains carry the attack's animation (and, for the weapons the data
-    ///     gives one, the attack's own damage). Nothing else in the server executes an NPC's weapon
-    ///     abilities: a weapon template's ability ids reach <see cref="NpcAttackProfile" /> and stop there,
-    ///     which is exactly why the status effects those chains apply - the replicated data a client plays
-    ///     an animation from - never reached a mob before.
+    ///     gives one, the attack's own damage). The id is <see cref="NpcAttackProfile.AttackChainAbilityId" />:
+    ///     burst, else attack, else melee - the three columns the template names for this window. Nothing
+    ///     else in the server executes an NPC's weapon abilities: a weapon template's ability ids reach
+    ///     <see cref="NpcAttackProfile" /> and stop there, which is exactly why the status effects those
+    ///     chains apply - the replicated data a client plays an animation from - never reached a mob before.
     /// </summary>
     /// <remarks>
     ///     A charging weapon hands the chain its charge time as the register, in seconds: the database's
@@ -701,7 +702,11 @@ public class AiEngine
             return false;
         }
 
-        uint abilityId = profile.BurstAbilityId != 0 ? profile.BurstAbilityId : profile.AttackAbilityId;
+        // Burst, then attack, then melee: the three ids the weapon template names for this window, in
+        // the order a player weapon already prefers. A melee row that only fills melee_ability_id still
+        // animates; a ranged row that fills burst (Shadowstrike) still prefers that over a leftover melee
+        // id. See NpcAttackProfile.AttackChainAbilityId.
+        uint abilityId = profile.AttackChainAbilityId;
         if (abilityId == 0)
         {
             return false;
@@ -793,6 +798,25 @@ public class AiEngine
     {
         npc.Magazine = npc.Magazine.StartReload(currentTime, npc.Profile?.ReloadTimeMs ?? 0);
         npc.Entity?.SetWeaponReloaded(unchecked((uint)currentTime));
+        ActivateReloadAbility(npc, currentTime);
+    }
+
+    /// <summary>
+    ///     Runs the weapon's own reload ability, the hook the database gives the moment a reload starts
+    ///     (<c>dbitems::WeaponTemplates.reload_ability</c>). Gated exactly like the empty-clip hook: a chain
+    ///     that carries nothing a client executes is left alone, and a shard with no aptitude system simply
+    ///     does not run it. The <c>WeaponReloaded</c> marker above is still what the client plays
+    ///     <c>anim_reload_type</c> from; this is the extra chain the row names for that same window.
+    /// </summary>
+    private void ActivateReloadAbility(NpcBrain npc, ulong currentTime)
+    {
+        var profile = npc.Profile;
+        if (profile == null || !profile.ReloadClientFeedback || profile.ReloadAbilityId == 0)
+        {
+            return;
+        }
+
+        _abilityActivator.Activate(npc.Entity, profile.ReloadAbilityId, (uint)currentTime, float.NaN);
     }
 
     /// <summary>Refills the magazine once the reload window the database gives the weapon has run out.</summary>
