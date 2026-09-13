@@ -282,6 +282,8 @@ AiEngine.Tick
                                            resolved per-round damage on board,
                                            each round scattered inside the
                                            weapon's own first-shot cone)
+                 -> WeaponProjectileFired to watching clients
+                    (ProjectileFiredAnnouncement; ProjectileSim is server-only)
                  -> flight/impact -> ProjectileHitEvent -> DamageSystem.ApplyDamage
 ```
 

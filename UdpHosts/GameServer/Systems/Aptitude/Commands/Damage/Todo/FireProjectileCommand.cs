@@ -5,6 +5,7 @@ using GameServer.Entities.Character;
 using GameServer.Enums;
 using GameServer.StaticDB;
 using GameServer.StaticDB.Records.aptfs;
+using GameServer.Systems.Combat;
 using GameServer.Systems.PRNG;
 
 namespace GameServer.Systems.Aptitude.Commands.Damage;
@@ -117,6 +118,7 @@ public class FireProjectileCommand : Command, ICommand
             PRNG.PRNG.Spread(time, (byte)Params.Hardpoint, bullet, aimForward, aimRight, aimUp, Params.Spread, Vector3.Zero, time, out Vector3 spreadDirection);
             uint trace = PRNG.PRNG.Trace(time, bullet);
             context.Shard.ProjectileSim.FireProjectile(shooter, trace, origin, spreadDirection, ammo, range, speed, ammo.ImpactRadius, ammo.MaxRadius, damageInt);
+            ProjectileFiredAnnouncement.SendToWatchers(context.Shard, shooter, spreadDirection);
         }
 
         return true;

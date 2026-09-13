@@ -50,7 +50,7 @@ UdpHosts/GameServer/Systems/Ai/
 ├── NpcAttackSpreadMath.cs      the standing first-shot cone (min/max/starting_spread + attr 958)
 ├── NpcAttackAnimation.cs       the attack animation window (burst markers)
 ├── NpcBehaviorParams.cs        parser for the behaviour string's attack parameters
-├── NpcProjectileLauncher.cs    fires a resolved shot through ProjectileSim
+├── NpcProjectileLauncher.cs    fires a resolved shot through ProjectileSim (+ WeaponProjectileFired)
 ├── INpcAttackDataSource.cs     the DB surface the resolver reads (fakeable in tests)
 ├── IAiHostility.cs             who counts as an enemy
 ├── FactionAiHostility.cs       SDB faction table implementation
@@ -182,6 +182,11 @@ AiEngine.UpdateBrain
                          first-shot cone - see NpcAttackSpreadMath)
                          -> flight, gravity, bounces, falloff, impact
                               -> ProjectileHitEvent -> DamageSystem.ApplyDamage
+                    -> WeaponProjectileFired to every watching client
+                         (ProjectileFiredAnnouncement: ProjectileSim is server-only,
+                          so without this event the damage arrives with no tracer
+                          and no muzzle - the same event a player's fire path
+                          echoes to the shooter)
        -> IAiAttackFeedback.OnAttack                       (melee only)
             -> CombatSim.HitFeedback.TookDebugHit -> TookHit to scoped clients
 ```
@@ -204,7 +209,11 @@ you are inside that reach; the victim gets the same `TookHit` message a weapon h
 produces, so damage numbers and the health bar behave normally. A ranged attack is
 a real projectile carrying the per-round damage the database resolved, so it can
 miss, be dodged, fall off with distance (the ammo's `damage_decay`) and use the
-ammo's own gravity and bounce behaviour. Each round of the burst is scattered
+ammo's own gravity and bounce behaviour. The server also announces each round with
+`WeaponProjectileFired` to every client the NPC is scoped into: a player's own
+client predicts that event from the fire input, an NPC has no client, and
+`ProjectileSim` does not replicate, so without the announcement a rifle or HMG
+lands its damage from across the yard while looking idle. Each round of the burst is scattered
 inside the weapon's own first-shot cone (`NpcAttackSpreadMath`: template
 `min_spread` / `max_spread` / `starting_spread`, scaled by the item's attribute
 958 when it carries one) through the same `PRNG.Spread` a player shot uses, so a
