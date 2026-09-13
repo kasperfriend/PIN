@@ -257,7 +257,8 @@ public class MovementSlideCommandTests
     {
         var character = FakeCharacterFactory.Create(shard);
         shard.EntityMan.Add(character.EntityId, character);
-        character.SetCharacterState(CharacterStateData.CharacterStatus.Living, shard.CurrentTime);
+        // CurrentTime is a default interface member on IShard; the fake is read through its own clock.
+        character.SetCharacterState(CharacterStateData.CharacterStatus.Living, unchecked((uint)shard.CurrentTimeLong));
         return character;
     }
 
