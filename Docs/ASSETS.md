@@ -224,9 +224,16 @@ curl -sI http://localhost:4401/vtex/prod-1962/static.vtex0 | head -5
 curl -s -o /dev/null -w '%{http_code} %{size_download}\n' \
      -H 'Range: bytes=0-1023' http://localhost:4401/vtex/prod-1962/static.vtex0
 
-# What the client is told to use (the capability response): WebAssetHost, not the catch-all.
+# Which host the client is told to use for *its own* UI assets (a capability answer).
 curl -s 'http://localhost:4400/check?environment=prod&build=1962' | grep -o '"web_asset_host":"[^"]*"'
 ```
+
+That last one is expected to say **4499/44399**, the catch-all: the texture and
+asset streams come from `firefall.ini`, which names port 4401 directly, and
+`web_asset_host` is what the client loads its own store UI from - where the
+catch-all's empty 200 is a better answer than a static host's 404. Do not
+"fix" it by repointing it at the asset host: that changes nothing about
+blurry textures and turns a benign reply into a 404.
 
 The URL is the client's question, so it is the same URL whichever folder the file
 is in: `Assets\static.vtex0` answers this `404`-free probe just as `Assets\vtex\

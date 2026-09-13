@@ -199,19 +199,6 @@ public class WebAssetTests : IDisposable
         Assert.False(token.HasChanged);
     }
 
-    [Fact]
-    public void Roots_AreKeptInTheOrderTheyAreSearched()
-    {
-        // The report and an operator's "which copy is being served" question both read this list, so the
-        // provider has to keep the roots as it was handed them.
-        var a = Prepare("A");
-        var b = Prepare("B");
-
-        var roots = Provider(a, b).Roots.Cast<PhysicalFileProvider>().Select(r => r.BasePath).ToList();
-
-        Assert.Equal(new[] { a, b }, roots);
-    }
-
     // --- what the startup report says ---------------------------------------------------------------------
 
     [Fact]

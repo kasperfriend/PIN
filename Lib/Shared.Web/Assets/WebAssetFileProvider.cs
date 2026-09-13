@@ -44,9 +44,6 @@ public sealed class WebAssetFileProvider : IFileProvider
                      : new List<IFileProvider>(roots);
     }
 
-    /// <summary>The roots this provider searches, in the order it searches them.</summary>
-    public IReadOnlyList<IFileProvider> Roots => _roots;
-
     /// <inheritdoc />
     public IFileInfo GetFileInfo(string subpath)
     {

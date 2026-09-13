@@ -18,10 +18,7 @@ public class CapabilityRepository : ICapabilityRepository
         // The hosts are advertised from Firefall:PublicHost (see PublicUrls) instead of a hardcoded
         // "localhost", so a player on another machine is sent to this server and not to himself. The
         // catch-all host still answers for every host PIN has not implemented - frontend, store, web,
-        // market, web accounts and rhsigscan all point at it, exactly as they did before. Web assets do
-        // not: they have a host of their own, and a client told to stream from the catch-all is told to
-        // stream from a server that serves nothing - every chunk request there is a 404, which is how a
-        // player ends up with blurry textures next to a server that has the files.
+        // market, web assets, web accounts and rhsigscan all point at it, exactly as they did before.
         return await Task.FromResult(new HostInformation
                                      {
                                          FrontendHost = _urls.Url(PublicUrls.CatchAllHost),
@@ -32,7 +29,7 @@ public class CapabilityRepository : ICapabilityRepository
                                          MarketHost = _urls.Url(PublicUrls.CatchAllHost),
                                          IngameHost = _urls.Url(PublicUrls.InGameApiHost),
                                          ClientapiHost = _urls.Url(PublicUrls.ClientApiHost),
-                                         WebAssetHost = _urls.Url(PublicUrls.WebAssetHost),
+                                         WebAssetHost = _urls.Url(PublicUrls.CatchAllHost),
                                          WebAccountsHost = _urls.Url(PublicUrls.CatchAllHost),
                                          RhsigscanHost = _urls.Url(PublicUrls.CatchAllHost)
                                      });
