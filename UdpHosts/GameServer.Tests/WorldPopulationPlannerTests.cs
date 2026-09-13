@@ -121,7 +121,26 @@ public class WorldPopulationPlannerTests
 
         Assert.Contains(planner.Cells.Values, cell => cell.Habitat == WorldPopulationHabitat.Settlement && cell.Level == 12);
         Assert.Contains(planner.Cells.Values, cell => cell.Habitat == WorldPopulationHabitat.Melding && cell.Level == 29);
-        Assert.Contains(planner.Cells.Values, cell => cell.Habitat == WorldPopulationHabitat.Wilderness && cell.Level == 7);
+
+        // Open field takes the band of whichever banded anchor is nearest to it, which is what gives
+        // a zone its gradient: the field by the outpost is outpost level, the field by the Melding is
+        // Melding level. The zone's own band is only for ground no anchor reaches (next test).
+        Assert.Contains(planner.Cells.Values, cell => cell.Habitat == WorldPopulationHabitat.Wilderness && cell.Level == 12);
+        Assert.Contains(planner.Cells.Values, cell => cell.Habitat == WorldPopulationHabitat.Wilderness && cell.Level == 29);
+    }
+
+    [Fact]
+    public void Plan_FallsBackToTheZonesOwnLevelWhenNoAnchorCarriesABand()
+    {
+        var (planner, data, terrain) = CreatePlanner();
+        AddGround(terrain); // no anchors at all: no outpost, no Melding, nothing banded
+        data.DefaultLevel = 7;
+        data.AddMonster(10);
+
+        Build(planner);
+
+        Assert.All(planner.Cells.Values, cell => Assert.Equal(WorldPopulationHabitat.Wilderness, cell.Habitat));
+        Assert.All(planner.Cells.Values, cell => Assert.Equal(7, cell.Level));
     }
 
     [Fact]
