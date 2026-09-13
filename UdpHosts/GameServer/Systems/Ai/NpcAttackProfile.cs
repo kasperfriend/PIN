@@ -248,6 +248,27 @@ public sealed record NpcAttackProfile
     public bool ReloadClientFeedback { get; init; }
 
     /// <summary>
+    ///     The ability the weapon fires when a charge is held long enough to overcharge
+    ///     (<c>dbitems::WeaponTemplates.overcharge_ability</c>), or 0. The delay is
+    ///     <see cref="MsOverchargeDelay" />; an NPC charges for <see cref="ChargeUpMs" /> and then
+    ///     fires, so the hook runs with the attack when that charge crosses the delay. See
+    ///     <see cref="NpcWeaponOvercharge" />.
+    /// </summary>
+    public uint OverchargeAbilityId { get; init; }
+
+    /// <summary>
+    ///     Milliseconds a charge must be held before <see cref="OverchargeAbilityId" /> applies
+    ///     (<c>ms_overcharge_delay</c>). 0 means the row does not overcharge.
+    /// </summary>
+    public uint MsOverchargeDelay { get; init; }
+
+    /// <summary>
+    ///     Whether the overcharge ability's chains carry a command a client executes. A server-only
+    ///     overcharge hook is not activated, exactly like a server-only empty-clip or burst chain.
+    /// </summary>
+    public bool OverchargeClientFeedback { get; init; }
+
+    /// <summary>
     ///     The ability id one attack actually runs: burst when the template names one, else attack, else
     ///     melee. The three columns are the database's own attack hooks; the engine picks one so a weapon
     ///     that only fills <c>melee_ability_id</c> still animates.

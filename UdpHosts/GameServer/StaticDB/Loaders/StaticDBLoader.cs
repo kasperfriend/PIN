@@ -104,6 +104,19 @@ public class StaticDBLoader : ISDBLoader
         .ToDictionary(row => row.Id);
     }
 
+    public Dictionary<uint, MonsterVisualOptions> LoadMonsterVisualOptions()
+    {
+        return LoadStaticDB<MonsterVisualOptions>("dbcharacter::MonsterVisualOptions")
+        .ToDictionary(row => row.Id);
+    }
+
+    public Dictionary<uint, List<MonsterVisualOption>> LoadMonsterVisualOption()
+    {
+        return LoadStaticDB<MonsterVisualOption>("dbcharacter::MonsterVisualOption")
+        .GroupBy(row => row.Parent)
+        .ToDictionary(group => group.Key, group => group.ToList());
+    }
+
     public Dictionary<ushort, EmoteRecord> LoadEmoteRecord()
     {
         return LoadStaticDB<EmoteRecord>("dbcharacter::EmoteRecord")
@@ -149,6 +162,18 @@ public class StaticDBLoader : ISDBLoader
     {
         return LoadStaticDB<VisualRecord>("dbvisualrecords::VisualRecord")
         .ToDictionary(row => row.Id);
+    }
+
+    /// <summary>
+    ///     <c>dbvisualrecords::Hardpoints</c> keyed by name. Duplicate names keep the first row;
+    ///     empty names are skipped so a muzzle lookup never keys on blank.
+    /// </summary>
+    public Dictionary<string, Hardpoints> LoadHardpoints()
+    {
+        return LoadStaticDB<Hardpoints>("dbvisualrecords::Hardpoints")
+            .Where(row => !string.IsNullOrWhiteSpace(row.Name))
+            .GroupBy(row => row.Name)
+            .ToDictionary(group => group.Key, group => group.First());
     }
 
     public Dictionary<uint, AttributeCategory> LoadAttributeCategory()

@@ -2,6 +2,7 @@ namespace GameServer.StaticDB;
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using FauFau.Formats;
 using Records.apt;
 using Records.aptfs;
@@ -26,6 +27,8 @@ public class SDBInterface
     private static List<FactionRelations> _factionRelations;
     private static Dictionary<uint, List<FactionReputations>> _factionReputations;
     private static Dictionary<uint, Monster> _monster;
+    private static Dictionary<uint, MonsterVisualOptions> _monsterVisualOptions;
+    private static Dictionary<uint, List<MonsterVisualOption>> _monsterVisualOptionByParent;
     private static Dictionary<ushort, EmoteRecord> _emoteRecord;
 
     /// <summary>
@@ -54,6 +57,7 @@ public class SDBInterface
     // dbvisualrecords
     private static Dictionary<uint, WarpaintPalette> _warpaintPalettes;
     private static Dictionary<uint, VisualRecord> _visualRecord;
+    private static Dictionary<string, Hardpoints> _hardpointsByName;
 
     // dbitems
     private static Dictionary<uint, AttributeCategory> _attributeCategory;
@@ -300,6 +304,8 @@ public class SDBInterface
         _factionRelations = loader.LoadFactionRelations();
         _factionReputations = loader.LoadFactionReputations();
         _monster = loader.LoadMonster();
+        _monsterVisualOptions = loader.LoadMonsterVisualOptions();
+        _monsterVisualOptionByParent = loader.LoadMonsterVisualOption();
         _emoteRecord = loader.LoadEmoteRecord();
         _emoteRecordByName = BuildEmoteNameIndex(_emoteRecord);
         _monsterAttributeRange = loader.LoadMonsterAttributeRange();
@@ -323,6 +329,7 @@ public class SDBInterface
         // dbvisualrecords
         _warpaintPalettes = loader.LoadWarpaintPalettes();
         _visualRecord = loader.LoadVisualRecord();
+        _hardpointsByName = loader.LoadHardpoints();
 
         // dbitems
         _attributeCategory = loader.LoadAttributeCategory();
@@ -618,6 +625,26 @@ public class SDBInterface
     public static IReadOnlyDictionary<uint, Monster> GetMonsters() => _monster;
 
     /// <summary>
+    ///     The <c>dbcharacter::MonsterVisualOptions</c> header <c>Monster.visual_options_id</c> names,
+    ///     or null when the set is missing or the table is not loaded yet.
+    /// </summary>
+    public static MonsterVisualOptions GetMonsterVisualOptions(uint id) => _monsterVisualOptions?.GetValueOrDefault(id);
+
+    /// <summary>
+    ///     The <c>dbcharacter::MonsterVisualOption</c> rows of a variant set, or empty when the set
+    ///     has none or the table is not loaded yet.
+    /// </summary>
+    public static IReadOnlyList<MonsterVisualOption> GetMonsterVisualOption(uint parent)
+    {
+        if (_monsterVisualOptionByParent != null && _monsterVisualOptionByParent.TryGetValue(parent, out var rows) && rows != null)
+        {
+            return rows;
+        }
+
+        return [];
+    }
+
+    /// <summary>
     ///     One <c>dbcharacter::EmoteRecord</c> row: an emote a character can perform, its client-side
     ///     animation (animation override / animation network id) and the status effect the emote applies
     ///     while it runs. 382 rows in build prod-1962, 4 of them naming a status effect.
@@ -675,6 +702,25 @@ public class SDBInterface
     // dbvisualrecords
     public static WarpaintPalette GetWarpaintPalette(uint id) => _warpaintPalettes.GetValueOrDefault(id);
     public static VisualRecord GetVisualRecord(uint id) => _visualRecord.GetValueOrDefault(id);
+
+    /// <summary>
+    ///     Local-space translation of a named <c>dbvisualrecords::Hardpoints</c> row, or
+    ///     <see cref="Vector3.Zero" /> when the name is empty, unknown, or the table is not loaded.
+    /// </summary>
+    public static Vector3 GetHardpointOffset(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || _hardpointsByName == null)
+        {
+            return Vector3.Zero;
+        }
+
+        if (!_hardpointsByName.TryGetValue(name, out var row) || row == null)
+        {
+            return Vector3.Zero;
+        }
+
+        return HardpointTransform.Translation(row.Transform);
+    }
 
     // dbitems
     public static RootItem GetRootItem(uint id) => _rootItem.GetValueOrDefault(id);

@@ -494,7 +494,8 @@ KNOWN_TABLES = [
     "dbitems::ItemCharacterScalars", "dbitems::LevelBand",
     "dbzonemetadata::ZoneRecord", "dbencounterdata::MapMarkerInfo",
     "dbencounterdata::SinCardTemplate", "dbvisualrecords::VisualRecord",
-    "dbvisualrecords::WarpaintPalette", "vcs::CharacterDefinition",
+    "dbvisualrecords::WarpaintPalette", "dbvisualrecords::Hardpoints",
+    "vcs::CharacterDefinition",
 ]
 
 

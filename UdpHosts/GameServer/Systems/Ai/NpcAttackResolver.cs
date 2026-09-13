@@ -138,6 +138,11 @@ public sealed class NpcAttackResolver
         // client draws or plays decides whether the engine activates it when the reload starts.
         var reloadAbility = NpcWeaponAbilities.ScanAbility(_data, template.ReloadAbility);
 
+        // The overcharge hook is a separate ability from the burst's, the empty click and the reload,
+        // with a chain of its own: whether anything in it is something a client draws or plays decides
+        // whether the engine activates it when the charge has crossed ms_overcharge_delay.
+        var overchargeAbility = NpcWeaponAbilities.ScanAbility(_data, template.OverchargeAbility);
+
         uint interval = NpcAttackDamageMath.ResolveAttackIntervalMs(
             behaviorParams.TriggerPullTimeMs,
             behaviorParams.FireRestDurationMs,
@@ -243,6 +248,9 @@ public sealed class NpcAttackResolver
             ClipEmptyClientFeedback = emptyAbility.ClientFeedback,
             ReloadAbilityId = template.ReloadAbility,
             ReloadClientFeedback = reloadAbility.ClientFeedback,
+            OverchargeAbilityId = template.OverchargeAbility,
+            MsOverchargeDelay = template.MsOverchargeDelay,
+            OverchargeClientFeedback = overchargeAbility.ClientFeedback,
             MuzzleOffset = muzzleOffset,
             CreatureDamageModifier = creatureDamageModifier,
             CreatureWeaponDamageModifier = weaponModifier,

@@ -185,6 +185,9 @@ AiEngine.UpdateBrain
                          scattered through PRNG.Spread inside the weapon's own
                          first-shot cone - see NpcAttackSpreadMath)
                          -> flight, gravity, bounces, falloff, impact
+                              -> AmmoAbilityHooks: AbilityId / TouchAbilityId at
+                                 impact, AirburstAbilityId when the round times
+                                 out, PeriodAbilityId every PeriodAbilityMs
                               -> ProjectileHitEvent -> DamageSystem.ApplyDamage
                     -> WeaponProjectileFired to every watching client
                          (ProjectileFiredAnnouncement: ProjectileSim is server-only,
@@ -369,16 +372,17 @@ carry nothing a client executes is left alone. Both the dry-after-burst path and
 so one empty magazine is one reload ability.
 
 Two templates (23 slots) carry an **`overcharge_ability`** (39467, on the plasma cannon
-12129 and the fusion cannon 60) and the engine does **not** run it, because the event that
-fires it cannot be established from this build. The data around it: both weapons state
-`ms_chargeup` = `ms_chargeup_max` = 4000 ms, `ms_overcharge_delay` = 2500 ms, and
-`fire_type` 6 (the client's charge-up mode), and the ability applies effect 10925 - three
-muzzle particle emitters and a looping sound, held for 2500 ms behind the same
-`RequireWeaponArmed` gate. Nothing in the build defines *what* the character must be
-doing when the delay elapses: the client owns the charge state (that is the one column
-the row has no server-side counterpart for), and an AI that invents a charge-hold would
-change how those mobs shoot rather than make them show what the original game shows.
-Documented rather than guessed (see [Known gaps](#6-known-gaps)).
+12129 and the fusion cannon 60). Both weapons state `ms_chargeup` = `ms_chargeup_max` =
+4000 ms, `ms_overcharge_delay` = 2500 ms, and `fire_type` 6 (the client's charge-up mode),
+and the ability applies effect 10925 - three muzzle particle emitters and a looping sound,
+held for 2500 ms behind the same `RequireWeaponArmed` gate. The engine runs it with the
+attack when the charge the weapon describes is at least the delay
+(`NpcWeaponOvercharge.ShouldActivate`: ability id set, delay non-zero, `ms_chargeup` ≥
+`ms_overcharge_delay`), gated like `clip_empty_ability` - a hook whose chains carry nothing
+a client executes is left alone. The register is NaN: the overcharge chain has no duration
+that reads it (the 2500 ms is the effect's own TimeDuration). A seated turret uses the
+same gate through the gunner's shard `AbilitySystem`. There is no hold-past-max event in
+this build, and a delay of 0 means the row does not overcharge.
 
 The two weapons that animate, command by command:
 
@@ -672,11 +676,13 @@ documented rather than wired:
 
 The protocol's only animation-specific observer message is the GSS character
 event `AnimationUpdated` (`ushort` + `byte`, both fields unnamed in
-`AeroMessages`);
-PIN has never sent it, so stumbles and the chain animations above have no observer
-channel today. `AbilityActivated`/`AbilityFailed` are `CombatController` events,
-i.e. addressed to the controlling player, and so cannot carry an NPC's animation
-either. The attack animation described above is what an observer of an NPC gets.
+`AeroMessages`). PIN now sends it to every client the NPC is scoped into at the
+same window as the burst markers: `Unk1` is the weapon's `anim_fire_type`, `Unk2`
+is 1 at `WeaponBurstFired` and 0 at `WeaponBurstEnded` (`AnimationUpdatedAnnouncement`).
+The names of those two fields are still unknown, so nothing else is packed into them.
+`AbilityActivated`/`AbilityFailed` are `CombatController` events, i.e. addressed to the
+controlling player, and so cannot carry an NPC's animation either. Stumble still has no
+observer channel but the effect (see below).
 
 ---
 
@@ -889,10 +895,11 @@ Vector3.Zero)` for every ranged row (21 dual-weapon types in prod-1962; melee
 or unresolved rows are skipped). `monsterId` 0 means there is no creature
 damage modifier (the lookup returns null and the modifier stays 1); the muzzle
 offset the resolver stores is unused because the shot leaves from
-`TurretWeapon.PhysicalOrigin` rotated by the current pose
+`TurretWeapon.PhysicalOrigin` plus the translation of `MuzzleHardpoint`
+(`dbvisualrecords::Hardpoints.Transform`, last column of the 12-float HalfMatrix4x3,
+else XYZ, else three floats), rotated by the current pose
 (`QuaternionEx.Transform(offset, Inverse(rotation))`), not from a monster
-`projectile_offset`. `MuzzleHardpoint` is unused (`dbvisualrecords::Hardpoints.Transform`
-is not loaded). The gunner (or unmanned owner) is the projectile source; damage
+`projectile_offset`. The gunner (or unmanned owner) is the projectile source; damage
 is then scaled by that character's `FrameProgressionLevel` through
 `WeaponDamageMath.DamageLevelScale`. One packet is one round per barrel; the
 gunner's equipped weapon is not fired. Remaining ammo replicates as `ushort[]`
@@ -905,8 +912,10 @@ packets; an unmanned one picks the closest hostile player inside the lead
 weapon's `AttackRange` (not the NPC `AggroRadius`) and fires at
 `AttackIntervalMs`. The source is the parent `CharacterEntity`, else the parent
 `BaseAptitudeEntity.Owner`. `dbcharacter::Turret.Behavior` is a numeric flag
-(`"1"` or `-`), not a CAIS behaviour string. `AnimationUpdated` and overcharge
-are not invented (see [Known gaps](#6-known-gaps)).
+(`"1"` or `-`), not a CAIS behaviour string. A turret whose weapon overcharges
+runs that ability through the gunner's shard. The turret protocol has no
+`AnimationUpdated`; the character observer event is the NPC burst window
+(above).
 
 **Spread.** A ranged row fires inside the weapon's own first-shot cone, the same
 number a standing player would get from the same template on their first trigger
@@ -974,11 +983,9 @@ stays horizontal, exactly as before.
   `dialogScript=` are dialog rather than animation; the other 7
   weapon templates with attack/burst ids carry no client command, so their
   effects (charge states, cone effects, stat modifiers) change numbers rather than
-  what anyone sees, and the overcharge vent (23 slots, above) is documented rather than
-  fired because the build states its delay but not the event; the
-  protocol's `AnimationUpdated` observer event is never sent, so the `apttf::tf*`
-  animations only reach a client through the status effect the effect-data chain
-  replicates; and stumble/hit-reaction animations (`dbcharacter::Stumble`,
+  what anyone sees; the overcharge vent (23 slots, above) now runs when the charge
+  crosses the delay, and `AnimationUpdated` is sent with the burst window
+  (`anim_fire_type` + start/end); stumble/hit-reaction animations (`dbcharacter::Stumble`,
   `dbcharacter::StumbleDirection`) are left out because the build has no trigger for
   them at all (the one table that links a stumble to what causes it has 0 rows, and
   no weapon, ammo, damage type or ability row references a stumble id; see

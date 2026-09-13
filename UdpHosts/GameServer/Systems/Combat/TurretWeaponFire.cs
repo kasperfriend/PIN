@@ -57,20 +57,24 @@ public sealed class TurretWeaponFire
     /// </summary>
     public static TurretWeaponFire Production { get; } = new(
         SDBInterface.GetTurretWeapons,
-        new NpcAttackResolver(new SdbNpcAttackDataSource()));
+        new NpcAttackResolver(new SdbNpcAttackDataSource()),
+        hardpointOffset: SDBInterface.GetHardpointOffset);
 
     private readonly Func<uint, IReadOnlyList<TurretWeapon>> _weapons;
     private readonly NpcAttackResolver _resolver;
     private readonly IAiProjectileLauncher _launcher;
+    private readonly Func<string, Vector3> _hardpointOffset;
 
     public TurretWeaponFire(
         Func<uint, IReadOnlyList<TurretWeapon>> weapons,
         NpcAttackResolver resolver,
-        IAiProjectileLauncher launcher = null)
+        IAiProjectileLauncher launcher = null,
+        Func<string, Vector3> hardpointOffset = null)
     {
         _weapons = weapons ?? throw new ArgumentNullException(nameof(weapons));
         _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
         _launcher = launcher;
+        _hardpointOffset = hardpointOffset;
     }
 
     /// <summary>
@@ -129,8 +133,8 @@ public sealed class TurretWeaponFire
 
             // monsterId 0: a turret is not a monster, so there is no Creature Damage Modifier row
             // to apply (the lookup returns null and the modifier stays 1). The muzzle offset the
-            // resolver stores is unused here - the shot leaves from TurretWeapon.PhysicalOrigin,
-            // not from a monster projectile_offset.
+            // resolver stores is unused here - the shot leaves from TurretWeapon.PhysicalOrigin
+            // plus MuzzleHardpoint, not from a monster projectile_offset.
             var profile = _resolver.ResolveWeapon(
                 monsterId: 0,
                 weapon.WeaponId,
@@ -152,7 +156,18 @@ public sealed class TurretWeaponFire
                 remaining[i] = profile.MagazineSize;
             }
 
-            Vector3 origin = ResolveOrigin(turret, gunner, weapon, time, aim, shooterVelocity);
+            if (NpcWeaponOvercharge.ShouldActivate(profile.OverchargeAbilityId, profile.MsOverchargeDelay, profile.ChargeUpMs)
+                && profile.OverchargeClientFeedback)
+            {
+                gunner.Shard?.Abilities?.HandleActivateAbility(
+                    gunner.Shard,
+                    gunner,
+                    profile.OverchargeAbilityId,
+                    time,
+                    new GameServer.Systems.Aptitude.AptitudeTargets());
+            }
+
+            Vector3 origin = ResolveOrigin(turret, gunner, weapon, time, aim, shooterVelocity, _hardpointOffset);
             Vector3 direction = NpcAttackSpreadMath.Apply(
                 aim,
                 profile.SpreadPct,
@@ -227,13 +242,11 @@ public sealed class TurretWeaponFire
     }
 
     /// <summary>
-    ///     World-space muzzle: the turret's position plus <c>TurretWeapon.PhysicalOrigin</c> rotated
-    ///     by the turret's current pose, the same local-to-world the character muzzle uses
-    ///     (<c>QuaternionEx.Transform(offset, Inverse(rotation))</c>). <c>MuzzleHardpoint</c> names
-    ///     the bone the offset is relative to, but <c>dbvisualrecords::Hardpoints.Transform</c> is
-    ///     not loaded in this build, so the pose is the only orientation the offset can follow. A
-    ///     missing or zero origin falls back to the gunner's own projectile origin, the same
-    ///     interpolation a handheld shot uses.
+    ///     World-space muzzle: the turret's position plus <c>TurretWeapon.PhysicalOrigin</c> and
+    ///     the translation of <c>MuzzleHardpoint</c> (from <c>dbvisualrecords::Hardpoints.Transform</c>),
+    ///     rotated by the turret's current pose — the same local-to-world the character muzzle uses
+    ///     (<c>QuaternionEx.Transform(offset, Inverse(rotation))</c>). A missing or zero origin falls
+    ///     back to the gunner's own projectile origin, the same interpolation a handheld shot uses.
     /// </summary>
     internal static Vector3 ResolveOrigin(
         TurretEntity turret,
@@ -241,11 +254,17 @@ public sealed class TurretWeaponFire
         TurretWeapon weapon,
         uint time,
         Vector3 aim,
-        Vector3? shooterVelocity)
+        Vector3? shooterVelocity,
+        Func<string, Vector3> hardpointOffset = null)
     {
         Vector3 offset = weapon?.PhysicalOrigin != null
             ? SDBUtils.Vector3FromFauFau(weapon.PhysicalOrigin)
             : Vector3.Zero;
+
+        if (hardpointOffset != null && !string.IsNullOrWhiteSpace(weapon?.MuzzleHardpoint))
+        {
+            offset += hardpointOffset(weapon.MuzzleHardpoint);
+        }
 
         if (offset.LengthSquared() > 0.0001f)
         {

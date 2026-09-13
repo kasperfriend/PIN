@@ -444,7 +444,6 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     /// </summary>
     public void LoadMonster(uint typeId, byte levelOverride = 0, Monster monsterInfo = null)
     {
-        // TODO: GetMonsterVisualOptions
         monsterInfo ??= SDBInterface.GetMonster(typeId);
         if (monsterInfo == null)
         {
@@ -486,7 +485,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             ornaments.Add(monsterInfo.OrnamentsMapGroupId_4);
         }
 
-        SetStaticInfo(new StaticInfoData()
+        var staticInfo = new StaticInfoData()
         {
             DisplayName = "_noname",
             UniqueName = string.Empty,
@@ -525,7 +524,9 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
                 Overlays = []
             },
             ArmyTag = string.Empty
-        });
+        };
+        ApplyMonsterVisualOptions(staticInfo, monsterInfo);
+        SetStaticInfo(staticInfo);
 
         SetHostilityInfo(new HostilityInfoData
         {
@@ -606,6 +607,33 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
                 "LoadMonster: no dbcharacter::MonsterScaling row for level {MonsterLevel} (monster {MonsterId}); keeping the default max health",
                 MonsterLevel, typeId);
         }
+    }
+
+    /// <summary>
+    ///     Picks one <c>dbcharacter::MonsterVisualOption</c> of each type from the set
+    ///     <c>Monster.visual_options_id</c> names and writes the head / skin onto
+    ///     <paramref name="info"/>. No-op when the monster has no set, the gender has no
+    ///     variants, or the tables are not loaded.
+    /// </summary>
+    private void ApplyMonsterVisualOptions(StaticInfoData info, Monster monsterInfo)
+    {
+        if (info == null || monsterInfo == null || monsterInfo.VisualOptionsId == 0)
+        {
+            return;
+        }
+
+        var header = SDBInterface.GetMonsterVisualOptions(monsterInfo.VisualOptionsId);
+        if (header == null)
+        {
+            return;
+        }
+
+        var selected = MonsterVisualOptionsMath.Select(
+            header,
+            SDBInterface.GetMonsterVisualOption(monsterInfo.VisualOptionsId),
+            female: monsterInfo.Gender == 'F',
+            seed: unchecked((uint)EntityId));
+        MonsterVisualOptionsMath.Apply(info, selected);
     }
 
     public void LoadRemote(CharacterAndBattleframeVisuals remoteData)

@@ -24,6 +24,8 @@ public interface ISDBLoader
     List<FactionRelations> LoadFactionRelations();
     Dictionary<uint, List<FactionReputations>> LoadFactionReputations();
     Dictionary<uint, Monster> LoadMonster();
+    Dictionary<uint, MonsterVisualOptions> LoadMonsterVisualOptions();
+    Dictionary<uint, List<MonsterVisualOption>> LoadMonsterVisualOption();
     Dictionary<ushort, EmoteRecord> LoadEmoteRecord();
     Dictionary<uint, MonsterScaling> LoadMonsterScaling();
     Dictionary<uint, Turret> LoadTurret();
@@ -45,6 +47,7 @@ public interface ISDBLoader
     // dbvisualrecords
     Dictionary<uint, WarpaintPalette> LoadWarpaintPalettes();
     Dictionary<uint, VisualRecord> LoadVisualRecord();
+    Dictionary<string, Hardpoints> LoadHardpoints();
 
     // dbitems
     Dictionary<uint, AttributeCategory> LoadAttributeCategory();

@@ -899,6 +899,86 @@ public class AiEngineTests
         Assert.Empty(abilities.Activations);
     }
 
+    /// <summary>
+    ///     A ranged profile whose weapon names the overcharge hook plasma 12129 carries: 4000 ms charge,
+    ///     2500 ms delay, a chain a client plays. The engine runs it with the attack when the charge is
+    ///     long enough, gated like clip_empty (client feedback).
+    /// </summary>
+    private static NpcAttackProfile OverchargeProfile() => RangedProfile() with
+    {
+        OverchargeAbilityId = 12_129,
+        MsOverchargeDelay = 2500,
+        ChargeUpMs = 4000,
+        OverchargeClientFeedback = true,
+    };
+
+    [Fact]
+    public void ArmedNpc_ChargingPastTheOverchargeDelay_RunsTheWeaponsOverchargeAbility()
+    {
+        var stats = new FakeAiMonsterStats { AttackProfile = OverchargeProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        var overcharge = Assert.Single(abilities.Activations);
+        Assert.Equal(12_129u, overcharge.AbilityId);
+        Assert.Equal(60_050u, overcharge.Time);
+        Assert.True(float.IsNaN(overcharge.Register));
+
+        Tick(shard, FirstTick + 2500 + Step);
+        Assert.Equal(2, abilities.Activations.Count);
+        Assert.Equal(12_129u, abilities.Activations[1].AbilityId);
+    }
+
+    [Fact]
+    public void OverchargeAbilityThatCarriesNoClientCommand_IsNotRun()
+    {
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = OverchargeProfile() with { OverchargeClientFeedback = false },
+        };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Empty(abilities.Activations);
+    }
+
+    [Fact]
+    public void OverchargeAbility_IsNotRunWhenTheChargeIsShorterThanTheDelay()
+    {
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = OverchargeProfile() with { ChargeUpMs = 1000 },
+        };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Empty(abilities.Activations);
+    }
+
     [Fact]
     public void ArmedNpc_ReloadOutlastingTheCadence_FiresAsSoonAsTheMagazineIsFull()
     {
@@ -1246,6 +1326,16 @@ public class AiEngineTests
         ChargeUpMs = 2_000,
         ChainClientFeedback = true,
         ChainDeliversDamage = true,
+    };
+
+    /// <summary>
+    ///     A melee weapon that fills only melee_ability_id: the fallback of the attack chain, used when
+    ///     neither burst nor attack is named.
+    /// </summary>
+    private static NpcAttackProfile MeleeOnlyAbilityProfile() => AnimatingMeleeProfile() with
+    {
+        BurstAbilityId = 0,
+        MeleeAbilityId = 188,
     };
 
     /// <summary>

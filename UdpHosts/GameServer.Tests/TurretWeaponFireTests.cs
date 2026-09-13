@@ -113,7 +113,10 @@ public class TurretWeaponFireTests
     }
 
     private static (TurretWeaponFire Fire, RecordingAiProjectileLauncher Launcher, TurretEntity Turret, GameServer.Entities.Character.CharacterEntity Gunner)
-        Create(FakeNpcAttackDataSource data, IReadOnlyList<TurretWeapon> weapons)
+        Create(
+            FakeNpcAttackDataSource data,
+            IReadOnlyList<TurretWeapon> weapons,
+            Func<string, Vector3> hardpointOffset = null)
     {
         var shard = new FakeShard();
         var gunner = FakeCharacterFactory.Create(shard);
@@ -126,7 +129,8 @@ public class TurretWeaponFireTests
         var fire = new TurretWeaponFire(
             _ => weapons,
             new NpcAttackResolver(data),
-            launcher);
+            launcher,
+            hardpointOffset);
 
         return (fire, launcher, turret, gunner);
     }
@@ -156,8 +160,7 @@ public class TurretWeaponFireTests
     [Fact]
     public void Fire_PhysicalOrigin_IsTurretPositionPlusTheRowOffset()
     {
-        // Identity pose leaves PhysicalOrigin on the world axes (MuzzleHardpoint is unused:
-        // dbvisualrecords::Hardpoints.Transform is not loaded). The gunner standing somewhere
+        // Identity pose leaves PhysicalOrigin on the world axes. The gunner standing somewhere
         // else must not move the muzzle.
         var data = DataWith(RangedTemplate());
         var (fire, launcher, turret, gunner) = Create(data, [Row(WeaponId, id: 1, originX: 0.2f, originY: 0f, originZ: 1.3f)]);
@@ -165,6 +168,24 @@ public class TurretWeaponFireTests
         fire.Fire(turret, gunner, Time, Aim);
 
         Assert.Equal(TurretPosition + new Vector3(0.2f, 0f, 1.3f), Assert.Single(launcher.Shots).Origin);
+    }
+
+    [Fact]
+    public void Fire_MuzzleHardpoint_AddsTheHardpointTranslationToPhysicalOrigin()
+    {
+        // dbvisualrecords::Hardpoints.Transform is the local offset named by
+        // TurretWeapon.MuzzleHardpoint; it is added to PhysicalOrigin before the pose rotation.
+        var data = DataWith(RangedTemplate());
+        var row = Row(WeaponId, id: 1, originX: 0.2f, originY: 0f, originZ: 1.3f);
+        row.MuzzleHardpoint = "muzzle";
+        var (fire, launcher, turret, gunner) = Create(
+            data,
+            [row],
+            hardpointOffset: name => name == "muzzle" ? new Vector3(0.1f, 0.2f, 0.3f) : Vector3.Zero);
+
+        fire.Fire(turret, gunner, Time, Aim);
+
+        Assert.Equal(TurretPosition + new Vector3(0.3f, 0.2f, 1.6f), Assert.Single(launcher.Shots).Origin);
     }
 
     [Fact]

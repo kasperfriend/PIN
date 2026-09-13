@@ -135,7 +135,8 @@ public class AiEngine
             turretFire ?? new TurretWeaponFire(
                 SDBInterface.GetTurretWeapons,
                 new NpcAttackResolver(new SdbNpcAttackDataSource()),
-                _projectiles));
+                _projectiles,
+                SDBInterface.GetHardpointOffset));
 
         // The bus is injected like every other system's: IShard does not expose it.
         eventBus?.Subscribe<EntityDamagedEvent>(OnEntityDamaged);
@@ -406,6 +407,7 @@ public class AiEngine
                         // the chains of that ability, and for some weapons the attack itself (see
                         // NpcWeaponAbilities).
                         bool abilityRan = ActivateWeaponAbility(npc, currentTime);
+                        ActivateOverchargeAbility(npc, currentTime);
 
                         if (!abilityRan || profile is not { ChainDeliversDamage: true })
                         {
@@ -858,6 +860,28 @@ public class AiEngine
         _abilityActivator.Activate(npc.Entity, profile.ReloadAbilityId, (uint)currentTime, float.NaN);
     }
 
+    /// <summary>
+    ///     Runs the weapon's own overcharge ability, the hook the database gives a charge that has
+    ///     been held past <c>ms_overcharge_delay</c> (<c>dbitems::WeaponTemplates.overcharge_ability</c>).
+    ///     Gated exactly like the empty-clip hook: a chain that carries nothing a client executes is
+    ///     left alone, and there is no hold-past-max event in this build — an NPC charges for
+    ///     <c>ms_chargeup</c> and then fires, so the hook runs with the attack when that charge is
+    ///     long enough. Nothing is passed as the register; the overcharge VFX effect carries its own
+    ///     duration.
+    /// </summary>
+    private void ActivateOverchargeAbility(NpcBrain npc, ulong currentTime)
+    {
+        var profile = npc.Profile;
+        if (profile == null
+            || !profile.OverchargeClientFeedback
+            || !NpcWeaponOvercharge.ShouldActivate(profile.OverchargeAbilityId, profile.MsOverchargeDelay, profile.ChargeUpMs))
+        {
+            return;
+        }
+
+        _abilityActivator.Activate(npc.Entity, profile.OverchargeAbilityId, (uint)currentTime, float.NaN);
+    }
+
     /// <summary>Refills the magazine once the reload window the database gives the weapon has run out.</summary>
     private void EndReloadIfElapsed(NpcBrain npc, ulong currentTime)
     {
@@ -904,6 +928,11 @@ public class AiEngine
             (uint)Math.Max(0, npc.Brain.AttackCooldownMs));
 
         entity.SetFireBurst(unchecked((uint)currentTime));
+        AnimationUpdatedAnnouncement.SendToWatchers(
+            entity.Shard,
+            entity,
+            npc.Profile?.FireAnimationType ?? 0,
+            AnimationUpdatedAnnouncement.BurstStarted);
         npc.Animation = NpcAttackAnimation.Start(currentTime, duration);
     }
 
@@ -918,6 +947,11 @@ public class AiEngine
 
         npc.Animation = null;
         npc.Entity?.SetFireEnd(unchecked((uint)animation.Value.EndTime));
+        AnimationUpdatedAnnouncement.SendToWatchers(
+            npc.Entity?.Shard,
+            npc.Entity,
+            npc.Profile?.FireAnimationType ?? 0,
+            AnimationUpdatedAnnouncement.BurstEnded);
     }
 
     /// <summary>

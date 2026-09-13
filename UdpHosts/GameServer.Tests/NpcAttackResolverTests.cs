@@ -193,6 +193,47 @@ public class NpcAttackResolverTests
     }
 
     [Fact]
+    public void Resolve_CarriesTheWeaponsOverchargeAbilityAndWhatItsChainDoes()
+    {
+        // Template 12129 (plasma) names an overcharge_ability with ms_overcharge_delay 2500 against
+        // ms_chargeup 4000: the charge the NPC holds is long enough, so the engine runs the hook with
+        // the attack. A chain that carries something a client plays is runnable.
+        var template = RangedTemplate();
+        template.OverchargeAbility = 12_129;
+        template.MsOverchargeDelay = 2500;
+        template.MsChargeUp = 4000;
+        var data = DataWith(template)
+            .WithAbility(12_129, 2_000)
+            .WithCommand(2_000, (ushort)CommandType.ImpactApplyEffect, effectId: 10_001)
+            .WithStatusEffect(10_001, applyChain: 2_100)
+            .WithCommand(2_100, (ushort)CommandType.AudioFeedback);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(12_129u, profile.OverchargeAbilityId);
+        Assert.Equal(2500u, profile.MsOverchargeDelay);
+        Assert.Equal(4000u, profile.ChargeUpMs);
+        Assert.True(profile.OverchargeClientFeedback);
+    }
+
+    [Fact]
+    public void Resolve_AServerOnlyOverchargeAbility_IsCarriedButNotRunnable()
+    {
+        var template = RangedTemplate();
+        template.OverchargeAbility = 12_130;
+        template.MsOverchargeDelay = 2500;
+        template.MsChargeUp = 4000;
+        var data = DataWith(template)
+            .WithAbility(12_130, 2_000)
+            .WithCommand(2_000, (ushort)CommandType.RegisterTimedTrigger);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(12_130u, profile.OverchargeAbilityId);
+        Assert.False(profile.OverchargeClientFeedback);
+    }
+
+    [Fact]
     public void Resolve_UnknownMonster_IsUnarmed()
     {
         var profile = CreateResolver(new FakeNpcAttackDataSource()).Resolve(999, 1);
@@ -528,9 +569,12 @@ public class NpcAttackResolverTests
         Assert.Equal(0u, profile.MeleeAbilityId);
         Assert.Equal(0u, profile.AttackChainAbilityId);
         Assert.Equal(0u, profile.ReloadAbilityId);
+        Assert.Equal(0u, profile.OverchargeAbilityId);
+        Assert.Equal(0u, profile.MsOverchargeDelay);
         Assert.Equal(0u, profile.ChargeUpMs);
         Assert.False(profile.ChainClientFeedback);
         Assert.False(profile.ChainDeliversDamage);
         Assert.False(profile.ReloadClientFeedback);
+        Assert.False(profile.OverchargeClientFeedback);
     }
 }

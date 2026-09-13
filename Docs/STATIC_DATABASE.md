@@ -78,8 +78,6 @@ targets, all mob-related:
 
 | Table | Rows | What it would give us |
 |-------|------|-----------------------|
-| `dbcharacter::MonsterVisualOption` | 15,230 | Random visual variants per monster (the `visual_options_id` PIN currently TODOs in `CharacterEntity.LoadMonster`). |
-| `dbcharacter::MonsterVisualOptions` | 153 | The variant set headers. |
 | `dbcharacter::MonsterMood` | 2,268 | Ambient mood/animation sets for idle NPCs. |
 | `dbcharacter::MonsterMoodName` | 6 | Mood name lookup. |
 | `dbcharacter::MonsterItemTags` | 1,032 | Item tags used by loot rolls. |
@@ -97,16 +95,18 @@ The remaining 320 tables are decodable but nobody has guessed their names yet;
 
 ### 2.1 New in this change
 
-Two tables were previously listed in the docs but not actually loaded; PIN now
-reads both:
+PIN now loads the monster visual-variant tables and the hardpoint transforms
+that turret muzzles name:
 
 | Table | Rows | Exposed as |
 |-------|------|-----------|
-| `dblocalization::LocalizedText` | 175,293 | `SDBInterface.GetLocalizedText(id)` / `GetLocalizedString(id)` |
-| `dbcharacter::MonsterScaling` | 80 | `SDBInterface.GetMonsterScaling(level)` |
+| `dbcharacter::MonsterVisualOptions` | 153 | `SDBInterface.GetMonsterVisualOptions(id)` |
+| `dbcharacter::MonsterVisualOption` | 15,230 | `SDBInterface.GetMonsterVisualOption(parent)` |
+| `dbvisualrecords::Hardpoints` | (named by `TurretWeapon.MuzzleHardpoint`) | `SDBInterface.GetHardpointOffset(name)` |
 
-Localization is what makes the new commands able to say *"Aranha Queen"*
-instead of *"2435"*.
+`CharacterEntity.LoadMonster` picks one option of each type from the entity id
+and applies type 0 as `HeadMain` and type 1 as skin color. Turret fire adds the
+hardpoint translation to `PhysicalOrigin` before rotating by the turret pose.
 
 ## 3. The spawnable catalog
 
