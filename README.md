@@ -268,6 +268,19 @@ The Firefall installation was not auto-detected, or the configured path is
 wrong. Set `StaticDBPath` in `GameServer.config.json` to the full path of
 `system\db\clientdb.sd2`, or point `PIN_FIREFALL_PATH` at the install directory.
 
+**Every texture in the game is blurry, at max settings, and the log is full of
+`NotFound: .../vtex/prod-1962/static.vtex0 ;; HEAD`**
+
+The server has no high-resolution texture chunks to serve. Copy
+`static.vtex0`, `static.vtex1` and `static.vtex2` into `Assets\` next to
+`WebHostManager.exe` (or `Assets\vtex\prod-1962\`, the path the client names),
+or point `Firefall:Assets:Paths` at a folder that holds them. What does *not*
+work: filling in `WebHosts\WebHost.WebAsset\Assets` in a source tree and running
+a different folder, or a file named `static.vtex` — the chunks are numbered, and
+the folder the host reads is the one next to the binary. The startup log now says
+which roots it read, what each holds, and — when nothing does — that textures
+will stay blurry. See [High-resolution textures](#high-resolution-textures-and-why-everything-looks-blurry).
+
 ### firefall.ini
 
 ```ini
@@ -285,6 +298,47 @@ PlayIntroMovie = false
 This is per-player client configuration: when you play with others, every player
 replaces `localhost` in his own `firefall.ini` with the address of the machine
 running the servers — see [Connecting with friends](#connecting-with-friends).
+
+### High-resolution textures (and why everything looks blurry)
+
+`AssetStreamPath` and `VTRemotePath` point at `WebHost.WebAsset` (4401/44301), a
+static file host over `Assets\` next to `WebHostManager.exe` plus every folder
+named by `Firefall:Assets:Paths` in `config\appsettings.json`. That folder ships
+**empty** on purpose — Red5's assets are gigabytes of game data and
+`.gitignore` keeps them out of the repository — so on a fresh install the client's
+three probes for the high-resolution texture chunks
+
+```
+[12:54:06 ERR] NotFound: http://localhost:4401/vtex/prod-1962/static.vtex0 ;; HEAD ;;
+```
+
+find nothing, and the game renders the low-resolution mips baked into its own
+archives: blurry terrain at every graphics setting, because the setting controls
+the *streamer* and there is nothing to stream. To fix it, give the host the three
+chunks — either flat in the folder or under the build directory the probe names,
+both next to `WebHostManager.exe`:
+
+```
+Assets\static.vtex0        Assets\vtex\prod-1962\static.vtex0
+Assets\static.vtex1        Assets\vtex\prod-1962\static.vtex1
+Assets\static.vtex2        Assets\vtex\prod-1962\static.vtex2
+```
+
+A chunk no root answers at its literal path is retried by file name, so the flat
+folder answers any build. Or skip the ~12 GB copy entirely and name a folder that
+already holds them:
+
+```json
+"Firefall": { "Assets": { "Paths": [ "C:\\Program Files\\Steam\\steamapps\\common\\Firefall\\system\\vt" ] } }
+```
+
+Restart `WebHostManager`; it now logs what each root holds and warns before you
+launch a client that no root has any chunk file. [`Docs/ASSETS.md`](Docs/ASSETS.md)
+covers the layout, the loose-file fallback, `curl` checks for the probe and the
+tile range request, and the client-side cache to clear afterwards. (The other
+`NotFound` lines in the same log — `armies/1/ranks`, `trade/products/…`,
+`market/listings`, `squad_builder/lfp` — are unimplemented endpoints, and cost
+you a UI tab rather than your textures.)
 
 ### Features
 
@@ -326,6 +380,9 @@ running the servers — see [Connecting with friends](#connecting-with-friends).
 ### Web Hosts
 
 CatchAll (4499 / 44399) is used for now, until the specific APIs are implemented.
+WebAsset (4401 / 44301) is the exception: it is a real static host already, and it
+is the one the client streams its high-resolution textures from
+([`Docs/ASSETS.md`](Docs/ASSETS.md)).
 
 | Host       | HTTP | HTTPS | Catch All |
 |------------|------|-------|-----------|

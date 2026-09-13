@@ -21,5 +21,9 @@
          configuration (PublicUrls, TlsCertificateStore); the rules of both are worth
          testing whether or not a web host is running, so they are tested here. -->
     <ProjectReference Include="..\..\Lib\Shared.Web\Shared.Web.csproj"/>
+    <!-- Which host a client is told to stream its assets from is a capability answer, not a
+         file-provider one, and pointing it at the catch-all is how a server with the textures
+         on disk still renders blurry - so the response itself is pinned here. -->
+    <ProjectReference Include="..\..\WebHosts\WebHost.OperatorApi\WebHost.OperatorApi.csproj"/>
   </ItemGroup>
 </Project>

@@ -7,6 +7,7 @@
 .idea/
 Webhosts/WebHost.WebAsset/Assets/*
 !Webhosts/WebHost.WebAsset/Assets/.gitkeep
+!Webhosts/WebHost.WebAsset/Assets/README.md
 UdpHosts/GameServer/App.config
 UdpHosts/GameServer/GameServer.config.json
 Tools/**/config.json
