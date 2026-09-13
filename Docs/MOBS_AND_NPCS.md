@@ -90,6 +90,7 @@ CustomData/character_spawn.json | \npc 290 | admin "npc 290"
             SDBInterface.GetMonster(typeId)          (dbcharacter::Monster row)
             SDBUtils.GetChassisWarpaint(...)         (visual palettes)
             CharacterLoadout { chassis, backpack, weapons }
+            ApplyMonsterVisualOptions (visual_options_id: one variant per Type; head + skin)
             SetStaticInfo   { NameLocalizationId, Race, Gender, TargetFlags.IsNPC, ... }
             SetHostilityInfo{ FactionId }            (stance vs. players)
             ApplyLoadout    (replicates visuals + battleframe energy params)

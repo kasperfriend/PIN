@@ -81,6 +81,17 @@ public class NpcBehaviorParamsTests
     }
 
     [Fact]
+    public void Parse_ReadsTheDialogScriptId()
+    {
+        // Seven monster rows name a dialogScript= (10551 on 612/620/621/622, 39340 on the vendors).
+        var parsed = NpcBehaviorParams.Parse("AlertAndInteractive(dialogScript=10551,interactionType=1)");
+
+        Assert.Equal(10551u, parsed.DialogScriptId);
+        Assert.Equal(0u, NpcBehaviorParams.Parse("AlertAndInteractive(emote=\"calm\")").DialogScriptId);
+        Assert.Equal(0u, NpcBehaviorParams.Parse("AggressiveWanderer").DialogScriptId);
+    }
+
+    [Fact]
     public void Parse_ReadsTheEmoteDuration()
     {
         var parsed = NpcBehaviorParams.Parse("AlertAndInteractive(emote=\"crouchSupply\",emoteDuration=-1)");
@@ -145,6 +156,17 @@ public class NpcBehaviorParamsTests
         Assert.True(module.AllowsDistance(10f));
         Assert.True(module.AllowsDistance(20f));
         Assert.False(module.AllowsDistance(20.1f));
+    }
+
+    [Fact]
+    public void TryGetAbilityModule_ReadsOriginalNavigationFields()
+    {
+        var parsed = NpcBehaviorParams.Parse(
+            "Arch_MoveThenFire_Base(am1Id=86132,am1NavToDist=6.5,am1NavTimeout=2400)");
+
+        Assert.True(parsed.TryGetAbilityModule("am1", out var module));
+        Assert.Equal(6.5f, module.NavToDistance);
+        Assert.Equal(2400, module.NavTimeoutMs);
     }
 
     [Fact]

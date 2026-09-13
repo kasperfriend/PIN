@@ -60,10 +60,17 @@ public static class NpcWeaponAbilities
     /// <summary>Ceiling on commands visited, as a belt-and-braces stop for malformed data.</summary>
     private const int MaxCommands = 2_000;
 
-    /// <summary>Scans the ability ids a weapon carries (0 for the hooks the row leaves empty).</summary>
-    public static NpcWeaponAbilityScan Scan(INpcAttackDataSource data, uint attackAbilityId, uint burstAbilityId)
+    /// <summary>
+    ///     Scans the ability ids a weapon's attack can run (0 for the hooks the row leaves empty). Burst,
+    ///     then attack, then melee: the same order <see cref="AiEngine" /> picks from when it activates one.
+    /// </summary>
+    public static NpcWeaponAbilityScan Scan(
+        INpcAttackDataSource data,
+        uint attackAbilityId,
+        uint burstAbilityId,
+        uint meleeAbilityId = 0)
     {
-        if (data == null || (attackAbilityId == 0 && burstAbilityId == 0))
+        if (data == null || (attackAbilityId == 0 && burstAbilityId == 0 && meleeAbilityId == 0))
         {
             return NpcWeaponAbilityScan.None;
         }
@@ -74,6 +81,7 @@ public static class NpcWeaponAbilities
 
         ScanAbility(data, attackAbilityId, visited, ref clientFeedback, ref deliversDamage);
         ScanAbility(data, burstAbilityId, visited, ref clientFeedback, ref deliversDamage);
+        ScanAbility(data, meleeAbilityId, visited, ref clientFeedback, ref deliversDamage);
 
         return new NpcWeaponAbilityScan(clientFeedback, deliversDamage);
     }

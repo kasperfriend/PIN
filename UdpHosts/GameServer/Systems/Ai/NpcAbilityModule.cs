@@ -24,10 +24,11 @@ namespace GameServer.Systems.Ai;
 ///         animation out of, and one module (86132, the Move Then Fire set) performs the <c>roar</c> emote.
 ///     </para>
 ///     <para>
-///         The <c>am*Timeout</c> watchdog, the <c>am*NavToDist</c>/<c>am*NavTimeout</c> navigation and the
-///         <c>am*Targeted</c>/<c>am*Facing</c>/<c>am*FacingDuring</c> requirements are not carried: an
-///         attack window already has a live target the NPC is facing, and the module's own movement is a
-///         separate server-side command (see <c>MovementSlide</c> in Docs/NPC_AI.md).
+///         The module's navigation fields are part of the record, not discarded parser noise:
+///         <c>am*NavToDist</c> is the distance at which CAIS wants the NPC to navigate before the
+///         module can run, and <c>am*NavTimeout</c> is its watchdog in milliseconds. The server uses
+///         these values as navigation-query inputs; it does not pretend that a generic attack-range
+///         check is equivalent to the original module navigation.
 ///     </para>
 /// </remarks>
 /// <param name="ModuleId">The <c>dbitems::AbilityModule</c> id the string names (<c>am1Id</c>).</param>
@@ -46,12 +47,21 @@ namespace GameServer.Systems.Ai;
 ///     Farthest the NPC's target may be for the module to be usable (<c>am1MaxDist</c>),
 ///     <see cref="float.MaxValue" /> when absent.
 /// </param>
+/// <param name="NavToDistance">
+///     CAIS navigation stop distance (<c>am1NavToDist</c>), or 0 when the module does not request
+///     navigation.
+/// </param>
+/// <param name="NavTimeoutMs">
+///     CAIS navigation watchdog (<c>am1NavTimeout</c>), in milliseconds, or 0 when absent.
+/// </param>
 public readonly record struct NpcAbilityModule(
     uint ModuleId,
     float Chance,
     int CooldownMs,
     float MinDistance,
-    float MaxDistance)
+    float MaxDistance,
+    float NavToDistance = 0f,
+    int NavTimeoutMs = 0)
 {
     /// <summary>The module prefixes the database spells: <c>am1</c> is the first module, <c>am2</c> the second.</summary>
     public static readonly string[] Prefixes = ["am1", "am2"];

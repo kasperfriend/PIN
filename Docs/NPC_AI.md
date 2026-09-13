@@ -33,7 +33,8 @@ give up when they are dragged too far from where they spawned.
 
 ```
 UdpHosts/GameServer/Systems/Ai/
-├── AiEngine.cs                 shard integration: targets, movement, attacks, events
+├── AiEngine.cs                 shard integration: targets, movement, attacks, events, unmanned turrets
+├── TurretAi.cs                 unmanned turret fire (range/cadence from the lead TurretWeapon row)
 ├── AiBrain.cs                  the state machine (no shard/entity/physics dependency)
 ├── AiBrainState.cs             Idle / Chase / Attack / Return / Dead
 ├── AiPerception.cs             what the engine tells a brain about the world
@@ -44,12 +45,16 @@ UdpHosts/GameServer/Systems/Ai/
 ├── AiSpeeds.cs                 monster row speed -> metres per second
 ├── AiAttackDamage.cs           monster damage rating -> what one swing is worth (fallback)
 ├── AiVectors.cs                horizontal / straight-line distance + character facing maths
+├── NpcPathfinder.cs             compatibility routes with original pathing-cost/exclusion hooks
+├── NavigationMesh.cs             collision-derived weighted triangle navigation graph
 ├── NpcAttackProfile.cs         everything one NPC attack needs, resolved from the DB
 ├── NpcAttackResolver.cs        monster -> weapon -> template/attributes/ammo -> profile
+│                               (ResolveWeapon is also how a turret fires: dbcharacter::TurretWeapon)
 ├── NpcAttackDamageMath.cs      the pure damage + cadence rules
+├── NpcAttackSpreadMath.cs      the standing first-shot cone (min/max/starting_spread + attr 958)
 ├── NpcAttackAnimation.cs       the attack animation window (burst markers)
 ├── NpcBehaviorParams.cs        parser for the behaviour string's attack parameters
-├── NpcProjectileLauncher.cs    fires a resolved shot through ProjectileSim
+├── NpcProjectileLauncher.cs    fires a resolved shot through ProjectileSim (+ WeaponProjectileFired)
 ├── INpcAttackDataSource.cs     the DB surface the resolver reads (fakeable in tests)
 ├── IAiHostility.cs             who counts as an enemy
 ├── FactionAiHostility.cs       SDB faction table implementation
@@ -61,9 +66,11 @@ UdpHosts/GameServer/Systems/Ai/
 
 `Shard` owns the engine as `Shard.AI` and ticks it first in `Shard.Tick`, before
 `Physics` and `EntityManager`. Every character that goes through
-`EntityManager.SpawnCharacter` is registered automatically, and
-`EntityManager.Remove` unregisters it. Player controlled characters are refused by
-`AiEngine.Register`.
+`EntityManager.SpawnCharacter` is registered automatically, every turret that
+goes through `EntityManager.SpawnTurret` is registered with `TurretAi`, and
+`EntityManager.Remove` unregisters both. Player controlled characters are refused by
+`AiEngine.Register`. Unmanned turrets tick **before** the empty-brains early
+return, so a shard with no NPCs still fires them.
 
 The split matters for testing: `AiBrain` is pure decision logic fed an
 `AiPerception` snapshot, so the whole state machine is covered by unit tests in
@@ -174,11 +181,21 @@ AiEngine.UpdateBrain
   -> AiEngine.ResolveAttack
        melee  -> IShard.Damage.ApplyDamage(target, perRoundDamage, npcEntity)
        ranged -> IAiProjectileLauncher.FireRangedAttack(  (ShardAiProjectileLauncher)
-                    npc, PRNG trace, muzzle origin, aim direction,
+                    npc, PRNG trace, muzzle origin, spread direction,
                     ammo, range, speed, impactRadius, maxRadius, damage)
-                    -> ProjectileSim.FireProjectile  (one call per round)
+                    -> ProjectileSim.FireProjectile  (one call per round, each
+                         scattered through PRNG.Spread inside the weapon's own
+                         first-shot cone - see NpcAttackSpreadMath)
                          -> flight, gravity, bounces, falloff, impact
+                              -> AmmoAbilityHooks: AbilityId / TouchAbilityId at
+                                 impact, AirburstAbilityId when the round times
+                                 out, PeriodAbilityId every PeriodAbilityMs
                               -> ProjectileHitEvent -> DamageSystem.ApplyDamage
+                    -> WeaponProjectileFired to every watching client
+                         (ProjectileFiredAnnouncement: ProjectileSim is server-only,
+                          so without this event the damage arrives with no tracer
+                          and no muzzle - the same event a player's fire path
+                          echoes to the shooter and announces to other watchers)
        -> IAiAttackFeedback.OnAttack                       (melee only)
             -> CombatSim.HitFeedback.TookDebugHit -> TookHit to scoped clients
 ```
@@ -201,8 +218,18 @@ you are inside that reach; the victim gets the same `TookHit` message a weapon h
 produces, so damage numbers and the health bar behave normally. A ranged attack is
 a real projectile carrying the per-round damage the database resolved, so it can
 miss, be dodged, fall off with distance (the ammo's `damage_decay`) and use the
-ammo's own gravity and bounce behaviour. Neither mode crits or counts as a
-headshot.
+ammo's own gravity and bounce behaviour. The server also announces each round with
+`WeaponProjectileFired` to every client the NPC is scoped into: a player's own
+client predicts that event from the fire input, an NPC has no client, and
+`ProjectileSim` does not replicate, so without the announcement a rifle or HMG
+lands its damage from across the yard while looking idle. Each round of the burst is scattered
+inside the weapon's own first-shot cone (`NpcAttackSpreadMath`: template
+`min_spread` / `max_spread` / `starting_spread`, scaled by the item's attribute
+958 when it carries one) through the same `PRNG.Spread` a player shot uses, so a
+shotgun's pellets fan out instead of stacking on a single chest-aimed ray. A
+weapon the database gives no spread (every melee row, and the ranged rows whose
+min/max/starting are 0) fires along the aim, which is what those rows asked for.
+Neither mode crits or counts as a headshot.
 
 Movement is applied by writing the entity position/orientation, pushing the new
 pose into the physics body with `PhysicsEngine.UpdateEntity` (so the mob stays
@@ -210,10 +237,26 @@ hittable where it now stands) and broadcasting a
 `AeroMessages.GSS.Character.Event.CurrentPoseUpdate` on the unreliable GSS channel
 - the same message `MovementRelay` uses to show one player's movement to another.
 
-Before stepping, a short forward ray cast checks for a wall; if the way is
-blocked the NPC holds position instead of walking through it. With no collision
-data loaded (`LoadMapsCollision` off) nothing can block and nothing occludes, so
-every target counts as visible.
+Before stepping, the NPC follows a collision-derived navigation query. The loaded zone
+collision surfaces are filtered into walkable faces and connected into a material-weighted
+triangle graph. A direct segment is used only when the graph route can be safely simplified;
+otherwise graph waypoints are followed, with an NPC-sized corridor probe at torso height on
+every edge. If no route exists, the NPC holds position instead of walking through geometry.
+When a zone has no usable navigation mesh, the bounded collision grid remains as a
+compatibility fallback. With no collision data loaded (`LoadMapsCollision` off) the sampler
+is flat and nothing can block or occlude, so every target counts as visible.
+
+**Original-game parity status.** This is not a claim that the planner is the original
+Firefall implementation. The repository contains the inputs (`dbphysicsmaterials`
+`AIPathingCost`, `dbzonemetadata` chunk `ExcludeFromPathing`, CAIS
+`am*NavToDist`/`am*NavTimeout`, and zone `ZonePathLayer` records), but it does not contain
+the original runtime navmesh/query implementation. The engine now extracts collision triangles,
+retains their physics-material ids where the Havok data exposes them, builds a static
+material-weighted triangle graph per loaded zone, applies chunk-level exclusions, and uses
+CAIS navigation distance/timeout requests. A compatibility grid remains only when no
+collision-derived mesh can be built. This is the closest data-driven reconstruction currently
+possible from the repository, but it is not byte-for-byte original-game parity until the
+original baked navmesh/query rules are recovered.
 
 ### What an NPC animates
 
@@ -227,7 +270,7 @@ server's job, and all five are now driven by the database:
 | Reload | `CombatView.WeaponReloaded` (then the magazine refills, or `WeaponReloadCancelled` when it dies mid-reload) | `dbitems::WeaponTemplates.base_clip_size` (else the item's attribute 956), `ammo_per_burst` (else `rounds_per_burst`) and `reload_time`; the client plays the template's `anim_reload_type` |
 | Locomotion | `CurrentPoseUpdate` / `MovementView` movement state | `dbcharacter::Monster.normal_speed` (the walk, `0x5004`, while attacking) and `fast_speed` (the run, `0x2004`, while chasing) |
 | Armed pose + weapon animation set | `CurrentEquipment` (the weapon item's template id) | `dbitems::WeaponTemplates.anim_armed_id` / `anim_armed_priority` / `anim_fire_type` / `anim_reload_type` / `anim_charge_type` |
-| Charge / swing animation (a named animation from a chain) | the character's `StatusEffects_0..31` fields (`EffectApply` / `EffectRemove`), which the client plays the effect's own `tf*` commands from | `dbitems::WeaponTemplates.attack_ability_id` / `burst_ability_id` -> `apt::AbilityData.chain` -> `apt::ImpactApplyEffectCommandDef.effect_id` -> `apt::StatusEffectData.apply_chain` / `remove_chain` |
+| Charge / swing animation (a named animation from a chain) | the character's `StatusEffects_0..31` fields (`EffectApply` / `EffectRemove`), which the client plays the effect's own `tf*` commands from | `dbitems::WeaponTemplates.attack_ability_id` / `burst_ability_id` / `melee_ability_id` -> `apt::AbilityData.chain` -> `apt::ImpactApplyEffectCommandDef.effect_id` -> `apt::StatusEffectData.apply_chain` / `remove_chain` |
 
 **Attack animation.** A player's is driven by the client itself: it sends
 `FireBurst` when a burst starts and `FireEnd`/`FireCancel` when it stops, and the
@@ -285,7 +328,7 @@ status effect, so applying the effect is what makes every client with the same
 database play it. Those commands are client-side by design - `Factory.LoadCommand`
 turns them into `CustomNOOPCommand`, because the client runs them from the replicated
 effect - which means the server's whole job is to apply the effect. Nothing did: a
-weapon template's `attack_ability_id` / `burst_ability_id` reached `NpcAttackProfile`
+weapon template's `attack_ability_id` / `burst_ability_id` / `melee_ability_id` reached `NpcAttackProfile`
 and stopped there, so no mob ever applied the effects its weapon's chains apply.
 
 `NpcWeaponAbilities.Scan` now walks those chains once, at profile resolution (through
@@ -327,17 +370,37 @@ other two rows (11975 and 11971, 2 slots) name 35842, whose chain is a
 alone exactly like a server-only burst chain - the same `ClientFeedback` gate, read off
 the hook's own chain.
 
+The **melee hook** (`melee_ability_id`) is the third attack id, not a separate event. A
+player weapon already prefers burst, then attack, then melee for the same window; the
+engine does the same (`NpcAttackProfile.AttackChainAbilityId`). `NpcWeaponAbilities.Scan`
+walks all three together so a weapon that only fills `melee_ability_id` still reports
+client feedback, and `ActivateWeaponAbility` runs that id when burst and attack are 0.
+Shadowstrike's swing lives on `burst_ability_id` 188 in this build - putting the same
+chain on `melee_ability_id` is the fallback the column is named for, not a new trigger.
+`restrict_melee` is not a second gate: it is one of the combat flags a charge-up already
+sets, and the engine already honours `restrict_weapon` / `restrict_abilities`.
+
+The **reload hook** (`reload_ability`) is the sibling of the empty click: the empty
+ability is the moment the magazine runs dry, this is the reload that follows. The AI
+already starts that reload (`StartReload` sets `WeaponReloaded`, which is still what the
+client plays `anim_reload_type` from); the extra chain the row names for that same window
+is now activated there, gated exactly like `clip_empty_ability` - a hook whose chains
+carry nothing a client executes is left alone. Both the dry-after-burst path and the
+`CanFire` path that starts a reload that was never announced go through `StartReload`,
+so one empty magazine is one reload ability.
+
 Two templates (23 slots) carry an **`overcharge_ability`** (39467, on the plasma cannon
-12129 and the fusion cannon 60) and the engine does **not** run it, because the event that
-fires it cannot be established from this build. The data around it: both weapons state
-`ms_chargeup` = `ms_chargeup_max` = 4000 ms, `ms_overcharge_delay` = 2500 ms, and
-`fire_type` 6 (the client's charge-up mode), and the ability applies effect 10925 - three
-muzzle particle emitters and a looping sound, held for 2500 ms behind the same
-`RequireWeaponArmed` gate. Nothing in the build defines *what* the character must be
-doing when the delay elapses: the client owns the charge state (that is the one column
-the row has no server-side counterpart for), and an AI that invents a charge-hold would
-change how those mobs shoot rather than make them show what the original game shows.
-Documented rather than guessed (see [Known gaps](#6-known-gaps)).
+12129 and the fusion cannon 60). Both weapons state `ms_chargeup` = `ms_chargeup_max` =
+4000 ms, `ms_overcharge_delay` = 2500 ms, and `fire_type` 6 (the client's charge-up mode),
+and the ability applies effect 10925 - three muzzle particle emitters and a looping sound,
+held for 2500 ms behind the same `RequireWeaponArmed` gate. The engine runs it with the
+attack when the charge the weapon describes is at least the delay
+(`NpcWeaponOvercharge.ShouldActivate`: ability id set, delay non-zero, `ms_chargeup` ≥
+`ms_overcharge_delay`), gated like `clip_empty_ability` - a hook whose chains carry nothing
+a client executes is left alone. The register is NaN: the overcharge chain has no duration
+that reads it (the 2500 ms is the effect's own TimeDuration). A seated turret uses the
+same gate through the gunner's shard `AbilitySystem`. There is no hold-past-max event in
+this build, and a delay of 0 means the row does not overcharge.
 
 The two weapons that animate, command by command:
 
@@ -486,11 +549,12 @@ before, exactly like a server-only weapon chain - no behaviour string in the bui
 such a module (all 26 reach a client command once every chain the engine runs is followed,
 `120937` included), so the gate protects against a data change rather than a shipped row.
 
-What the strings state and the engine does **not** carry: `am*Timeout` (a watchdog),
-`am*NavToDist`/`am*NavTimeout` (the module's own navigation) and
-`am*Targeted`/`am*Facing`/`am*FacingDuring` (requirements an attack window already
-meets). The database gives no event that fires a module, so the window the brain asked to
-attack in is the trigger.
+The module's navigation fields are carried as well: `am*NavToDist` becomes the
+requested approach distance and `am*NavTimeout` ends that request if the NPC cannot
+reach it. `am*Timeout` and `am*Targeted`/`am*Facing`/`am*FacingDuring` still are not
+full behaviour-tree gates; an attack window has a live target and the server does not
+possess the original CAIS tree runner. The database gives no independent event that
+fires a module, so the window the brain asked to attack in remains the trigger.
 
 **The displacement a chain declares now happens (`MovementSlide`).** The one part of a
 module's chains the engine did not execute was their movement: `aptfs::MovementSlideCommandDef`
@@ -564,8 +628,8 @@ these three pieces, and the line currently sits here:
 | `dbitems::WeaponTemplates` / `WeaponTemplateModifiers` `anim_*`, `ms_burst_duration`, `ms_per_burst`, `base_clip_size`, `ammo_per_burst`, `rounds_per_burst`, `reload_time` | 318 / 5,387 | the weapon's animation selectors, its burst timing and its magazine/reload | used (above) |
 | `dbcharacter::Monster.normal_speed` / `fast_speed` | 3,109 | the two locomotion speeds the walk/run animation matches | used (above) |
 | `dbcharacter::GibVisuals` (`death_anim_index`, `blast_impulse_strength`, `direct_vrec_id`) via `dbitems::Battleframe.gibset_id` | 128 | the row a corpse reports at death: the death animation variant and the gib visuals | used: `NpcDeathService` reports the battleframe's `gibset_id` at the death time, 0 included (see below), covering the 1,137 monsters with an explicit gib set and the 1,806 whose battleframe names the default row. 112 monster rows have no battleframe to read it from (89 of them `chassis_id` 0, legacy entries), and 54 name a `GibVisuals` id this build does not ship - the id is reported as the row states it and the client resolves it against its own copy |
-| `dbcharacter::Stumble` (`anim_index`, `duration`, `cooldown_ms`, `distance`, `only_once`) | 39 | hit-reaction ("stumble") rows: which animation, which status effect, how long, how often | unused, and not implementable from this build (see below) |
-| `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction (references the 32 directional rows) | unused - no row points at it |
+| `dbcharacter::Stumble` (`anim_index`, `duration`, `cooldown_ms`, `distance`, `only_once`) | 39 | hit-reaction ("stumble") rows: which animation, which status effect, how long, how often | used by `StumbleService.TryStumble` when a caller names the id; DamageSystem does not pick one (see below) |
+| `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction (references the 32 directional rows) | used: the hit offset vs facing picks substate 0 front / 1 right / 2 back / 3 left |
 | `dbcharacter::EmoteRecord` (`animation_name`, `anim_override_id`, `head_anim_override_id`, `statuseffect`) | 382 | emotes: the animation ids the client resolves from the emote id, and on 4 rows the status effect whose chain draws the emote | used for the emote lifecycle: `PerformEmote` is validated against the table (an id outside it is ignored), emote 0 clears the emote, and the 4 rows apply their effect so the emote animates for every client watching, not only for the performer (`Docs/EMOTES.md` §1-2). An NPC's own emote does not come from a chain at all: **207 monster rows name one in their `behavior` string** (`AlertAndInteractive(emote="calm")`), which the AI now performs while the NPC is in its base behaviour set and clears when it fights (`Docs/EMOTES.md` §7); the 530 `tfPerformEmote` commands and the 359 effects holding them stay unreachable from every monster weapon |
 | `dbcharacter::MonsterMood` / `MonsterMoodName` | 2,268 / 6 | mood -> portrait id (`Neutral`, `Excited`, `Thinking`, `Angry`, `Happy`, `Sad`) | unused - a UI portrait with no field in the character views, so there is nothing for the server to replicate (`Docs/EMOTES.md` §5) |
 | `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the animation commands of the original game's chains, and the only place an animation is named | placeholder records, because the client runs them from the replicated effect they sit in; the two monster weapons above reach one through the effect their ability applies, and so do 25 of the 26 behaviour ability modules (`am1Id`/`am2Id`, above); the rest of these rows belong to player abilities, to the 359 emote effects (`Docs/EMOTES.md` §3) and to effects no monster weapon applies |
@@ -614,9 +678,9 @@ documented rather than wired:
   uncovers `120937`'s animations 22 and 26; the corrected module numbers are in §3's
   table. On the *weapon* side nothing changes: no attack/burst ability of the 14 templates
   hides a command behind those fields, so the 7-of-14 finding above stands.
-- *Hit reactions have no trigger in this build.* The stumble data is complete -
-  `dbcharacter::Stumble` 9452 is the effect a stumble applies, and that effect's
-  own chain is a stumble in full: `RequireHasEffectTag`, then
+- *Hit reactions have no damage-type trigger in this build.* The stumble data is
+  complete - `dbcharacter::Stumble` 9452 is the effect a stumble applies, and that
+  effect's own chain is a stumble in full: `RequireHasEffectTag`, then
   `tfPlayAnimationCommandDef` `DamageHeavy`, then `CombatFlagsCommandDef` with
   `restrict_movement` + `restrict_weapon` + `restrict_abilities` + `restrict_melee`
   + `restrict_interaction`, for `TimeDurationCommandDef` 2,000 ms. The one table
@@ -625,17 +689,21 @@ documented rather than wired:
   or ability row references a stumble id, and the only other chain in the build
   that applies a stumble effect is ability 34039 ("on impact, apply 901 to self"),
   granted by a single `WeaponTemplateModifiers.burst_ability_id` - player gear.
-  The victim-facing event is BaseController-scoped too (`Stumble`: `ushort`,
-  `ushort`, `byte`), so an NPC's stumble has no observer channel but the effect.
-  Picking a trigger would mean inventing the rule, so it is left out.
+  `StumbleService.TryStumble` therefore takes an **explicit** stumble id (cooldown,
+  `only_once`, `restrict_stumble`, and the four direction substates are honoured)
+  and sends the victim-facing BaseController event (`Stumble`: `ushort`, `ushort`,
+  `byte`) to the victim player only. An NPC has no BaseController, so its stumble
+  is the status effect alone. DamageSystem does not invent a default stumble id.
 
 The protocol's only animation-specific observer message is the GSS character
 event `AnimationUpdated` (`ushort` + `byte`, both fields unnamed in
-`AeroMessages`);
-PIN has never sent it, so stumbles and the chain animations above have no observer
-channel today. `AbilityActivated`/`AbilityFailed` are `CombatController` events,
-i.e. addressed to the controlling player, and so cannot carry an NPC's animation
-either. The attack animation described above is what an observer of an NPC gets.
+`AeroMessages`). PIN now sends it to every client the NPC is scoped into at the
+same window as the burst markers: `Unk1` is the weapon's `anim_fire_type`, `Unk2`
+is 1 at `WeaponBurstFired` and 0 at `WeaponBurstEnded` (`AnimationUpdatedAnnouncement`).
+The names of those two fields are still unknown, so nothing else is packed into them.
+`AbilityActivated`/`AbilityFailed` are `CombatController` events, i.e. addressed to the
+controlling player, and so cannot carry an NPC's animation either. Stumble still has no
+observer channel but the effect (see below).
 
 ---
 
@@ -775,7 +843,7 @@ same monster type spawns with 21,836 health and hits for 1,092.
 
 `NpcAttackResolver` walks the database's own chain when a monster is registered
 and hands the engine an `NpcAttackProfile` - the mode, per-round damage, rounds
-per burst, cadence, reach, and the ammo row to fire:
+per burst, cadence, reach, spread cone and the ammo row to fire:
 
 ```
 dbcharacter::Monster.weapon1_id (else weapon2_id)
@@ -784,8 +852,8 @@ dbcharacter::Monster.weapon1_id (else weapon2_id)
                                             WeaponTemplateModifiers and the
                                             weapon-slot ability modules are
                                             applied by SDBUtils.GetDetailedWeaponInfo)
-  + dbitems::AttributeRange rows of the item (954 damage, 957 range, 1145 modifier,
-                                              the ammo stat attributes)
+  + dbitems::AttributeRange rows of the item (954 damage, 957 range, 958 spread,
+                                              1145 modifier, the ammo stat attributes)
   + dbcharacter::MonsterAttributeRange row of the monster (1144 damage modifier)
   + dbcharacter::Monster.behavior string   (triggerPullTime, fireRestDuration,
                                              combatDist, preferredMinCombatDist)
@@ -839,6 +907,54 @@ so guards stop at the distance the data gives them instead of walking into melee
 into world space the same way `CharacterEntity.CalculateProjectileOrigin` rotates
 a character's own muzzle; a row with no offset uses the chest height (1.62 m).
 
+**Turrets.** A turret reuses the same `ResolveWeapon` - the method is
+public because deployables and turrets carry their weapon ids in other tables
+but share the whole weapon/attribute/modifier chain below it.
+`TurretWeaponFire` looks up `dbcharacter::TurretWeapon` by turret type and
+calls `ResolveWeapon(monsterId: 0, weaponId, level: 1, NpcBehaviorParams.Empty,
+Vector3.Zero)` for every ranged row (21 dual-weapon types in prod-1962; melee
+or unresolved rows are skipped). `monsterId` 0 means there is no creature
+damage modifier (the lookup returns null and the modifier stays 1); the muzzle
+offset the resolver stores is unused because the shot leaves from
+`TurretWeapon.PhysicalOrigin` plus the translation of `MuzzleHardpoint`
+(`dbvisualrecords::Hardpoints.Transform`, last column of the 12-float HalfMatrix4x3,
+else XYZ, else three floats), rotated by the current pose
+(`QuaternionEx.Transform(offset, Inverse(rotation))`), not from a monster
+`projectile_offset`. The gunner (or unmanned owner) is the projectile source; damage
+is then scaled by that character's `FrameProgressionLevel` through
+`WeaponDamageMath.DamageLevelScale`. One packet is one round per barrel. A seated
+gunner's character CombatController still receives `FireWeaponProjectile` for the
+gun in their hands; `CharacterWeaponFire.ShouldFireEquippedWeapon` is false while
+`AttachedToEntity` is a `TurretEntity`, so CombatController / NetworkPlayer /
+WeaponSim skip that second round. Remaining ammo replicates as `ushort[]`
+on the controller (`AmmoData.Ammo`) with slot indices on the observer
+(`AmmoStruct.AmmoIndex`); the turret protocol has no `ReloadWeapon`, so an
+empty clip refills before the round.
+Unmanned fire lives in `TurretAi` (ticked by `AiEngine` before the empty-brains
+return): a seated turret (`ControllingPlayer != null`) is left to the gunner's
+packets; an unmanned one picks the closest hostile player inside the lead
+weapon's `AttackRange` (not the NPC `AggroRadius`) and fires at
+`AttackIntervalMs`. The source is the parent `CharacterEntity`, else the parent
+`BaseAptitudeEntity.Owner`. `dbcharacter::Turret.Behavior` is a numeric flag
+(`"1"` or `-`), not a CAIS behaviour string. A turret whose weapon overcharges
+runs that ability through the gunner's shard. The turret protocol has no
+`AnimationUpdated`; the character observer event is the NPC burst window
+(above).
+
+**Spread.** A ranged row fires inside the weapon's own first-shot cone, the same
+number a standing player would get from the same template on their first trigger
+pull (`MinSpread + StartingSpread × (MaxSpread − MinSpread)`, with the item's
+attribute 958 scaling both terms the way `WeaponSpreadProfile.Build` scales them).
+There is no per-NPC heat to keep: the behaviour's `fireRestDuration` (median
+1,000 ms across the build's ranged humanoids) outlasts every `ms_spread_return`
+the NPC weapons carry, so each burst opens at that standing cone. One attack then
+spends the cone through `PRNG.Spread` once per round, seeded with the shard time,
+the template's `slot_index` and the round number. A melee row, and a ranged row
+the database gives no spread, resolve to 0 and stay on the aim. What is *not*
+modelled: the running heat/movement/agility state a player accumulates while they
+hold the trigger, because an NPC does not hold the trigger - it rests between
+bursts. See [Known gaps](#6-known-gaps).
+
 ### Ground snapping
 
 `SnapToGround` is on. The character origin sits at the feet, so `GroundOffset` is
@@ -848,11 +964,12 @@ sinking. Spawned mobs are snapped the same way before they are scoped in
 (`PhysicsEngine.FindGround`), so zone entries with a placeholder `Z` of `0` land
 on the ground instead of spawning deep under it.
 
-The probe only tests static geometry (a nearby player or mob cannot be mistaken
-for the ground), and the wall check ray is raised to torso height so it does not
-graze the terrain the mob is standing on. When no zone collision data is loaded
-(`LoadMapsCollision` off, or no map files) both probes are no-ops and movement
-stays horizontal, exactly as before.
+The ground sampler only tests static geometry (a nearby player or mob cannot be mistaken
+for the ground). Navigation uses the same static geometry for a small, NPC-sized corridor
+probe at two torso heights and routes around blocked cells with `NpcPathfinder`; a direct
+route remains the fast path. When no zone collision data is loaded (`LoadMapsCollision`
+off, or no map files), both probes are no-ops and movement stays horizontal, exactly as
+before.
 
 ---
 
@@ -865,7 +982,10 @@ stays horizontal, exactly as before.
   draws or plays in the effect that ability applies (7 of the 14 templates with
   attack/burst ids, 75 monster slots: the Shadowstrike swing, the charge-up weapon's
   charge/release, the flamethrower's cone, and the charge sniper/phason/fluid
-  cannon/magic finger muzzle flash and sound), it runs a behaviour set's ability modules
+  cannon/magic finger muzzle flash and sound - and `melee_ability_id` is now the
+  fallback of that same attack chain, so a weapon that only fills the melee column still
+  animates), it runs the weapon's `reload_ability` when a reload starts (the sibling of
+  the empty-clip hook, gated the same way), it runs a behaviour set's ability modules
   (`am1Id`/`am2Id`: all 26 module ids the build's monsters name, 25 of them holding an
   animation and 20 landing their own damage - the dodge pair's 500 ms sidestep, the Move
   Then Fire roar, the melee swings and the rest), and it performs the emote of the
@@ -874,9 +994,9 @@ stays horizontal, exactly as before.
   (see [What an NPC animates](#what-an-npc-animates), which lists the animation rows
   that are and are not used, and `Docs/EMOTES.md` §7). What is still untouched: the
   engine does not run a monster's behaviour tree, so the *tree's* other actions (taunts,
-  wander idles, interaction poses, and the navigation the `am*NavToDist` parameters
-  describe) do not happen - the emote parameter of the set it is in and its `am1`/`am2`
-  modules do; a module's own movement *is* applied now (`MovementSlide`, above - the dodge
+  wander idles and interaction poses) do not happen - the emote parameter of the set it is in,
+  its `am1`/`am2` modules and their `am*NavToDist`/`am*NavTimeout` approach request do;
+  a module's own movement *is* applied now (`MovementSlide`, above - the dodge
   pair's 5 m in 667 ms, the Move Then Fire lunge's 20 m in 1 s, 39066's rise), so the only
   placeholders left on the animation paths are the ones whose semantics this build cannot
   establish from the database (`aptgss::AbilityFinished`, which the dodge's own remove
@@ -888,32 +1008,43 @@ stays horizontal, exactly as before.
   `dialogScript=` are dialog rather than animation; the other 7
   weapon templates with attack/burst ids carry no client command, so their
   effects (charge states, cone effects, stat modifiers) change numbers rather than
-  what anyone sees, and the overcharge vent (23 slots, above) is documented rather than
-  fired because the build states its delay but not the event; the
-  protocol's `AnimationUpdated` observer event is never sent, so the `apttf::tf*`
-  animations only reach a client through the status effect the effect-data chain
-  replicates; and stumble/hit-reaction animations (`dbcharacter::Stumble`,
+  what anyone sees; the overcharge vent (23 slots, above) now runs when the charge
+  crosses the delay, and `AnimationUpdated` is sent with the burst window
+  (`anim_fire_type` + start/end); stumble/hit-reaction animations (`dbcharacter::Stumble`,
   `dbcharacter::StumbleDirection`) are left out because the build has no trigger for
   them at all (the one table that links a stumble to what causes it has 0 rows, and
   no weapon, ammo, damage type or ability row references a stumble id; see
   [What an NPC animates](#what-an-npc-animates)).
-* **No accuracy model.** NPC shots aim at the target's chest with the weapon's
-  own spread profile left unused: there is no per-NPC spread state, no
-  `MinSpread`/`MaxSpread` handling and no aim error, so a ranged mob hits for as
-  long as line of sight holds. The behaviour strings' `am*Chance`/`am*Cooldown`
-  gates *are* modelled now, on the ability modules they belong to (see the
-  behaviour ability modules above); what stays unmodelled is the weapon's own spread and
-  everything the AI's hits do not state.
+* **NPC spread is the standing first-shot cone, not a running heat state.** Each
+  ranged attack scatters inside the weapon's own `min_spread` / `max_spread` /
+  `starting_spread` (attribute 958 when the item carries it) through the same
+  `PRNG.Spread` a player shot uses, once per round in the burst. What stays
+  unmodelled is the rest of a player's spread state - accumulated heat,
+  `spread_per_burst`, movement add, agility, crouch - because an NPC rests
+  between bursts for the behaviour's `fireRestDuration` (median 1,000 ms), which
+  outlasts the weapon's `ms_spread_return`, so there is no heat to keep. Aim is
+  still the target's chest; there is no extra aim error on top of the cone. The
+  behaviour strings' `am*Chance`/`am*Cooldown` gates *are* modelled, on the
+  ability modules they belong to (see the behaviour ability modules above).
 * **Weapon damage rows are placeholder where the data is placeholder.** A few
   templates (not per-monster items) carry `damage_per_round` 1; those rows still
   resolve through the 954/1145 chain above, so the placeholder only survives where
   a weapon item has neither attribute row - the rating share covers it.
-* **No pathfinding, no climbing.** Movement is a straight line towards the goal
-  plus a wall check, always at the spawn's own height band. A mob behind a low
-  obstacle will stand there until the leash or the give-up timer fires, and a mob
-  you are standing over - on a roof, on a ledge, on top of a vehicle - simply
-  cannot reach you. It does not jump, climb or walk around the height difference;
-  it circles at its own ground level until the leash drags it home.
+* **Navigation is collision-derived and material-weighted, but not yet the original runtime
+  navmesh.** When a zone loads, its collision triangles are retained as walkable faces,
+  adjacent faces form a graph, `AIPathingCost` weights graph edges, and chunk
+  `ExcludeFromPathing` removes excluded faces. NPCs query that graph first; the old bounded
+  collision grid is only the fallback when no mesh can be built. Runtime corridor probes
+  still use the same static Bepu geometry as line of sight, with body radius and height taken
+  from `dbcharacter::Monster` when available. Routes are refreshed when the target moves,
+  when collision changes or after 750 ms, and the movement state is `Running` while chasing,
+  `Walking` while repositioning in attack range, and `Standing` when no route is available.
+  A step higher than 1.25 m is not traversable: the engine does not invent jumps, ladders or
+  climbing, and a player on a separate roof/floor remains unreachable. The triangle graph is
+  the closest reconstruction possible with the checked-in assets; exact original polygon
+  generation, off-mesh links, tie-breaking and dynamic avoidance still require original
+  navmesh/runtime evidence. With maps collision disabled the sampler falls back to the current
+  plane and navigation is intentionally a direct no-op for test and development shards.
 * **No SDB behaviour trees.** `Monster.Behavior`, `BehaviorOffensive` and
   `BehaviorDefensive` name the live game's AI behaviour assets; PIN ignores them
   and runs one state machine for every monster type.

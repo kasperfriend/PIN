@@ -2,6 +2,7 @@ using System;
 using System.Numerics;
 using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.dbitems;
+using GameServer.Systems.Combat;
 
 namespace GameServer.Systems.Ai;
 
@@ -49,5 +50,12 @@ public sealed class ShardAiProjectileLauncher : IAiProjectileLauncher
         int damage)
     {
         _shard.ProjectileSim?.FireProjectile(source, trace, origin, direction, ammo, range, projectileSpeed, impactRadius, maxRadius, damage);
+
+        // ProjectileSim is server-only: without this event a watching client has nothing to draw,
+        // so a ranged NPC (a Dreadnaught HMG, a guard rifle) lands damage with no tracer and no
+        // muzzle. A player's own client predicts the shot from the fire input; an NPC has no
+        // client, so the server has to announce it the same way the player fire path echoes
+        // WeaponProjectileFired. See ProjectileFiredAnnouncement.
+        ProjectileFiredAnnouncement.SendToWatchers(_shard, source, direction);
     }
 }

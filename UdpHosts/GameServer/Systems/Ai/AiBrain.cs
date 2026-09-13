@@ -56,6 +56,9 @@ public class AiBrain
     /// <summary>Milliseconds between this NPC's attacks (its weapon's cadence, or the rules value).</summary>
     public int AttackCooldownMs => _attackCooldownMs;
 
+    /// <summary>Distance the NPC keeps from its target while it is closing or repositioning.</summary>
+    public float StandoffRange => _standoffRange;
+
     /// <summary>Current behaviour state.</summary>
     public AiBrainState State { get; private set; } = AiBrainState.Idle;
 
@@ -92,9 +95,9 @@ public class AiBrain
     }
 
     /// <summary>
-    ///     Makes the next attack legal from <paramref name="now" /> on, keeping whatever is already later.
-    ///     Used when an attack could not be fired because the weapon had to reload: the reload is the wait,
-    ///     so it must not stack on top of the cadence that attempt just spent.
+    ///     Makes the next attack legal no later than <paramref name="now" />. Used when an attack could
+    ///     not be fired because the weapon had to reload: the reload is the wait, so it must not stack on
+    ///     top of the cadence that attempt just spent.
     /// </summary>
     public void AllowAttackAt(ulong now)
     {
@@ -103,6 +106,9 @@ public class AiBrain
             return;
         }
 
+        // A reload should replace the remaining cadence delay, not add to it. If the
+        // cadence is already due, keep it due; otherwise let the reload end be the
+        // earliest legal attack time.
         NextAttackAt = Math.Min(NextAttackAt, now);
     }
 
@@ -184,7 +190,7 @@ public class AiBrain
             _ => AiMovementIntent.None,
         };
 
-        bool faceTarget = engaged && State is AiBrainState.Chase or AiBrainState.Attack;
+        bool faceTarget = engaged && (State is AiBrainState.Chase or AiBrainState.Attack);
 
         bool attack = false;
         if (State == AiBrainState.Attack && engaged && perception.TargetVisible && InAttackVolume(perception) && now >= NextAttackAt)

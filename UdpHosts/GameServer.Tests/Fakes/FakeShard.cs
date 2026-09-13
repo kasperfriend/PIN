@@ -65,6 +65,14 @@ public sealed class FakeShard : IShard
 
     public ulong CurrentTimeLong { get; set; } = 60_000;
 
+    /// <summary>
+    ///     Default interface members on <see cref="IShard" /> are not visible on the concrete
+    ///     fake, so tests that read the clock through <c>FakeShard</c> need these on the type.
+    /// </summary>
+    public uint CurrentTime => unchecked((uint)CurrentTimeLong);
+
+    public ushort CurrentShortTime => unchecked((ushort)CurrentTime);
+
     public ulong InstanceId { get; set; } = 1;
 
     public uint ZoneId { get; set; } = 448;

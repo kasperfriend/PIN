@@ -494,8 +494,11 @@ public class AiEngineTests
         Assert.Equal(npc.Position.Y, burst.Origin.Y, 3);
         Assert.Equal(npc.Position.Z + 1.62f, burst.Origin.Z, 3);
 
-        // Aimed at the player's chest.
+        // Aimed at the player's chest. The default profile carries no spread, so every round of the
+        // burst lands on the same ray - the behaviour a weapon the database gives no spread asked for.
         Assert.True(burst.Direction.X > 0.9f, "an NPC should aim at its target, not at the floor");
+        Assert.Equal(shots.Shots[0].Direction, shots.Shots[1].Direction);
+        Assert.Equal(shots.Shots[0].Direction, shots.Shots[2].Direction);
         Assert.Equal(100_000, player.CurrentHealth);
 
         // A burst is one attack: the weapon's own cadence, not one attack per tick.
@@ -503,6 +506,33 @@ public class AiEngineTests
         Assert.Equal(3, shots.Shots.Count);
         Tick(shard, FirstTick + 2500 + Step);
         Assert.Equal(6, shots.Shots.Count);
+    }
+
+    [Fact]
+    public void RangedNpc_WithASpreadCone_ScattersEachRoundOfTheBurst()
+    {
+        // The weapon's own first-shot cone, applied once per round: a shotgun's pellets (or a rifle's
+        // 3-round burst) scatter instead of stacking on a single chest-aimed ray. The default profile
+        // above carries no spread and keeps the stacked-ray behaviour a 0 row asked for.
+        var stats = new FakeAiMonsterStats { AttackProfile = RangedProfile() with { SpreadPct = 6f, SlotIndex = 2 } };
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: shots);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(3, shots.Shots.Count);
+        Assert.NotEqual(shots.Shots[0].Direction, shots.Shots[1].Direction);
+        Assert.NotEqual(shots.Shots[0].Direction, shots.Shots[2].Direction);
+        Assert.NotEqual(shots.Shots[1].Direction, shots.Shots[2].Direction);
+
+        var aim = Vector3.Normalize(shots.Shots[0].Direction);
+        Assert.True(Vector3.Dot(Vector3.Normalize(shots.Shots[1].Direction), aim) > 0.9f);
+        Assert.True(Vector3.Dot(Vector3.Normalize(shots.Shots[2].Direction), aim) > 0.9f);
     }
 
     [Fact]
@@ -774,6 +804,76 @@ public class AiEngineTests
         Assert.Equal(2, abilities.Activations.Count);
     }
 
+    /// <summary>
+    ///     A magazine profile whose weapon names a reload ability with client feedback: the sibling of
+    ///     the empty-clip hook, fired when the reload starts rather than when the magazine runs dry.
+    /// </summary>
+    private static NpcAttackProfile ReloadAbilityProfile() => MagazineProfile() with
+    {
+        ReloadAbilityId = 40_001,
+        ReloadClientFeedback = true,
+    };
+
+    [Fact]
+    public void ArmedNpc_StartingAReload_RunsTheWeaponsReloadAbility()
+    {
+        // The template's reload_ability is the chain the database names for the reload window. The
+        // WeaponReloaded marker is still what the client plays anim_reload_type from; this is the extra
+        // chain the row names for that same moment, gated like clip_empty (client feedback, once per
+        // reload).
+        var stats = new FakeAiMonsterStats { AttackProfile = ReloadAbilityProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);                   // Idle -> Chase
+        Tick(shard, FirstTick + Step);            // burst 1: 2 rounds -> 1
+
+        Assert.Empty(abilities.Activations);
+
+        Tick(shard, FirstTick + 2500 + Step);     // burst 2 empties the magazine and starts the reload
+
+        var reload = Assert.Single(abilities.Activations);
+        Assert.Equal(40_001u, reload.AbilityId);
+        Assert.Equal(62_550u, reload.Time);
+
+        Tick(shard, 63_000);
+        Tick(shard, 63_550);
+        Assert.Single(abilities.Activations);
+
+        Tick(shard, 65_050);
+        Assert.Single(abilities.Activations);
+
+        Tick(shard, 67_550);
+        Assert.Equal(2, abilities.Activations.Count);
+    }
+
+    [Fact]
+    public void ReloadAbilityThatCarriesNoClientCommand_IsNotRun()
+    {
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = MagazineProfile() with { ReloadAbilityId = 40_002, ReloadClientFeedback = false },
+        };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Tick(shard, FirstTick + 2500 + Step);
+
+        Assert.Empty(abilities.Activations);
+    }
+
     [Fact]
     public void EmptyClipAbilityThatCarriesNoClientCommand_IsNotRun()
     {
@@ -795,6 +895,86 @@ public class AiEngineTests
         Tick(shard, FirstTick);
         Tick(shard, FirstTick + Step);
         Tick(shard, FirstTick + 2500 + Step);     // the magazine runs dry here
+
+        Assert.Empty(abilities.Activations);
+    }
+
+    /// <summary>
+    ///     A ranged profile whose weapon names the overcharge hook plasma 12129 carries: 4000 ms charge,
+    ///     2500 ms delay, a chain a client plays. The engine runs it with the attack when the charge is
+    ///     long enough, gated like clip_empty (client feedback).
+    /// </summary>
+    private static NpcAttackProfile OverchargeProfile() => RangedProfile() with
+    {
+        OverchargeAbilityId = 12_129,
+        MsOverchargeDelay = 2500,
+        ChargeUpMs = 4000,
+        OverchargeClientFeedback = true,
+    };
+
+    [Fact]
+    public void ArmedNpc_ChargingPastTheOverchargeDelay_RunsTheWeaponsOverchargeAbility()
+    {
+        var stats = new FakeAiMonsterStats { AttackProfile = OverchargeProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        var overcharge = Assert.Single(abilities.Activations);
+        Assert.Equal(12_129u, overcharge.AbilityId);
+        Assert.Equal(60_050u, overcharge.Time);
+        Assert.True(float.IsNaN(overcharge.Register));
+
+        Tick(shard, FirstTick + 2500 + Step);
+        Assert.Equal(2, abilities.Activations.Count);
+        Assert.Equal(12_129u, abilities.Activations[1].AbilityId);
+    }
+
+    [Fact]
+    public void OverchargeAbilityThatCarriesNoClientCommand_IsNotRun()
+    {
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = OverchargeProfile() with { OverchargeClientFeedback = false },
+        };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Empty(abilities.Activations);
+    }
+
+    [Fact]
+    public void OverchargeAbility_IsNotRunWhenTheChargeIsShorterThanTheDelay()
+    {
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = OverchargeProfile() with { ChargeUpMs = 1000 },
+        };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
 
         Assert.Empty(abilities.Activations);
     }
@@ -1149,6 +1329,16 @@ public class AiEngineTests
     };
 
     /// <summary>
+    ///     A melee weapon that fills only melee_ability_id: the fallback of the attack chain, used when
+    ///     neither burst nor attack is named.
+    /// </summary>
+    private static NpcAttackProfile MeleeOnlyAbilityProfile() => AnimatingMeleeProfile() with
+    {
+        BurstAbilityId = 0,
+        MeleeAbilityId = 188,
+    };
+
+    /// <summary>
     ///     A melee weapon whose chain is the swing itself, like Melee - Shadowstrike: the chain lands the
     ///     damage, so the AI must not add its own on the same target.
     /// </summary>
@@ -1200,6 +1390,50 @@ public class AiEngineTests
         Assert.Equal(39_249u, activation.AbilityId);
         Assert.Equal(60_050u, activation.Time);
         Assert.Equal(2f, activation.Register);
+    }
+
+    [Fact]
+    public void MeleeNpc_WithOnlyAMeleeAbility_RunsThatAbility()
+    {
+        // melee_ability_id is the fallback of the attack chain: a weapon that fills neither burst nor
+        // attack still animates from the melee hook, and a chain that delivers the hit still replaces
+        // the AI's own swing.
+        var stats = new FakeAiMonsterStats { AttackProfile = MeleeOnlyAbilityProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, player) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(3f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(188u, Assert.Single(abilities.Activations).AbilityId);
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
+        Assert.Equal(100_000, player.CurrentHealth);
+    }
+
+    [Fact]
+    public void MeleeNpc_PrefersBurstOverMelee()
+    {
+        // A leftover melee id must not steal the window from the burst the template names as the
+        // attack (Shadowstrike's 188). Burst, then attack, then melee.
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = AnimatingMeleeProfile() with { MeleeAbilityId = 999 },
+        };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(3f, 0f, 0f),
+            monsterStats: stats,
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(188u, Assert.Single(abilities.Activations).AbilityId);
     }
 
     [Fact]

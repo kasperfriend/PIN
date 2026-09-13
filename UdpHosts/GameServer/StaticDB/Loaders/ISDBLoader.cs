@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Records.apt;
 using Records.aptfs;
 using Records.dbcharacter;
+using Records.dbdialogdata;
 using Records.dbencounterdata;
 using Records.dbitems;
 using Records.dblocalization;
@@ -24,9 +25,17 @@ public interface ISDBLoader
     List<FactionRelations> LoadFactionRelations();
     Dictionary<uint, List<FactionReputations>> LoadFactionReputations();
     Dictionary<uint, Monster> LoadMonster();
+    Dictionary<uint, MonsterVisualOptions> LoadMonsterVisualOptions();
+    Dictionary<uint, List<MonsterVisualOption>> LoadMonsterVisualOption();
     Dictionary<ushort, EmoteRecord> LoadEmoteRecord();
+    Dictionary<uint, Stumble> LoadStumble();
+    Dictionary<uint, List<StumbleDirection>> LoadStumbleDirection();
+    Dictionary<uint, DialogScript> LoadDialogScript();
+    Dictionary<uint, BattleChatterDescriptions> LoadBattleChatterDescriptions();
+    Dictionary<uint, List<BattleChatterSetParams>> LoadBattleChatterSetParams();
     Dictionary<uint, MonsterScaling> LoadMonsterScaling();
     Dictionary<uint, Turret> LoadTurret();
+    Dictionary<uint, List<TurretWeapon>> LoadTurretWeapon();
     Dictionary<uint, PoseType> LoadPoseType();
     Dictionary<uint, CharInfo> LoadCharInfo();
     Dictionary<byte, DamageType> LoadDamageType();
@@ -44,6 +53,7 @@ public interface ISDBLoader
     // dbvisualrecords
     Dictionary<uint, WarpaintPalette> LoadWarpaintPalettes();
     Dictionary<uint, VisualRecord> LoadVisualRecord();
+    Dictionary<string, Hardpoints> LoadHardpoints();
 
     // dbitems
     Dictionary<uint, AttributeCategory> LoadAttributeCategory();
@@ -75,6 +85,7 @@ public interface ISDBLoader
 
     // dbzonemetadata
     Dictionary<uint, ZoneRecord> LoadZoneRecord();
+    Dictionary<uint, ChunkRecord> LoadChunkRecord();
 
     // apt
     Dictionary<uint, BaseCommandDef> LoadBaseCommandDef();

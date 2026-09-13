@@ -96,6 +96,35 @@ public sealed record NpcAttackProfile
     public byte FireType { get; init; }
 
     /// <summary>
+    ///     Template <c>slot_index</c>, the PRNG seed a player shot uses for spread. Carried so an NPC
+    ///     pellet of the same weapon scatters from the same slot the client would have used.
+    /// </summary>
+    public byte SlotIndex { get; init; }
+
+    /// <summary>
+    ///     Template <c>min_spread</c> (with item/slot modifiers already applied). The floor of the
+    ///     weapon's cone; 0 on a weapon the database gives no spread.
+    /// </summary>
+    public float MinSpread { get; init; }
+
+    /// <summary>Template <c>max_spread</c>, the ceiling of the weapon's cone.</summary>
+    public float MaxSpread { get; init; }
+
+    /// <summary>
+    ///     Template <c>starting_spread</c>, the fraction of the (max - min) band the first shot of a
+    ///     standing character opens at. See <see cref="NpcAttackSpreadMath.ResolveSpreadPct" />.
+    /// </summary>
+    public float StartingSpread { get; init; }
+
+    /// <summary>
+    ///     The spread percent one standing NPC attack fires at: the first-shot cone of the weapon's
+    ///     own spread profile, with the item's attribute 958 applied when it carries one. 0 on a
+    ///     weapon the database gives no spread, which is every melee row. See
+    ///     <see cref="NpcAttackSpreadMath" />.
+    /// </summary>
+    public float SpreadPct { get; init; }
+
+    /// <summary>
     ///     Length of one attack's animation in milliseconds, straight from the template's burst
     ///     columns (<c>ms_burst_duration</c> when the burst is fired over time, otherwise
     ///     <c>ms_per_burst</c>). This is the window the engine marks with
@@ -180,7 +209,12 @@ public sealed record NpcAttackProfile
     /// </summary>
     public bool ChainDeliversDamage { get; init; }
 
-    /// <summary>Template melee ability id, or 0.</summary>
+    /// <summary>
+    ///     Template melee ability id (<c>melee_ability_id</c>) - the chain a melee weapon runs as its
+    ///     attack when it has no burst/attack ability, or 0. Walked with the other two attack ids (see
+    ///     <see cref="NpcWeaponAbilities.Scan" />) and run as the fallback of
+    ///     <see cref="AttackChainAbilityId" /> when the chain carries client feedback.
+    /// </summary>
     public uint MeleeAbilityId { get; init; }
 
     /// <summary>
@@ -198,6 +232,49 @@ public sealed record NpcAttackProfile
     ///     nothing a client shows, exactly like a server-only burst chain.
     /// </summary>
     public bool ClipEmptyClientFeedback { get; init; }
+
+    /// <summary>
+    ///     The ability the weapon fires when a reload starts (<c>dbitems::WeaponTemplates.reload_ability</c>),
+    ///     or 0. The sibling of <see cref="ClipEmptyAbilityId" />: the empty click is the moment the magazine
+    ///     runs dry, this is the reload that follows. Gated the same way - a hook whose chains carry nothing
+    ///     a client executes is left alone.
+    /// </summary>
+    public uint ReloadAbilityId { get; init; }
+
+    /// <summary>
+    ///     Whether the reload ability's chains carry a command a client executes. A server-only reload hook
+    ///     is not activated, exactly like a server-only empty-clip or burst chain.
+    /// </summary>
+    public bool ReloadClientFeedback { get; init; }
+
+    /// <summary>
+    ///     The ability the weapon fires when a charge is held long enough to overcharge
+    ///     (<c>dbitems::WeaponTemplates.overcharge_ability</c>), or 0. The delay is
+    ///     <see cref="MsOverchargeDelay" />; an NPC charges for <see cref="ChargeUpMs" /> and then
+    ///     fires, so the hook runs with the attack when that charge crosses the delay. See
+    ///     <see cref="NpcWeaponOvercharge" />.
+    /// </summary>
+    public uint OverchargeAbilityId { get; init; }
+
+    /// <summary>
+    ///     Milliseconds a charge must be held before <see cref="OverchargeAbilityId" /> applies
+    ///     (<c>ms_overcharge_delay</c>). 0 means the row does not overcharge.
+    /// </summary>
+    public uint MsOverchargeDelay { get; init; }
+
+    /// <summary>
+    ///     Whether the overcharge ability's chains carry a command a client executes. A server-only
+    ///     overcharge hook is not activated, exactly like a server-only empty-clip or burst chain.
+    /// </summary>
+    public bool OverchargeClientFeedback { get; init; }
+
+    /// <summary>
+    ///     The ability id one attack actually runs: burst when the template names one, else attack, else
+    ///     melee. The three columns are the database's own attack hooks; the engine picks one so a weapon
+    ///     that only fills <c>melee_ability_id</c> still animates.
+    /// </summary>
+    public uint AttackChainAbilityId =>
+        BurstAbilityId != 0 ? BurstAbilityId : AttackAbilityId != 0 ? AttackAbilityId : MeleeAbilityId;
 
     /// <summary>
     ///     Local-space muzzle offset (<c>dbcharacter::Monster.projectile_offset</c>). When it is

@@ -2,10 +2,12 @@ namespace GameServer.StaticDB;
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using FauFau.Formats;
 using Records.apt;
 using Records.aptfs;
 using Records.dbcharacter;
+using Records.dbdialogdata;
 using Records.dbencounterdata;
 using Records.dbitems;
 using Records.dblocalization;
@@ -26,6 +28,8 @@ public class SDBInterface
     private static List<FactionRelations> _factionRelations;
     private static Dictionary<uint, List<FactionReputations>> _factionReputations;
     private static Dictionary<uint, Monster> _monster;
+    private static Dictionary<uint, MonsterVisualOptions> _monsterVisualOptions;
+    private static Dictionary<uint, List<MonsterVisualOption>> _monsterVisualOptionByParent;
     private static Dictionary<ushort, EmoteRecord> _emoteRecord;
 
     /// <summary>
@@ -33,9 +37,15 @@ public class SDBInterface
     ///     NPC poses in (<c>AlertAndInteractive(emote="calm")</c>) rather than its id.
     /// </summary>
     private static Dictionary<string, EmoteRecord> _emoteRecordByName;
+    private static Dictionary<uint, Stumble> _stumble;
+    private static Dictionary<uint, List<StumbleDirection>> _stumbleDirectionByStumble;
+    private static Dictionary<uint, DialogScript> _dialogScript;
+    private static Dictionary<uint, BattleChatterDescriptions> _battleChatterDescriptions;
+    private static Dictionary<uint, List<BattleChatterSetParams>> _battleChatterSetParamsBySet;
     private static Dictionary<KeyValuePair<uint, ushort>, MonsterAttributeRange> _monsterAttributeRange;
     private static Dictionary<uint, MonsterScaling> _monsterScaling;
     private static Dictionary<uint, Turret> _turret;
+    private static Dictionary<uint, List<TurretWeapon>> _turretWeaponByType;
     private static Dictionary<uint, PoseType> _poseType;
     private static Dictionary<uint, CharInfo> _charInfo;
     private static Dictionary<byte, DamageType> _damageType;
@@ -53,6 +63,7 @@ public class SDBInterface
     // dbvisualrecords
     private static Dictionary<uint, WarpaintPalette> _warpaintPalettes;
     private static Dictionary<uint, VisualRecord> _visualRecord;
+    private static Dictionary<string, Hardpoints> _hardpointsByName;
 
     // dbitems
     private static Dictionary<uint, AttributeCategory> _attributeCategory;
@@ -85,6 +96,7 @@ public class SDBInterface
 
     // dbzonemetadata
     private static Dictionary<uint, ZoneRecord> _zoneRecord;
+    private static Dictionary<uint, ChunkRecord> _chunkRecord;
 
     // apt
     private static Dictionary<uint, BaseCommandDef> _baseCommandDef;
@@ -299,11 +311,19 @@ public class SDBInterface
         _factionRelations = loader.LoadFactionRelations();
         _factionReputations = loader.LoadFactionReputations();
         _monster = loader.LoadMonster();
+        _monsterVisualOptions = loader.LoadMonsterVisualOptions();
+        _monsterVisualOptionByParent = loader.LoadMonsterVisualOption();
         _emoteRecord = loader.LoadEmoteRecord();
         _emoteRecordByName = BuildEmoteNameIndex(_emoteRecord);
+        _stumble = loader.LoadStumble();
+        _stumbleDirectionByStumble = loader.LoadStumbleDirection();
+        _dialogScript = loader.LoadDialogScript();
+        _battleChatterDescriptions = loader.LoadBattleChatterDescriptions();
+        _battleChatterSetParamsBySet = loader.LoadBattleChatterSetParams();
         _monsterAttributeRange = loader.LoadMonsterAttributeRange();
         _monsterScaling = loader.LoadMonsterScaling();
         _turret = loader.LoadTurret();
+        _turretWeaponByType = loader.LoadTurretWeapon();
         _poseType = loader.LoadPoseType();
         _charInfo = loader.LoadCharInfo();
         _damageType = loader.LoadDamageType();
@@ -321,6 +341,7 @@ public class SDBInterface
         // dbvisualrecords
         _warpaintPalettes = loader.LoadWarpaintPalettes();
         _visualRecord = loader.LoadVisualRecord();
+        _hardpointsByName = loader.LoadHardpoints();
 
         // dbitems
         _attributeCategory = loader.LoadAttributeCategory();
@@ -353,6 +374,7 @@ public class SDBInterface
 
         // dbzonemetadata
         _zoneRecord = loader.LoadZoneRecord();
+        _chunkRecord = loader.LoadChunkRecord();
 
         // apt
         _statusEffectData = loader.LoadStatusEffectData();
@@ -616,6 +638,26 @@ public class SDBInterface
     public static IReadOnlyDictionary<uint, Monster> GetMonsters() => _monster;
 
     /// <summary>
+    ///     The <c>dbcharacter::MonsterVisualOptions</c> header <c>Monster.visual_options_id</c> names,
+    ///     or null when the set is missing or the table is not loaded yet.
+    /// </summary>
+    public static MonsterVisualOptions GetMonsterVisualOptions(uint id) => _monsterVisualOptions?.GetValueOrDefault(id);
+
+    /// <summary>
+    ///     The <c>dbcharacter::MonsterVisualOption</c> rows of a variant set, or empty when the set
+    ///     has none or the table is not loaded yet.
+    /// </summary>
+    public static IReadOnlyList<MonsterVisualOption> GetMonsterVisualOption(uint parent)
+    {
+        if (_monsterVisualOptionByParent != null && _monsterVisualOptionByParent.TryGetValue(parent, out var rows) && rows != null)
+        {
+            return rows;
+        }
+
+        return [];
+    }
+
+    /// <summary>
     ///     One <c>dbcharacter::EmoteRecord</c> row: an emote a character can perform, its client-side
     ///     animation (animation override / animation network id) and the status effect the emote applies
     ///     while it runs. 382 rows in build prod-1962, 4 of them naming a status effect.
@@ -631,6 +673,72 @@ public class SDBInterface
     /// </summary>
     public static EmoteRecord GetEmoteRecord(string name) =>
         string.IsNullOrWhiteSpace(name) ? null : _emoteRecordByName?.GetValueOrDefault(name.Trim());
+
+    /// <summary>
+    ///     One <c>dbcharacter::Stumble</c> row (the hit-reaction animation, status effect, cooldown
+    ///     and duration), or null when the id is unknown or the table is not loaded.
+    /// </summary>
+    public static Stumble GetStumble(uint id) => _stumble?.GetValueOrDefault(id);
+
+    /// <summary>Every loaded <c>dbcharacter::Stumble</c> row, or empty when the table is not loaded.</summary>
+    public static IReadOnlyDictionary<uint, Stumble> GetStumbles() => _stumble ?? new Dictionary<uint, Stumble>();
+
+    /// <summary>
+    ///     The <c>dbcharacter::StumbleDirection</c> rows of a stumble, or empty when it has none
+    ///     or the table is not loaded.
+    /// </summary>
+    public static IReadOnlyList<StumbleDirection> GetStumbleDirections(uint stumbleId)
+    {
+        if (_stumbleDirectionByStumble != null && _stumbleDirectionByStumble.TryGetValue(stumbleId, out var rows) && rows != null)
+        {
+            return rows;
+        }
+
+        return [];
+    }
+
+    /// <summary>Every loaded stumble's direction rows, keyed by <c>stumble_id</c>.</summary>
+    public static IReadOnlyDictionary<uint, IReadOnlyList<StumbleDirection>> GetStumbleDirections()
+    {
+        if (_stumbleDirectionByStumble == null)
+        {
+            return new Dictionary<uint, IReadOnlyList<StumbleDirection>>();
+        }
+
+        var result = new Dictionary<uint, IReadOnlyList<StumbleDirection>>(_stumbleDirectionByStumble.Count);
+        foreach (var pair in _stumbleDirectionByStumble)
+        {
+            result[pair.Key] = pair.Value;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    ///     One <c>dbdialogdata::DialogScript</c> row, or null when the id is unknown or the table
+    ///     is not loaded.
+    /// </summary>
+    public static DialogScript GetDialogScript(uint id) => _dialogScript?.GetValueOrDefault(id);
+
+    /// <summary>
+    ///     One <c>dbdialogdata::BattleChatterDescriptions</c> row, or null when the id is unknown
+    ///     or the table is not loaded.
+    /// </summary>
+    public static BattleChatterDescriptions GetBattleChatter(uint id) => _battleChatterDescriptions?.GetValueOrDefault(id);
+
+    /// <summary>
+    ///     The <c>dbdialogdata::BattleChatterSetParams</c> rows of a chatter set, or empty when
+    ///     the set has none or the table is not loaded.
+    /// </summary>
+    public static IReadOnlyList<BattleChatterSetParams> GetBattleChatterSet(uint setId)
+    {
+        if (_battleChatterSetParamsBySet != null && _battleChatterSetParamsBySet.TryGetValue(setId, out var rows) && rows != null)
+        {
+            return rows;
+        }
+
+        return [];
+    }
     /// <summary>
     ///     One <c>dbcharacter::MonsterAttributeRange</c> row of a monster (attribute 1143 Creature HP
     ///     Modifier, 1144 Creature Damage Modifier, ...), or null when that monster has no row for it.
@@ -645,6 +753,21 @@ public class SDBInterface
     public static IReadOnlyDictionary<uint, MonsterScaling> GetMonsterScalings() => _monsterScaling;
     public static Turret GetTurret(uint id) => _turret.GetValueOrDefault(id);
     public static IReadOnlyDictionary<uint, Turret> GetTurrets() => _turret;
+
+    /// <summary>
+    ///     The <c>dbcharacter::TurretWeapon</c> rows of a turret type, ordered by <c>Id</c>.
+    ///     Empty when the type has none or the table is not loaded yet.
+    /// </summary>
+    public static IReadOnlyList<TurretWeapon> GetTurretWeapons(uint turretTypeId)
+    {
+        if (_turretWeaponByType != null && _turretWeaponByType.TryGetValue(turretTypeId, out var rows) && rows != null)
+        {
+            return rows;
+        }
+
+        return [];
+    }
+
     public static PoseType GetPoseType(uint id) => _poseType.GetValueOrDefault(id);
     public static CharInfo GetCharInfo(uint id) => _charInfo.GetValueOrDefault(id);
 
@@ -658,6 +781,25 @@ public class SDBInterface
     // dbvisualrecords
     public static WarpaintPalette GetWarpaintPalette(uint id) => _warpaintPalettes.GetValueOrDefault(id);
     public static VisualRecord GetVisualRecord(uint id) => _visualRecord.GetValueOrDefault(id);
+
+    /// <summary>
+    ///     Local-space translation of a named <c>dbvisualrecords::Hardpoints</c> row, or
+    ///     <see cref="Vector3.Zero" /> when the name is empty, unknown, or the table is not loaded.
+    /// </summary>
+    public static Vector3 GetHardpointOffset(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || _hardpointsByName == null)
+        {
+            return Vector3.Zero;
+        }
+
+        if (!_hardpointsByName.TryGetValue(name, out var row) || row == null)
+        {
+            return Vector3.Zero;
+        }
+
+        return HardpointTransform.Translation(row.Transform);
+    }
 
     // dbitems
     public static RootItem GetRootItem(uint id) => _rootItem.GetValueOrDefault(id);
@@ -703,6 +845,7 @@ public class SDBInterface
 
     // dbzonemetadata
     public static ZoneRecord GetZoneRecord(uint id) => _zoneRecord.GetValueOrDefault(id);
+    public static ChunkRecord GetChunkRecord(uint id) => _chunkRecord?.GetValueOrDefault(id);
 
     // apt
     public static BaseCommandDef GetBaseCommandDef(uint id) => _baseCommandDef.GetValueOrDefault(id);

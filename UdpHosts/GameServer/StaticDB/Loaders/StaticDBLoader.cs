@@ -7,6 +7,7 @@ using FauFau.Formats;
 using Records.apt;
 using Records.aptfs;
 using Records.dbcharacter;
+using Records.dbdialogdata;
 using Records.dbencounterdata;
 using Records.dbitems;
 using Records.dblocalization;
@@ -104,16 +105,78 @@ public class StaticDBLoader : ISDBLoader
         .ToDictionary(row => row.Id);
     }
 
+    public Dictionary<uint, MonsterVisualOptions> LoadMonsterVisualOptions()
+    {
+        return LoadStaticDB<MonsterVisualOptions>("dbcharacter::MonsterVisualOptions")
+        .ToDictionary(row => row.Id);
+    }
+
+    public Dictionary<uint, List<MonsterVisualOption>> LoadMonsterVisualOption()
+    {
+        return LoadStaticDB<MonsterVisualOption>("dbcharacter::MonsterVisualOption")
+        .GroupBy(row => row.Parent)
+        .ToDictionary(group => group.Key, group => group.ToList());
+    }
+
     public Dictionary<ushort, EmoteRecord> LoadEmoteRecord()
     {
         return LoadStaticDB<EmoteRecord>("dbcharacter::EmoteRecord")
         .ToDictionary(row => row.Id);
     }
 
+    public Dictionary<uint, Stumble> LoadStumble()
+    {
+        return LoadStaticDB<Stumble>("dbcharacter::Stumble")
+        .ToDictionary(row => row.Id);
+    }
+
+    /// <summary>
+    ///     Direction rows of a stumble, grouped by <c>stumble_id</c>.
+    /// </summary>
+    public Dictionary<uint, List<StumbleDirection>> LoadStumbleDirection()
+    {
+        return LoadStaticDB<StumbleDirection>("dbcharacter::StumbleDirection")
+        .GroupBy(row => row.StumbleId)
+        .ToDictionary(group => group.Key, group => group.ToList());
+    }
+
+    public Dictionary<uint, DialogScript> LoadDialogScript()
+    {
+        return LoadStaticDB<DialogScript>("dbdialogdata::DialogScript")
+        .ToDictionary(row => row.Id);
+    }
+
+    public Dictionary<uint, BattleChatterDescriptions> LoadBattleChatterDescriptions()
+    {
+        return LoadStaticDB<BattleChatterDescriptions>("dbdialogdata::BattleChatterDescriptions")
+        .ToDictionary(row => row.Id);
+    }
+
+    /// <summary>
+    ///     Voice-set lines of a battle-chatter set, grouped by <c>set_id</c>.
+    /// </summary>
+    public Dictionary<uint, List<BattleChatterSetParams>> LoadBattleChatterSetParams()
+    {
+        return LoadStaticDB<BattleChatterSetParams>("dbdialogdata::BattleChatterSetParams")
+        .GroupBy(row => row.SetId)
+        .ToDictionary(group => group.Key, group => group.ToList());
+    }
+
     public Dictionary<uint, Turret> LoadTurret()
     {
         return LoadStaticDB<Turret>("dbcharacter::Turret")
             .ToDictionary(row => row.Id);
+    }
+
+    /// <summary>
+    ///     The guns a <c>dbcharacter::Turret</c> fires, grouped by turret type and ordered by
+    ///     <c>Id</c> so a seated fire takes the first barrel without inventing a second shot.
+    /// </summary>
+    public Dictionary<uint, List<TurretWeapon>> LoadTurretWeapon()
+    {
+        return LoadStaticDB<TurretWeapon>("dbcharacter::TurretWeapon")
+            .GroupBy(row => row.TurretTypeId)
+            .ToDictionary(group => group.Key, group => group.OrderBy(row => row.Id).ToList());
     }
 
     public Dictionary<uint, MapMarkerInfo> LoadMapMarkerInfo()
@@ -138,6 +201,18 @@ public class StaticDBLoader : ISDBLoader
     {
         return LoadStaticDB<VisualRecord>("dbvisualrecords::VisualRecord")
         .ToDictionary(row => row.Id);
+    }
+
+    /// <summary>
+    ///     <c>dbvisualrecords::Hardpoints</c> keyed by name. Duplicate names keep the first row;
+    ///     empty names are skipped so a muzzle lookup never keys on blank.
+    /// </summary>
+    public Dictionary<string, Hardpoints> LoadHardpoints()
+    {
+        return LoadStaticDB<Hardpoints>("dbvisualrecords::Hardpoints")
+            .Where(row => !string.IsNullOrWhiteSpace(row.Name))
+            .GroupBy(row => row.Name)
+            .ToDictionary(group => group.Key, group => group.First());
     }
 
     public Dictionary<uint, AttributeCategory> LoadAttributeCategory()
@@ -1439,6 +1514,12 @@ public class StaticDBLoader : ISDBLoader
     public Dictionary<uint, ZoneRecord> LoadZoneRecord()
     {
         return LoadStaticDB<ZoneRecord>("dbzonemetadata::ZoneRecord")
+            .ToDictionary(row => row.Id);
+    }
+
+    public Dictionary<uint, ChunkRecord> LoadChunkRecord()
+    {
+        return LoadStaticDB<ChunkRecord>("dbzonemetadata::ChunkRecord")
             .ToDictionary(row => row.Id);
     }
 
