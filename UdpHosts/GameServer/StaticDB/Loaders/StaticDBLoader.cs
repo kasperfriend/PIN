@@ -7,6 +7,7 @@ using FauFau.Formats;
 using Records.apt;
 using Records.aptfs;
 using Records.dbcharacter;
+using Records.dbdialogdata;
 using Records.dbencounterdata;
 using Records.dbitems;
 using Records.dblocalization;

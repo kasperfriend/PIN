@@ -61,7 +61,7 @@ public class MonsterVisualOptionsMathTests
             },
         };
 
-        MonsterVisualOptionsMath.Apply(info,
+        MonsterVisualOptionsMath.Apply(ref info,
         [
             new MonsterVisualOption { Type = MonsterVisualOptionsMath.HeadType, Value = 99 },
             new MonsterVisualOption { Type = MonsterVisualOptionsMath.ColorType, Value = 0xAABBCCDD },

@@ -35,6 +35,11 @@ public class CombatController : Base
     [MessageID(GssCharacterCommand.FireBurst)]
     public void FireBurst(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {
+        if (!CharacterWeaponFire.ShouldFireEquippedWeapon(player.CharacterEntity))
+        {
+            return;
+        }
+
         var query = packet.Unpack<FireBurst>();
         player.CharacterEntity.SetFireBurst(query.Time);
     }
@@ -42,6 +47,11 @@ public class CombatController : Base
     [MessageID(GssCharacterCommand.FireWeaponProjectile)]
     public void FireWeaponProjectile(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {
+        if (!CharacterWeaponFire.ShouldFireEquippedWeapon(player.CharacterEntity))
+        {
+            return;
+        }
+
         var fireWeaponProjectile = packet.Unpack<FireWeaponProjectile>();
 
         Vector3? shooterVelocity = fireWeaponProjectile.HaveShooterVelocity == 1 ? fireWeaponProjectile.ShooterVelocity : null;
@@ -71,6 +81,11 @@ public class CombatController : Base
     [MessageID(GssCharacterCommand.FireEnd)]
     public void FireEnd(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {
+        if (!CharacterWeaponFire.ShouldFireEquippedWeapon(player.CharacterEntity))
+        {
+            return;
+        }
+
         var query = packet.Unpack<FireEnd>();
         player.CharacterEntity.SetFireEnd(query.Time);
     }
@@ -78,6 +93,11 @@ public class CombatController : Base
     [MessageID(GssCharacterCommand.FireCancel)]
     public void FireCancel(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {
+        if (!CharacterWeaponFire.ShouldFireEquippedWeapon(player.CharacterEntity))
+        {
+            return;
+        }
+
         var query = packet.Unpack<FireCancel>();
         player.CharacterEntity.SetFireCancel(query.Time);
     }

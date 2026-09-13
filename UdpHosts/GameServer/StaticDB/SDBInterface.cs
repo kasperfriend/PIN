@@ -7,6 +7,7 @@ using FauFau.Formats;
 using Records.apt;
 using Records.aptfs;
 using Records.dbcharacter;
+using Records.dbdialogdata;
 using Records.dbencounterdata;
 using Records.dbitems;
 using Records.dblocalization;
@@ -36,6 +37,11 @@ public class SDBInterface
     ///     NPC poses in (<c>AlertAndInteractive(emote="calm")</c>) rather than its id.
     /// </summary>
     private static Dictionary<string, EmoteRecord> _emoteRecordByName;
+    private static Dictionary<uint, Stumble> _stumble;
+    private static Dictionary<uint, List<StumbleDirection>> _stumbleDirectionByStumble;
+    private static Dictionary<uint, DialogScript> _dialogScript;
+    private static Dictionary<uint, BattleChatterDescriptions> _battleChatterDescriptions;
+    private static Dictionary<uint, List<BattleChatterSetParams>> _battleChatterSetParamsBySet;
     private static Dictionary<KeyValuePair<uint, ushort>, MonsterAttributeRange> _monsterAttributeRange;
     private static Dictionary<uint, MonsterScaling> _monsterScaling;
     private static Dictionary<uint, Turret> _turret;
@@ -308,6 +314,11 @@ public class SDBInterface
         _monsterVisualOptionByParent = loader.LoadMonsterVisualOption();
         _emoteRecord = loader.LoadEmoteRecord();
         _emoteRecordByName = BuildEmoteNameIndex(_emoteRecord);
+        _stumble = loader.LoadStumble();
+        _stumbleDirectionByStumble = loader.LoadStumbleDirection();
+        _dialogScript = loader.LoadDialogScript();
+        _battleChatterDescriptions = loader.LoadBattleChatterDescriptions();
+        _battleChatterSetParamsBySet = loader.LoadBattleChatterSetParams();
         _monsterAttributeRange = loader.LoadMonsterAttributeRange();
         _monsterScaling = loader.LoadMonsterScaling();
         _turret = loader.LoadTurret();
@@ -660,6 +671,72 @@ public class SDBInterface
     /// </summary>
     public static EmoteRecord GetEmoteRecord(string name) =>
         string.IsNullOrWhiteSpace(name) ? null : _emoteRecordByName?.GetValueOrDefault(name.Trim());
+
+    /// <summary>
+    ///     One <c>dbcharacter::Stumble</c> row (the hit-reaction animation, status effect, cooldown
+    ///     and duration), or null when the id is unknown or the table is not loaded.
+    /// </summary>
+    public static Stumble GetStumble(uint id) => _stumble?.GetValueOrDefault(id);
+
+    /// <summary>Every loaded <c>dbcharacter::Stumble</c> row, or empty when the table is not loaded.</summary>
+    public static IReadOnlyDictionary<uint, Stumble> GetStumbles() => _stumble ?? new Dictionary<uint, Stumble>();
+
+    /// <summary>
+    ///     The <c>dbcharacter::StumbleDirection</c> rows of a stumble, or empty when it has none
+    ///     or the table is not loaded.
+    /// </summary>
+    public static IReadOnlyList<StumbleDirection> GetStumbleDirections(uint stumbleId)
+    {
+        if (_stumbleDirectionByStumble != null && _stumbleDirectionByStumble.TryGetValue(stumbleId, out var rows) && rows != null)
+        {
+            return rows;
+        }
+
+        return [];
+    }
+
+    /// <summary>Every loaded stumble's direction rows, keyed by <c>stumble_id</c>.</summary>
+    public static IReadOnlyDictionary<uint, IReadOnlyList<StumbleDirection>> GetStumbleDirections()
+    {
+        if (_stumbleDirectionByStumble == null)
+        {
+            return new Dictionary<uint, IReadOnlyList<StumbleDirection>>();
+        }
+
+        var result = new Dictionary<uint, IReadOnlyList<StumbleDirection>>(_stumbleDirectionByStumble.Count);
+        foreach (var pair in _stumbleDirectionByStumble)
+        {
+            result[pair.Key] = pair.Value;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    ///     One <c>dbdialogdata::DialogScript</c> row, or null when the id is unknown or the table
+    ///     is not loaded.
+    /// </summary>
+    public static DialogScript GetDialogScript(uint id) => _dialogScript?.GetValueOrDefault(id);
+
+    /// <summary>
+    ///     One <c>dbdialogdata::BattleChatterDescriptions</c> row, or null when the id is unknown
+    ///     or the table is not loaded.
+    /// </summary>
+    public static BattleChatterDescriptions GetBattleChatter(uint id) => _battleChatterDescriptions?.GetValueOrDefault(id);
+
+    /// <summary>
+    ///     The <c>dbdialogdata::BattleChatterSetParams</c> rows of a chatter set, or empty when
+    ///     the set has none or the table is not loaded.
+    /// </summary>
+    public static IReadOnlyList<BattleChatterSetParams> GetBattleChatterSet(uint setId)
+    {
+        if (_battleChatterSetParamsBySet != null && _battleChatterSetParamsBySet.TryGetValue(setId, out var rows) && rows != null)
+        {
+            return rows;
+        }
+
+        return [];
+    }
     /// <summary>
     ///     One <c>dbcharacter::MonsterAttributeRange</c> row of a monster (attribute 1143 Creature HP
     ///     Modifier, 1144 Creature Damage Modifier, ...), or null when that monster has no row for it.

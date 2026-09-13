@@ -7,6 +7,7 @@ using GameServer.Entities.Turret;
 using GameServer.StaticDB;
 using GameServer.StaticDB.Records.dbcharacter;
 using GameServer.Systems.Ai;
+using GameServer.Systems.Aptitude;
 using GameServer.Systems.WeaponSim;
 using AiPrng = GameServer.Systems.PRNG.PRNG;
 
@@ -164,7 +165,7 @@ public sealed class TurretWeaponFire
                     gunner,
                     profile.OverchargeAbilityId,
                     time,
-                    new GameServer.Systems.Aptitude.AptitudeTargets());
+                    new AptitudeTargets());
             }
 
             Vector3 origin = ResolveOrigin(turret, gunner, weapon, time, aim, shooterVelocity, _hardpointOffset);

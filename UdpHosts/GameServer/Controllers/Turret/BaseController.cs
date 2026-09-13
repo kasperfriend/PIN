@@ -81,7 +81,9 @@ public class BaseController : Base
             return;
         }
 
-        Vector3? shooterVelocity = projectile.HaveShooterVelocity == 1 ? projectile.ShooterVelocity : null;
-        TurretWeaponFire.Production.Fire(turret, player.CharacterEntity, projectile.Time, projectile.AimDirection, shooterVelocity);
+        // Turret FireWeaponProjectile is Time + Aim + HaveMoreData/MoreData, not the
+        // character packet's AimDirection / HaveShooterVelocity / ShooterVelocity.
+        // MoreData is not named as velocity on the wire, so it is not invented as one.
+        TurretWeaponFire.Production.Fire(turret, player.CharacterEntity, projectile.Time, projectile.Aim);
     }
 }

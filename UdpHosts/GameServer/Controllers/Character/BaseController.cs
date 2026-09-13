@@ -15,6 +15,7 @@ using GameServer.GRPC;
 using GameServer.Packets;
 using GameServer.StaticDB;
 using GameServer.StaticDB.Records.customdata;
+using GameServer.Systems.Dialog;
 using GameServer.Systems.Encounters;
 using Serilog;
 using static AeroMessages.GSS.Character.Command.NonDevDebugCommand;
@@ -235,6 +236,14 @@ public class BaseController : Base
         {
             _logger?.Debug("Ignoring emote {EmoteId}: not in dbcharacter::EmoteRecord", query.EmoteId);
         }
+    }
+
+    [MessageID(GssCharacterCommand.NotifyDialogScriptComplete)]
+    public void NotifyDialogScriptComplete(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
+    {
+        var query = packet.Unpack<NotifyDialogScriptComplete>();
+        uint completedId = query.Unk1 != 0 ? query.Unk1 : query.Unk2;
+        DialogService.Production.OnScriptComplete(player.CharacterEntity, completedId, player.CharacterEntity.Shard.CurrentTime);
     }
 
     [MessageID(GssCharacterCommand.ClientQueryInteractionStatus)]

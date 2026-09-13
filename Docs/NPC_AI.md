@@ -609,8 +609,8 @@ these three pieces, and the line currently sits here:
 | `dbitems::WeaponTemplates` / `WeaponTemplateModifiers` `anim_*`, `ms_burst_duration`, `ms_per_burst`, `base_clip_size`, `ammo_per_burst`, `rounds_per_burst`, `reload_time` | 318 / 5,387 | the weapon's animation selectors, its burst timing and its magazine/reload | used (above) |
 | `dbcharacter::Monster.normal_speed` / `fast_speed` | 3,109 | the two locomotion speeds the walk/run animation matches | used (above) |
 | `dbcharacter::GibVisuals` (`death_anim_index`, `blast_impulse_strength`, `direct_vrec_id`) via `dbitems::Battleframe.gibset_id` | 128 | the row a corpse reports at death: the death animation variant and the gib visuals | used: `NpcDeathService` reports the battleframe's `gibset_id` at the death time, 0 included (see below), covering the 1,137 monsters with an explicit gib set and the 1,806 whose battleframe names the default row. 112 monster rows have no battleframe to read it from (89 of them `chassis_id` 0, legacy entries), and 54 name a `GibVisuals` id this build does not ship - the id is reported as the row states it and the client resolves it against its own copy |
-| `dbcharacter::Stumble` (`anim_index`, `duration`, `cooldown_ms`, `distance`, `only_once`) | 39 | hit-reaction ("stumble") rows: which animation, which status effect, how long, how often | unused, and not implementable from this build (see below) |
-| `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction (references the 32 directional rows) | unused - no row points at it |
+| `dbcharacter::Stumble` (`anim_index`, `duration`, `cooldown_ms`, `distance`, `only_once`) | 39 | hit-reaction ("stumble") rows: which animation, which status effect, how long, how often | used by `StumbleService.TryStumble` when a caller names the id; DamageSystem does not pick one (see below) |
+| `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction (references the 32 directional rows) | used: the hit offset vs facing picks substate 0 front / 1 right / 2 back / 3 left |
 | `dbcharacter::EmoteRecord` (`animation_name`, `anim_override_id`, `head_anim_override_id`, `statuseffect`) | 382 | emotes: the animation ids the client resolves from the emote id, and on 4 rows the status effect whose chain draws the emote | used for the emote lifecycle: `PerformEmote` is validated against the table (an id outside it is ignored), emote 0 clears the emote, and the 4 rows apply their effect so the emote animates for every client watching, not only for the performer (`Docs/EMOTES.md` §1-2). An NPC's own emote does not come from a chain at all: **207 monster rows name one in their `behavior` string** (`AlertAndInteractive(emote="calm")`), which the AI now performs while the NPC is in its base behaviour set and clears when it fights (`Docs/EMOTES.md` §7); the 530 `tfPerformEmote` commands and the 359 effects holding them stay unreachable from every monster weapon |
 | `dbcharacter::MonsterMood` / `MonsterMoodName` | 2,268 / 6 | mood -> portrait id (`Neutral`, `Excited`, `Thinking`, `Angry`, `Happy`, `Sad`) | unused - a UI portrait with no field in the character views, so there is nothing for the server to replicate (`Docs/EMOTES.md` §5) |
 | `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the animation commands of the original game's chains, and the only place an animation is named | placeholder records, because the client runs them from the replicated effect they sit in; the two monster weapons above reach one through the effect their ability applies, and so do 25 of the 26 behaviour ability modules (`am1Id`/`am2Id`, above); the rest of these rows belong to player abilities, to the 359 emote effects (`Docs/EMOTES.md` §3) and to effects no monster weapon applies |
@@ -659,9 +659,9 @@ documented rather than wired:
   uncovers `120937`'s animations 22 and 26; the corrected module numbers are in §3's
   table. On the *weapon* side nothing changes: no attack/burst ability of the 14 templates
   hides a command behind those fields, so the 7-of-14 finding above stands.
-- *Hit reactions have no trigger in this build.* The stumble data is complete -
-  `dbcharacter::Stumble` 9452 is the effect a stumble applies, and that effect's
-  own chain is a stumble in full: `RequireHasEffectTag`, then
+- *Hit reactions have no damage-type trigger in this build.* The stumble data is
+  complete - `dbcharacter::Stumble` 9452 is the effect a stumble applies, and that
+  effect's own chain is a stumble in full: `RequireHasEffectTag`, then
   `tfPlayAnimationCommandDef` `DamageHeavy`, then `CombatFlagsCommandDef` with
   `restrict_movement` + `restrict_weapon` + `restrict_abilities` + `restrict_melee`
   + `restrict_interaction`, for `TimeDurationCommandDef` 2,000 ms. The one table
@@ -670,9 +670,11 @@ documented rather than wired:
   or ability row references a stumble id, and the only other chain in the build
   that applies a stumble effect is ability 34039 ("on impact, apply 901 to self"),
   granted by a single `WeaponTemplateModifiers.burst_ability_id` - player gear.
-  The victim-facing event is BaseController-scoped too (`Stumble`: `ushort`,
-  `ushort`, `byte`), so an NPC's stumble has no observer channel but the effect.
-  Picking a trigger would mean inventing the rule, so it is left out.
+  `StumbleService.TryStumble` therefore takes an **explicit** stumble id (cooldown,
+  `only_once`, `restrict_stumble`, and the four direction substates are honoured)
+  and sends the victim-facing BaseController event (`Stumble`: `ushort`, `ushort`,
+  `byte`) to the victim player only. An NPC has no BaseController, so its stumble
+  is the status effect alone. DamageSystem does not invent a default stumble id.
 
 The protocol's only animation-specific observer message is the GSS character
 event `AnimationUpdated` (`ushort` + `byte`, both fields unnamed in
@@ -901,8 +903,11 @@ else XYZ, else three floats), rotated by the current pose
 (`QuaternionEx.Transform(offset, Inverse(rotation))`), not from a monster
 `projectile_offset`. The gunner (or unmanned owner) is the projectile source; damage
 is then scaled by that character's `FrameProgressionLevel` through
-`WeaponDamageMath.DamageLevelScale`. One packet is one round per barrel; the
-gunner's equipped weapon is not fired. Remaining ammo replicates as `ushort[]`
+`WeaponDamageMath.DamageLevelScale`. One packet is one round per barrel. A seated
+gunner's character CombatController still receives `FireWeaponProjectile` for the
+gun in their hands; `CharacterWeaponFire.ShouldFireEquippedWeapon` is false while
+`AttachedToEntity` is a `TurretEntity`, so CombatController / NetworkPlayer /
+WeaponSim skip that second round. Remaining ammo replicates as `ushort[]`
 on the controller (`AmmoData.Ammo`) with slot indices on the observer
 (`AmmoStruct.AmmoIndex`); the turret protocol has no `ReloadWeapon`, so an
 empty clip refills before the round.

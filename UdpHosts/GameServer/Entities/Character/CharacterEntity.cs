@@ -41,6 +41,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     private const float _fallbackRunSpeed = 40.5f; // TODO: Derive from SDB/character stats
     private const float _fallbackSprintSpeed = 7.0f; // TODO: Derive from SDB/character stats
     private const float _fallbackCrouchSpeed = 2.5f; // TODO: Derive from SDB/character stats
+    private readonly HashSet<uint> _stumbledOnce = [];
     private readonly MapMarkerState[] _mapMarkers = new MapMarkerState[MaxMapMarkerCount];
     private readonly MovementSample[] _movementSamples = new MovementSample[_maxMovementSamples];
     private int _movementSampleCount;
@@ -227,6 +228,25 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public sbyte ArmyIsOfficer { get; set; }
     public CharacterStateData CharacterState { get; set; }
     public CombatFlagsData CombatFlags { get; private set; }
+
+    /// <summary>
+    ///     Shard time of the last stumble this character played, or 0 when it has never stumbled.
+    ///     <c>dbcharacter::Stumble.cooldown_ms</c> is measured from this.
+    /// </summary>
+    public uint LastStumbleTime { get; private set; }
+
+    /// <summary>
+    ///     The dialog line this character last spoke, so <c>NotifyDialogScriptComplete</c> can walk
+    ///     <c>dbdialogdata::DialogScript.next_id</c>.
+    /// </summary>
+    public uint CurrentDialogId { get; set; }
+
+    /// <summary>
+    ///     The NPC a player is in a dialog with (the speaker of a private line), or 0. Used to play
+    ///     the follow-up line from the same speaker.
+    /// </summary>
+    public ulong CurrentDialogSpeakerId { get; set; }
+
     public int TimePlayed { get; set; }
     public MaxVital MaxShields { get; private set; }
     public MaxVital MaxHealth { get; private set; }
@@ -525,7 +545,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             },
             ArmyTag = string.Empty
         };
-        ApplyMonsterVisualOptions(staticInfo, monsterInfo);
+        ApplyMonsterVisualOptions(ref staticInfo, monsterInfo);
         SetStaticInfo(staticInfo);
 
         SetHostilityInfo(new HostilityInfoData
@@ -615,9 +635,9 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     ///     <paramref name="info"/>. No-op when the monster has no set, the gender has no
     ///     variants, or the tables are not loaded.
     /// </summary>
-    private void ApplyMonsterVisualOptions(StaticInfoData info, Monster monsterInfo)
+    private void ApplyMonsterVisualOptions(ref StaticInfoData info, Monster monsterInfo)
     {
-        if (info == null || monsterInfo == null || monsterInfo.VisualOptionsId == 0)
+        if (monsterInfo == null || monsterInfo.VisualOptionsId == 0)
         {
             return;
         }
@@ -633,7 +653,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             SDBInterface.GetMonsterVisualOption(monsterInfo.VisualOptionsId),
             female: monsterInfo.Gender == 'F',
             seed: unchecked((uint)EntityId));
-        MonsterVisualOptionsMath.Apply(info, selected);
+        MonsterVisualOptionsMath.Apply(ref info, selected);
     }
 
     public void LoadRemote(CharacterAndBattleframeVisuals remoteData)
@@ -1876,6 +1896,16 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         CombatFlags = value;
         Character_CombatController?.CombatFlagsProp = value;
         Character_CombatView?.CombatFlagsProp = value;
+    }
+
+    /// <summary>Whether this character has already played the <c>only_once</c> stumble <paramref name="stumbleId" />.</summary>
+    public bool HasStumbled(uint stumbleId) => _stumbledOnce.Contains(stumbleId);
+
+    /// <summary>Records that a stumble of <paramref name="stumbleId" /> played at <paramref name="time" />.</summary>
+    public void MarkStumbled(uint stumbleId, uint time)
+    {
+        LastStumbleTime = time;
+        _stumbledOnce.Add(stumbleId);
     }
 
     /// <summary>Checks a flag on the last known combat flags, e.g. the fall damage immunity.</summary>

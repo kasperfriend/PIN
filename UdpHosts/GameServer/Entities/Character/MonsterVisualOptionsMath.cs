@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using AeroMessages.GSS.Character;
 using GameServer.StaticDB.Records.dbcharacter;
 
 namespace GameServer.Entities.Character;
@@ -54,9 +55,9 @@ public static class MonsterVisualOptionsMath
     }
 
     /// <summary>Applies the head and color types of <paramref name="selected" /> onto <paramref name="info" />.</summary>
-    public static void Apply(AeroMessages.GSS.Character.StaticInfoData info, IReadOnlyList<MonsterVisualOption> selected)
+    public static void Apply(ref StaticInfoData info, IReadOnlyList<MonsterVisualOption> selected)
     {
-        if (info == null || selected == null)
+        if (selected == null)
         {
             return;
         }
