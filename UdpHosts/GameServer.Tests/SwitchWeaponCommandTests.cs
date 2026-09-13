@@ -38,8 +38,11 @@ public class SwitchWeaponCommandTests
     [Fact]
     public void Execute_WithPlayAnimation_StampsTheEquipmentLoadTime()
     {
-        var shard = new FakeShard { CurrentTimeLong = Now };
+        var shard = new FakeShard();
         var character = CreateCharacter(shard);
+        // Spawn stamped the load time with the shard's time; move the clock on so the swap's stamp is
+        // distinguishable from it.
+        shard.CurrentTimeLong = Now;
 
         var command = new SwitchWeaponCommand(new SwitchWeaponCommandDef
         {
@@ -55,8 +58,9 @@ public class SwitchWeaponCommandTests
     [Fact]
     public void Execute_WithoutPlayAnimation_LeavesTheEquipmentLoadTimeAlone()
     {
-        var shard = new FakeShard { CurrentTimeLong = Now };
+        var shard = new FakeShard();
         var character = CreateCharacter(shard);
+        shard.CurrentTimeLong = Now;
 
         var command = new SwitchWeaponCommand(new SwitchWeaponCommandDef
         {
@@ -66,6 +70,7 @@ public class SwitchWeaponCommandTests
         });
         Execute(command, character);
 
+        // Still the spawn stamp: the swap happened at a later time and wrote nothing.
         Assert.Equal(60_000u, character.Character_CombatView.EquipmentLoadTimeProp);
     }
 
