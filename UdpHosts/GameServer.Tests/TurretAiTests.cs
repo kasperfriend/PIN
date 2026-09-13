@@ -4,6 +4,7 @@ using AeroMessages.GSS.Character;
 using GameServer.Entities.Character;
 using GameServer.Entities.Deployable;
 using GameServer.Entities.Turret;
+using GameServer.StaticDB;
 using GameServer.StaticDB.Records.dbcharacter;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;

@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Numerics;
 using System.Reflection;
 using AeroMessages.GSS.Turret.View;
+using GameServer.Entities.Character;
 using GameServer.Entities.Turret;
+using GameServer.StaticDB;
 using GameServer.StaticDB.Records.dbcharacter;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;
@@ -112,7 +114,7 @@ public class TurretWeaponFireTests
             ?.SetValue(target, value);
     }
 
-    private static (TurretWeaponFire Fire, RecordingAiProjectileLauncher Launcher, TurretEntity Turret, GameServer.Entities.Character.CharacterEntity Gunner)
+    private static (TurretWeaponFire Fire, RecordingAiProjectileLauncher Launcher, TurretEntity Turret, CharacterEntity Gunner)
         Create(
             FakeNpcAttackDataSource data,
             IReadOnlyList<TurretWeapon> weapons,
