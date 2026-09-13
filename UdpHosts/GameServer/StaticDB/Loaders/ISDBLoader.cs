@@ -85,6 +85,7 @@ public interface ISDBLoader
 
     // dbzonemetadata
     Dictionary<uint, ZoneRecord> LoadZoneRecord();
+    Dictionary<uint, ChunkRecord> LoadChunkRecord();
 
     // apt
     Dictionary<uint, BaseCommandDef> LoadBaseCommandDef();

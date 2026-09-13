@@ -96,6 +96,7 @@ public class SDBInterface
 
     // dbzonemetadata
     private static Dictionary<uint, ZoneRecord> _zoneRecord;
+    private static Dictionary<uint, ChunkRecord> _chunkRecord;
 
     // apt
     private static Dictionary<uint, BaseCommandDef> _baseCommandDef;
@@ -373,6 +374,7 @@ public class SDBInterface
 
         // dbzonemetadata
         _zoneRecord = loader.LoadZoneRecord();
+        _chunkRecord = loader.LoadChunkRecord();
 
         // apt
         _statusEffectData = loader.LoadStatusEffectData();
@@ -843,6 +845,7 @@ public class SDBInterface
 
     // dbzonemetadata
     public static ZoneRecord GetZoneRecord(uint id) => _zoneRecord.GetValueOrDefault(id);
+    public static ChunkRecord GetChunkRecord(uint id) => _chunkRecord?.GetValueOrDefault(id);
 
     // apt
     public static BaseCommandDef GetBaseCommandDef(uint id) => _baseCommandDef.GetValueOrDefault(id);

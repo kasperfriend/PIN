@@ -112,7 +112,9 @@ public sealed class NpcBehaviorParams
             TryGetFloat(prefix + "Chance", out float chance) ? chance : 1f,
             cooldown,
             TryGetFloat(prefix + "MinDist", out float minDistance) ? minDistance : 0f,
-            TryGetFloat(prefix + "MaxDist", out float maxDistance) ? maxDistance : float.MaxValue);
+            TryGetFloat(prefix + "MaxDist", out float maxDistance) ? maxDistance : float.MaxValue,
+            TryGetFloat(prefix + "NavToDist", out float navToDistance) ? navToDistance : 0f,
+            TryGetInt(prefix + "NavTimeout", out int navTimeoutMs) ? navTimeoutMs : 0);
         return true;
     }
 

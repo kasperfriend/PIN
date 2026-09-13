@@ -5,7 +5,7 @@ namespace Shared.Collision.ZoneLoading;
 
 public static class ChunkOriginCalculator
 {
-    private const float _chunkSize = 512f;
+    public const float ChunkSize = 512f;
     private const uint _coralForestZoneId = 448;
     private const uint _sertaoZoneId = 1030;
 
@@ -52,14 +52,27 @@ public static class ChunkOriginCalculator
             {
                 var origin = CalculateOrigin(maxCoordX, maxCoordY, centerIndexX, centerIndexY, refLayer.X, refLayer.Y);
                 string chunkName = $"{rangeLayer.CubeFaceId}_{refLayer.X:D4}_{refLayer.Y:D4}";
-                chunkRefs.Add(new ZoneChunkRef { Name = chunkName, Origin = origin });
+                chunkRefs.Add(new ZoneChunkRef
+                {
+                    Name = chunkName,
+                    Origin = origin,
+                    X = refLayer.X,
+                    Y = refLayer.Y,
+                    ChunkRecordId = refLayer.ChunkRecordId,
+                });
             }
 
             foreach (var ref2Layer in refs2)
             {
                 var origin = CalculateOrigin(maxCoordX, maxCoordY, centerIndexX, centerIndexY, ref2Layer.X, ref2Layer.Y);
                 string chunkName = $"{rangeLayer.CubeFaceId}_{ref2Layer.X:D4}_{ref2Layer.Y:D4}";
-                chunkRefs.Add(new ZoneChunkRef { Name = chunkName, Origin = origin });
+                chunkRefs.Add(new ZoneChunkRef
+                {
+                    Name = chunkName,
+                    Origin = origin,
+                    X = ref2Layer.X,
+                    Y = ref2Layer.Y,
+                });
             }
         }
 
@@ -74,8 +87,8 @@ public static class ChunkOriginCalculator
         double coordMultiX = centerIndexX - coordIndexX;
         double coordMultiY = centerIndexY - coordIndexY;
 
-        int originX = (int)(coordMultiX * _chunkSize);
-        int originY = (int)(coordMultiY * _chunkSize);
+        int originX = (int)(coordMultiX * ChunkSize);
+        int originY = (int)(coordMultiY * ChunkSize);
 
         return new Vector3(originX, originY, 0);
     }

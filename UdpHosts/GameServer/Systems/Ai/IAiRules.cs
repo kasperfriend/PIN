@@ -19,18 +19,19 @@ public interface IAiRules
     ///     and makes the aggro volume a cylinder instead of a squashed sphere.
     /// </summary>
     /// <remarks>
-    ///     Without it a mob two storeys below a player walks up to the wall under them and stays
-    ///     engaged forever (there is no pathfinding to solve the height difference yet), which reads
-    ///     as "the mob found me through the floor".
+    ///     Without it a mob two storeys below a player can route to the wall under them and stay
+    ///     engaged forever (navigation does not invent stairs or jumps), which reads as "the mob
+    ///     found me through the floor".
     /// </remarks>
     float MaxAcquisitionHeightDelta { get; }
 
     /// <summary>
     ///     Distance in metres at which a chasing NPC switches into the attack state, measured
     ///     straight-line (including the height difference, see <see cref="AiVectors.Distance" />).
-    ///     This is the monster's reach: as long as PIN has no NPC projectiles it is a melee reach,
-    ///     so it is deliberately close to the monster's own melee weapon row
-    ///     (<c>dbitems::WeaponTemplates.range</c>, e.g. 2.6 m for "NPC Melee Medium (Spyder)").
+    ///     This is the fallback monster reach when no weapon profile resolves. A resolved ranged
+    ///     weapon supplies its own attack range; the fallback is deliberately close to the
+    ///     monster's melee weapon row (<c>dbitems::WeaponTemplates.range</c>, e.g. 2.6 m for
+    ///     "NPC Melee Medium (Spyder)").
     /// </summary>
     float AttackRange { get; }
 

@@ -45,6 +45,8 @@ UdpHosts/GameServer/Systems/Ai/
 ├── AiSpeeds.cs                 monster row speed -> metres per second
 ├── AiAttackDamage.cs           monster damage rating -> what one swing is worth (fallback)
 ├── AiVectors.cs                horizontal / straight-line distance + character facing maths
+├── NpcPathfinder.cs             compatibility routes with original pathing-cost/exclusion hooks
+├── NavigationMesh.cs             collision-derived weighted triangle navigation graph
 ├── NpcAttackProfile.cs         everything one NPC attack needs, resolved from the DB
 ├── NpcAttackResolver.cs        monster -> weapon -> template/attributes/ammo -> profile
 │                               (ResolveWeapon is also how a turret fires: dbcharacter::TurretWeapon)
@@ -235,10 +237,26 @@ hittable where it now stands) and broadcasting a
 `AeroMessages.GSS.Character.Event.CurrentPoseUpdate` on the unreliable GSS channel
 - the same message `MovementRelay` uses to show one player's movement to another.
 
-Before stepping, a short forward ray cast checks for a wall; if the way is
-blocked the NPC holds position instead of walking through it. With no collision
-data loaded (`LoadMapsCollision` off) nothing can block and nothing occludes, so
-every target counts as visible.
+Before stepping, the NPC follows a collision-derived navigation query. The loaded zone
+collision surfaces are filtered into walkable faces and connected into a material-weighted
+triangle graph. A direct segment is used only when the graph route can be safely simplified;
+otherwise graph waypoints are followed, with an NPC-sized corridor probe at torso height on
+every edge. If no route exists, the NPC holds position instead of walking through geometry.
+When a zone has no usable navigation mesh, the bounded collision grid remains as a
+compatibility fallback. With no collision data loaded (`LoadMapsCollision` off) the sampler
+is flat and nothing can block or occlude, so every target counts as visible.
+
+**Original-game parity status.** This is not a claim that the planner is the original
+Firefall implementation. The repository contains the inputs (`dbphysicsmaterials`
+`AIPathingCost`, `dbzonemetadata` chunk `ExcludeFromPathing`, CAIS
+`am*NavToDist`/`am*NavTimeout`, and zone `ZonePathLayer` records), but it does not contain
+the original runtime navmesh/query implementation. The engine now extracts collision triangles,
+retains their physics-material ids where the Havok data exposes them, builds a static
+material-weighted triangle graph per loaded zone, applies chunk-level exclusions, and uses
+CAIS navigation distance/timeout requests. A compatibility grid remains only when no
+collision-derived mesh can be built. This is the closest data-driven reconstruction currently
+possible from the repository, but it is not byte-for-byte original-game parity until the
+original baked navmesh/query rules are recovered.
 
 ### What an NPC animates
 
@@ -531,11 +549,12 @@ before, exactly like a server-only weapon chain - no behaviour string in the bui
 such a module (all 26 reach a client command once every chain the engine runs is followed,
 `120937` included), so the gate protects against a data change rather than a shipped row.
 
-What the strings state and the engine does **not** carry: `am*Timeout` (a watchdog),
-`am*NavToDist`/`am*NavTimeout` (the module's own navigation) and
-`am*Targeted`/`am*Facing`/`am*FacingDuring` (requirements an attack window already
-meets). The database gives no event that fires a module, so the window the brain asked to
-attack in is the trigger.
+The module's navigation fields are carried as well: `am*NavToDist` becomes the
+requested approach distance and `am*NavTimeout` ends that request if the NPC cannot
+reach it. `am*Timeout` and `am*Targeted`/`am*Facing`/`am*FacingDuring` still are not
+full behaviour-tree gates; an attack window has a live target and the server does not
+possess the original CAIS tree runner. The database gives no independent event that
+fires a module, so the window the brain asked to attack in remains the trigger.
 
 **The displacement a chain declares now happens (`MovementSlide`).** The one part of a
 module's chains the engine did not execute was their movement: `aptfs::MovementSlideCommandDef`
@@ -945,11 +964,12 @@ sinking. Spawned mobs are snapped the same way before they are scoped in
 (`PhysicsEngine.FindGround`), so zone entries with a placeholder `Z` of `0` land
 on the ground instead of spawning deep under it.
 
-The probe only tests static geometry (a nearby player or mob cannot be mistaken
-for the ground), and the wall check ray is raised to torso height so it does not
-graze the terrain the mob is standing on. When no zone collision data is loaded
-(`LoadMapsCollision` off, or no map files) both probes are no-ops and movement
-stays horizontal, exactly as before.
+The ground sampler only tests static geometry (a nearby player or mob cannot be mistaken
+for the ground). Navigation uses the same static geometry for a small, NPC-sized corridor
+probe at two torso heights and routes around blocked cells with `NpcPathfinder`; a direct
+route remains the fast path. When no zone collision data is loaded (`LoadMapsCollision`
+off, or no map files), both probes are no-ops and movement stays horizontal, exactly as
+before.
 
 ---
 
@@ -974,9 +994,9 @@ stays horizontal, exactly as before.
   (see [What an NPC animates](#what-an-npc-animates), which lists the animation rows
   that are and are not used, and `Docs/EMOTES.md` §7). What is still untouched: the
   engine does not run a monster's behaviour tree, so the *tree's* other actions (taunts,
-  wander idles, interaction poses, and the navigation the `am*NavToDist` parameters
-  describe) do not happen - the emote parameter of the set it is in and its `am1`/`am2`
-  modules do; a module's own movement *is* applied now (`MovementSlide`, above - the dodge
+  wander idles and interaction poses) do not happen - the emote parameter of the set it is in,
+  its `am1`/`am2` modules and their `am*NavToDist`/`am*NavTimeout` approach request do;
+  a module's own movement *is* applied now (`MovementSlide`, above - the dodge
   pair's 5 m in 667 ms, the Move Then Fire lunge's 20 m in 1 s, 39066's rise), so the only
   placeholders left on the animation paths are the ones whose semantics this build cannot
   establish from the database (`aptgss::AbilityFinished`, which the dodge's own remove
@@ -1010,12 +1030,21 @@ stays horizontal, exactly as before.
   templates (not per-monster items) carry `damage_per_round` 1; those rows still
   resolve through the 954/1145 chain above, so the placeholder only survives where
   a weapon item has neither attribute row - the rating share covers it.
-* **No pathfinding, no climbing.** Movement is a straight line towards the goal
-  plus a wall check, always at the spawn's own height band. A mob behind a low
-  obstacle will stand there until the leash or the give-up timer fires, and a mob
-  you are standing over - on a roof, on a ledge, on top of a vehicle - simply
-  cannot reach you. It does not jump, climb or walk around the height difference;
-  it circles at its own ground level until the leash drags it home.
+* **Navigation is collision-derived and material-weighted, but not yet the original runtime
+  navmesh.** When a zone loads, its collision triangles are retained as walkable faces,
+  adjacent faces form a graph, `AIPathingCost` weights graph edges, and chunk
+  `ExcludeFromPathing` removes excluded faces. NPCs query that graph first; the old bounded
+  collision grid is only the fallback when no mesh can be built. Runtime corridor probes
+  still use the same static Bepu geometry as line of sight, with body radius and height taken
+  from `dbcharacter::Monster` when available. Routes are refreshed when the target moves,
+  when collision changes or after 750 ms, and the movement state is `Running` while chasing,
+  `Walking` while repositioning in attack range, and `Standing` when no route is available.
+  A step higher than 1.25 m is not traversable: the engine does not invent jumps, ladders or
+  climbing, and a player on a separate roof/floor remains unreachable. The triangle graph is
+  the closest reconstruction possible with the checked-in assets; exact original polygon
+  generation, off-mesh links, tie-breaking and dynamic avoidance still require original
+  navmesh/runtime evidence. With maps collision disabled the sampler falls back to the current
+  plane and navigation is intentionally a direct no-op for test and development shards.
 * **No SDB behaviour trees.** `Monster.Behavior`, `BehaviorOffensive` and
   `BehaviorDefensive` name the live game's AI behaviour assets; PIN ignores them
   and runs one state machine for every monster type.

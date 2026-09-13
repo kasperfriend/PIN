@@ -18,6 +18,7 @@ using GameServer.Systems.ProjectileSim;
 using GameServer.Systems.SystemEvents;
 using Serilog;
 using Shared.Collision;
+using Shared.Collision.Navigation;
 using Shared.Collision.ZoneLoading;
 
 namespace GameServer.Physics;
@@ -63,6 +64,7 @@ public partial class PhysicsEngine
     private readonly bool _isDebugPipeClient;
 
     private TypedIndex _fallbackShape;
+    private NavigationMesh? _navigationMesh;
     private int _debugEntityIndex = -1;
     private double _debugTimeAccumulator;
 
@@ -92,7 +94,13 @@ public partial class PhysicsEngine
 
         _fallbackShape = Simulation.Shapes.Add(new Sphere(0.9f));
 
-        _zoneLoader = new ZoneLoader(Simulation, BufferPool, ThreadDispatcher, mapsPath, cachePath);
+        _zoneLoader = new ZoneLoader(
+            Simulation,
+            BufferPool,
+            ThreadDispatcher,
+            mapsPath,
+            cachePath,
+            chunkId => SDBInterface.GetChunkRecord(chunkId)?.ExcludeFromPathing);
         _rigidBodyLoader = new RigidBodyLoader(Simulation, BufferPool, ThreadDispatcher, assetDBPath, cachePath);
         PoseLoader = new PoseLoader.PoseLoader(assetDBPath);
 
@@ -120,7 +128,42 @@ public partial class PhysicsEngine
         if (ts.HasValue)
         {
             ZoneFileTimestamp = ts.Value;
+            _navigationMesh = _zoneLoader.NavigationTriangles.Count > 0
+                ? new NavigationMesh(
+                    _zoneLoader.NavigationTriangles,
+                    materialId => SDBInterface.GetPhysicsMaterial(materialId)?.AIPathingCost ?? 1f,
+                    _zoneLoader.IsNavigationExcluded)
+                : null;
+            _logger.Information(
+                "Zone {ZoneId}: navigation mesh has {TriangleCount} source triangles and {FaceCount} walkable faces",
+                zoneId,
+                _zoneLoader.NavigationTriangles.Count,
+                _navigationMesh?.FaceCount ?? 0);
         }
+        else
+        {
+            _navigationMesh = null;
+        }
+    }
+
+    /// <summary>Whether the loaded zone supplied original exclusions and walkable collision surfaces.</summary>
+    public bool HasNavigationExclusions => _zoneLoader.HasNavigationExclusions;
+
+    /// <summary>Tests the original zone chunk metadata's excluded-from-pathing regions.</summary>
+    public bool IsNavigationExcluded(Vector3 point) => _zoneLoader.IsNavigationExcluded(point);
+
+    /// <summary>Whether a collision-derived, material-weighted navigation mesh is available.</summary>
+    public bool HasNavigationMesh => _navigationMesh != null && _navigationMesh.FaceCount > 0;
+
+    /// <summary>Queries the loaded collision-derived navigation mesh, if one is available.</summary>
+    public IReadOnlyList<Vector3>? FindNavigationPath(
+        Vector3 start,
+        Vector3 goal,
+        Func<Vector3, Vector3, bool> blocked,
+        float maxStepHeight,
+        float maxSearchDistance = 128f)
+    {
+        return _navigationMesh?.FindPath(start, goal, blocked, maxStepHeight, maxSearchDistance);
     }
 
     public StaticDescription[] LoadRigidBody(string assetId)

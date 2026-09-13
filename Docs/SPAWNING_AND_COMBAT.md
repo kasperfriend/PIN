@@ -337,7 +337,11 @@ Two things about that gate matter in play:
   its own range, because a bullet does not care about the floor between the two of
   you. The acquisition band (`MaxAcquisitionHeightDelta`, 12 m) is deliberately
   wider than either, so a mob still notices you up there and comes looking for a
-  way up; there is no pathfinding, so a melee mob can only stand under you.
+  way up with its collision-derived, material-weighted route; it still does not invent stairs,
+  jumps or a route between disconnected floor levels. The route query uses the original
+  `AIPathingCost` and chunk `ExcludeFromPathing` inputs where the collision assets expose them.
+  It remains a reconstruction rather than byte-for-byte original-game navigation because the
+  original baked navmesh and query rules are not present.
 
 Ranged mobs run out of rounds like anyone else: the weapon's clip
 (`dbitems::WeaponTemplates.base_clip_size`, or the item's attribute 956) is how many

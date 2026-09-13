@@ -15,6 +15,13 @@ public interface IAiMonsterStats
     (float NormalSpeed, float FastSpeed) GetSpeeds(uint characterTypeId);
 
     /// <summary>
+    ///     The monster's original navigation body dimensions from <c>dbcharacter::Monster</c>.
+    ///     These dimensions are used for corridor clearance; zero values mean the database row
+    ///     did not provide a usable dimension and the navigation fallback is used.
+    /// </summary>
+    (float BodyRadius, float BodyHeight) GetBodyDimensions(uint characterTypeId);
+
+    /// <summary>
     ///     The monster's behaviour strings: the base <c>behavior</c> column (the behaviour set it runs while
     ///     it has no target, where its idle emote lives) and the <c>behavior_offensive</c> one (the set it
     ///     runs while it is fighting). Either may be empty or carry no parentheses at all, and the third

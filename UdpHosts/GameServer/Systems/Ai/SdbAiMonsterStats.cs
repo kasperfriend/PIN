@@ -37,6 +37,12 @@ public class SdbAiMonsterStats : IAiMonsterStats
         return (monster.NormalSpeed, monster.FastSpeed);
     }
 
+    public (float BodyRadius, float BodyHeight) GetBodyDimensions(uint characterTypeId)
+    {
+        var monster = SDBInterface.GetMonster(characterTypeId);
+        return monster == null ? (0f, 0f) : (monster.BodyRadius, monster.BodyHeight);
+    }
+
     public (string Base, string Offensive) GetBehaviors(uint characterTypeId)
     {
         var monster = SDBInterface.GetMonster(characterTypeId);

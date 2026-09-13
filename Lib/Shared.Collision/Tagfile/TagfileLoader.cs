@@ -4,6 +4,7 @@ using BepuPhysics.Collidables;
 using BepuUtilities;
 using BepuUtilities.Memory;
 using Serilog;
+using Shared.Collision.Navigation;
 using Shared.Collision.Tagfile.Binary;
 using Shared.Collision.Tagfile.Models;
 using static Shared.Collision.Tagfile.BepuData;
@@ -33,7 +34,12 @@ public class TagfileLoader
         return ProcessTagfileBytes(hkxBytes, [], []);
     }
 
-    public StaticDescription[] ProcessTagfileBytes(byte[] hkxBytes, VertBlockContent[] vertBlocks, IndiceBlockContent[] indiceBlocks)
+    public StaticDescription[] ProcessTagfileBytes(
+        byte[] hkxBytes,
+        VertBlockContent[] vertBlocks,
+        IndiceBlockContent[] indiceBlocks,
+        IReadOnlyList<uint>? physicsMaterialIds = null,
+        Action<IReadOnlyList<NavigationTriangle>>? navigationSink = null)
     {
         try
         {
@@ -56,6 +62,14 @@ public class TagfileLoader
             {
                 _logger.Error("ProcessTagfileBytes has no root object");
                 return [];
+            }
+
+            if (navigationSink != null)
+            {
+                navigationSink(NavigationGeometryExtractor.Extract(
+                    asset,
+                    root,
+                    physicsMaterialIds ?? Array.Empty<uint>()));
             }
 
             return ProcessObject(root, ref myLayer);
