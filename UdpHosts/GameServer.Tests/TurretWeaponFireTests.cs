@@ -252,8 +252,14 @@ public class TurretWeaponFireTests
         Assert.Equal(2, launcher.Shots.Count);
         Assert.Equal(AmmoId, launcher.Shots[0].AmmoId);
         Assert.Equal(secondAmmoId, launcher.Shots[1].AmmoId);
-        Assert.Equal(TurretPosition + new Vector3(0.2f, 0f, 1.3f), launcher.Shots[0].Origin);
-        Assert.Equal(TurretPosition + new Vector3(-0.2f, 0f, 1.3f), launcher.Shots[1].Origin);
+        Assert.Equal(
+            TurretPosition + TurretWeaponFire.RotateByPose(new Vector3(0.2f, 0f, 1.3f), turret),
+            launcher.Shots[0].Origin,
+            new Vector3Comparer());
+        Assert.Equal(
+            TurretPosition + TurretWeaponFire.RotateByPose(new Vector3(-0.2f, 0f, 1.3f), turret),
+            launcher.Shots[1].Origin,
+            new Vector3Comparer());
     }
 
     [Fact]
