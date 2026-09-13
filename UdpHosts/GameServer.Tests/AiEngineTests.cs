@@ -725,6 +725,80 @@ public class AiEngineTests
         Assert.Equal(cancelledAtSpawn, npc.Character_CombatView.WeaponReloadCancelledProp);
     }
 
+    /// <summary>
+    ///     A magazine profile whose weapon names the empty-clip ability the build's Tesla Rifle 2.0 (template
+    ///     12132, 5 monster slots) carries: ability 39239, which applies effect 10480 - the dry-fire sound, its
+    ///     muzzle particles and <c>restrict_weapon</c> for the 1.5 s the effect lives.
+    /// </summary>
+    private static NpcAttackProfile ClipEmptyProfile() => MagazineProfile() with
+    {
+        ClipEmptyAbilityId = 39_239,
+        ClipEmptyClientFeedback = true,
+    };
+
+    [Fact]
+    public void ArmedNpc_EmptyingTheMagazine_RunsTheWeaponsEmptyClipAbility()
+    {
+        var stats = new FakeAiMonsterStats { AttackProfile = ClipEmptyProfile() };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);                   // Idle -> Chase
+        Tick(shard, FirstTick + Step);            // burst 1: 2 rounds -> 1
+
+        // Nothing is empty yet, so the weapon's own empty hook has not run.
+        Assert.Empty(abilities.Activations);
+
+        Tick(shard, FirstTick + 2500 + Step);     // burst 2 empties the magazine
+
+        var empty = Assert.Single(abilities.Activations);
+        Assert.Equal(39_239u, empty.AbilityId);
+        Assert.Equal(62_550u, empty.Time);
+
+        // Fired once per empty magazine, not once per tick: the reload it triggered comes first, and the next
+        // burst (after the reload) refills the clip without running the hook again.
+        Tick(shard, 63_000);
+        Tick(shard, 63_550);
+        Assert.Single(abilities.Activations);
+
+        // The magazine is full again, so the next burst spends it down to one round - still not empty.
+        Tick(shard, 65_050);
+        Assert.Single(abilities.Activations);
+
+        Tick(shard, 67_550);
+        Assert.Equal(2, abilities.Activations.Count);
+    }
+
+    [Fact]
+    public void EmptyClipAbilityThatCarriesNoClientCommand_IsNotRun()
+    {
+        // The other two rows that name a clip_empty_ability (templates 11975 and 11971, 2 slots) point at 35842,
+        // whose chain is a RegisterTimedTriggerCommandDef and nothing else: server-side, so the engine leaves it
+        // exactly like a server-only burst chain.
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = MagazineProfile() with { ClipEmptyAbilityId = 35_842, ClipEmptyClientFeedback = false },
+        };
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: new RecordingAiProjectileLauncher(),
+            abilityActivator: abilities);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Tick(shard, FirstTick + 2500 + Step);     // the magazine runs dry here
+
+        Assert.Empty(abilities.Activations);
+    }
+
     [Fact]
     public void ArmedNpc_ReloadOutlastingTheCadence_FiresAsSoonAsTheMagazineIsFull()
     {

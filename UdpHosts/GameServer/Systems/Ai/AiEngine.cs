@@ -393,6 +393,10 @@ public class AiEngine
                         // time - never gets here.
                         if (profile is { Reloads: true } && !npc.Magazine.CanFire(magazineCost, currentTime))
                         {
+                            // ...and the weapon's own empty-clip ability runs first: the dry-fire sound and
+                            // the muzzle particles of effect 10480 for the 1.5 s it lives, which is the
+                            // database's own answer to "the magazine just ran out".
+                            ActivateClipEmptyAbility(npc, currentTime);
                             StartReload(npc, currentTime);
                         }
                     }
@@ -705,6 +709,25 @@ public class AiEngine
 
         float register = profile.ChargeUpMs > 0 ? profile.ChargeUpMs / 1000f : float.NaN;
         return _abilityActivator.Activate(npc.Entity, abilityId, (uint)currentTime, register);
+    }
+
+    /// <summary>
+    ///     Runs the weapon's own empty-clip ability, the hook the database gives the moment a magazine runs
+    ///     dry (<c>dbitems::WeaponTemplates.clip_empty_ability</c>). Gated exactly like the burst's ability: a
+    ///     hook whose chains carry nothing a client executes is left alone, and a shard with no aptitude
+    ///     system simply does not run it (see <see cref="INpcAbilityActivator" />). Nothing is passed as the
+    ///     register - the rows state no charge for this hook - and the hook is fired once per empty burst,
+    ///     from the same branch that starts the reload.
+    /// </summary>
+    private void ActivateClipEmptyAbility(NpcBrain npc, ulong currentTime)
+    {
+        var profile = npc.Profile;
+        if (profile == null || !profile.ClipEmptyClientFeedback || profile.ClipEmptyAbilityId == 0)
+        {
+            return;
+        }
+
+        _abilityActivator.Activate(npc.Entity, profile.ClipEmptyAbilityId, (uint)currentTime, float.NaN);
     }
 
     /// <summary>

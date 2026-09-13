@@ -128,6 +128,11 @@ public sealed class NpcAttackResolver
         // themselves (in which case the AI must not land its own on top).
         var abilities = NpcWeaponAbilities.Scan(_data, template.AttackAbility, template.BurstAbility);
 
+        // The hook the weapon fires when the magazine runs dry is a separate ability from the burst's, with a
+        // chain of its own, so it is scanned separately (a fresh visited set): whether anything in it is
+        // something a client draws or plays decides whether the engine activates it at all.
+        var emptyAbility = NpcWeaponAbilities.ScanAbility(_data, template.EmptyAbility);
+
         uint interval = NpcAttackDamageMath.ResolveAttackIntervalMs(
             behaviorParams.TriggerPullTimeMs,
             behaviorParams.FireRestDurationMs,
@@ -215,6 +220,8 @@ public sealed class NpcAttackResolver
             ChainClientFeedback = abilities.ClientFeedback,
             ChainDeliversDamage = abilities.DeliversDamage,
             MeleeAbilityId = template.MeleeAbility,
+            ClipEmptyAbilityId = template.EmptyAbility,
+            ClipEmptyClientFeedback = emptyAbility.ClientFeedback,
             MuzzleOffset = muzzleOffset,
             CreatureDamageModifier = creatureDamageModifier,
             CreatureWeaponDamageModifier = weaponModifier,

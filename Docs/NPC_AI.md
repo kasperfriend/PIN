@@ -312,10 +312,32 @@ magic finger 12183.
 The other 7 templates with attack/burst ids (27 slots) carry no client command at all:
 the Vorrax beam's stat modifier 356, the missile launcher's 251, the overcharge stat
 modifier 11326, and chains that reach no effect, so they keep the AI's own attack and
-running them would change combat numbers without changing what anyone sees. Five more
-templates (30 slots) carry their ids only in the hooks the engine does not activate
-(the `overcharge_ability` of 12129 and 60, the `clip_empty_ability` of 12132, 11975 and
-11971); three of those chains do carry client feedback and are the next step.
+running them would change combat numbers without changing what anyone sees.
+
+Three more templates (25 slots) carry their ids in the **empty-clip hook**
+(`clip_empty_ability`), which is now run: 12132 (Tesla Rifle 2.0, 5 slots) names 39239,
+whose chain is `ActiveInitiation` -> apply effect 10480 -> `Return`, and effect 10480 is
+the dry-fire sound, two muzzle particles and `restrict_weapon` for the 1.5 s it lives
+(behind a `RequireWeaponArmed` duration gate). The trigger is not a guess and not one
+invented here: the column is named for the moment the magazine runs out, and the AI
+already tracks that state - the branch that empties the clip calls the hook and then
+starts the reload, so the mob's empty click sounds exactly when its clip empties. The
+other two rows (11975 and 11971, 2 slots) name 35842, whose chain is a
+`RegisterTimedTriggerCommandDef` and nothing else: server-side, so the engine leaves it
+alone exactly like a server-only burst chain - the same `ClientFeedback` gate, read off
+the hook's own chain.
+
+Two templates (23 slots) carry an **`overcharge_ability`** (39467, on the plasma cannon
+12129 and the fusion cannon 60) and the engine does **not** run it, because the event that
+fires it cannot be established from this build. The data around it: both weapons state
+`ms_chargeup` = `ms_chargeup_max` = 4000 ms, `ms_overcharge_delay` = 2500 ms, and
+`fire_type` 6 (the client's charge-up mode), and the ability applies effect 10925 - three
+muzzle particle emitters and a looping sound, held for 2500 ms behind the same
+`RequireWeaponArmed` gate. Nothing in the build defines *what* the character must be
+doing when the delay elapses: the client owns the charge state (that is the one column
+the row has no server-side counterpart for), and an AI that invents a charge-hold would
+change how those mobs shoot rather than make them show what the original game shows.
+Documented rather than guessed (see [Known gaps](#6-known-gaps)).
 
 The two weapons that animate, command by command:
 
@@ -866,7 +888,8 @@ stays horizontal, exactly as before.
   `dialogScript=` are dialog rather than animation; the other 7
   weapon templates with attack/burst ids carry no client command, so their
   effects (charge states, cone effects, stat modifiers) change numbers rather than
-  what anyone sees; the
+  what anyone sees, and the overcharge vent (23 slots, above) is documented rather than
+  fired because the build states its delay but not the event; the
   protocol's `AnimationUpdated` observer event is never sent, so the `apttf::tf*`
   animations only reach a client through the status effect the effect-data chain
   replicates; and stumble/hit-reaction animations (`dbcharacter::Stumble`,

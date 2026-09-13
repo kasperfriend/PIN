@@ -184,6 +184,22 @@ public sealed record NpcAttackProfile
     public uint MeleeAbilityId { get; init; }
 
     /// <summary>
+    ///     The ability the weapon fires when its magazine runs dry (<c>dbitems::WeaponTemplates.clip_empty_ability</c>),
+    ///     or 0. The data says what the empty click is: template 12132 (Tesla Rifle 2.0) names 39239, which applies
+    ///     effect 10480 - the dry-fire sound and its two muzzle particles, plus <c>restrict_weapon</c> for the 1.5 s
+    ///     the effect lives, behind a <c>RequireWeaponArmed</c> duration gate.
+    /// </summary>
+    public uint ClipEmptyAbilityId { get; init; }
+
+    /// <summary>
+    ///     Whether the clip-empty ability's chains carry a command a client executes. A weapon whose empty ability
+    ///     is server-side alone (35842, the <c>clip_empty_ability</c> of templates 11975 and 11971: a
+    ///     <c>RegisterTimedTriggerCommandDef</c> and nothing else) is not activated - running it would change
+    ///     nothing a client shows, exactly like a server-only burst chain.
+    /// </summary>
+    public bool ClipEmptyClientFeedback { get; init; }
+
+    /// <summary>
     ///     Local-space muzzle offset (<c>dbcharacter::Monster.projectile_offset</c>). When it is
     ///     zero the engine uses a chest-height offset instead.
     /// </summary>

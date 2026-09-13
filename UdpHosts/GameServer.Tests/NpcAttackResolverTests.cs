@@ -74,6 +74,48 @@ public class NpcAttackResolverTests
     }
 
     [Fact]
+    public void Resolve_CarriesTheWeaponsEmptyClipAbilityAndWhatItsChainDoes()
+    {
+        // Template 12132 (Tesla Rifle 2.0) names 39239 as its clip_empty_ability; that ability applies effect
+        // 10480, whose apply chain is a tfAudioFeedback and two tfParticleEffectAsset commands - so the hook is
+        // something a client plays and the engine activates it. The trigger is not a guess: it is the moment the
+        // magazine runs dry, which is the state the column is named for and the AI already tracks.
+        var template = RangedTemplate();
+        template.EmptyAbility = 39_239;
+        template.BaseClipSize = 2;
+        template.AmmoPerBurst = 1;
+        var data = DataWith(template)
+            .WithAbility(39_239, 1_263_441)
+            .WithCommand(1_263_441, (ushort)CommandType.ActiveInitiation, next: 1_263_440)
+            .WithCommand(1_263_440, (ushort)CommandType.ImpactApplyEffect, effectId: 10_480)
+            .WithStatusEffect(10_480, applyChain: 1_263_445)
+            .WithCommand(1_263_445, (ushort)CommandType.AudioFeedback);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(39_239u, profile.ClipEmptyAbilityId);
+        Assert.True(profile.ClipEmptyClientFeedback);
+    }
+
+    [Fact]
+    public void Resolve_AServerOnlyEmptyClipAbility_IsCarriedButNotRunnable()
+    {
+        // Templates 11975 and 11971 name 35842, whose chain is RegisterTimedTriggerCommandDef alone.
+        var template = RangedTemplate();
+        template.EmptyAbility = 35_842;
+        template.BaseClipSize = 5;
+        template.AmmoPerBurst = 1;
+        var data = DataWith(template)
+            .WithAbility(35_842, 1_370_713)
+            .WithCommand(1_370_713, (ushort)CommandType.RegisterTimedTrigger);
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+
+        Assert.Equal(35_842u, profile.ClipEmptyAbilityId);
+        Assert.False(profile.ClipEmptyClientFeedback);
+    }
+
+    [Fact]
     public void Resolve_UnknownMonster_IsUnarmed()
     {
         var profile = CreateResolver(new FakeNpcAttackDataSource()).Resolve(999, 1);
