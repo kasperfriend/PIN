@@ -96,6 +96,35 @@ public sealed record NpcAttackProfile
     public byte FireType { get; init; }
 
     /// <summary>
+    ///     Template <c>slot_index</c>, the PRNG seed a player shot uses for spread. Carried so an NPC
+    ///     pellet of the same weapon scatters from the same slot the client would have used.
+    /// </summary>
+    public byte SlotIndex { get; init; }
+
+    /// <summary>
+    ///     Template <c>min_spread</c> (with item/slot modifiers already applied). The floor of the
+    ///     weapon's cone; 0 on a weapon the database gives no spread.
+    /// </summary>
+    public float MinSpread { get; init; }
+
+    /// <summary>Template <c>max_spread</c>, the ceiling of the weapon's cone.</summary>
+    public float MaxSpread { get; init; }
+
+    /// <summary>
+    ///     Template <c>starting_spread</c>, the fraction of the (max - min) band the first shot of a
+    ///     standing character opens at. See <see cref="NpcAttackSpreadMath.ResolveSpreadPct" />.
+    /// </summary>
+    public float StartingSpread { get; init; }
+
+    /// <summary>
+    ///     The spread percent one standing NPC attack fires at: the first-shot cone of the weapon's
+    ///     own spread profile, with the item's attribute 958 applied when it carries one. 0 on a
+    ///     weapon the database gives no spread, which is every melee row. See
+    ///     <see cref="NpcAttackSpreadMath" />.
+    /// </summary>
+    public float SpreadPct { get; init; }
+
+    /// <summary>
     ///     Length of one attack's animation in milliseconds, straight from the template's burst
     ///     columns (<c>ms_burst_duration</c> when the burst is fired over time, otherwise
     ///     <c>ms_per_burst</c>). This is the window the engine marks with

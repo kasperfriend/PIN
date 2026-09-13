@@ -185,6 +185,46 @@ public class NpcAttackResolverTests
         Assert.Equal(4, profile.AmmoPerBurst);
         Assert.Equal(700u, profile.ReloadTimeMs);
         Assert.True(profile.Reloads);
+
+        // A template the test does not give a spread: the cone is 0 and the burst stays on the aim.
+        Assert.Equal(0f, profile.SpreadPct);
+        Assert.Equal(0f, profile.MinSpread);
+        Assert.Equal(0f, profile.MaxSpread);
+        Assert.Equal(0f, profile.StartingSpread);
+    }
+
+    [Fact]
+    public void Resolve_RangedWeapon_CarriesTheWeaponsFirstShotCone()
+    {
+        // NPC Guard Rifle shape: min 2, max 8, starting 0.5, no attribute 958. The standing first-shot
+        // cone is the midpoint of the band, the same number a player would get from the same row.
+        var template = RangedTemplate();
+        template.MinSpread = 2f;
+        template.MaxSpread = 8f;
+        template.StartingSpread = 0.5f;
+        template.SlotIndex = 2;
+
+        var profile = CreateResolver(DataWith(template)).Resolve(MonsterId, 45);
+
+        Assert.Equal(2, profile.SlotIndex);
+        Assert.Equal(2f, profile.MinSpread);
+        Assert.Equal(8f, profile.MaxSpread);
+        Assert.Equal(0.5f, profile.StartingSpread);
+        Assert.Equal(5f, profile.SpreadPct);
+    }
+
+    [Fact]
+    public void Resolve_WeaponSpreadAttribute_ScalesTheCone()
+    {
+        // Attribute 958 (Weapon Spread) of the weapon item scales both terms the way
+        // WeaponSpreadProfile.Build scales them for a player: attr 4 against max 8 is a 0.5 scale.
+        var template = RangedTemplate();
+        template.MinSpread = 2f;
+        template.MaxSpread = 8f;
+        template.StartingSpread = 0.5f;
+        var data = DataWith(template).WithAttribute(WeaponId, 958, 4f);
+
+        Assert.Equal(2.5f, CreateResolver(data).Resolve(MonsterId, 45).SpreadPct);
     }
 
     [Fact]
@@ -250,6 +290,7 @@ public class NpcAttackResolverTests
         Assert.Equal(2000u, profile.AttackIntervalMs);
         Assert.Equal(0u, profile.AmmoId);
         Assert.Null(profile.Ammo);
+        Assert.Equal(0f, profile.SpreadPct);                       // a melee row has no projectile to scatter
     }
 
     [Fact]

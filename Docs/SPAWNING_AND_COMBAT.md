@@ -279,7 +279,9 @@ AiEngine.Tick
                  -> HitFeedback.TookDebugHit  (TookHit to scoped clients)
     -> ranged: ProjectileSim.FireProjectile  (the weapon's dbitems::Ammo row, one
                                            projectile per round in the burst, the
-                                           resolved per-round damage on board)
+                                           resolved per-round damage on board,
+                                           each round scattered inside the
+                                           weapon's own first-shot cone)
                  -> flight/impact -> ProjectileHitEvent -> DamageSystem.ApplyDamage
 ```
 

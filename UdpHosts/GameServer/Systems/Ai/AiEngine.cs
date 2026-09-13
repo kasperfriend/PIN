@@ -918,15 +918,33 @@ public class AiEngine
 
         direction = Vector3.Normalize(direction);
 
+        // The weapon's own first-shot cone, applied once per round so a shotgun's pellets scatter
+        // instead of stacking on a single chest-aimed ray. A 0 cone (every melee row, and the ranged
+        // rows the database gives no spread) is a no-op and the shot stays on the aim. There is no
+        // per-NPC heat to keep: the behaviour's fireRestDuration outlasts the weapon's spread return,
+        // so each burst opens at the standing first-shot cone. See NpcAttackSpreadMath.
+        uint time = _shard.CurrentTime;
+        float spreadPct = profile.SpreadPct;
+        Vector3 lastSpreadDirection = Vector3.Zero;
         byte rounds = profile.RoundsPerBurst > 0 ? profile.RoundsPerBurst : (byte)1;
         for (byte round = 0; round < rounds; round++)
         {
-            uint trace = AiPrng.Trace(_shard.CurrentTime, round);
+            Vector3 shotDirection = NpcAttackSpreadMath.Apply(
+                direction,
+                spreadPct,
+                time,
+                profile.SlotIndex,
+                round,
+                lastSpreadDirection,
+                time);
+            lastSpreadDirection = shotDirection;
+
+            uint trace = AiPrng.Trace(time, round);
             _projectiles.FireRangedAttack(
                 entity,
                 trace,
                 origin,
-                direction,
+                shotDirection,
                 profile.Ammo,
                 profile.Range,
                 profile.ProjectileSpeed,

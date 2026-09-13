@@ -494,8 +494,11 @@ public class AiEngineTests
         Assert.Equal(npc.Position.Y, burst.Origin.Y, 3);
         Assert.Equal(npc.Position.Z + 1.62f, burst.Origin.Z, 3);
 
-        // Aimed at the player's chest.
+        // Aimed at the player's chest. The default profile carries no spread, so every round of the
+        // burst lands on the same ray - the behaviour a weapon the database gives no spread asked for.
         Assert.True(burst.Direction.X > 0.9f, "an NPC should aim at its target, not at the floor");
+        Assert.Equal(shots.Shots[0].Direction, shots.Shots[1].Direction);
+        Assert.Equal(shots.Shots[0].Direction, shots.Shots[2].Direction);
         Assert.Equal(100_000, player.CurrentHealth);
 
         // A burst is one attack: the weapon's own cadence, not one attack per tick.
@@ -503,6 +506,33 @@ public class AiEngineTests
         Assert.Equal(3, shots.Shots.Count);
         Tick(shard, FirstTick + 2500 + Step);
         Assert.Equal(6, shots.Shots.Count);
+    }
+
+    [Fact]
+    public void RangedNpc_WithASpreadCone_ScattersEachRoundOfTheBurst()
+    {
+        // The weapon's own first-shot cone, applied once per round: a shotgun's pellets (or a rifle's
+        // 3-round burst) scatter instead of stacking on a single chest-aimed ray. The default profile
+        // above carries no spread and keeps the stacked-ray behaviour a 0 row asked for.
+        var stats = new FakeAiMonsterStats { AttackProfile = RangedProfile() with { SpreadPct = 6f, SlotIndex = 2 } };
+        var shots = new RecordingAiProjectileLauncher();
+        var (shard, _, _) = CreateWorld(
+            Vector3.Zero,
+            new Vector3(20f, 0f, 0f),
+            monsterStats: stats,
+            projectileLauncher: shots);
+
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+
+        Assert.Equal(3, shots.Shots.Count);
+        Assert.NotEqual(shots.Shots[0].Direction, shots.Shots[1].Direction);
+        Assert.NotEqual(shots.Shots[0].Direction, shots.Shots[2].Direction);
+        Assert.NotEqual(shots.Shots[1].Direction, shots.Shots[2].Direction);
+
+        var aim = Vector3.Normalize(shots.Shots[0].Direction);
+        Assert.True(Vector3.Dot(Vector3.Normalize(shots.Shots[1].Direction), aim) > 0.9f);
+        Assert.True(Vector3.Dot(Vector3.Normalize(shots.Shots[2].Direction), aim) > 0.9f);
     }
 
     [Fact]

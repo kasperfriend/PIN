@@ -185,6 +185,15 @@ public sealed class NpcAttackResolver
 
         float standoff = ranged ? ResolveRangedStandoff(behaviorParams) : _rules.StandoffRange;
 
+        // The cone a standing NPC fires at: the template's min/max/starting_spread, scaled by the
+        // item's attribute 958 when it carries one. Melee rows resolve to 0 (they have no projectile
+        // to scatter) and a ranged row the database gives no spread fires along the aim, which is
+        // what those rows asked for. See NpcAttackSpreadMath.
+        float itemSpread = ReadAttribute(attributes, (ushort)ItemAttributeId.WeaponSpread);
+        float spreadPct = ranged
+            ? NpcAttackSpreadMath.ResolveSpreadPct(template.MinSpread, template.MaxSpread, template.StartingSpread, itemSpread)
+            : 0f;
+
         return new NpcAttackProfile
         {
             Mode = ranged ? NpcAttackMode.Ranged : NpcAttackMode.Melee,
@@ -208,6 +217,11 @@ public sealed class NpcAttackResolver
             ImpactRadius = impactRadius,
             MaxRadius = maxRadius,
             FireType = template.FireType,
+            SlotIndex = template.SlotIndex,
+            MinSpread = template.MinSpread,
+            MaxSpread = template.MaxSpread,
+            StartingSpread = template.StartingSpread,
+            SpreadPct = spreadPct,
             BurstDurationMs = burstDuration,
             ArmedAnimationId = template.AnimArmedId,
             ArmedAnimationPriority = template.AnimArmedPriority,

@@ -47,6 +47,7 @@ UdpHosts/GameServer/Systems/Ai/
 ├── NpcAttackProfile.cs         everything one NPC attack needs, resolved from the DB
 ├── NpcAttackResolver.cs        monster -> weapon -> template/attributes/ammo -> profile
 ├── NpcAttackDamageMath.cs      the pure damage + cadence rules
+├── NpcAttackSpreadMath.cs      the standing first-shot cone (min/max/starting_spread + attr 958)
 ├── NpcAttackAnimation.cs       the attack animation window (burst markers)
 ├── NpcBehaviorParams.cs        parser for the behaviour string's attack parameters
 ├── NpcProjectileLauncher.cs    fires a resolved shot through ProjectileSim
@@ -174,9 +175,11 @@ AiEngine.UpdateBrain
   -> AiEngine.ResolveAttack
        melee  -> IShard.Damage.ApplyDamage(target, perRoundDamage, npcEntity)
        ranged -> IAiProjectileLauncher.FireRangedAttack(  (ShardAiProjectileLauncher)
-                    npc, PRNG trace, muzzle origin, aim direction,
+                    npc, PRNG trace, muzzle origin, spread direction,
                     ammo, range, speed, impactRadius, maxRadius, damage)
-                    -> ProjectileSim.FireProjectile  (one call per round)
+                    -> ProjectileSim.FireProjectile  (one call per round, each
+                         scattered through PRNG.Spread inside the weapon's own
+                         first-shot cone - see NpcAttackSpreadMath)
                          -> flight, gravity, bounces, falloff, impact
                               -> ProjectileHitEvent -> DamageSystem.ApplyDamage
        -> IAiAttackFeedback.OnAttack                       (melee only)
@@ -201,8 +204,14 @@ you are inside that reach; the victim gets the same `TookHit` message a weapon h
 produces, so damage numbers and the health bar behave normally. A ranged attack is
 a real projectile carrying the per-round damage the database resolved, so it can
 miss, be dodged, fall off with distance (the ammo's `damage_decay`) and use the
-ammo's own gravity and bounce behaviour. Neither mode crits or counts as a
-headshot.
+ammo's own gravity and bounce behaviour. Each round of the burst is scattered
+inside the weapon's own first-shot cone (`NpcAttackSpreadMath`: template
+`min_spread` / `max_spread` / `starting_spread`, scaled by the item's attribute
+958 when it carries one) through the same `PRNG.Spread` a player shot uses, so a
+shotgun's pellets fan out instead of stacking on a single chest-aimed ray. A
+weapon the database gives no spread (every melee row, and the ranged rows whose
+min/max/starting are 0) fires along the aim, which is what those rows asked for.
+Neither mode crits or counts as a headshot.
 
 Movement is applied by writing the entity position/orientation, pushing the new
 pose into the physics body with `PhysicsEngine.UpdateEntity` (so the mob stays
@@ -775,7 +784,7 @@ same monster type spawns with 21,836 health and hits for 1,092.
 
 `NpcAttackResolver` walks the database's own chain when a monster is registered
 and hands the engine an `NpcAttackProfile` - the mode, per-round damage, rounds
-per burst, cadence, reach, and the ammo row to fire:
+per burst, cadence, reach, spread cone and the ammo row to fire:
 
 ```
 dbcharacter::Monster.weapon1_id (else weapon2_id)
@@ -784,8 +793,8 @@ dbcharacter::Monster.weapon1_id (else weapon2_id)
                                             WeaponTemplateModifiers and the
                                             weapon-slot ability modules are
                                             applied by SDBUtils.GetDetailedWeaponInfo)
-  + dbitems::AttributeRange rows of the item (954 damage, 957 range, 1145 modifier,
-                                              the ammo stat attributes)
+  + dbitems::AttributeRange rows of the item (954 damage, 957 range, 958 spread,
+                                              1145 modifier, the ammo stat attributes)
   + dbcharacter::MonsterAttributeRange row of the monster (1144 damage modifier)
   + dbcharacter::Monster.behavior string   (triggerPullTime, fireRestDuration,
                                              combatDist, preferredMinCombatDist)
@@ -838,6 +847,20 @@ so guards stop at the distance the data gives them instead of walking into melee
 **Muzzle.** The shot leaves from `dbcharacter::Monster.projectile_offset` rotated
 into world space the same way `CharacterEntity.CalculateProjectileOrigin` rotates
 a character's own muzzle; a row with no offset uses the chest height (1.62 m).
+
+**Spread.** A ranged row fires inside the weapon's own first-shot cone, the same
+number a standing player would get from the same template on their first trigger
+pull (`MinSpread + StartingSpread × (MaxSpread − MinSpread)`, with the item's
+attribute 958 scaling both terms the way `WeaponSpreadProfile.Build` scales them).
+There is no per-NPC heat to keep: the behaviour's `fireRestDuration` (median
+1,000 ms across the build's ranged humanoids) outlasts every `ms_spread_return`
+the NPC weapons carry, so each burst opens at that standing cone. One attack then
+spends the cone through `PRNG.Spread` once per round, seeded with the shard time,
+the template's `slot_index` and the round number. A melee row, and a ranged row
+the database gives no spread, resolve to 0 and stay on the aim. What is *not*
+modelled: the running heat/movement/agility state a player accumulates while they
+hold the trigger, because an NPC does not hold the trigger - it rests between
+bursts. See [Known gaps](#6-known-gaps).
 
 ### Ground snapping
 
@@ -897,13 +920,17 @@ stays horizontal, exactly as before.
   them at all (the one table that links a stumble to what causes it has 0 rows, and
   no weapon, ammo, damage type or ability row references a stumble id; see
   [What an NPC animates](#what-an-npc-animates)).
-* **No accuracy model.** NPC shots aim at the target's chest with the weapon's
-  own spread profile left unused: there is no per-NPC spread state, no
-  `MinSpread`/`MaxSpread` handling and no aim error, so a ranged mob hits for as
-  long as line of sight holds. The behaviour strings' `am*Chance`/`am*Cooldown`
-  gates *are* modelled now, on the ability modules they belong to (see the
-  behaviour ability modules above); what stays unmodelled is the weapon's own spread and
-  everything the AI's hits do not state.
+* **NPC spread is the standing first-shot cone, not a running heat state.** Each
+  ranged attack scatters inside the weapon's own `min_spread` / `max_spread` /
+  `starting_spread` (attribute 958 when the item carries it) through the same
+  `PRNG.Spread` a player shot uses, once per round in the burst. What stays
+  unmodelled is the rest of a player's spread state - accumulated heat,
+  `spread_per_burst`, movement add, agility, crouch - because an NPC rests
+  between bursts for the behaviour's `fireRestDuration` (median 1,000 ms), which
+  outlasts the weapon's `ms_spread_return`, so there is no heat to keep. Aim is
+  still the target's chest; there is no extra aim error on top of the cone. The
+  behaviour strings' `am*Chance`/`am*Cooldown` gates *are* modelled, on the
+  ability modules they belong to (see the behaviour ability modules above).
 * **Weapon damage rows are placeholder where the data is placeholder.** A few
   templates (not per-monster items) carry `damage_per_round` 1; those rows still
   resolve through the 954/1145 chain above, so the placeholder only survives where
