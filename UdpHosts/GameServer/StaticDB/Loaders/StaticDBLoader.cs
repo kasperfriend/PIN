@@ -124,6 +124,44 @@ public class StaticDBLoader : ISDBLoader
         .ToDictionary(row => row.Id);
     }
 
+    public Dictionary<uint, Stumble> LoadStumble()
+    {
+        return LoadStaticDB<Stumble>("dbcharacter::Stumble")
+        .ToDictionary(row => row.Id);
+    }
+
+    /// <summary>
+    ///     Direction rows of a stumble, grouped by <c>stumble_id</c>.
+    /// </summary>
+    public Dictionary<uint, List<StumbleDirection>> LoadStumbleDirection()
+    {
+        return LoadStaticDB<StumbleDirection>("dbcharacter::StumbleDirection")
+        .GroupBy(row => row.StumbleId)
+        .ToDictionary(group => group.Key, group => group.ToList());
+    }
+
+    public Dictionary<uint, DialogScript> LoadDialogScript()
+    {
+        return LoadStaticDB<DialogScript>("dbdialogdata::DialogScript")
+        .ToDictionary(row => row.Id);
+    }
+
+    public Dictionary<uint, BattleChatterDescriptions> LoadBattleChatterDescriptions()
+    {
+        return LoadStaticDB<BattleChatterDescriptions>("dbdialogdata::BattleChatterDescriptions")
+        .ToDictionary(row => row.Id);
+    }
+
+    /// <summary>
+    ///     Voice-set lines of a battle-chatter set, grouped by <c>set_id</c>.
+    /// </summary>
+    public Dictionary<uint, List<BattleChatterSetParams>> LoadBattleChatterSetParams()
+    {
+        return LoadStaticDB<BattleChatterSetParams>("dbdialogdata::BattleChatterSetParams")
+        .GroupBy(row => row.SetId)
+        .ToDictionary(group => group.Key, group => group.ToList());
+    }
+
     public Dictionary<uint, Turret> LoadTurret()
     {
         return LoadStaticDB<Turret>("dbcharacter::Turret")
