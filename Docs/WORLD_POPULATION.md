@@ -204,9 +204,10 @@ the plan's log line and in `population status`.
    rows did not use. The difficulty budget is **not** enforced here (a row priced
    above a whole cell's budget still gets its one slot; the cell then simply has no
    room for anything else), but the per-cell count and the plan's slot ceiling are.
-   A row is refused only when the zone has no ground of its kind at all - a
+   A row is refused when the zone has no ground of its kind at all - a
    settlement NPC in a zone with no outpost, a Melding creature in a zone with no
-   Melding - and those rows are counted and **reported**, not silently dropped.
+   Melding - or when the plan has already hit its slot ceiling, and those rows are
+   counted and **reported**, not silently dropped.
 2. **Density** fills the remaining room in a scattered but deterministic order,
    picking rows by the frequency `WorldPopulationCandidate.DensityWeight` reads out
    of their `difficulty_cost` (`0` → 8, `<=25` → 6, `<=60` → 4, `<=120` → 2, else
