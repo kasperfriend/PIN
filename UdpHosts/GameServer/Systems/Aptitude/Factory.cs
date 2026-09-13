@@ -24,6 +24,7 @@ using GameServer.Systems.Aptitude.Commands.Requirement;
 using GameServer.Systems.Aptitude.Commands.Self;
 using GameServer.Systems.Aptitude.Commands.SetFlags;
 using GameServer.Systems.Aptitude.Commands.Target;
+using GameServer.Systems.Aptitude.Commands.Update;
 using Serilog;
 
 namespace GameServer.Systems.Aptitude;
@@ -476,8 +477,8 @@ public class Factory
                 return new PeekRegisterCommand(SDBInterface.GetPeekRegisterCommandDef(commandId));
             case CommandType.WhileLoop:
                 return new WhileLoopCommand(SDBInterface.GetWhileLoopCommandDef(commandId));
-            // case CommandType.MovementSlide:
-            //     return new MovementSlideCommand(SDBInterface.GetMovementSlideCommandDef(commandId));
+            case CommandType.MovementSlide:
+                return new MovementSlideCommand(SDBInterface.GetMovementSlideCommandDef(commandId));
             case CommandType.RequireEnergyByRange:
                 return new RequireEnergyByRangeCommand(SDBInterface.GetRequireEnergyByRangeCommandDef(commandId));
             // case CommandType.NetworkStealth:
@@ -623,8 +624,12 @@ public class Factory
                                        ?? new ReplenishableDurationCommandDef { Id = commandId };
                 return new ReplenishableDurationCommand(replenishableDef);
             }
-            // case CommandType.ReplenishEffectDuration:
-            //     return new ReplenishEffectDurationCommand(CustomDBInterface.GetReplenishEffectDurationCommandDef(commandId));
+            case CommandType.ReplenishEffectDuration:
+            {
+                var replenishDef = CustomDBInterface.GetReplenishEffectDurationCommandDef(commandId)
+                                   ?? new ReplenishEffectDurationCommandDef { Id = commandId };
+                return new ReplenishEffectDurationCommand(replenishDef);
+            }
             case CommandType.ConsumeSuperCharge:
                 return new ConsumeSuperChargeCommand(SDBInterface.GetConsumeSuperChargeCommandDef(commandId));
             // case CommandType.RequireSuperCharge:
@@ -671,8 +676,8 @@ public class Factory
             //     return new RequireItemAttributeCommand(SDBInterface.GetRequireItemAttributeCommandDef(commandId));
             // case CommandType.AddLootTable:
             //     return new AddLootTableCommand(CustomDBInterface.GetAddLootTableCommandDef(commandId));
-            // case CommandType.UpdateWaitAndFireOnce:
-            //     return new UpdateWaitAndFireOnceCommand(SDBInterface.GetUpdateWaitAndFireOnceCommandDef(commandId));
+            case CommandType.UpdateWaitAndFireOnce:
+                return new UpdateWaitAndFireOnceCommand(SDBInterface.GetUpdateWaitAndFireOnceCommandDef(commandId));
             case CommandType.RequireZoneType:
                 return new RequireZoneTypeCommand(SDBInterface.GetRequireZoneTypeCommandDef(commandId));
             // case CommandType.SetInteractionType:

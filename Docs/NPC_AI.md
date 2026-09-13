@@ -7,10 +7,19 @@ It replaces the old `AIEngine` stub, which was an empty `Tick`. Spawned mobs now
 pick a target, walk towards it, swing at it once they are within reach of it, and
 give up when they are dragged too far from where they spawned.
 
-> **NPC attacks are melee.** An attack is a direct damage call - PIN has no NPC
-> projectile path yet - so a monster can only hurt you once it has reached you,
-> and only if you are not standing above or below it out of reach. See
-> [What an attack actually does](#3-what-an-attack-actually-does).
+> **NPC attacks come from the database.** Each mob fights with the weapon its
+> `dbcharacter::Monster` row names: the `dbitems::Weapons` item, its
+> `WeaponTemplates` mode, its `AttributeRange` damage/range rows and, for ranged
+> rows, its `dbitems::Ammo` projectile - fired through the same `ProjectileSim`
+> a player shot uses. Mob melee is still a direct damage call, but only the rows
+> the data says are melee. See
+> [What an attack actually does](#3-what-an-attack-actually-does) and
+> [Weapon attacks come from the database](#weapon-attacks-come-from-the-database).
+
+> **Mobs animate their attacks.** Each attack is marked in the combat view with the
+> weapon's own burst timing, and the walk/run states come from the monster's two
+> speed columns - see
+> [What an NPC animates](#what-an-npc-animates).
 
 > Character origins sit at the feet (the muzzle offset is `(0.2, 0, 1.62)` in
 > `CalculateProjectileOrigin`, i.e. chest height above the origin) and the body
@@ -31,13 +40,21 @@ UdpHosts/GameServer/Systems/Ai/
 ├── AiDecision.cs               what a brain tells the engine to do
 ├── IAiRules.cs                 tunables
 ├── StandardAiRules.cs          the shipped defaults
+├── AiCombatTuning.cs           per-NPC attack reach/cadence overrides from its weapon
 ├── AiSpeeds.cs                 monster row speed -> metres per second
-├── AiAttackDamage.cs           monster damage rating -> what one swing is worth
+├── AiAttackDamage.cs           monster damage rating -> what one swing is worth (fallback)
 ├── AiVectors.cs                horizontal / straight-line distance + character facing maths
+├── NpcAttackProfile.cs         everything one NPC attack needs, resolved from the DB
+├── NpcAttackResolver.cs        monster -> weapon -> template/attributes/ammo -> profile
+├── NpcAttackDamageMath.cs      the pure damage + cadence rules
+├── NpcAttackAnimation.cs       the attack animation window (burst markers)
+├── NpcBehaviorParams.cs        parser for the behaviour string's attack parameters
+├── NpcProjectileLauncher.cs    fires a resolved shot through ProjectileSim
+├── INpcAttackDataSource.cs     the DB surface the resolver reads (fakeable in tests)
 ├── IAiHostility.cs             who counts as an enemy
 ├── FactionAiHostility.cs       SDB faction table implementation
-├── IAiMonsterStats.cs          where movement speeds + the per-level damage rating come from
-├── SdbAiMonsterStats.cs        reads dbcharacter::Monster + MonsterScaling (by level)
+├── IAiMonsterStats.cs          where movement speeds, the damage rating and the weapon profile come from
+├── SdbAiMonsterStats.cs        reads dbcharacter::Monster + MonsterScaling + NpcAttackResolver
 ├── IAiAttackFeedback.cs        cosmetic hit messages
 └── HitFeedbackAttackFeedback.cs routes them through CombatSim.HitFeedback
 ```
@@ -92,15 +109,18 @@ Details worth knowing:
   `AiVectors.HorizontalDistance` alone makes a player standing on the crate, the
   ledge or the floor *above* a mob "0.5 m away" - which is how a mob ended up
   hitting a player through the ground it was standing on.
-* **Attacks are melee.** `AttackRange` is a reach (3.5 m, in the order of the
-  `range` the database gives the monster melee weapon rows, e.g. 2.6 m for
-  "NPC Melee Medium (Spyder)"), not a fire range: an attack here is a direct
-  `DamageSystem.ApplyDamage` call with no projectile, so anything beyond a reach
-  would be an unavoidable hitscan shot. Ranged monsters need the NPC projectile
-  path first (see [Known gaps](#6-known-gaps)).
-* **Entry and exit ranges differ.** A target is acquired at `AttackRange` but only
-  released at `AttackRangeExit` (3.5 m in, 5 m out). Without that hysteresis a
-  player walking along the edge of the range flips the state every tick.
+* **Attacks are per weapon.** The reach and the mode come from the mob's own
+  `dbcharacter::Monster` weapon row (`AiCombatTuning.FromProfile`): a mob melee
+  row swings (`range` 2.6 m for "NPC Melee Medium (Spyder)") and a ranged row
+  fires its `dbitems::Ammo` projectile at the weapon's `range` - the 3.5 m
+  rules reach is only what a mob with no resolvable weapon uses. The height band
+  widens to the weapon's own range for a ranged weapon, so a rifle can shoot a
+  target standing above the mob where a punch could not.
+* **Entry and exit ranges differ.** A target is acquired at the NPC's
+  `AttackRange` but only released at its `AttackRangeExit` (3.5 m in, 5 m out for
+  a weaponless mob; a ranged weapon's is its range and range × 1.15). Without that
+  hysteresis a player walking along the edge of the range flips the state every
+  tick.
 * **Giving up is time based.** Losing line of sight does not drop the target
   immediately - the NPC keeps hunting for `TargetLostTimeoutMs` and only then
   forgets. Dying or despawning drops it at once.
@@ -122,9 +142,9 @@ Details worth knowing:
    on the roof over it and then stand there with nothing to do.
 2. **Being shot.** `AiEngine` subscribes to `EntityDamagedEvent` and forces the
    damaged NPC onto its attacker regardless of distance. This is why you cannot
-   snipe a mob from across the map for free - and, since attacks are melee, why
-   sniping one from a roof is free: it will come, and it will not be able to
-   reach you.
+   snipe a mob from across the map for free: it will come, and a mob with a ranged
+   weapon will start shooting back as soon as you are inside that weapon's range -
+   only the melee rows still have to walk all the way to you.
 
 The target is sticky: as long as the current target entity still exists the scan
 is skipped, so a mob does not ping pong between two players standing side by side.
@@ -147,37 +167,42 @@ AiEngine.UpdateBrain
   -> AiPerception          flat distance (chasing) + straight-line distance and
                           height delta (attacking), line of sight
   -> AiBrain.Decide        Idle / Chase / Attack / Return / Dead
-       Attack gate: AttackDistance <= AttackRange (3.5 m)
-                   and HeightDeltaToTarget <= MaxAttackHeightDelta (2.5 m)
+       Attack gate: AttackDistance <= the NPC's AttackRange (its weapon's,
+                    or the rules 3.5 m when it has none)
+                   and HeightDeltaToTarget <= MaxAttackHeightDelta
+                    (2.5 m, or the weapon's own range for a ranged weapon)
   -> AiEngine.ResolveAttack
-       -> IShard.Damage.ApplyDamage(target, npcAttackDamage, npcEntity)
-            -> shields first, then health
-            -> EntityDamagedEvent
-                 -> CharacterLifecycleService  (bleedout / death for the player)
-       -> IAiAttackFeedback.OnAttack
+       melee  -> IShard.Damage.ApplyDamage(target, perRoundDamage, npcEntity)
+       ranged -> IAiProjectileLauncher.FireRangedAttack(  (ShardAiProjectileLauncher)
+                    npc, PRNG trace, muzzle origin, aim direction,
+                    ammo, range, speed, impactRadius, maxRadius, damage)
+                    -> ProjectileSim.FireProjectile  (one call per round)
+                         -> flight, gravity, bounces, falloff, impact
+                              -> ProjectileHitEvent -> DamageSystem.ApplyDamage
+       -> IAiAttackFeedback.OnAttack                       (melee only)
             -> CombatSim.HitFeedback.TookDebugHit -> TookHit to scoped clients
 ```
 
-Two things gate the hit itself, both of them in the brain so they are covered by
-`AiBrainTests` without a shard:
+Two things gate the attack itself, both of them in the brain so they are covered
+by `AiBrainTests` without a shard:
 
 * **Reach.** The attack is measured over the straight-line distance
   (`AiVectors.Distance`), not the flat one chasing is planned on. A mob 3 m under
   a player is not "3 m away in range", it is 3 m of air away from a swing.
-* **Height band.** `MaxAttackHeightDelta` is the vertical slack of that swing. It
+* **Height band.** `MaxAttackHeightDelta` is the vertical slack of the attack. It
   is a separate test on purpose: the 3.5 m sphere already covers most cases, but a
   player standing directly over the mob's head is 1 m away in every horizontal
-  measure, and an attack that lands there reads as "the mob hit me through the
-  floor".
+  measure, and a melee hit that lands there reads as "the mob hit me through the
+  floor". A ranged weapon keeps the band at its own range instead, because a
+  bullet does not care about the floor between the two of you.
 
-The damage per hit is a fraction of the monster's database rating, resolved once
-when the NPC is registered (see
-[Health and attack damage come from the database](#health-and-attack-damage-come-from-the-database)).
-
-It is a hitscan, not a projectile: no `ProjectileSim` trace, no ammo, no spread,
-and nothing to dodge while you are inside that reach. The victim gets the same
-`TookHit` message a weapon hit produces, so damage numbers and the health bar
-behave normally. NPC attacks never crit and never count as headshots.
+A melee attack is a hitscan: no projectile, no spread, and nothing to dodge while
+you are inside that reach; the victim gets the same `TookHit` message a weapon hit
+produces, so damage numbers and the health bar behave normally. A ranged attack is
+a real projectile carrying the per-round damage the database resolved, so it can
+miss, be dodged, fall off with distance (the ammo's `damage_decay`) and use the
+ammo's own gravity and bounce behaviour. Neither mode crits or counts as a
+headshot.
 
 Movement is applied by writing the entity position/orientation, pushing the new
 pose into the physics body with `PhysicsEngine.UpdateEntity` (so the mob stays
@@ -189,6 +214,428 @@ Before stepping, a short forward ray cast checks for a wall; if the way is
 blocked the NPC holds position instead of walking through it. With no collision
 data loaded (`LoadMapsCollision` off) nothing can block and nothing occludes, so
 every target counts as visible.
+
+### What an NPC animates
+
+A mob's animation is not a server-side asset choice - the client owns the animation
+graphs and picks them from replicated state. Five pieces of that state are the
+server's job, and all five are now driven by the database:
+
+| What | Replicated where | Where the value comes from |
+|---|---|---|
+| Attack / fire | `CombatView.WeaponBurstFired`, then `WeaponBurstEnded` (or `WeaponBurstCancelled`) | `dbitems::WeaponTemplates.ms_burst_duration` (else `ms_per_burst`), clamped to the NPC's own attack cadence |
+| Reload | `CombatView.WeaponReloaded` (then the magazine refills, or `WeaponReloadCancelled` when it dies mid-reload) | `dbitems::WeaponTemplates.base_clip_size` (else the item's attribute 956), `ammo_per_burst` (else `rounds_per_burst`) and `reload_time`; the client plays the template's `anim_reload_type` |
+| Locomotion | `CurrentPoseUpdate` / `MovementView` movement state | `dbcharacter::Monster.normal_speed` (the walk, `0x5004`, while attacking) and `fast_speed` (the run, `0x2004`, while chasing) |
+| Armed pose + weapon animation set | `CurrentEquipment` (the weapon item's template id) | `dbitems::WeaponTemplates.anim_armed_id` / `anim_armed_priority` / `anim_fire_type` / `anim_reload_type` / `anim_charge_type` |
+| Charge / swing animation (a named animation from a chain) | the character's `StatusEffects_0..31` fields (`EffectApply` / `EffectRemove`), which the client plays the effect's own `tf*` commands from | `dbitems::WeaponTemplates.attack_ability_id` / `burst_ability_id` -> `apt::AbilityData.chain` -> `apt::ImpactApplyEffectCommandDef.effect_id` -> `apt::StatusEffectData.apply_chain` / `remove_chain` |
+
+**Attack animation.** A player's is driven by the client itself: it sends
+`FireBurst` when a burst starts and `FireEnd`/`FireCancel` when it stops, and the
+server only relays those three times to everyone else, who play the animation of
+the weapon the replicated equipment says the character holds. An NPC has no client
+to send them, which is why mobs used to stand still while hitting you. `AiEngine`
+now produces the same three markers: `FireBurst` at the attack, `FireEnd` at the
+weapon's own burst timing, and `FireCancel` if the mob dies in the middle of one
+(the client then drops the attack pose for the death). The window is the
+template's `ms_burst_duration` (the burst is fired over time) else `ms_per_burst`
+(the fire cycle), clamped so an animation can never outlive the attack cycle that
+started it - a rifle's 100 ms volley inside a 2,500 ms behaviour cycle, a melee
+Spyder's 1,600 ms swing inside its 2,000 ms one. A monster the database gives no
+weapon at all swings with a documented 500 ms default (the only animation length
+here that is not a row), so weaponless mobs animate too.
+
+**Reload animation.** A player's reload is client driven too - the client sends
+`ReloadWeapon` (or `CancelReload` to abort), the server relays the two times and
+every watching client plays the reload of the weapon the replicated equipment says
+the character holds. An NPC has no client to send them, which is why mobs used to
+fire forever without ever reloading; `AiEngine` now keeps the weapon's magazine
+itself (`NpcWeaponMagazine`, pure and unit tested) and produces the same markers:
+`WeaponReloaded` at the moment the magazine runs dry, no fire for the template's
+`reload_time` (that window is the reload animation), and `WeaponReloadCancelled` if
+the mob dies in the middle of one. The magazine is the weapon item's attribute 956
+(`WeaponMagazineSize`) when the item carries it, else the template's
+`base_clip_size`; one attack spends `ammo_per_burst` when the template carries it,
+else `rounds_per_burst` (a shotgun's 16 pellets are one shell, not 16 reloads). The
+reload starts as soon as the burst empties the magazine, so `reload_time` overlaps
+the rest of the weapon's cadence instead of stacking on top of the next shot, and a
+shot the reload does block goes out as soon as the magazine is full. An attack wants
+a whole burst's worth of rounds, so a magazine that cannot pay for one waits for the
+reload even if it is not literally empty - which the build's data makes reachable
+once (`NPC Juggernaut Beam Cannon`: 110 rounds a burst out of a 65,535 round clip). The marker is
+also what the aptitude `RequireReload` condition tests
+(`RequireReloadCommand`: `CombatView.WeaponReloaded > InitTime`), so a mob's own
+chains can satisfy a reload check the way a player's do.
+
+80 of the 85 templates the build's monsters use reload, covering 1,510 of the 1,861
+monster weapon slots - and 747 of those slots are on templates that carry an
+`anim_reload_type` for the client to play. That includes the single-round weapons,
+which the database means to reload after every shot: the NPC Charge Sniper Rifle's
+`base_clip_size` is 1 with a 1,000 ms `reload_time` (39 monster slots), and the NPC
+Ranged Default row is the same shape (37). The five that do not reload are the rows
+that are not projectile weapons: the Spyder's melee clip (`reload_time` 0, 334
+monster slots) and four rows whose `default_ammo_id` resolves to no
+`dbitems::Ammo` row at all (visual-only and trigger-only templates). A weapon the
+database gives no magazine fires forever, exactly as it did before.
+
+**Chain animations (the charge, the swing and the weapon's own feedback).** The
+database's *named* animations live in aptitude chains: a `tfPlayAnimationCommandDef`
+("MeleeAttack", "Shoot", "roar", ...) or a `tfAbilityAnimationCommandDef` (an
+animation-graph state) is a node in a chain, and the chain that holds it belongs to a
+status effect, so applying the effect is what makes every client with the same
+database play it. Those commands are client-side by design - `Factory.LoadCommand`
+turns them into `CustomNOOPCommand`, because the client runs them from the replicated
+effect - which means the server's whole job is to apply the effect. Nothing did: a
+weapon template's `attack_ability_id` / `burst_ability_id` reached `NpcAttackProfile`
+and stopped there, so no mob ever applied the effects its weapon's chains apply.
+
+`NpcWeaponAbilities.Scan` now walks those chains once, at profile resolution (through
+`INpcAttackDataSource`, so it is unit tested without a database), and reports two
+things: whether the chain carries a command the **client** runs (`ChainClientFeedback`)
+and whether the chain delivers the hit itself (`ChainDeliversDamage`). The first is read
+out of the database rather than from a list kept in the code: a command instance's kind
+is its `apt::BaseCommandDef.subtype`, and the row that names that subtype in
+`apt::CommandType` says who executes it: its `environment` column is `client`, `server`
+or `both` - the client's 50 types are the `apttf::` feedback commands (animations,
+emotes, material switches, particles, audio), the `aptfs::`/`aptgss::` ones are the
+server's functions and the bare `apt::` ones are control flow both sides know. That
+column is the rule (`INpcAttackDataSource.IsClientCommand` reads it), not the table-name
+prefix the walk first used: the two agree on all 392 types today, and the column is what
+the command factory keys on as well. `AiEngine`
+runs the ability when the chain carries client feedback,
+through the shard's own `AbilitySystem.HandleActivateAbility`, which is **7 of the 14
+templates with an `attack_ability_id` / `burst_ability_id` and 75 of their 102 monster
+slots**: 2 templates (16 slots) carry a named animation, 3 (22 slots) deliver their own
+damage, and the four that do neither (53 slots) carry the weapon's muzzle flash and
+sound - the charge sniper 51, the phason thrower 12157, the fluid cannon 12264 and the
+magic finger 12183.
+
+The other 7 templates with attack/burst ids (27 slots) carry no client command at all:
+the Vorrax beam's stat modifier 356, the missile launcher's 251, the overcharge stat
+modifier 11326, and chains that reach no effect, so they keep the AI's own attack and
+running them would change combat numbers without changing what anyone sees.
+
+Three more templates (25 slots) carry their ids in the **empty-clip hook**
+(`clip_empty_ability`), which is now run: 12132 (Tesla Rifle 2.0, 5 slots) names 39239,
+whose chain is `ActiveInitiation` -> apply effect 10480 -> `Return`, and effect 10480 is
+the dry-fire sound, two muzzle particles and `restrict_weapon` for the 1.5 s it lives
+(behind a `RequireWeaponArmed` duration gate). The trigger is not a guess and not one
+invented here: the column is named for the moment the magazine runs out, and the AI
+already tracks that state - the branch that empties the clip calls the hook and then
+starts the reload, so the mob's empty click sounds exactly when its clip empties. The
+other two rows (11975 and 11971, 2 slots) name 35842, whose chain is a
+`RegisterTimedTriggerCommandDef` and nothing else: server-side, so the engine leaves it
+alone exactly like a server-only burst chain - the same `ClientFeedback` gate, read off
+the hook's own chain.
+
+Two templates (23 slots) carry an **`overcharge_ability`** (39467, on the plasma cannon
+12129 and the fusion cannon 60) and the engine does **not** run it, because the event that
+fires it cannot be established from this build. The data around it: both weapons state
+`ms_chargeup` = `ms_chargeup_max` = 4000 ms, `ms_overcharge_delay` = 2500 ms, and
+`fire_type` 6 (the client's charge-up mode), and the ability applies effect 10925 - three
+muzzle particle emitters and a looping sound, held for 2500 ms behind the same
+`RequireWeaponArmed` gate. Nothing in the build defines *what* the character must be
+doing when the delay elapses: the client owns the charge state (that is the one column
+the row has no server-side counterpart for), and an AI that invents a charge-hold would
+change how those mobs shoot rather than make them show what the original game shows.
+Documented rather than guessed (see [Known gaps](#6-known-gaps)).
+
+The two weapons that animate, command by command:
+
+* **Melee - Shadowstrike** (`burst_ability_id` 188, 2 monster slots). The chain
+  targets a cone in front of the mob and the hostiles inside it, applies effect 270
+  (its update chain inflicts 100 damage over a 5 m splash, and it stacks to 3),
+  plays a particle and a 100 damage `InflictDamage`, then applies effect 176 to
+  itself: a `tfPlayAnimationCommandDef` with the animation `MeleeAttack` for a
+  900 ms `TimeDuration` (`RequireCState` keeps it alive only while the mob lives).
+  The swing you see is the replicated effect; the damage is the chain's own.
+* **NPC Charge Up and Channel Fire** (`attack_ability_id` 39249, 14 monster slots).
+  The chain applies effect 10496 to itself and then runs
+  `ReplenishEffectDurationCommandDef`: the charge effect is a `tfAbilityAnimationCommandDef`
+  (the charge pose) plus the charge audio plus `restrict_movement` /
+  `restrict_abilities` / `restrict_melee`, and its duration chain is
+  `RequireCState` + `ReplenishableDurationCommandDef` - so the charge lasts as long
+  as the value the activation hands it. When it runs out, the removal chain is the
+  shot: the release animation, a `FireProjectileCommandDef` (ammo 1036, 100 damage,
+  100 m, hardpoint 2) and the firing audio.
+
+Three details make that work, and each is a place the data forced a decision:
+
+* **The charge time is the register.** A weapon with `ms_chargeup` (2,000 ms for the
+  charge-up weapon, 0 for the Shadowstrike) hands the chain its charge time as the
+  ability activation's register, in seconds - the unit `ReplenishableDurationCommand`
+  reads (a value below 1000 is seconds, and the monster trees have charge times of
+  750, 2,000, 2,500 and 4,000 ms, so milliseconds would be read as seconds on the
+  short ones). The charge effect therefore lasts exactly as long as the weapon
+  describes, and the shot leaves at the end of it. A weapon with no charge time
+  passes no register and every duration command falls back to its own default.
+* **`ReplenishEffectDuration` is what carries it into the effect.**
+  `aptgss::ReplenishEffectDurationCommandDef` (type 294) was a placeholder that
+  always returned true, and its definition table is server-only (absent from
+  `clientdb.sd2`), so the build's copy of the command is a reconstruction from the
+  chains that use it: it hands the activation's register to the effects the
+  activation applies - recording it on the context for the ones still to come
+  (consumed by `AbilitySystem.DoApplyEffect`) and writing it into the contexts of the
+  ones already applied. The database has both orders: `39249` and the sniper's
+  `34894` run it after the apply, the Phason Thrower's `40266` runs it before. Without
+  it, `ImpactApplyEffect.pass_register` is 0 on every monster weapon row, so the
+  applied effect's context is copied with no register and its replenishable duration
+  would fall back to the command's 30 s default instead of the charge time.
+* **A chain that delivers the hit replaces the AI's own.** For the weapons whose chain
+  is the attack as well - the Shadowstrike cone swing, the charge that ends in its own
+  projectile, the flamethrower's burning cone - the engine does not add the melee hit or
+  the volley it would otherwise fire on top of it (`ChainDeliversDamage` is what says
+  so). If the activation does not run (no aptitude system, an unknown ability, a chain
+  requirement that rejects it), the engine falls back to its own attack, so a data or
+  runtime gap cannot leave a mob harmless. Every other weapon keeps the AI attack it had:
+  the 7 templates whose attack/burst chains hold no client command (the Vorrax beam's
+  356/358 stat modifier, the missile launcher's 251, the overcharge stat modifier 11326,
+  chains that reach no effect) change combat numbers rather than what a client draws, and
+  so do the charge states the AI never triggers (sniper 2759, phason 12513) - the next
+  step rather than this one.
+* **A death mid-charge releases the shot.** The charge effect's duration chain starts
+  with `RequireCState(living=1)`, so the effect ends the moment the mob stops living -
+  and the chain that ends an effect is its removal chain, which for this effect is the
+  release: animation, projectile, audio. A corpse therefore fires the shot it had
+  charged. That is the data's own structure (the release runs on any removal) and the
+  build does not special-case it.
+* **The weapon fire markers stay as they are.** The two animating templates carry
+  `anim_fire_type` 0 and `anim_charge_type` 0 - the database gives them no weapon fire
+  or charge animation of its own, which is exactly why their animation lives in the
+  effect chains instead. A client's `WeaponBurstFired` handling has nothing to play for
+  a type of 0; the chain's `tfPlayAnimation` / `tfAbilityAnimation` is what it plays. The
+  templates whose chains carry only particles and audio are the other way round: they do
+  carry an `anim_fire_type` (1 or 2 - `Fire`, `ChargeFire`), so the client plays the
+  weapon's own fire animation from the marker and the effect chain adds the muzzle flash,
+  the beam and the sound on top.
+* **The flags the charge sets are honoured.** A charge-up effect restricts the
+  character it sits on, and the client shows that; the AI reads the same replicated
+  flags (`CharacterEntity.HasCombatFlag`) rather than inventing its own charge state,
+  so a mob running a `restrict_movement` effect holds position (it still turns to
+  face its target) and one under `restrict_weapon` / `restrict_abilities` does not
+  fire. `CombatFlagsCommand` snapshots and restores those bits per effect, so the
+  restriction ends exactly when the effect that set it does.
+
+**Behaviour ability modules (`am1Id` / `am2Id`).** A behaviour string can name up to two
+ability modules next to its attack timing - `am1Id` with `am1Cooldown`, `am1Chance`,
+`am1MinDist`/`am1MaxDist`, `am1Timeout`, `am1NavToDist`/`am1NavTimeout`, `am1Facing`,
+`am1FacingDuring`, `am1Targeted`, and the same group for `am2` - and 60 of the build's
+3,109 monster rows do (215 references across the three behaviour columns, 26 distinct
+ids). The database spells the pairs with spaces around the `=` as often as without, and
+the cooldown key is misspelled on nine parameter occurrences (`am1Coodown=3000`, three
+monsters' three behaviour columns each), both of which the parser absorbs. The id is a
+`dbitems::AbilityModule` id, not an ability id: the module row's
+`ability_chain_id` names the `apt::AbilityData` to run. 25 of the 26 resolve that way
+(`86132` -> `36817`, `88159` -> `37359`, `82621` -> `35942`, ...); the exception is
+`33812`, the second value of the dodge pair's 39 rows - no module row carries that id
+(the module that names ability 33812 is 77388), so that one value is read as an ability
+id, which is what the data needs.
+
+Running those chains is where most of a monster's behaviour drawing comes from: 25 of the
+26 modules reach a `tfAbilityAnimationCommandDef` in an effect their chain applies
+(animation indices 1-28; the twenty-sixth, `86461`, draws particles and sound but no
+skeleton animation), one of them - `86132`, the `Arch_MoveThenFire` module on 12
+references - also performs the `roar` emote (`tfPerformEmoteCommandDef` carries the emote
+*name*, and `EmoteRecord.name` is what turns it into an id), and 20 deliver their own
+damage. Nine of the modules reach those commands only through chains that a control-flow
+command hands execution to - the `UpdateWaitAndFireOnce` chain of an effect's update loop
+and the logic branches (`120937`'s animations 22 and 26 are both behind a wait, and eight
+modules deliver their damage from one) - which is why the scan follows them (see the
+weapon-chain note above).
+
+| module (`am*Id`) | ability | refs | animation | emote | delivers the hit |
+|---|---|---|---|---|---|
+| `33833` | `33833` | 43 | 10 | - | no |
+| `33812` | `33812` | 39 | 9 | - | no |
+| `88159` | `37359` | 26 | 26 | - | yes |
+| `82621` | `35942` | 15 | 4 | - | yes |
+| `86132` | `36817` | 12 | 28 | `roar` | yes |
+| `86465` | `36882` | 9 | 14 | - | yes |
+| `95025` | `37439` | 9 | 4 | - | no |
+| `88161` | `37362` | 8 | 25 | - | yes |
+| `86474` | `36035` | 6 | 8 | - | yes |
+| `96949` | `37682` | 6 | 25 | - | yes |
+| `77721` | `35511` | 5 | 14 | - | yes |
+| `95445` | `37503` | 5 | 8 | - | no |
+| `85964` | `36757` | 3 | 7 | - | yes |
+| `86055` | `34753` | 3 | 1 | - | no |
+| `86392` | `36948` | 3 | 8 | - | yes |
+| `86393` | `36949` | 3 | 2 | - | yes |
+| `86461` | `37049` | 3 | none | - | no |
+| `96905` | `37659` | 3 | 3 | - | yes |
+| `120937` | `38700` | 3 | 22, 26 | - | yes |
+| `121427` | `39066` | 3 | 28 | - | yes |
+| `82610` | `35933` | 2 | 8 | - | yes |
+| `118356` | `38164` | 2 | 26 | - | yes |
+| `86100` | `34770` | 1 | 21 | - | yes |
+| `95479` | `37522` | 1 | 8 | - | yes |
+| `96478` | `37557` | 1 | 8 | - | yes |
+| `96947` | `37681` | 1 | 26 | - | yes |
+
+`NpcBehaviorAbilities.Resolve` walks them once, when the NPC is registered, through
+`INpcAttackDataSource` (`SdbAiMonsterStats.GetAbilityModules`), and reports what each
+module's chains carry the same way a weapon's ability ids are read. `AiEngine` runs a
+module in the attack decision window its brain already has: the base `behavior` supplies
+the modules, `behavior_offensive` does when the base names none (12 rows), `am1` is
+preferred over `am2`, `am*Chance` is the roll, `am*Cooldown` the lockout and
+`am*MinDist`/`am*MaxDist` the distance band. A module whose chains land the hit is that
+window's attack; one that only animates leaves the mob's own attack to go out with it,
+unless the module's own effect restricts the weapon meanwhile - the dodge pair's effect
+sets `restrict_weapon` for the 500 ms it runs, so a dodge window fires nothing. A module
+whose chains carry nothing a client draws or plays is left alone and the weapon fires as
+before, exactly like a server-only weapon chain - no behaviour string in the build names
+such a module (all 26 reach a client command once every chain the engine runs is followed,
+`120937` included), so the gate protects against a data change rather than a shipped row.
+
+What the strings state and the engine does **not** carry: `am*Timeout` (a watchdog),
+`am*NavToDist`/`am*NavTimeout` (the module's own navigation) and
+`am*Targeted`/`am*Facing`/`am*FacingDuring` (requirements an attack window already
+meets). The database gives no event that fires a module, so the window the brain asked to
+attack in is the trigger.
+
+**The displacement a chain declares now happens (`MovementSlide`).** The one part of a
+module's chains the engine did not execute was their movement: `aptfs::MovementSlideCommandDef`
+was a placeholder the command factory never even constructed, so the shapes that carry it
+animated in place. Three mob-facing chains do, and they are where a monster's own motion
+comes from: the dodge pair's `offset_x -5` / `+5` over **667 ms** (effects 1247/1282,
+applied by abilities 33812/33833 - a 5 m sidestep at 7.5 m/s, the animation is 9/10 of the
+same effect), the Move Then Fire module's `offset_y 20` over 1000 ms toward its current
+target (`offset_target 1`; ability 36817 roars for 3.5 s, then lunges 20 m into a 2.65 m
+cone that pushes and damages what it hits every 100 ms), and ability 39066's `offset_z 20`
+over 2400 ms with a 0.1 m drift every 600 ms from its update loop. `MovementSlideCommand`
+reads the row, resolves the offsets into one world displacement and hands it to
+`AbilitySystem`, which moves the character along it on the effect sweep and applies the
+row's endpoint exactly when the slide ends. The offsets are measured in the character's
+own axes - `offset_x` right, `offset_y` forward, `offset_z` up, the frame
+`CharacterEntity` rotates its muzzle and its aim in - with the forward axis taken from the
+direction the row asks for (`offset_target` toward the context's target, `along_velocity`,
+`offset_aim`, each falling back to the caster's facing), `fixed_speed` deriving the
+duration from the distance when a row states one (187880 states a 2 ms duration next to a
+speed of 10), and `offset_regop` / `move_duration_regop` / `fixed_speed_regop` reading the
+activation's register. `AiEngine` leaves the character to the slide while it runs, exactly
+as it does under `restrict_movement`, so the mob completes the displacement the row
+declared instead of walking out of it - necessary because the sidestep outlives its effect
+(667 ms against 500 ms). A player-controlled character is not moved (its position is the
+client's to report, and the client runs the slide it predicted - `allow_prediction`), and
+neither is a corpse: the dodge's duration chain ends on `RequireCState(living=1)` while its
+slide runs 167 ms longer. What the build records but does not apply from the row:
+`velocity_type`, `orientation_type`, `initiation_position`, `rollback` and the
+`rand_offset_*` spread - none of them is set on a mob-facing row (see
+[Known gaps](#6-known-gaps)).
+
+**Weapon animation parameters.** `SDBUtils.GetDetailedWeaponTemplateInfo` used to
+drop the `anim_*` columns ("stuff that is presumably client side like
+animations"); they are now resolved through the same item/slot modifier cascade as
+every other template field and carried on `NpcAttackProfile`
+(`ArmedAnimationId`, `ArmedAnimationPriority`, `FireAnimationType`,
+`ReloadAnimationType`, `ChargeAnimationType`, `BurstDurationMs`). Of the 85
+templates the build's mobs actually use, all 85 carry `anim_armed_id` (1 on 76 of
+them, 4 on the other 9) and `anim_armed_priority` 100, 47 carry a non-zero
+`anim_fire_type`, 53 an `anim_reload_type` (the reload animation the marker above
+plays, on 747 of the 1,510 monster weapon slots that reload) and 2 an
+`anim_charge_type`; the client gets them from the item's template id, which the
+equipment replication already carries.
+
+**Locomotion.** The database gives a mob two speeds and the client has two
+locomotion animations to match: `normal_speed` is the walk used while it
+repositions inside its attack (the `Attack` state's speed) and `fast_speed` the
+run it chases with, so the engine broadcasts `Walking` (`0x5004`) while attacking
+and `Running` (`0x2004`) while chasing, and `Standing` (`0x1000`) when it holds
+still. `AiSpeeds` picks which of the two rows is trusted; the movement state that
+goes out with every pose is the DB-driven selection on top of it.
+
+**Death.** The state change (`CharacterState.Dead`) plus `NpcDeathService`'s gib
+visuals and corpse linger are what the client plays its death and gib animation
+from; an attack animation in flight is cancelled first (above). The gib visuals
+id is the chassis battleframe's `gibset_id`, resolved by `GibVisualsResolution`,
+and - the point of that type - a `gibset_id` of **0 is a value, not an absence**:
+it is `dbcharacter::GibVisuals` row 0, the database's default row, which 804 of
+the 1,676 battleframes and 3,816 of the 3,902 deployables use. The deployable
+death path has always reported it as-is (`DamageSystem`), while the character path
+used to drop it, so 1,806 monsters stayed silent at death and logged
+`No gib visuals id available`; they now report the default row at their death
+time like everything else. Only a chassis the database has no battleframe row for
+(112 monster rows, 89 of them with `chassis_id` 0) has no gib set to report.
+
+**What is *not* driven yet.** The database's animation surface is larger than
+these three pieces, and the line currently sits here:
+
+| Static DB | Rows | Describes | State in PIN |
+|---|---|---|---|
+| `dbitems::WeaponTemplates` / `WeaponTemplateModifiers` `anim_*`, `ms_burst_duration`, `ms_per_burst`, `base_clip_size`, `ammo_per_burst`, `rounds_per_burst`, `reload_time` | 318 / 5,387 | the weapon's animation selectors, its burst timing and its magazine/reload | used (above) |
+| `dbcharacter::Monster.normal_speed` / `fast_speed` | 3,109 | the two locomotion speeds the walk/run animation matches | used (above) |
+| `dbcharacter::GibVisuals` (`death_anim_index`, `blast_impulse_strength`, `direct_vrec_id`) via `dbitems::Battleframe.gibset_id` | 128 | the row a corpse reports at death: the death animation variant and the gib visuals | used: `NpcDeathService` reports the battleframe's `gibset_id` at the death time, 0 included (see below), covering the 1,137 monsters with an explicit gib set and the 1,806 whose battleframe names the default row. 112 monster rows have no battleframe to read it from (89 of them `chassis_id` 0, legacy entries), and 54 name a `GibVisuals` id this build does not ship - the id is reported as the row states it and the client resolves it against its own copy |
+| `dbcharacter::Stumble` (`anim_index`, `duration`, `cooldown_ms`, `distance`, `only_once`) | 39 | hit-reaction ("stumble") rows: which animation, which status effect, how long, how often | unused, and not implementable from this build (see below) |
+| `dbcharacter::StumbleDirection` (`anim_substate` 0-3, `direction_in`/`direction_out`, `threshold_in`, `stumble_id`) | 120 | which stumble plays for a hit from each direction (references the 32 directional rows) | unused - no row points at it |
+| `dbcharacter::EmoteRecord` (`animation_name`, `anim_override_id`, `head_anim_override_id`, `statuseffect`) | 382 | emotes: the animation ids the client resolves from the emote id, and on 4 rows the status effect whose chain draws the emote | used for the emote lifecycle: `PerformEmote` is validated against the table (an id outside it is ignored), emote 0 clears the emote, and the 4 rows apply their effect so the emote animates for every client watching, not only for the performer (`Docs/EMOTES.md` §1-2). An NPC's own emote does not come from a chain at all: **207 monster rows name one in their `behavior` string** (`AlertAndInteractive(emote="calm")`), which the AI now performs while the NPC is in its base behaviour set and clears when it fights (`Docs/EMOTES.md` §7); the 530 `tfPerformEmote` commands and the 359 effects holding them stay unreachable from every monster weapon |
+| `dbcharacter::MonsterMood` / `MonsterMoodName` | 2,268 / 6 | mood -> portrait id (`Neutral`, `Excited`, `Thinking`, `Angry`, `Happy`, `Sad`) | unused - a UI portrait with no field in the character views, so there is nothing for the server to replicate (`Docs/EMOTES.md` §5) |
+| `apttf::tfPlayAnimationCommandDef` (122 distinct names: `AttackSingle`, `Shoot`, `MeleeAttack`, `Idle`, `Injured*`, `Death`, `roar`, `sleep`, ... plus `on_targets`) and `tfAbilityAnimationCommandDef` | 642 / 1,898 | the animation commands of the original game's chains, and the only place an animation is named | placeholder records, because the client runs them from the replicated effect they sit in; the two monster weapons above reach one through the effect their ability applies, and so do 25 of the 26 behaviour ability modules (`am1Id`/`am2Id`, above); the rest of these rows belong to player abilities, to the 359 emote effects (`Docs/EMOTES.md` §3) and to effects no monster weapon applies |
+| `dbitems::Weapons.first_person_animnet_id` / `third_person_animnet_id`, `dbcharacter::Head.animnet_id`, `dbitems::BattleframeVisuals.animnetwork_id`, `dbcharacter::Deployable.animnetwork` | 6,789 / 67 / 2,786 / 3,902 | animation-network (animation graph) asset ids | client side: the client picks the graph from the item/visual id the server already replicates, so there is nothing for the server to send |
+
+**Where the animations actually live.** Probing the aptitude chains settles what
+the database can and cannot drive for a mob, and why the two pieces above are
+documented rather than wired:
+
+- *Animations ride status effects.* A `tfPlayAnimationCommandDef` is a node in a
+  chain, and the chains that hold animations are the ones under
+  `apt::StatusEffectData.apply_chain` / `remove_chain` / `duration_chain`: applying
+  the effect is what plays the animation, for every client that has the same
+  database. Effects are replicated on the character (`CombatView.StatusEffects_*`),
+  so this is the one DB-declared animation path that reaches an observer of an NPC.
+  The 2,540 animation commands are owned by status effects, `dbitems::AbilityModule`
+  chains, one `WeaponTemplateModifiers.burst_ability_id`, one `Ammo.ability_id`, one
+  `Ammo.touch_ability_id` and one `dbcharacter::Deployable.spawn_abilityid`; through the
+  fields this first walk follows, only **7** abilities in the whole build have a chain
+  that reaches an animation command (the walk was later extended - see the end of the
+  next bullet - and the behaviour modules alone add 25).
+- *Monster weapons barely have abilities at all.* Of the 85 weapon templates the
+  build's monsters use, 14 carry an `attack_ability_id` or a `burst_ability_id`
+  (102 monster slots), and none of those abilities' own chains contains an animation
+  command - even following `apt::CallCommandDef` into called abilities. Two of them
+  apply a status effect whose chain does carry one: effect 176 (animation
+  `MeleeAttack`, applied by template 21 "Melee - Shadowstrike", 2 monsters) and
+  effect 10496 (`tfAbilityAnimationCommandDef` + `FireProjectileCommandDef`, applied
+  by template 12143 "NPC Charge Up and Channel Fire", 14 monsters). Applying those
+  effects is the faithful way to animate those 16 mobs, and §3 now does it: the
+  charge effect's restrictions, its `ReplenishableDurationCommandDef` and the
+  `ReplenishEffectDurationCommandDef` that hands the charge time to it are all
+  part of the same change. The same walk also reports what the other templates' chains
+  hold, which is why the engine's rule is not "does it animate" but "does it carry
+  anything a client runs": **7 of the 14 templates (75 slots)** do - two of them
+  animate (above), two more deliver the hit themselves (the flamethrower's cone burn
+  8785 among them), and the rest carry the weapon's muzzle flash and sound - while the
+  other 7 (27 slots) reach only server-side commands and keep the AI's own attack.
+  **The walk was later extended, and it changed the module answer, not this one.** It
+  followed `next`, the branch bodies, called abilities and every effect chain, but not the
+  chains a control-flow command *hands execution to*: an `UpdateWaitAndFireOnce`'s chain,
+  the and/or/negate chains, a while loop's condition and body, and an effect toggle's
+  pre-apply chain - all of which the engine runs (`Factory.LoadCommand` has every one of
+  them). Following those too reaches 218 distinct client commands from the same 114 ability
+  roots instead of 134, gives eight behaviour modules the damage they hide behind a wait, and
+  uncovers `120937`'s animations 22 and 26; the corrected module numbers are in §3's
+  table. On the *weapon* side nothing changes: no attack/burst ability of the 14 templates
+  hides a command behind those fields, so the 7-of-14 finding above stands.
+- *Hit reactions have no trigger in this build.* The stumble data is complete -
+  `dbcharacter::Stumble` 9452 is the effect a stumble applies, and that effect's
+  own chain is a stumble in full: `RequireHasEffectTag`, then
+  `tfPlayAnimationCommandDef` `DamageHeavy`, then `CombatFlagsCommandDef` with
+  `restrict_movement` + `restrict_weapon` + `restrict_abilities` + `restrict_melee`
+  + `restrict_interaction`, for `TimeDurationCommandDef` 2,000 ms. The one table
+  that says *when* it fires is the hardpoint table (`hardpoint_name`,
+  `pfx_asset_id`, `stumble_id`) and it has **0 rows**, no weapon, ammo, damage type
+  or ability row references a stumble id, and the only other chain in the build
+  that applies a stumble effect is ability 34039 ("on impact, apply 901 to self"),
+  granted by a single `WeaponTemplateModifiers.burst_ability_id` - player gear.
+  The victim-facing event is BaseController-scoped too (`Stumble`: `ushort`,
+  `ushort`, `byte`), so an NPC's stumble has no observer channel but the effect.
+  Picking a trigger would mean inventing the rule, so it is left out.
+
+The protocol's only animation-specific observer message is the GSS character
+event `AnimationUpdated` (`ushort` + `byte`, both fields unnamed in
+`AeroMessages`);
+PIN has never sent it, so stumbles and the chain animations above have no observer
+channel today. `AbilityActivated`/`AbilityFailed` are `CombatController` events,
+i.e. addressed to the controlling player, and so cannot carry an NPC's animation
+either. The attack animation described above is what an observer of an NPC gets.
 
 ---
 
@@ -218,13 +665,13 @@ Everything is an `IAiRules` property. `AiEngine` takes an optional instance; pas
 | `Enabled`            | `true`  | Master switch                                                    |
 | `AggroRadius`        | `55`    | Metres at which an idle NPC notices a hostile player             |
 | `MaxAcquisitionHeightDelta` | `12` | Metres of height difference the notice scan accepts (`0` = unlimited, i.e. a cylinder) |
-| `AttackRange`        | `3.5`   | Metres of straight-line reach an attack needs - a melee reach, not a fire range |
-| `AttackRangeExit`    | `5`     | Metres at which attacking falls back to chasing                  |
-| `MaxAttackHeightDelta` | `2.5` | Metres of height difference one attack may span                  |
-| `StandoffRange`      | `2`     | Metres the NPC tries to keep from its target                     |
+| `AttackRange`        | `3.5`   | Metres of straight-line reach an attack needs; used by an NPC with no resolvable weapon (a mob with one uses its weapon's range) |
+| `AttackRangeExit`    | `5`     | Metres at which attacking falls back to chasing (weapon overrides, see above) |
+| `MaxAttackHeightDelta` | `2.5` | Metres of height difference one attack may span; a ranged weapon widens it to the weapon's range |
+| `StandoffRange`      | `2`     | Metres the NPC tries to keep from its target; a ranged weapon uses its behaviour's `combatDist` instead |
 | `LeashRadius`        | `120`   | Metres from the spawn point before it gives up                   |
 | `HomeArrivalRadius`  | `2`     | Metres from home that counts as arrived                          |
-| `AttackCooldownMs`   | `1200`  | Delay between two attacks by the same NPC                        |
+| `AttackCooldownMs`   | `1200`  | Delay between two attacks by the same NPC; used by an NPC with no resolvable weapon (a mob with one uses its behaviour/weapon cadence) |
 | `AttackDamageFraction` | `0.1` | Share of the monster's per-level damage rating one attack commits |
 | `AttackDamage`       | `5`     | Fallback damage per attack when the DB has no scaling row for the NPC's level |
 | `TargetLostTimeoutMs`| `6000`  | How long an unseen target is still hunted                        |
@@ -270,13 +717,17 @@ comes from where it spawns:
   `level` (1-80) that becomes the spawn's `MonsterScaling` level — the emulator
   equivalent of that flow.
 - The scaling row then sets the NPC's `MaxHealth` (`ScalingTable.health`), and
-  `AiEngine` asks `SdbAiMonsterStats.GetAttackDamage(typeId, level)` for the
-  damage **rating** of the NPC's level (`ScalingTable.damage`) when the NPC is
-  registered. `AiAttackDamage.Resolve` turns that rating into what one swing is
-  worth - `AttackDamageFraction` (a tenth) of it - because the rating is not a
-  per-hit amount. The rules' `AttackDamage` is only the fallback for a monster or
-  level the database has no row for, and it is already a per-swing number, so it
-  is not fractioned a second time.
+  `AiEngine` resolves the monster's weapon at the NPC's level when it registers:
+  `SdbAiMonsterStats.GetAttackProfile` (see
+  [Weapon attacks come from the database](#weapon-attacks-come-from-the-database))
+  gives the per-round damage, and only when that resolves to nothing does the
+  engine spend the rating: `SdbAiMonsterStats.GetAttackDamage(typeId, level)` for
+  the damage **rating** of the NPC's level (`ScalingTable.damage`), which
+  `AiAttackDamage.Resolve` turns into what one swing is worth -
+  `AttackDamageFraction` (a tenth) of it - because the rating is not a per-hit
+  amount. The rules' `AttackDamage` is only the fallback for a monster or level
+  the database has no row for, and it is already a per-swing number, so it is not
+  fractioned a second time.
 - A per-spawn `max_health` in `character_spawn.json` still overrides the database
   health for that one spawn (`EntityManager.SpawnZoneEntities` applies it after
   `LoadMonster`), and a per-spawn `level` overrides the level it is looked up at.
@@ -320,6 +771,74 @@ without a band resolves its NPCs at the default player level (1, see above)
 instead, hitting for 5. In a level-40 zone (Sertao's open-world band is 39-40) the
 same monster type spawns with 21,836 health and hits for 1,092.
 
+### Weapon attacks come from the database
+
+`NpcAttackResolver` walks the database's own chain when a monster is registered
+and hands the engine an `NpcAttackProfile` - the mode, per-round damage, rounds
+per burst, cadence, reach, and the ammo row to fire:
+
+```
+dbcharacter::Monster.weapon1_id (else weapon2_id)
+  -> dbitems::Weapons                      (the per-monster item)
+  -> dbitems::WeaponTemplates              (via weapon_type_id; the item's
+                                            WeaponTemplateModifiers and the
+                                            weapon-slot ability modules are
+                                            applied by SDBUtils.GetDetailedWeaponInfo)
+  + dbitems::AttributeRange rows of the item (954 damage, 957 range, 1145 modifier,
+                                              the ammo stat attributes)
+  + dbcharacter::MonsterAttributeRange row of the monster (1144 damage modifier)
+  + dbcharacter::Monster.behavior string   (triggerPullTime, fireRestDuration,
+                                             combatDist, preferredMinCombatDist)
+```
+
+**Mode.** A row is ranged when its template carries an `ammo` id that resolves
+*and* its range is past arm's length (4 m); everything else - the melee ability
+vehicles with 2-3 m ranges, rows whose ammo does not resolve, and every monster
+the database gives no weapon at all - melees. Of the 3,109 monsters in build
+`prod-1962`, 1,727 carry a weapon; 596 of the weapon items are used by monsters
+and 85 distinct templates are involved.
+
+**Damage.** The two damage statements are mutually exclusive on monster weapons
+(0 of the 596 items carry both):
+
+1. `AttributeRange` 954 (Damage Per Round) - the literal per-round damage of a
+   level-matched item (the shared PvE weapon families carry it). Used as-is.
+2. `AttributeRange` 1145 (Creature Weapon Damage Modifier) - the creature item's
+   own modifier on the monster's per-level damage rating
+   (`dbcharacter::MonsterScaling.damage` × 1145). This is how a level-45 mob hits
+   like a level-45 mob while its weapon item is a level-1 row: the rating is the
+   level term, the modifier is the weapon term (0.0217 on the common guards, 0.15
+   on the elite ones).
+3. Neither (the ~103 melee/ability-only items, and every weaponless monster) -
+   the rating share the engine has always used: `rating × AttackDamageFraction`
+   (a tenth), with the rules' flat `AttackDamage` for a monster or level the
+   database has no rating for.
+
+Every branch is then multiplied by the monster's own
+`MonsterAttributeRange` 1144 (Creature Damage Modifier, 0.95-1.5 on the 81 named
+monsters that carry one, 1 otherwise).
+
+**Cadence.** The behaviour string is where the original game put its AI attack
+timing: `triggerPullTime` (median 1,500 ms across the 248 rows that carry it) plus
+`fireRestDuration` (median 1,000 ms). The weapon template's `ms_per_burst` is the
+client's fire animation cadence (50-100 ms on several NPC weapons), so it is only
+used when the row has no behaviour timing, clamped at 250 ms (one 50 ms AI tick's
+worth of sanity), and `AttackCooldownMs` is the last resort. Rounds per burst come
+from the template, so one attack can be a burst of projectiles.
+
+**Range and standoff.** A ranged weapon's effective range is its item's 957 row
+when it has one, else the template's `range`; the exit range is that × 1.15. A
+melee row swings at the tuned 3.5 m reach rather than its own template `range`
+(2.6 m for the Spyder's "NPC Melee Medium", where the template value is an
+ability radius), and a ranged row whose ammo does not resolve falls back to that
+same reach instead of becoming a hitscan sniper at its own range. A ranged row
+keeps its behaviour's `preferredMinCombatDist` (or `combatDist`) as its standoff,
+so guards stop at the distance the data gives them instead of walking into melee.
+
+**Muzzle.** The shot leaves from `dbcharacter::Monster.projectile_offset` rotated
+into world space the same way `CharacterEntity.CalculateProjectileOrigin` rotates
+a character's own muzzle; a row with no offset uses the chest height (1.62 m).
+
 ### Ground snapping
 
 `SnapToGround` is on. The character origin sits at the feet, so `GroundOffset` is
@@ -339,17 +858,56 @@ stays horizontal, exactly as before.
 
 ## 6. Known gaps
 
-* **No animation selection.** The engine only sets the movement state
-  (`0x1000` standing, `0x2004` running); there is no attack or death animation.
-* **Melee only, on purpose.** `Monster.weapon1_id` does point at real per-monster
-  weapon rows (`FAMAS Burst Rifle`, `NPC Assault Rifle`, an acid-spit launcher),
-  but their `WeaponTemplates.damage_per_round` is a placeholder stub - several
-  templates are `1` - and there is no NPC-side projectile path to fire them
-  through, so PIN ignores them and every monster swings instead. The mob's melee
-  reach does come from the data: a melee weapon's template `range` (2.6 m for
-  `NPC Melee Medium (Spyder)`) is what `AttackRange` / `StandoffRange` are
-  modelled on, and the 3.5 m / 2 m defaults keep the hit generous enough to land
-  while chasing walks the mob to 2 m.
+* **Animation is the attack + reload + locomotion + death markers, the weapon
+  chains that carry client feedback, and the NPC's own emote.** The engine drives the
+  attack burst markers, the weapon reload markers, the walk/run/stand movement state and
+  the death state, it runs a weapon's ability when the database puts anything a client
+  draws or plays in the effect that ability applies (7 of the 14 templates with
+  attack/burst ids, 75 monster slots: the Shadowstrike swing, the charge-up weapon's
+  charge/release, the flamethrower's cone, and the charge sniper/phason/fluid
+  cannon/magic finger muzzle flash and sound), it runs a behaviour set's ability modules
+  (`am1Id`/`am2Id`: all 26 module ids the build's monsters name, 25 of them holding an
+  animation and 20 landing their own damage - the dodge pair's 500 ms sidestep, the Move
+  Then Fire roar, the melee swings and the rest), and it performs the emote of the
+  behaviour set an NPC is in - 207 monster rows name one in `behavior`, so a guard
+  guards, a citizen works and a dancer dances, and a monster that engages drops the pose
+  (see [What an NPC animates](#what-an-npc-animates), which lists the animation rows
+  that are and are not used, and `Docs/EMOTES.md` §7). What is still untouched: the
+  engine does not run a monster's behaviour tree, so the *tree's* other actions (taunts,
+  wander idles, interaction poses, and the navigation the `am*NavToDist` parameters
+  describe) do not happen - the emote parameter of the set it is in and its `am1`/`am2`
+  modules do; a module's own movement *is* applied now (`MovementSlide`, above - the dodge
+  pair's 5 m in 667 ms, the Move Then Fire lunge's 20 m in 1 s, 39066's rise), so the only
+  placeholders left on the animation paths are the ones whose semantics this build cannot
+  establish from the database (`aptgss::AbilityFinished`, which the dodge's own remove
+  chain ends on, `ActiveInitiation`, whose `AbilityActivated` payload is player-facing, and
+  `apt::Return`, whose `return_status`/`return_halt` flags have no documented meaning here);
+  the 39,261 dialog rows - 356 of them with an emote - are not played because
+  the trigger rules for them are not in the database (6 chatter rows describe the
+  probabilities, not the events), and the 7 monster rows whose behaviour names a
+  `dialogScript=` are dialog rather than animation; the other 7
+  weapon templates with attack/burst ids carry no client command, so their
+  effects (charge states, cone effects, stat modifiers) change numbers rather than
+  what anyone sees, and the overcharge vent (23 slots, above) is documented rather than
+  fired because the build states its delay but not the event; the
+  protocol's `AnimationUpdated` observer event is never sent, so the `apttf::tf*`
+  animations only reach a client through the status effect the effect-data chain
+  replicates; and stumble/hit-reaction animations (`dbcharacter::Stumble`,
+  `dbcharacter::StumbleDirection`) are left out because the build has no trigger for
+  them at all (the one table that links a stumble to what causes it has 0 rows, and
+  no weapon, ammo, damage type or ability row references a stumble id; see
+  [What an NPC animates](#what-an-npc-animates)).
+* **No accuracy model.** NPC shots aim at the target's chest with the weapon's
+  own spread profile left unused: there is no per-NPC spread state, no
+  `MinSpread`/`MaxSpread` handling and no aim error, so a ranged mob hits for as
+  long as line of sight holds. The behaviour strings' `am*Chance`/`am*Cooldown`
+  gates *are* modelled now, on the ability modules they belong to (see the
+  behaviour ability modules above); what stays unmodelled is the weapon's own spread and
+  everything the AI's hits do not state.
+* **Weapon damage rows are placeholder where the data is placeholder.** A few
+  templates (not per-monster items) carry `damage_per_round` 1; those rows still
+  resolve through the 954/1145 chain above, so the placeholder only survives where
+  a weapon item has neither attribute row - the rating share covers it.
 * **No pathfinding, no climbing.** Movement is a straight line towards the goal
   plus a wall check, always at the spawn's own height band. A mob behind a low
   obstacle will stand there until the leash or the give-up timer fires, and a mob

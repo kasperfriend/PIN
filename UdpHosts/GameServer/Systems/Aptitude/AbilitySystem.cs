@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Threading;
 using AeroMessages.GSS.Character.Command;
 using GameServer.Entities.Character;
@@ -50,6 +51,15 @@ public class AbilitySystem
     /// effect is applied, and the moment it leaves that state (or the carrying effect ends) it is removed.
     /// </summary>
     private readonly Dictionary<ulong, List<MovementEffectRegistration>> _movementEffectRegistrations = [];
+
+    /// <summary>
+    ///     The displacement a database command (<c>aptfs::MovementSlideCommandDef</c>) asked each character to
+    ///     make, per character. At most one slide per character: the command states a displacement, not a
+    ///     queue, so a second slide that starts while one is running restarts the motion from wherever the
+    ///     character is now. Advanced on the effect sweep (<see cref="ProcessTarget" />) and dropped when the
+    ///     character leaves the shard or stops living.
+    /// </summary>
+    private readonly Dictionary<ulong, MovementSlide> _movementSlides = [];
 
     private uint _proximityActivationsPruneAt;
 
@@ -212,8 +222,17 @@ public class AbilitySystem
 
             // A character that left the shard cannot leave its movement-state bindings behind either: the
             // bindings are keyed by entity id and would otherwise leak (and could apply effects to an entity
-            // id the shard later reuses).
+            // id the shard later reuses). The slides a database command started are keyed the same way and
+            // would leak the same way - and would move whatever entity the shard next gives that id to.
             foreach (var pair in _movementEffectRegistrations)
+            {
+                if (!_shard.Entities.ContainsKey(pair.Key))
+                {
+                    (stale ??= []).Add(pair.Key);
+                }
+            }
+
+            foreach (var pair in _movementSlides)
             {
                 if (!_shard.Entities.ContainsKey(pair.Key))
                 {
@@ -226,6 +245,7 @@ public class AbilitySystem
                 foreach (var entityId in stale)
                 {
                     _movementEffectRegistrations.Remove(entityId);
+                    _movementSlides.Remove(entityId);
                 }
             }
 
@@ -266,8 +286,15 @@ public class AbilitySystem
                 && scopedCharacter.ScopeStatusEffectId == activeEffect?.Effect.Id
                 && scopedCharacter.FireMode_1.Mode != 0;
 
+            // `UpdateFrequency` is the period of this effect's update loop, so an update is due once a whole
+            // period has passed - at exactly `LastUpdateTime + UpdateFrequency`, not the tick after it. The
+            // strict comparison this used to have made every period one tick longer than the database says
+            // and, because `LastUpdateTime` moves to the tick that ran the loop, the lateness accumulated:
+            // an effect with a 1000 ms frequency under the 20 ms update sweep evaluated at 1020, 2040, 3060.
+            // Effect 10162 waits 20000 ms inside a 20000 ms effect, which that schedule could never reach -
+            // the duration chain expired on the evaluation where the wait was due.
             if (activeEffect is { Removed: false } && !isActiveScope && activeEffect.Effect.DurationChain != null
-                && currentTime > activeEffect.LastUpdateTime + activeEffect.Effect.UpdateFrequency)
+                && currentTime >= activeEffect.LastUpdateTime + activeEffect.Effect.UpdateFrequency)
             {
                 var context = activeEffect.Context;
                 var previousApplicationTime = context.EffectApplicationTime;
@@ -308,6 +335,69 @@ public class AbilitySystem
         }
 
         ReevaluateMovementEffects(entity, currentTime);
+        AdvanceMovementSlide(entity, currentTime);
+    }
+
+    /// <summary>
+    ///     Starts the displacement a <c>MovementSlideCommand</c> declares: the character moves along
+    ///     <paramref name="offset" /> over <paramref name="durationMs" /> from where it stands now.
+    /// </summary>
+    /// <param name="character">The character to move (the server only moves characters it simulates).</param>
+    /// <param name="durationMs">How long the displacement takes, in milliseconds.</param>
+    /// <param name="offset">The world-space displacement the row's offsets resolve to.</param>
+    /// <returns>The slide that was started.</returns>
+    public MovementSlide RegisterMovementSlide(CharacterEntity character, uint durationMs, Vector3 offset)
+    {
+        var slide = new MovementSlide(character.EntityId, _shard.CurrentTime, durationMs, character.Position, offset);
+        _movementSlides[character.EntityId] = slide;
+        return slide;
+    }
+
+    /// <summary>Whether a database slide is moving the entity right now.</summary>
+    /// <param name="entityId">The character's entity id.</param>
+    /// <returns>Whether a slide is still running at the current server time.</returns>
+    public bool IsMovementSliding(ulong entityId)
+    {
+        return _movementSlides.TryGetValue(entityId, out var slide) && slide.IsActive(_shard.CurrentTimeLong);
+    }
+
+    /// <summary>
+    ///     Advances one entity's slide to <paramref name="currentTime" />, applying the row's endpoint exactly
+    ///     when the slide ends (the last tick before the end would otherwise leave the character up to a tick
+    ///     short of the offset the database states).
+    /// </summary>
+    private void AdvanceMovementSlide(IAptitudeTarget entity, ulong currentTime)
+    {
+        if (!_movementSlides.TryGetValue(entity.EntityId, out var slide))
+        {
+            return;
+        }
+
+        if (entity is not CharacterEntity character)
+        {
+            _movementSlides.Remove(entity.EntityId);
+            return;
+        }
+
+        // A corpse does not dodge: the row's displacement belongs to a living caster (the dodge's own
+        // duration chain ends on RequireCState(living=1), and the slide may outlive that effect).
+        if (!character.IsAlive)
+        {
+            _movementSlides.Remove(entity.EntityId);
+            return;
+        }
+
+        if (slide.IsActive(currentTime))
+        {
+            character.SetPosition(slide.PositionAt(currentTime));
+        }
+        else
+        {
+            character.SetPosition(slide.EndPosition);
+            _movementSlides.Remove(entity.EntityId);
+        }
+
+        _shard.Physics?.UpdateEntity(character);
     }
 
     /// <summary>
@@ -423,6 +513,14 @@ public class AbilitySystem
 
         var applyContext = Context.CopyContext(context);
         applyContext.Self = target;
+
+        // A chain that ran ReplenishEffectDuration (see the command) asked for the effect it applies to
+        // live for the value the activation carries - a charge-up weapon's charge time. Without one the
+        // effect's own duration chain decides, exactly as the ImpactApplyEffect row's PassRegister says.
+        if (!float.IsNaN(context.AppliedEffectDuration))
+        {
+            applyContext.Register = context.AppliedEffectDuration;
+        }
         applyContext.InitTime = context.EffectApplicationTime ?? context.InitTime;
         applyContext.EffectApplicationTime = null;
         applyContext.ExecutionHint = ExecutionHint.ApplyEffect;
@@ -750,7 +848,7 @@ public class AbilitySystem
     /// Executes the chain of an activated ability and returns whether the whole
     /// chain succeeded (requirements like cooldowns or energy can fail it).
     /// </summary>
-    public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId, uint activationTime, AptitudeTargets targets, Guid? executionId = null, uint abilityModuleId = 0, List<AppliedEffectRecord> appliedEffects = null)
+    public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId, uint activationTime, AptitudeTargets targets, Guid? executionId = null, uint abilityModuleId = 0, List<AppliedEffectRecord> appliedEffects = null, float register = float.NaN)
     {
         var execId = executionId ?? Guid.NewGuid();
         using var logContext = Serilog.Context.LogContext.PushProperty("ExecutionId", execId);
@@ -777,6 +875,11 @@ public class AbilitySystem
             InitTime = activationTime,
             ExecutionHint = ExecutionHint.Ability,
             AppliedEffects = appliedEffects,
+
+            // The value the chain's commands read, when the caller has one: a player's activation comes from
+            // the client (no register), an NPC's from the AI, which hands a charging weapon its own charge
+            // time so the effect the chain applies lasts as long as the charge the data describes.
+            Register = register,
         };
 
         return ExecuteAbilityActivation(context, abilityId, ability.Chain, isRootActivation: true);

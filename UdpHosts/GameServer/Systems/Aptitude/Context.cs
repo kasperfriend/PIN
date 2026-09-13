@@ -88,6 +88,14 @@ public class Context
     /// </summary>
     public List<AppliedEffectRecord> AppliedEffects { get; set; }
 
+    /// <summary>
+    ///     Lifetime a <c>ReplenishEffectDurationCommand</c> in this activation hands to the effects the
+    ///     activation applies, in the register unit the duration commands read (a value below 1000 is
+    ///     seconds). NaN - the default, and every player activation, which has no register of its own -
+    ///     leaves the effect's lifetime to its own chains.
+    /// </summary>
+    public float AppliedEffectDuration { get; set; } = float.NaN;
+
     public static Context CopyContext(Context original)
     {
         return new Context(original.Shard, original.Initiator)
@@ -115,6 +123,7 @@ public class Context
             ExecutionId = original.ExecutionId,
             PendingCooldowns = original.PendingCooldowns,
             AppliedEffects = original.AppliedEffects,
+            AppliedEffectDuration = original.AppliedEffectDuration,
         };
     }
 

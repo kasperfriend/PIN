@@ -263,44 +263,80 @@ linger.
 
 `AiEngine` runs the reverse path on the shard tick. A mob acquires you by
 proximity or by being shot, walks towards you and, once you are inside its
-**melee** reach with an unobstructed line of sight, applies its attack damage
-through the same `DamageSystem` and sends the same `TookHit` feedback a weapon
-hit produces:
+weapon's reach with an unobstructed line of sight, attacks with the weapon its
+`dbcharacter::Monster` row names:
 
 ```
 AiEngine.Tick
   -> AiBrain.Decide              (Idle / Chase / Attack / Return / Dead)
-       attack gate: straight-line distance <= AttackRange (3.5 m)
-                    and height difference <= MaxAttackHeightDelta (2.5 m)
-    -> DamageSystem.ApplyDamage  (shields, then health; AttackDamageFraction of the
-                                   monster's dbcharacter::MonsterScaling damage rating)
-      -> EntityDamagedEvent      (bleedout / death for the player)
-    -> HitFeedback.TookDebugHit  (TookHit to scoped clients)
+       attack gate: straight-line distance <= the NPC's AttackRange
+                    (its weapon's range, or the rules 3.5 m melee reach)
+                    and height difference <= MaxAttackHeightDelta
+    -> melee:  DamageSystem.ApplyDamage  (weapon per-round damage, else the
+                                           AttackDamageFraction of the monster's
+                                           dbcharacter::MonsterScaling rating)
+                 -> EntityDamagedEvent   (bleedout / death for the player)
+                 -> HitFeedback.TookDebugHit  (TookHit to scoped clients)
+    -> ranged: ProjectileSim.FireProjectile  (the weapon's dbitems::Ammo row, one
+                                           projectile per round in the burst, the
+                                           resolved per-round damage on board)
+                 -> flight/impact -> ProjectileHitEvent -> DamageSystem.ApplyDamage
 ```
 
 Two things about that gate matter in play:
 
-* **Melee only, on purpose.** An attack is a direct damage call — there is no NPC
-  projectile yet — so a monster has to reach you to hurt you. The old 45 m attack
-  range meant a mob opened up the moment it noticed you, from the far side of the
-  aggro band, with nothing to dodge.
+* **Melee or ranged is a property of the weapon row.** A weapon with an ammo row
+  and a range past arm's length fires that ammo through `ProjectileSim` and can be
+  dodged; a melee row (or a monster with no resolvable weapon) is a direct damage
+  call. A monster has to reach you to punch you, but a guard with a rifle opens up
+  from its weapon's range as soon as it sees you.
 * **Reach is measured in 3D.** Chasing is planned on the flat plane (a mob walks,
   it does not fly), but an attack is not: standing on the crate or the balcony
-  above a mob keeps you out of a swing that would otherwise travel straight up
-  through the floor you are standing on. The acquisition band
-  (`MaxAcquisitionHeightDelta`, 12 m) is deliberately wider than the attack band,
-  so a mob still notices you up there and comes looking for a way up; there is no
-  pathfinding, so until you come down it can only stand under you.
+  above a melee mob keeps you out of a swing that would otherwise travel straight
+  up through the floor you are standing on. A ranged weapon raises that band to
+  its own range, because a bullet does not care about the floor between the two of
+  you. The acquisition band (`MaxAcquisitionHeightDelta`, 12 m) is deliberately
+  wider than either, so a mob still notices you up there and comes looking for a
+  way up; there is no pathfinding, so a melee mob can only stand under you.
 
-Damage per hit is a **fraction** (a tenth by default) of the monster's
-`dbcharacter::MonsterScaling.damage` rating for its level, where the level comes
-from the zone band — or the spawn's authored `level`, or the default player level
-for untuned zones. The rating column is a balance figure (it is exactly half of
-that level's health rating on all 80 rows), not a per-swing amount; see
+Ranged mobs run out of rounds like anyone else: the weapon's clip
+(`dbitems::WeaponTemplates.base_clip_size`, or the item's attribute 956) is how many
+shots it holds, `ammo_per_burst` (else `rounds_per_burst`) how many one attack
+spends, and the template's `reload_time` how long the mob cannot fire once it is
+dry. It announces that window through `CombatView.WeaponReloaded` - the same marker
+a player's own reload sends, and the one the client plays the weapon's
+`anim_reload_type` from - and `WeaponReloadCancelled` if it dies mid-reload. The
+attack itself is announced the same way (`WeaponBurstFired`, then `WeaponBurstEnded`
+or `WeaponBurstCancelled`), so a mob's shooting and reloading are visible rather
+than silent; see [NPC_AI.md](NPC_AI.md) §3.
+
+Some of the weapons the build's monsters carry also animate and sound from their own
+ability chains, which is the only path in the database that names an animation: the
+chain applies a status effect, and the client plays the `tf*` commands inside that
+effect's chains - the animation, the muzzle flash, the weapon sound - for everyone who
+can see the character, because the client is the one that runs them. The engine
+therefore runs the weapon's ability whenever its chain carries a command the client
+executes (`apttf::`), which is 7 of the 14 templates with attack/burst ids and 75 of
+their 102 monster slots: the Shadowstrike swing and the charge-up weapon's
+charge/release (the 2 that animate), the flamethrower's burning cone, and the charge
+sniper, phason thrower, fluid cannon and magic finger (whose effects carry the flash and
+the sound). It hands the activation the weapon's `ms_chargeup` as the register so the
+charge effect lasts exactly as long as the weapon charges, and lets a chain that
+delivers the hit land it itself rather than adding its own melee damage or volley on top
+(falling back to its own attack if the activation does not run). The charge effect's
+`restrict_movement` / `restrict_abilities` / `restrict_melee` flags are honoured while it
+lasts, so a charging mob holds position and does not fire. Weapons whose chains carry no
+client command keep the AI attack described above; see [NPC_AI.md](NPC_AI.md) §3.
+
+Damage per hit comes from the weapon's own database rows (attribute 954, or the
+level's `MonsterScaling.damage` rating scaled by the item's attribute 1145), and
+only falls back to a **fraction** (a tenth by default) of the rating for rows
+with neither; the monster's own attribute 1144 scales whatever resolves. The
+rating column is a balance figure (it is exactly half of that level's health
+rating on all 80 rows), not a per-swing amount; see
 [NPC_AI.md](NPC_AI.md) §5.
 
-Attacks are hitscan, so there is nothing to dodge. Full details, the tunables and
-the `\ai` commands are in [NPC_AI.md](NPC_AI.md).
+Full details, the tunables and the `\ai` commands are in [NPC_AI.md](NPC_AI.md).
 
 ### Faction / hostility gate
 
