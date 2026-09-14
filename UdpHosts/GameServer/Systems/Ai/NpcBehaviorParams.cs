@@ -147,7 +147,7 @@ public sealed class NpcBehaviorParams
         string arguments = close > open ? text[(open + 1)..close] : text[(open + 1)..];
 
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string fragment in arguments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (string fragment in SplitArguments(arguments))
         {
             int equals = fragment.IndexOf('=');
             if (equals <= 0)
@@ -165,6 +165,73 @@ public sealed class NpcBehaviorParams
         }
 
         return new NpcBehaviorParams(name, values);
+    }
+
+    // CAIS invocations can contain quoted dialogue names and nested behaviour invocations. Splitting
+    // on every comma leaks a child's parameters into its parent (e.g. ChainWithPush.behaviorB's
+    // maxDistance), which is especially dangerous when those parameters decide where a body moves.
+    private static IEnumerable<string> SplitArguments(string arguments)
+    {
+        int start = 0;
+        int depth = 0;
+        bool quoted = false;
+        bool escaped = false;
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            char ch = arguments[i];
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if (quoted && ch == '\\')
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                quoted = !quoted;
+            }
+            else if (!quoted)
+            {
+                if (ch == '(')
+                {
+                    depth++;
+                }
+                else if (ch == ')' && depth > 0)
+                {
+                    depth--;
+                }
+                else if (ch == ',' && depth == 0)
+                {
+                    yield return arguments[start..i].Trim();
+                    start = i + 1;
+                }
+            }
+        }
+
+        yield return arguments[start..].Trim();
+    }
+
+    /// <summary>Reads the two boolean spellings used by CAIS: true/false and 1/0.</summary>
+    public bool TryGetBool(string key, out bool value)
+    {
+        value = false;
+        if (!_values.TryGetValue(key, out string text))
+        {
+            return false;
+        }
+
+        if (text == "1" || text == "0")
+        {
+            value = text == "1";
+            return true;
+        }
+
+        return bool.TryParse(text, out value);
     }
 
     /// <summary>Reads an integer parameter, returning false when it is absent or not a number.</summary>

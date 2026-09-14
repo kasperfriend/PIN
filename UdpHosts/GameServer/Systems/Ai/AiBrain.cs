@@ -16,6 +16,7 @@ namespace GameServer.Systems.Ai;
 public class AiBrain
 {
     private readonly IAiRules _rules;
+    private readonly float _leashRadius;
     private readonly float _attackRange;
     private readonly float _attackRangeExit;
     private readonly float _standoffRange;
@@ -28,9 +29,10 @@ public class AiBrain
     ///     The NPC's own weapon reach, cadence and standoff (see <see cref="AiCombatTuning" />), or
     ///     <see cref="AiCombatTuning.None" /> to fight on the rules values alone.
     /// </param>
-    public AiBrain(IAiRules rules, ulong now, AiCombatTuning combat = default)
+    public AiBrain(IAiRules rules, ulong now, AiCombatTuning combat = default, float? leashRadius = null)
     {
         _rules = rules ?? throw new ArgumentNullException(nameof(rules));
+        _leashRadius = leashRadius is > 0f && float.IsFinite(leashRadius.Value) ? leashRadius.Value : rules.LeashRadius;
 
         // A mob whose weapon row resolves fights with that weapon's reach and cadence instead of the
         // generic rules values; a mob without one (rules melee, no weapon in the database) keeps the
@@ -155,7 +157,7 @@ public class AiBrain
         }
 
         // Leash: an NPC dragged too far from where it spawned gives up and walks home.
-        if (State != AiBrainState.Return && perception.DistanceToHome > _rules.LeashRadius)
+        if (State != AiBrainState.Return && perception.DistanceToHome > _leashRadius)
         {
             State = AiBrainState.Return;
         }

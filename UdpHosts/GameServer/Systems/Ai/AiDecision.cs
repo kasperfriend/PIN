@@ -11,6 +11,9 @@ public enum AiMovementIntent
 
     /// <summary>Walk back to the spawn point.</summary>
     TowardHome = 2,
+
+    /// <summary>Follow the base behaviour's ambient goal.</summary>
+    TowardRoutine = 3,
 }
 
 /// <summary>
