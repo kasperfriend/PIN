@@ -23,6 +23,17 @@ itself says an NPC can stand on, around the players who are in it.
 > zone without a player in it. Cells come alive inside 150 m of a player and are
 > removed again beyond 225 m, so the world exists around the players instead of
 > all at once.
+>
+> **Only the shard's zone.** One shard runs one zone (`ZoneId`, default 448):
+> the plan's ground is that zone's collision, and only players *in* that zone
+> count as present. A player who picked any other entry in the zone picker neither
+> activates cells nor triggers planning — populating around their position would
+> put New Eden's NPCs on Sertao's coordinates — and when *nobody* is in the
+> shard's zone the log says so (`are in other zones … set ZoneId to its id …`)
+> instead of spawning nothing in silence. The same mismatch is warned about at
+> login (`entered zone … but this shard runs zone …`). To populate another zone,
+> set `ZoneId` to its id and restart. See [Single Zone](SINGLE_ZONE.md) for the whole
+> one-shard-one-zone model.
 
 > **Both kinds of collision are checked before anything appears.** The physical
 > one (ground probe, walkable slope, standing volume clear of the world and of
@@ -241,7 +252,10 @@ Per update:
 1. **No players?** Everything this service spawned is removed, the activations are
    forgotten and the update ends. The plan survives (it is only memory), so the zone
    comes back without being planned again. Turning the feature off does exactly the
-   same, and touches nothing else - the zone's own entities stay.
+   same, and touches nothing else - the zone's own entities stay. Players in other
+   zones are treated as absent for this purpose (with their own announcement naming
+   the zones and the `ZoneId` fix); a mixed crowd populates around the players who
+   are here, and `status` counts the rest (`1 players (1 in other zones: …)`).
 2. **Plan not complete?** One `Work` call, then return. Nothing spawns until the plan
    exists.
 3. **Seed the placement grid** from everything already in the world (the zone's

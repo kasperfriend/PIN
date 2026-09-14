@@ -677,6 +677,12 @@ public class EntityManager
                     {
                         shouldBeScoped = true;
                     }
+                    else if (!ShardZone.IsPlayerInZone(_shard, player))
+                    {
+                        // Cross-zone players are inside another map: a position match with
+                        // something simulated here is a coincidence, never proximity.
+                        shouldBeScoped = false;
+                    }
                     else
                     {
                         var playerPosition = player.CharacterEntity.Position;
@@ -2106,6 +2112,14 @@ public class EntityManager
         {
             // We don't want to inform players that are still in the early steps of connecting
             if (!client.CanReceiveGSS)
+            {
+                continue;
+            }
+
+            // One shard simulates one zone: a new entity belongs to this zone, so only tell
+            // players standing in it - except a client's own character, which is introduced
+            // before EnterZone places the client anywhere.
+            if (entity != client.CharacterEntity && !ShardZone.IsPlayerInZone(_shard, client))
             {
                 continue;
             }

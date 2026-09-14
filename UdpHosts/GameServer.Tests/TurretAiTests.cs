@@ -1,6 +1,8 @@
+using System.Linq;
 using System.Numerics;
 using System.Threading;
 using AeroMessages.GSS.Character;
+using GameServer.Data;
 using GameServer.Entities.Character;
 using GameServer.Entities.Deployable;
 using GameServer.Entities.Turret;
@@ -107,6 +109,17 @@ public class TurretAiTests
             turret.Turret_ObserverView.CurrentPoseProp.Rotation != Quaternion.Identity,
             "the turret should yaw toward the target");
         Assert.Equal(100_000, target.CurrentHealth);
+    }
+
+    [Fact]
+    public void UnmannedTurret_DoesNotFireAtATargetInAnotherZone()
+    {
+        var (shard, ai, shots, _, _, _) = Create(new Vector3(20f, 0f, 0f));
+        ((FakeNetworkPlayer)shard.Clients.Values.Single()).CurrentZone = new Zone { ID = 1030, Name = "Sertao" };
+
+        ai.Tick(FirstTick);
+
+        Assert.Empty(shots.Shots);
     }
 
     [Fact]

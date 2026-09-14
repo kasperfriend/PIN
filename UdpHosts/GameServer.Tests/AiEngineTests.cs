@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Threading;
 using AeroMessages.GSS.Character;
+using GameServer.Data;
 using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;
@@ -139,6 +141,18 @@ public class AiEngineTests
         // Default chase speed is 8.5 m/s, one 50ms step is 0.425m towards the player.
         Assert.Equal(0.425f, npc.Position.X, 3);
         Assert.Equal(0f, npc.Position.Y, 3);
+    }
+
+    [Fact]
+    public void IdleNpc_PlayerInAnotherZone_IgnoresThem()
+    {
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f));
+        ((FakeNetworkPlayer)shard.Clients.Values.Single()).CurrentZone = new Zone { ID = 1030, Name = "Sertao" };
+
+        Tick(shard, FirstTick);
+
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Equal(Vector3.Zero, npc.Position);
     }
 
     [Fact]

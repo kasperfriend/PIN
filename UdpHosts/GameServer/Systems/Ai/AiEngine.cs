@@ -698,6 +698,14 @@ public class AiEngine
                 continue;
             }
 
+            // One shard simulates one zone: a player in another zone stands on ground this
+            // simulation knows nothing about, so their position can only coincide with an
+            // NPC's by accident. Never aggro across that boundary.
+            if (!ShardZone.IsPlayerInZone(_shard, client))
+            {
+                continue;
+            }
+
             if (!_hostility.IsHostile(npc.Entity, candidate))
             {
                 continue;

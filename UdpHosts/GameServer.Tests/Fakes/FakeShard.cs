@@ -233,7 +233,12 @@ public sealed class FakeNetworkPlayer : INetworkPlayer
 
     public PlayerPreferences Preferences { get; }
 
-    public Zone CurrentZone { get; }
+    /// <summary>
+    ///     Null until a test puts the player somewhere: production always sets this in
+    ///     <c>EnterZone</c> before the client can receive entity state, and the systems under
+    ///     test treat null as "not placed anywhere yet" rather than as another zone.
+    /// </summary>
+    public Zone CurrentZone { get; set; }
 
     public uint ConnectedAt { get; }
 

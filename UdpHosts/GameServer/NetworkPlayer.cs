@@ -266,6 +266,25 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
 
     public void EnterZone(Zone z, uint outpostId = 0)
     {
+        if (AssignedShard != null && z.ID != AssignedShard.ZoneId)
+        {
+            // One shard runs one zone: its collision, its authored entities and its world
+            // population all belong to the ZoneId the server was started with. The character
+            // selection screen is a zone picker, so a player can still land anywhere else -
+            // and that zone is then empty (nothing spawned for it, nothing scoped into it)
+            // with physics answering from the wrong map. Say so here, at the moment the
+            // choice is made, rather than leaving "the zone is empty" to be debugged from
+            // the population log lines alone.
+            Logger.Warning(
+                "Character {Character:l} entered zone {ZoneId} ({ZoneName:l}) but this shard runs zone {ShardZoneId}: " +
+                "collision, authored entities and world population all belong to the shard's zone, so that zone will be empty. " +
+                "To play there, set ZoneId to {ZoneId} in the server config and restart",
+                CharacterEntity?.ToString() ?? CharacterId.ToString(),
+                z.ID,
+                z.Name,
+                AssignedShard.ZoneId);
+        }
+
         var spawnPoint = outpostId == 0
                              ? new SpawnPoint { Position = z.POIs["spawn"] }
                              : AssignedShard.Outposts[z.ID][outpostId].RandomSpawnPoint;

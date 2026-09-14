@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading;
+using GameServer.Data;
 using GameServer.Entities.Character;
 using GameServer.Systems.Spawning.Population;
 using GameServer.Tests.Fakes;
@@ -588,6 +589,96 @@ public class WorldPopulationServiceTests
 
         Assert.Empty(world.Spawner.Spawned);
         Assert.Equal(1, logger.CountContaining("no player counts as present yet"));
+    }
+
+    [Fact]
+    public void Tick_IgnoresPlayersInOtherZones()
+    {
+        var world = CreateWorld();
+
+        // The shard runs New Eden (448); the only player picked Sertao in the zone picker.
+        world.Client.CurrentZone = new Zone { ID = 1030, Name = "Sertao" };
+        AddGroundAndRoster(world);
+
+        Tick(world, 10);
+
+        // Nobody here to stream to: not even the plan is built, exactly as if nobody were
+        // connected at all - planning New Eden's ground for a player standing in Sertao would
+        // only spend the plan work and then refuse every placement against the wrong map.
+        Assert.Empty(world.Spawner.Spawned);
+        Assert.Equal(0, world.Service.LiveCount);
+        Assert.Equal(0, world.Service.ActiveCellCount);
+        Assert.False(world.Service.Plan.IsComplete);
+        Assert.Equal(0, world.Data.AnchorCalls);
+        Assert.Equal(0, world.Service.PlayerCount);
+        Assert.Equal(1, world.Service.PlayersElsewhereCount);
+        Assert.Contains("Sertao (1030)", world.Service.PlayersElsewhereZones);
+    }
+
+    [Fact]
+    public void SpawningNothingBecausePlayersAreInOtherZones_SaysSoOnce_AndNamesTheFix()
+    {
+        var logger = new CapturingLogger();
+        var world = CreateWorld(logger: logger.Logger);
+        world.Client.CurrentZone = new Zone { ID = 1030, Name = "Sertao" };
+        AddGroundAndRoster(world);
+
+        Tick(world, 10);
+
+        Assert.Empty(world.Spawner.Spawned);
+
+        // Once, not once per update, naming the shard's zone, the player's zone and the fix.
+        Assert.Equal(1, logger.CountContaining("spawning nothing in zone 448"));
+        Assert.Equal(1, logger.CountContaining("are in other zones (Sertao (1030))"));
+        Assert.Equal(1, logger.CountContaining("set ZoneId to its id in the server config and restart"));
+
+        // And it is not the "nobody connected" message: there is a player, just not here.
+        Assert.Equal(0, logger.CountContaining("no player counts as present yet"));
+    }
+
+    [Fact]
+    public void Tick_PopulatesAroundInZonePlayersWhileIgnoringElsewhereOnes()
+    {
+        var world = CreateWorld();
+        world.Client.CurrentZone = new Zone { ID = 448, Name = "New Eden" };
+
+        var elsewherePlayer = CreateCharacter(world.Shard, new Vector3(56f, 56f, 0f));
+        var elsewhereClient = new FakeNetworkPlayer(world.Shard)
+        {
+            SocketId = 2,
+            CharacterEntity = elsewherePlayer,
+            CurrentZone = new Zone { ID = 1030, Name = "Sertao" },
+        };
+        world.Shard.Clients[elsewhereClient.SocketId] = elsewhereClient;
+        AddGroundAndRoster(world);
+
+        Tick(world, 8);
+
+        Assert.Equal(64, world.Service.LiveCount);
+        Assert.Equal(1, world.Service.PlayerCount);
+        Assert.Equal(1, world.Service.PlayersElsewhereCount);
+
+        var status = world.Service.DescribeStatus();
+        Assert.Contains("1 players (1 in other zones: Sertao (1030))", status);
+    }
+
+    [Fact]
+    public void Tick_ClearsWhenTheLastInZonePlayerLeavesForAnotherZone()
+    {
+        var world = CreateWorld();
+        AddGroundAndRoster(world);
+        Tick(world, 8);
+        Assert.Equal(64, world.Service.LiveCount);
+
+        // The player is still connected, but now in Sertao: nobody left to populate for.
+        world.Client.CurrentZone = new Zone { ID = 1030, Name = "Sertao" };
+        Tick(world);
+
+        Assert.Equal(0, world.Service.LiveCount);
+        Assert.Equal(0, world.Service.ActiveCellCount);
+        Assert.Equal(64, world.Spawner.Despawned.Count);
+        Assert.Empty(world.Spawner.Alive);
+        Assert.Equal(1, world.Service.PlayersElsewhereCount);
     }
 
     [Fact]

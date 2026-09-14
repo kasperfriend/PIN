@@ -90,7 +90,10 @@ public class GameServerSettings
     public string CachePath { get; set; } = string.Empty;
 
     /// <summary>
-    ///    ZoneId to load
+    ///    The zone this shard simulates. One shard runs one zone: its collision, authored
+    ///    entities, encounters, NPC AI and world population all belong to this zone, and
+    ///    players anywhere else get an empty map (see Docs/SINGLE_ZONE.md). Default 448
+    ///    (New Eden).
     /// </summary>
     public uint ZoneId { get; set; } = 448;
 
