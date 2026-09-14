@@ -55,6 +55,20 @@ public class Firefall
     public FirefallCertificate Certificate { get; set; } = new();
 
     /// <summary>
+    ///     Where the streamable assets the clients ask this server for live: the high-resolution
+    ///     virtual-texture chunks, the asset stream, and anything else the <c>firefall.ini</c> paths name.
+    /// </summary>
+    /// <remarks>
+    ///     The host always serves <c>Assets</c> next to the binary as well, and that folder ships empty on
+    ///     purpose (<c>.gitignore</c> keeps a dozen gigabytes of Red5 textures out of the repository). An
+    ///     install whose roots hold no chunks is not broken - a client whose chunk probe comes back empty keeps
+    ///     the low-resolution mips baked into its own archives, which is what blurry terrain is - so the web
+    ///     asset host reports what it found in each root, and where a client would have to be answered from,
+    ///     on every start. See <c>Docs/ASSETS.md</c>.
+    /// </remarks>
+    public FirefallAssets Assets { get; set; } = new();
+
+    /// <summary>
     ///     UDP port of the MatrixServer, advertised as the <c>host:port</c> matrix address of the oracle
     ///     ticket. Must match the <c>Port</c> the MatrixServer listens on (25000 by default). The GameServer
     ///     port is not advertised here: the MatrixServer's HUGG reply carries it to the client.
