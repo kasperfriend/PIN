@@ -1,5 +1,8 @@
 name: tmp-nuget-cache
-on: workflow_dispatch
+on:
+  push:
+    branches: [ "arena/01a0a139-pin" ]
+    paths: [ ".github/workflows/tmp-nuget-cache.yml" ]
 permissions:
   contents: write
 jobs:
