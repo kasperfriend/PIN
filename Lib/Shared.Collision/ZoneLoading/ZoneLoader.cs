@@ -159,12 +159,12 @@ public class ZoneLoader
 
         if (_zoneBoundsMin.HasValue && _zoneBoundsMax.HasValue)
         {
-            _logger.Information(\"Zone {ZoneId}: Bounds Min {Min} Max {Max} Paths {PathCount} MeldingPerims {MeldingCount} SubZoneRegions {SubZoneCount} EncounterNames {EncCount}\",
+            _logger.Information("Zone {ZoneId}: Bounds Min {Min} Max {Max} Paths {PathCount} MeldingPerims {MeldingCount} SubZoneRegions {SubZoneCount} EncounterNames {EncCount}",
                 zoneId, _zoneBoundsMin.Value, _zoneBoundsMax.Value, _zonePaths.Count, _meldingPerimeters.Count, _subZoneRegionCount, _encounterNameCount);
         }
         else
         {
-            _logger.Information(\"Zone {ZoneId}: No bounds layer, Paths {PathCount} MeldingPerims {MeldingCount} SubZoneRegions {SubZoneCount} EncounterNames {EncCount}\",
+            _logger.Information("Zone {ZoneId}: No bounds layer, Paths {PathCount} MeldingPerims {MeldingCount} SubZoneRegions {SubZoneCount} EncounterNames {EncCount}",
                 zoneId, _zonePaths.Count, _meldingPerimeters.Count, _subZoneRegionCount, _encounterNameCount);
         }
 
