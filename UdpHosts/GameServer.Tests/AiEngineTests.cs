@@ -147,7 +147,7 @@ public class AiEngineTests
     public void IdleNpc_PlayerInAnotherZone_IgnoresThem()
     {
         var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f));
-        shard.Clients.Values.Single().CurrentZone = new Zone { ID = 1030, Name = "Sertao" };
+        ((FakeNetworkPlayer)shard.Clients.Values.Single()).CurrentZone = new Zone { ID = 1030, Name = "Sertao" };
 
         Tick(shard, FirstTick);
 

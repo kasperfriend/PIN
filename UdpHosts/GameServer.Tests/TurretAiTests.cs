@@ -115,7 +115,7 @@ public class TurretAiTests
     public void UnmannedTurret_DoesNotFireAtATargetInAnotherZone()
     {
         var (shard, ai, shots, _, _, _) = Create(new Vector3(20f, 0f, 0f));
-        shard.Clients.Values.Single().CurrentZone = new Zone { ID = 1030, Name = "Sertao" };
+        ((FakeNetworkPlayer)shard.Clients.Values.Single()).CurrentZone = new Zone { ID = 1030, Name = "Sertao" };
 
         ai.Tick(FirstTick);
 
