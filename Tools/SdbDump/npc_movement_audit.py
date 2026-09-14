@@ -135,6 +135,8 @@ def build_reports(sdb_path, root=ROOT):
     unidentified = sum(t["name"] is None for t in db.tables)
     vec3arrays = sum(f["type"] == DBT_VECTOR3_ARRAY for t in db.tables for f in t["fields"])
     populated_refs = [sum(bool(r[field + "_instance_id"]) for r in monsters) for field in BEHAVIORS]
+    row_counts = {table["name"]: table["row_count"] for table in db.tables}
+    loaded_tables = sum(table["runtime_loaded"] for table in tables)
     defined_activities = sum(bool(r["behavior"]) for r in deployables)
     placed_activities = sum(placed[r["id"]] for r in deployables if r["behavior"])
     lines = ["# NPC movement database census", "",
@@ -142,19 +144,21 @@ def build_reports(sdb_path, root=ROOT):
              "Runtime behaviour and the original-game parity boundary: [NPC routines](../NPC_ROUTINES.md).", "",
              f"- Source build: **{db.patch}**, SHA-256 `{sha}`.",
              f"- **{len(db.tables)} tables**, **{sum(t['row_count'] for t in db.tables):,} rows** in the database; **{unidentified} unidentified tables**.",
+             f"- **{loaded_tables} tables** are referenced by PIN's loader; the other **{len(db.tables) - loaded_tables}** named tables are also included in this census, not silently skipped.",
              f"- **{len(monsters):,} monster templates**, all three behaviour columns and all three instance references included in `monsters.json`.",
              f"- Nonzero base/offensive/defensive behaviour-instance references: **{' / '.join(map(str, populated_refs))}** rows. No CAIS instance/tree-definition table was found in this client schema.",
              f"- **{vec3arrays} Vector3Array columns** in the entire file. All spatial and blob columns, including those in unloaded tables, are listed in `tables.csv`.",
              f"- **{len(deployables):,} deployable templates**, **{len(functions)} functions**, **{defined_activities} nonempty deployable behaviours** in `activities.csv`.",
              f"- **{placed_activities} placements** of those nonempty-behaviour deployables in the repository's `CustomData/deployable.json`. The templates alone do not place a work station in a zone.", "",
              "## What the path-like tables actually contain", "",
-             "- `clientmissions::MissionWaypoint`: 312 chunk-local mission locations and area polygons; `chunk_id` is present. There is no NPC id, patrol ordering, next-node link or monster→waypoint association. These are not NPC routes.",
-             "- `clientmissions::GoldenPath`: 28 mission-progression rows (`missionchain_id`, `mission_id`, `display_lvl`, `level_req`, `order`), no movement coordinates.",
-             "- `vcs::GroundPathComponentDef`: 1 row, id 285, accel 2, max_speed 6. Vehicle motion tuning, no points.",
-             "- `vcs::FlightPathComponentDef`: 36 rows of vehicle flight/landing tuning, no route points.",
+             "The following semantic interpretations were verified for the bundled prod-1962 build. Counts above and below are computed from the input; other builds need their schema/content reviewed before applying these interpretations.", "",
+             f"- `clientmissions::MissionWaypoint`: {row_counts.get('clientmissions::MissionWaypoint', 0)} chunk-local mission locations and area polygons; `chunk_id` is present. There is no NPC id, patrol ordering, next-node link or monster→waypoint association. These are not NPC routes.",
+             f"- `clientmissions::GoldenPath`: {row_counts.get('clientmissions::GoldenPath', 0)} mission-progression rows (`missionchain_id`, `mission_id`, `display_lvl`, `level_req`, `order`), no movement coordinates.",
+             f"- `vcs::GroundPathComponentDef`: {row_counts.get('vcs::GroundPathComponentDef', 0)} rows of vehicle motion tuning (`accel`, `max_speed`), no points.",
+             f"- `vcs::FlightPathComponentDef`: {row_counts.get('vcs::FlightPathComponentDef', 0)} rows of vehicle flight/landing tuning, no route points.",
              "- `dbzonemetadata::ChunkRecord.exclude_from_pathing`: pathing exclusions, not patrol definitions.",
              "- `dbzonemetadata::GlobeViewLocation.route_mask`: globe UI routes, not NPC waypoints.",
-             "- Remaining vector/matrix columns describe visual offsets, hardpoints, aim, physics, cameras, particles and UI gradients. Blob columns belong to decals, subzone grids, reverb materials and cosmetic warpaint. No authored NPC route table was identified.", "",
+             "- Remaining vector/matrix columns describe visual offsets, hardpoints, aim, physics, cameras, particles and UI gradients. Blob columns belong to decals, subzone grids, reverb materials and cosmetic warpaint. Opaque bytes are not fully interpreted, so this is not proof about every blob payload or external asset. No authored NPC route table was identified.", "",
              "**Absence of an authored route is not permission to turn mission markers or template offsets into patrols.** Map gameplay/CAIS/server encounter data may contain routes not present in this client database; those assets are not available in this checkout.", "",
              "## Explicit route / named-point requests", "",
              "Every occurrence in all three monster columns (not just the base column):", "",
@@ -174,7 +178,7 @@ def build_reports(sdb_path, root=ROOT):
         lines.append(f"| `{key}` | " + " | ".join(str(parameter_counts[field][key]) for field in BEHAVIORS) + " |")
     lines += ["", "## Reproduce / verify", "", "```sh", "python Tools/SdbDump/npc_movement_audit.py --check",
               "python Tools/SdbDump/npc_movement_audit.py /path/to/clientdb.sd2 --out-dir /tmp/movement-audit", "```", "",
-              "`--check` fails if any census file differs. The reference JSON is also exercised by the C# suite: every one of its 3,109 rows is resolved and checked without requiring an installed client.", ""]
+              "`--check` fails if any census file differs. Every row of the bundled prod-1962 reference JSON is also resolved and checked by the C# suite without requiring an installed client. Alternate --out-dir outputs are not that embedded test fixture.", ""]
     return {"README.md": "\n".join(lines),
             "monsters.json": json.dumps({"patch": db.patch, "sha256": sha, "monsters": roster}, indent=2, ensure_ascii=False) + "\n",
             "tables.csv": csv_text(list(tables[0]), tables),

@@ -41,7 +41,7 @@ public interface INpcActivityWorld
 public sealed class NpcRoutine
 {
     public const float ArrivalRadius = 0.4f;
-    private const float ArrivalHeight = 1.25f;
+    private const float ArrivalHeight = 0.4f;
     private readonly ulong _entityId;
     private readonly INpcActivityWorld _activities;
     private uint _random;

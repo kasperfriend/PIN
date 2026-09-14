@@ -230,9 +230,48 @@ public class AiRoutineIntegrationTests
         Assert.Equal((ushort)0, npc.Emote.Id);
     }
 
+    [Fact]
+    public void WorkEndingInTheSameBaseEmoteStartsAFreshIdleDuration()
+    {
+        var (shard, npc, _) = Create("PeacetimeCityWanderer(restFunction=Work,emote=utility,emoteDuration=1)", station: true);
+        for (ulong now = Start; now < Start + 5000; now += 50)
+        {
+            Tick(shard, now);
+            if (shard.AI.GetRoutineState(npc.EntityId) == NpcRoutineState.Working)
+            {
+                break;
+            }
+        }
+
+        Assert.Equal(NpcRoutineState.Working, shard.AI.GetRoutineState(npc.EntityId));
+        Tick(shard, shard.CurrentTimeLong + 3000);
+        Assert.Equal(NpcRoutineState.Waiting, shard.AI.GetRoutineState(npc.EntityId));
+        Assert.Equal((ushort)60, npc.Emote.Id);
+    }
+
+    [Fact]
+    public void NullBehaviorDoesNotAcquireAGenericCombatBrain()
+    {
+        var shard = new FakeShard();
+        var npc = AddCharacter(shard, Vector3.Zero);
+        var engine = new AiEngine(shard, shard.EventBus,
+            monsterStats: new FakeAiMonsterStats { Behavior = "Null" });
+        Assert.False(engine.Register(npc));
+        Assert.Equal(0, engine.TrackedCount);
+    }
+
+    [Fact]
+    public void RoutineDiagnosticsExposeMissingRoutes()
+    {
+        var (shard, npc, _) = Create("OneOff_FollowRoute");
+        Assert.Contains("MissingRoute=1", shard.AI.DescribeRoutines());
+        Assert.NotEmpty(shard.AI.GetRoutineProfile(npc.EntityId).MissingData);
+    }
+
     [Theory]
     [InlineData("unregister")]
     [InlineData("death")]
+    [InlineData("dead-before-event")]
     [InlineData("remove")]
     [InlineData("clear")]
     public void CleanupReleasesWorkLocationsForOtherNpcs(string cleanup)
@@ -242,7 +281,13 @@ public class AiRoutineIntegrationTests
         switch (cleanup)
         {
             case "unregister": shard.AI.Unregister(npc.EntityId); break;
-            case "death": shard.CharacterLifecycle.ForceDeath(npc); break;
+            case "death":
+                shard.CharacterLifecycle.ForceDeath(npc);
+                Assert.False(npc.IsAlive);
+                break;
+            case "dead-before-event":
+                npc.SetCharacterState(CharacterStateData.CharacterStatus.Dead, shard.CurrentTime);
+                break;
             case "remove": shard.Entities.Remove(npc.EntityId); break;
             case "clear": shard.AI.Clear(); break;
         }
@@ -291,6 +336,7 @@ public class AiRoutineIntegrationTests
         entity.SetCharacterState(CharacterStateData.CharacterStatus.Living, 0);
         entity.SetMaxHealth(100_000, resetCurrent: true);
         shard.Entities[entity.EntityId] = entity;
+        shard.CharacterLifecycle.OnCharacterCreated(entity);
         return entity;
     }
 

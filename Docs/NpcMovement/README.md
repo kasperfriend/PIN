@@ -5,6 +5,7 @@ Runtime behaviour and the original-game parity boundary: [NPC routines](../NPC_R
 
 - Source build: **prod-1962**, SHA-256 `de6858fd1e3028cc887a87d71d2315da4c74ed99faa11cec7ab09a7bba60ad47`.
 - **575 tables**, **1,523,277 rows** in the database; **0 unidentified tables**.
+- **254 tables** are referenced by PIN's loader; the other **321** named tables are also included in this census, not silently skipped.
 - **3,109 monster templates**, all three behaviour columns and all three instance references included in `monsters.json`.
 - Nonzero base/offensive/defensive behaviour-instance references: **757 / 7 / 4** rows. No CAIS instance/tree-definition table was found in this client schema.
 - **0 Vector3Array columns** in the entire file. All spatial and blob columns, including those in unloaded tables, are listed in `tables.csv`.
@@ -13,13 +14,15 @@ Runtime behaviour and the original-game parity boundary: [NPC routines](../NPC_R
 
 ## What the path-like tables actually contain
 
+The following semantic interpretations were verified for the bundled prod-1962 build. Counts above and below are computed from the input; other builds need their schema/content reviewed before applying these interpretations.
+
 - `clientmissions::MissionWaypoint`: 312 chunk-local mission locations and area polygons; `chunk_id` is present. There is no NPC id, patrol ordering, next-node link or monster→waypoint association. These are not NPC routes.
 - `clientmissions::GoldenPath`: 28 mission-progression rows (`missionchain_id`, `mission_id`, `display_lvl`, `level_req`, `order`), no movement coordinates.
-- `vcs::GroundPathComponentDef`: 1 row, id 285, accel 2, max_speed 6. Vehicle motion tuning, no points.
+- `vcs::GroundPathComponentDef`: 1 rows of vehicle motion tuning (`accel`, `max_speed`), no points.
 - `vcs::FlightPathComponentDef`: 36 rows of vehicle flight/landing tuning, no route points.
 - `dbzonemetadata::ChunkRecord.exclude_from_pathing`: pathing exclusions, not patrol definitions.
 - `dbzonemetadata::GlobeViewLocation.route_mask`: globe UI routes, not NPC waypoints.
-- Remaining vector/matrix columns describe visual offsets, hardpoints, aim, physics, cameras, particles and UI gradients. Blob columns belong to decals, subzone grids, reverb materials and cosmetic warpaint. No authored NPC route table was identified.
+- Remaining vector/matrix columns describe visual offsets, hardpoints, aim, physics, cameras, particles and UI gradients. Blob columns belong to decals, subzone grids, reverb materials and cosmetic warpaint. Opaque bytes are not fully interpreted, so this is not proof about every blob payload or external asset. No authored NPC route table was identified.
 
 **Absence of an authored route is not permission to turn mission markers or template offsets into patrols.** Map gameplay/CAIS/server encounter data may contain routes not present in this client database; those assets are not available in this checkout.
 
@@ -481,4 +484,4 @@ python Tools/SdbDump/npc_movement_audit.py --check
 python Tools/SdbDump/npc_movement_audit.py /path/to/clientdb.sd2 --out-dir /tmp/movement-audit
 ```
 
-`--check` fails if any census file differs. The reference JSON is also exercised by the C# suite: every one of its 3,109 rows is resolved and checked without requiring an installed client.
+`--check` fails if any census file differs. Every row of the bundled prod-1962 reference JSON is also resolved and checked by the C# suite without requiring an installed client. Alternate --out-dir outputs are not that embedded test fixture.

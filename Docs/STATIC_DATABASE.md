@@ -54,32 +54,49 @@ Generated with `python3 Tools/SdbDump/sdb_dump.py coverage clientdb.sd2`:
 
 ```
 tables in file : 575
-identified     : 264      (names recovered by hashing candidates)
+identified     : 575      (all record-schema names matched by hash)
 loaded by PIN  : 254
-unidentified   : 311      (name unknown; content still decodable by hash)
+unidentified   : 0        (table naming does not mean every payload is understood)
 rows           : 924,062 of 1,523,277 (60.7%) in PIN-loaded tables
 ```
 
-| Schema | Tables loaded / identified | Rows |
-|--------|---------------------------|------|
-| `apt` (aptitude/abilities) | 59 / 59 | 237,835 |
-| `aptfs` (aptitude command defs) | 121 / 121 | 31,027 |
-| `dbcharacter` | 24 / 33 | 32,406 |
-| `dbdialogdata` (dialog) | 3 / 3 | 39,426 |
-| `dbencounterdata` | 2 / 2 | 1,002 |
-| `dbitems` | 24 / 24 | 341,619 |
-| `dblocalization` | 1 / 2 | 182,958 |
-| `dbphysicsmaterials` | 1 / 1 | 49 |
-| `dbvisualrecords` | 3 / 3 | 56,323 |
-| `dbzonemetadata` | 3 / 3 | 10,232 |
-| `vcs` (vehicles) | 13 / 13 | 3,447 |
+Names now include every `StaticDB/Records/<schema>/<Table>.cs` candidate,
+not just `StaticDBLoader` calls. A record declaration is **not** counted as loading
+the table. The last column below is the total in all named tables of the schema,
+including those the runtime loader does not reference.
+
+| Schema | Tables loaded / named | Total named rows |
+|--------|-----------------------|------------------|
+| `apt` | 59 / 62 | 237,884 |
+| `aptfs` | 121 / 121 | 31,027 |
+| `apttf` | 0 / 49 | 25,103 |
+| `clientmissions` | 0 / 13 | 3,305 |
+| `dbcharacter` | 24 / 60 | 35,079 |
+| `dbconfig` | 0 / 2 | 891 |
+| `dbdecals` | 0 / 1 | 143 |
+| `dbdialogdata` | 3 / 5 | 39,437 |
+| `dbelitelevels` | 0 / 8 | 2,182 |
+| `dbencounterdata` | 2 / 10 | 16,072 |
+| `dbfabrication` | 0 / 10 | 4,428 |
+| `dbitems` | 24 / 95 | 496,563 |
+| `dblocalization` | 1 / 8 | 208,097 |
+| `dbmatchmaking` | 0 / 1 | 6 |
+| `dbphysicsmaterials` | 1 / 3 | 989 |
+| `dbquickchatdata` | 0 / 2 | 100 |
+| `dbsounddata` | 0 / 18 | 54,450 |
+| `dbstats` | 0 / 5 | 1,185 |
+| `dbsubzonegrid` | 0 / 1 | 565 |
+| `dbtutorials` | 0 / 10 | 10,082 |
+| `dbvisualrecords` | 3 / 34 | 332,320 |
+| `dbzonemetadata` | 3 / 10 | 10,451 |
+| `vcs` | 13 / 47 | 12,918 |
 
 **Identified but still unused by PIN** — the obvious next implementation
 targets, all mob-related:
 
 | Table | Rows | What it would give us |
 |-------|------|-----------------------|
-| `dbcharacter::MonsterMood` | 2,268 | Ambient mood/animation sets for idle NPCs. |
+| `dbcharacter::MonsterMood` | 2,268 | Monster/mood → portrait mappings (`portrait_id`), not ambient movement or behaviour trees. |
 | `dbcharacter::MonsterMoodName` | 6 | Mood name lookup. |
 | `dbcharacter::MonsterItemTags` | 1,032 | Item tags used by loot rolls. |
 | `dbcharacter::MonsterTitle` | 419 | Titles shown above an NPC's name. |
@@ -89,8 +106,11 @@ targets, all mob-related:
 | `dbcharacter::Head` | 67 | Head visual records. |
 | `dblocalization::UITextMap` | 7,665 | UI string keys. |
 
-The remaining 311 tables are decodable but nobody has guessed their names yet;
-`sdb_dump.py dump clientdb.sd2 0xC79FA24C` still works on them.
+All 575 table names now resolve. Some column names and opaque payloads remain
+uninterpreted; table naming alone is not full game-semantic coverage. The
+[complete movement audit](NpcMovement/README.md) includes spatial/blob columns
+from loaded **and** unloaded tables. No authored NPC patrol table was identified;
+see [NPC routines](NPC_ROUTINES.md) for what can run and what original content is missing.
 
 ### 2.1 New in this change
 

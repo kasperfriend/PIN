@@ -222,6 +222,19 @@ public class NpcRoutineTests
     }
 
     [Fact]
+    public void ArrivalCannotStartAnActivityOnTheFloorAbove()
+    {
+        var world = new Activities { Spot = new NpcActivitySpot(2, new Vector3(0f, 0f, 1f), Quaternion.Identity, 60, 1000, false, 0) };
+        var routine = Create("UseWorkDeployables(function=Work)", activities: world);
+        routine.Update(0, Vector3.Zero, true, true, true);
+        routine.Update(50, Vector3.Zero, true, true, true);
+        Assert.Equal(NpcRoutineState.Walking, routine.State);
+        Assert.False(routine.IsWorking);
+        routine.Update(100, new Vector3(0f, 0f, 1f), true, true, true);
+        Assert.True(routine.IsWorking);
+    }
+
+    [Fact]
     public void StopIsTerminalUntilANewRoutineIsRegistered()
     {
         var routine = Create();
@@ -237,7 +250,7 @@ public class NpcRoutineTests
 
     private sealed class Activities : INpcActivityWorld
     {
-        public NpcActivitySpot Spot { get; } = new(12, new Vector3(2f, 0f, 0f), Quaternion.Identity, 60, 3000, true, 1062);
+        public NpcActivitySpot Spot { get; set; } = new(12, new Vector3(2f, 0f, 0f), Quaternion.Identity, 60, 3000, true, 1062);
         public HashSet<ulong> Owners { get; } = [];
         public bool Valid { get; set; } = true;
         public bool TryReserve(ulong npcId, string function, Vector3 position, Vector3 home, float radius, ulong previousSpot, out NpcActivitySpot spot)

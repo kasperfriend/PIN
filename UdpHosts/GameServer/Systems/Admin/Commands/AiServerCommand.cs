@@ -5,7 +5,7 @@ namespace GameServer.Systems.Admin.Commands;
 
 [ServerCommand(
     "Inspect and toggle server side NPC AI.",
-    "ai [on|off|status|list]",
+    "ai [on|off|status|list|routines]",
     "ai",
     "mobai")]
 public class AiServerCommand : ServerCommand
@@ -41,6 +41,10 @@ public class AiServerCommand : ServerCommand
                 SourceFeedback(DescribeTracked(engine), context);
                 break;
 
+            case "routines":
+                SourceFeedback(engine.DescribeRoutines(), context);
+                break;
+
             case "status":
                 SourceFeedback(
                     $"NPC AI: {(engine.Enabled ? "on" : "off")} | tracking {engine.TrackedCount} NPC(s)",
@@ -48,7 +52,7 @@ public class AiServerCommand : ServerCommand
                 break;
 
             default:
-                SourceFeedback("Unknown ai action. Try: on, off, status, list", context);
+                SourceFeedback("Unknown ai action. Try: on, off, status, list, routines", context);
                 break;
         }
     }
@@ -63,7 +67,7 @@ public class AiServerCommand : ServerCommand
         var builder = new StringBuilder($"NPC AI tracking {engine.TrackedCount}:");
         foreach (var entityId in engine.GetTrackedEntityIds())
         {
-            builder.Append($" {entityId}={engine.GetState(entityId)}");
+            builder.Append($" {entityId}={engine.GetState(entityId)}/{engine.GetRoutineState(entityId)}");
         }
 
         return builder.ToString();

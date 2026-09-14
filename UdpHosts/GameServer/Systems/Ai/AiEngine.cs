@@ -183,6 +183,17 @@ public class AiEngine
     public NpcRoutineProfile GetRoutineProfile(ulong entityId)
         => _brains.TryGetValue(entityId, out var npc) ? npc.Routine.Profile : null;
 
+    /// <summary>Small operator-facing census; it does not present unknown trees as running routines.</summary>
+    public string DescribeRoutines()
+    {
+        var snapshot = _brains.Values.ToArray();
+        string states = string.Join(", ", snapshot.GroupBy(npc => npc.Routine.State)
+            .OrderBy(group => group.Key).Select(group => $"{group.Key}={group.Count()}"));
+        int unspecified = snapshot.Count(npc => npc.Routine.Profile.Kind == NpcRoutineKind.Unspecified);
+        return $"NPC routines | ground={(_navigation.SupportsRoutines ? "loaded" : "missing (ambient travel disabled)")} | " +
+            $"{(states.Length > 0 ? states : "no NPCs")} | unspecified ambient definitions={unspecified}";
+    }
+
     /// <summary>Whether this entity currently has an AI brain.</summary>
     public bool IsTracked(ulong entityId) => _brains.ContainsKey(entityId);
 
