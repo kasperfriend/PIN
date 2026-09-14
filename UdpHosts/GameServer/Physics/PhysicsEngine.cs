@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -133,6 +134,16 @@ public partial class PhysicsEngine
         {
             LoadZone(zoneId);
         }
+        else
+        {
+            // Said out loud rather than implied: a shard configured without collision has no ground
+            // to snap spawned mobs to and no navigation mesh for world population to plan on, which
+            // is exactly the state an operator chasing "the world looks empty" needs to rule in or
+            // out from the first log lines.
+            _logger.Information(
+                "Zone {ZoneId}: collision loading is disabled (LoadMapsCollision is false), so ground snapping and collision-derived world population placement are unavailable",
+                zoneId);
+        }
     }
 
     public long? ZoneFileTimestamp { get; private set; }
@@ -165,6 +176,16 @@ public partial class PhysicsEngine
         else
         {
             _navigationMesh = null;
+
+            // The zone loader already logged why (a missing {zoneId}.zone file or an invalid root
+            // layer), but that message does not say what it means for this shard. Spell it out here
+            // once so an operator who switched ZoneId can see immediately what the server is (and is
+            // not) doing: no collision, no ground snapping, and world population degrades to the
+            // zone's authored positions.
+            _logger.Warning(
+                "Zone {ZoneId} could not be loaded (expected {ZoneFile} in the maps folder). This shard runs without zone collision: ground snapping is unavailable and world population falls back to the zone's authored positions",
+                zoneId,
+                Path.Combine(_mapsPath, $"{zoneId}.zone"));
         }
     }
 

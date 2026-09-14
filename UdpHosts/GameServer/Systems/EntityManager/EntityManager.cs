@@ -100,6 +100,12 @@ public class EntityManager
     ///     scope check would retract the entity from the far away clients within seconds anyway,
     ///     after every one of its keyframes had been sent to them for nothing.
     /// </param>
+    /// <param name="scopeRange">
+    ///     Overrides the character's scope range when positive and larger than its default. World
+    ///     population passes its deactivation radius: it spawns NPCs up to the activation radius away
+    ///     from a player, so an NPC carrying the default 100 m range would be simulated but never
+    ///     scoped to that player until they closed in, and the world would read as empty.
+    /// </param>
     public CharacterEntity SpawnCharacter(
         uint typeId,
         Vector3 position,
@@ -108,7 +114,8 @@ public class EntityManager
         Quaternion? orientation = null,
         byte level = 0,
         bool snapToGround = true,
-        bool scopeToNearbyClientsOnly = false)
+        bool scopeToNearbyClientsOnly = false,
+        float scopeRange = 0f)
     {
         var monsterInfo = SDBInterface.GetMonster(typeId);
         if (monsterInfo == null)
@@ -163,6 +170,15 @@ public class EntityManager
         _shard.Physics.CreateKineticEntity(characterEntity);
         _shard.Physics.UpdateEntity(characterEntity);
         _shard.CharacterLifecycle.OnCharacterCreated(characterEntity);
+
+        // Applied before Add: Add's distance-filtered introduction (scopeToNearbyClientsOnly)
+        // measures against GetScopeRange(), so an NPC whose range is only raised afterwards would
+        // miss the far band's clients until the next periodic scope check.
+        if (scopeRange > 0f && scopeRange > characterEntity.GetScopeRange())
+        {
+            characterEntity.Scoping = new ScopingComponent { Range = scopeRange };
+        }
+
         Add(characterEntity.EntityId, characterEntity, scopeToNearbyClientsOnly);
 
         // Spawned characters are NPCs; the engine ignores player controlled ones.
@@ -457,16 +473,10 @@ public class EntityManager
         if (_shard.ZoneId == 448)
         {
             // Aero
-            var aero = SpawnCharacter(356, new Vector3(167.84642f, 262.20822f, 491.86758f));
+            SpawnCharacter(356, new Vector3(167.84642f, 262.20822f, 491.86758f));
 
             // Battleframe Station
             SpawnDeployable(395, new Vector3(170.84642f, 243.20822f, 491.71597f), new Quaternion(0f, 0f, 0.92874485f, 0.37071964f));
-
-            // Thumper
-            if (aero != null)
-            {
-                _shard.EncounterMan.CreateThumper(20, new Vector3(158.3f, 249.3f, 491.93f), aero, SDBInterface.GetResourceNodeBeaconCalldownCommandDef(766269));
-            }
 
             // Datapad
             SpawnCarryable(26, new Vector3(160.3f, 250.3f, 491.93f));

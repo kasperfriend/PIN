@@ -35,13 +35,25 @@ public sealed class EntityManagerWorldPopulationSpawner : IWorldPopulationSpawne
     private readonly IShard _shard;
     private readonly ILogger _logger;
 
+    /// <summary>
+    ///     Scope range given to every NPC this spawner creates. Population activates cells out to the
+    ///     rules' activation radius (and keeps them alive out to the deactivation radius), but a
+    ///     <see cref="CharacterEntity"/> carries no <see cref="GameServer.Entities.ScopingComponent"/>
+    ///     by default and so scopes at the 100 m fallback. Without this, an NPC spawned in that outer
+    ///     band is simulated but never scoped to the client until the player closes in — the world
+    ///     reads as empty. The value is supplied by <see cref="GameServer.Shard"/> from the population
+    ///     rules, so it tracks the configured activation/deactivation radii.
+    /// </summary>
+    private readonly float _scopeRange;
+
     /// <summary>Rows that threw while being spawned, so each is reported once rather than per attempt.</summary>
     private readonly HashSet<uint> _rowsThatThrew = [];
 
-    public EntityManagerWorldPopulationSpawner(IShard shard)
+    public EntityManagerWorldPopulationSpawner(IShard shard, float scopeRange)
     {
         _shard = shard;
         _logger = shard.Logger.ForContext<EntityManagerWorldPopulationSpawner>();
+        _scopeRange = scopeRange;
     }
 
     public ulong Spawn(uint monsterId, Vector3 position, Quaternion orientation, byte level)
@@ -59,7 +71,8 @@ public sealed class EntityManagerWorldPopulationSpawner : IWorldPopulationSpawne
                 orientation: orientation,
                 level: level,
                 snapToGround: false,
-                scopeToNearbyClientsOnly: true);
+                scopeToNearbyClientsOnly: true,
+                scopeRange: _scopeRange);
 
             return character?.EntityId ?? 0;
         }
