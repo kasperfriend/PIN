@@ -2,9 +2,9 @@ namespace GameServer.Systems.Ai;
 
 /// <summary>
 ///     Resolves the movement speeds an NPC should use. Monster rows carry
-///     <c>normal_speed</c> / <c>fast_speed</c> but plenty of them are zero and some
-///     look like they are expressed in a different unit, so out of range values fall
-///     back to the configured defaults instead of producing frozen or teleporting mobs.
+///     <c>normal_speed</c> / <c>fast_speed</c>; most prod-1962 rows use the -1 inherit
+///     sentinel (see Docs/NpcMovement). Until the species/pose defaults are recovered,
+///     the existing trusted range and configured fallbacks remain compatibility policy.
 /// </summary>
 public static class AiSpeeds
 {

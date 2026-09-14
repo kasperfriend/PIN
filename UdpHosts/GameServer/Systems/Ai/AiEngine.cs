@@ -42,15 +42,6 @@ public class AiEngine
     /// <summary>How much further than the aggro radius an already engaged NPC will chase.</summary>
     private const float _chaseSlackMultiplier = 1.5f;
 
-    /// <summary>Raise the trace above the feet so the ground probe does not start inside the body.</summary>
-    private const float _groundProbeUp = 1.5f;
-
-    /// <summary>
-    ///     How far below the feet the ground probe reaches before we give up. Large so the
-    ///     mob follows the terrain down ledges and slopes instead of floating off them.
-    /// </summary>
-    private const float _groundProbeDown = 100f;
-
     /// <summary>Chest height, used for both the line of sight trace and the aim direction.</summary>
     private const float _eyeHeight = 1.4f;
 
@@ -102,6 +93,11 @@ public class AiEngine
     private readonly INpcAbilityActivator _abilityActivator;
     private readonly EmoteService _emotes;
     private readonly IShard _shard;
+    private readonly INpcNavigation _navigation;
+    private readonly INpcActivityWorld _activities;
+    private readonly NpcRoutineRules _routineRules;
+    private int _routinePathQueriesLeft;
+    private const int RoutinePathQueriesPerTick = 4;
     private ulong _lastPerceptionAt;
     private ulong _lastMovementAt;
 
@@ -115,7 +111,10 @@ public class AiEngine
         IAiProjectileLauncher projectileLauncher = null,
         INpcAbilityActivator abilityActivator = null,
         EmoteService emotes = null,
-        TurretWeaponFire turretFire = null)
+        TurretWeaponFire turretFire = null,
+        INpcNavigation navigation = null,
+        INpcActivityWorld activities = null,
+        NpcRoutineRules routineRules = null)
     {
         _shard = shard ?? throw new ArgumentNullException(nameof(shard));
         _rules = rules ?? new StandardAiRules();
@@ -140,6 +139,9 @@ public class AiEngine
         // row lookup and a replicated EmoteData, not a private animation path.
         _emotes = emotes ?? new EmoteService(new SdbEmoteDataSource(), new AbilitySystemEmoteEffectApplier());
         _logger = shard.Logger?.ForContext<AiEngine>() ?? Log.ForContext<AiEngine>();
+        _routineRules = routineRules ?? new NpcRoutineRules();
+        _navigation = navigation ?? new PhysicsNpcNavigation(shard, _rules);
+        _activities = activities ?? new SdbNpcActivityWorld(shard, _emotes, _routineRules);
 
         // Unmanned turrets share the engine's hostility and the injected projectile launcher (so a
         // test that records NPC shots also records turret shots). Production looks the turret's
@@ -173,6 +175,25 @@ public class AiEngine
         return _brains.TryGetValue(entityId, out var npc) ? new AiBrainState?(npc.Brain.State) : null;
     }
 
+    /// <summary>Ambient activity, distinct from the combat brain's Idle state.</summary>
+    public NpcRoutineState? GetRoutineState(ulong entityId)
+        => _brains.TryGetValue(entityId, out var npc) ? npc.Routine.State : null;
+
+    /// <summary>The data-backed routine (including missing-route diagnostics) of a tracked NPC.</summary>
+    public NpcRoutineProfile GetRoutineProfile(ulong entityId)
+        => _brains.TryGetValue(entityId, out var npc) ? npc.Routine.Profile : null;
+
+    /// <summary>Small operator-facing census; it does not present unknown trees as running routines.</summary>
+    public string DescribeRoutines()
+    {
+        var snapshot = _brains.Values.ToArray();
+        string states = string.Join(", ", snapshot.GroupBy(npc => npc.Routine.State)
+            .OrderBy(group => group.Key).Select(group => $"{group.Key}={group.Count()}"));
+        int unspecified = snapshot.Count(npc => npc.Routine.Profile.Kind == NpcRoutineKind.Unspecified);
+        return $"NPC routines | ground={(_navigation.SupportsRoutines ? "loaded" : "missing (ambient travel disabled)")} | " +
+            $"{(states.Length > 0 ? states : "no NPCs")} | unspecified ambient definitions={unspecified}";
+    }
+
     /// <summary>Whether this entity currently has an AI brain.</summary>
     public bool IsTracked(ulong entityId) => _brains.ContainsKey(entityId);
 
@@ -191,6 +212,14 @@ public class AiEngine
         var (bodyRadius, bodyHeight) = _monsterStats.GetBodyDimensions(npc.StaticInfo.CharacterTypeId);
         var (baseBehavior, offensiveBehavior) = _monsterStats.GetBehaviors(npc.StaticInfo.CharacterTypeId);
         var baseParams = NpcBehaviorParams.Parse(baseBehavior);
+        if (baseParams.Name.Equals("Null", StringComparison.OrdinalIgnoreCase))
+        {
+            // This CAIS invocation explicitly requests no AI, not a generic melee brain.
+            return false;
+        }
+
+        var offensiveParams = NpcBehaviorParams.Parse(offensiveBehavior);
+        var routineProfile = NpcRoutineProfile.Resolve(baseParams, offensiveParams, _routineRules, _rules.LeashRadius);
         int dbDamageRating = _monsterStats.GetAttackDamage(npc.StaticInfo.CharacterTypeId, npc.MonsterLevel);
         var attackProfile = _monsterStats.GetAttackProfile(npc.StaticInfo.CharacterTypeId, npc.MonsterLevel) ?? NpcAttackProfile.Unarmed;
 
@@ -207,7 +236,9 @@ public class AiEngine
             EntityId = npc.EntityId,
             Entity = npc,
             Home = npc.Position,
-            Brain = new AiBrain(_rules, _shard.CurrentTimeLong, AiCombatTuning.FromProfile(attackProfile)),
+            Brain = new AiBrain(_rules, _shard.CurrentTimeLong, AiCombatTuning.FromProfile(attackProfile), routineProfile.LeashDistance),
+            Routine = new NpcRoutine(npc.EntityId, npc.StaticInfo.CharacterTypeId, npc.Position,
+                routineProfile, _shard.CurrentTimeLong, _activities),
             MoveSpeed = AiSpeeds.Resolve(normalSpeed, _rules.DefaultMoveSpeed, _rules),
             ChaseSpeed = AiSpeeds.Resolve(fastSpeed, _rules.DefaultChaseSpeed, _rules),
             NavigationRadius = float.IsFinite(bodyRadius) && bodyRadius > 0f
@@ -224,7 +255,7 @@ public class AiEngine
                 ? NpcWeaponMagazine.Loaded(attackProfile.MagazineSize)
                 : NpcWeaponMagazine.None,
             IdleEmoteId = ResolveBehaviorEmote(baseParams),
-            CombatEmoteId = ResolveBehaviorEmote(NpcBehaviorParams.Parse(offensiveBehavior)),
+            CombatEmoteId = ResolveBehaviorEmote(offensiveParams),
             EmoteDurationSeconds = baseParams.TryGetEmoteDurationSeconds(out int emoteSeconds) ? emoteSeconds : -1,
             AbilityModules = ResolveAbilityModules(baseParams, offensiveBehavior),
         };
@@ -238,7 +269,8 @@ public class AiEngine
     /// <summary>Stops simulating an NPC or turret. Safe to call for unknown ids.</summary>
     public bool Unregister(ulong entityId)
     {
-        bool npc = _brains.TryRemove(entityId, out _);
+        bool npc = _brains.TryRemove(entityId, out var removed);
+        removed?.Routine.Stop();
         bool turret = Turrets.Unregister(entityId);
         return npc || turret;
     }
@@ -258,7 +290,13 @@ public class AiEngine
     /// <summary>Drops every brain and turret. Used when a zone is torn down.</summary>
     public void Clear()
     {
+        foreach (var npc in _brains.Values)
+        {
+            npc.Routine.Stop();
+        }
+
         _brains.Clear();
+        _activities.Clear();
         Turrets.Clear();
     }
 
@@ -291,7 +329,10 @@ public class AiEngine
         // deltaTime is the time since the previous shard tick, but we only act once per
         // movement interval, so step by the time actually elapsed since we last moved.
         ulong elapsedMs = _lastMovementAt == 0 ? (ulong)_rules.MovementIntervalMs : currentTime - _lastMovementAt;
+        // A stalled shard or toggled AI must not turn wall-clock downtime into a teleport.
+        elapsedMs = Math.Min(elapsedMs, 250UL);
         _lastMovementAt = currentTime;
+        _routinePathQueriesLeft = RoutinePathQueriesPerTick;
 
         bool perceive = currentTime >= _lastPerceptionAt + (ulong)_rules.PerceptionIntervalMs;
         if (perceive)
@@ -326,6 +367,7 @@ public class AiEngine
             CancelAttackAnimation(npc);
             CancelReload(npc, _shard.CurrentTime);
             npc.Brain.OnDeath();
+            npc.Routine.Stop();
             npc.TargetId = 0;
         }
     }
@@ -337,7 +379,7 @@ public class AiEngine
             !_shard.Entities.TryGetValue(npc.EntityId, out var registered) ||
             !ReferenceEquals(registered, entity))
         {
-            _brains.TryRemove(npc.EntityId, out _);
+            Unregister(npc.EntityId);
             return;
         }
 
@@ -350,6 +392,7 @@ public class AiEngine
             CancelAttackAnimation(npc);
             CancelReload(npc, currentTime);
             npc.Brain.OnDeath();
+            npc.Routine.Stop();
             npc.TargetId = 0;
             npc.Navigation.Reset();
             SyncBehaviorEmote(npc, currentTime);
@@ -405,6 +448,12 @@ public class AiEngine
         {
             npc.TargetId = 0;
         }
+
+        npc.Routine.Update(currentTime, entity.Position, decision.State == AiBrainState.Idle,
+            !IsMovementRestricted(entity) && !IsSliding(entity), _navigation.SupportsRoutines);
+        SyncRoutineWeapon(npc, currentTime);
+        // Stop a work/idle pose BEFORE an attack chain can start its own emote.
+        SyncBehaviorEmote(npc, currentTime);
 
         if (decision.Attack && targetAlive)
         {
@@ -626,10 +675,13 @@ public class AiEngine
         {
             AiBrainState.Dead => EmoteService.NoEmote,
             AiBrainState.Chase or AiBrainState.Attack => npc.CombatEmoteId,
-            _ => npc.IdleEmoteId,
+            AiBrainState.Return => EmoteService.NoEmote,
+            _ => npc.Routine.EmoteOverride ?? npc.IdleEmoteId,
         };
 
-        if (behaviorEmote != npc.BehaviorEmoteId)
+        bool activityChanged = npc.WorkingEmote != npc.Routine.IsWorking;
+        npc.WorkingEmote = npc.Routine.IsWorking;
+        if (behaviorEmote != npc.BehaviorEmoteId || activityChanged)
         {
             // A different behaviour set is running (or a different emote inside it): a length that ran out
             // under the old one does not carry over, so the emote of the new set starts fresh.
@@ -638,14 +690,14 @@ public class AiEngine
         }
 
         ushort wanted = npc.EmotePlayedOut ? EmoteService.NoEmote : behaviorEmote;
-        if (wanted != npc.EmoteId && _emotes.Perform(npc.Entity, wanted, (uint)currentTime))
+        if ((wanted != npc.EmoteId || activityChanged) && _emotes.Perform(npc.Entity, wanted, (uint)currentTime))
         {
             npc.EmoteId = wanted;
             npc.EmoteStartedAt = currentTime;
         }
 
-        if (npc.EmoteId != EmoteService.NoEmote && npc.EmoteDurationSeconds >= 0 &&
-            currentTime >= npc.EmoteStartedAt + (ulong)(npc.EmoteDurationSeconds * 1000))
+        if (!npc.Routine.IsWorking && npc.EmoteId != EmoteService.NoEmote && npc.EmoteDurationSeconds >= 0 &&
+            currentTime >= npc.EmoteStartedAt + ((ulong)npc.EmoteDurationSeconds * 1000UL))
         {
             // The length the behaviour asked for ("pose for 30 seconds") has run out: the emote ends, and
             // the set that still asks for it does not start it over. A `-1` - every value the database
@@ -656,6 +708,34 @@ public class AiEngine
                 npc.EmoteId = EmoteService.NoEmote;
                 npc.EmoteStartedAt = currentTime;
             }
+        }
+    }
+
+    private static void SyncRoutineWeapon(NpcBrain npc, ulong currentTime)
+    {
+        var entity = npc.Entity;
+        if (npc.Routine.Holster)
+        {
+            if (!npc.RoutineWeapon.HasValue && entity.WeaponIndex.Index != 0)
+            {
+                npc.RoutineWeapon = entity.WeaponIndex;
+                var holstered = entity.WeaponIndex;
+                holstered.Index = 0;
+                holstered.Time = unchecked((uint)currentTime);
+                entity.SetWeaponIndex(holstered);
+            }
+        }
+        else if (npc.RoutineWeapon.HasValue)
+        {
+            // Do not overwrite an equipment change made by an ability while the NPC was working.
+            if (entity.WeaponIndex.Index == 0)
+            {
+                var restored = npc.RoutineWeapon.Value;
+                restored.Time = unchecked((uint)currentTime);
+                entity.SetWeaponIndex(restored);
+            }
+
+            npc.RoutineWeapon = null;
         }
     }
 
@@ -1144,8 +1224,13 @@ public class AiEngine
             {
                 AiMovementIntent.TowardTarget => new Vector3?(target?.Position ?? npc.Home),
                 AiMovementIntent.TowardHome => new Vector3?(npc.Home),
-                _ => null,
+                _ => decision.State == AiBrainState.Idle ? npc.Routine.Goal : null,
             };
+        bool routineMovement = decision.State == AiBrainState.Idle && npc.Routine.Goal.HasValue;
+        if (npc.Routine.Profile.FixedInPlace)
+        {
+            goal = null;
+        }
 
         bool moved = false;
         bool sliding = goal.HasValue && IsSliding(entity);
@@ -1156,12 +1241,19 @@ public class AiEngine
         // against 500 ms), so this reads the ability system's own slide state rather than a combat flag.
         if (goal.HasValue && !IsMovementRestricted(entity) && !IsSliding(entity))
         {
-            moved = MoveToward(npc, goal.Value, decision.State, elapsedMs, currentTime);
+            moved = MoveToward(npc, goal.Value, decision.State, elapsedMs, currentTime, routineMovement);
         }
         else if (!goal.HasValue)
         {
             // A stale route must not be reused when a target is lost or the NPC reaches home.
             npc.Navigation.Reset();
+        }
+
+        if (npc.Routine.Facing.HasValue && !IsMovementRestricted(entity) && !IsSliding(entity))
+        {
+            entity.SetOrientation(npc.Routine.Facing.Value);
+            entity.AimDirection = Vector3.Transform(Vector3.UnitY, Quaternion.Conjugate(entity.Orientation));
+            _shard.Physics?.UpdateEntity(entity);
         }
 
         if (decision.FaceTarget && target != null)
@@ -1193,15 +1285,15 @@ public class AiEngine
             ? _movementStateSliding
             : !moved
                 ? _movementStateIdle
-                : decision.State == AiBrainState.Attack ? _movementStateWalking : _movementStateRunning;
+                : UsesWalking(npc, decision.State, routineMovement) ? _movementStateWalking : _movementStateRunning;
         entity.SetMovementState(movementState);
         BroadcastPoseIfChanged(npc, entity, movementState);
     }
 
-    private bool MoveToward(NpcBrain npc, Vector3 goal, AiBrainState state, ulong elapsedMs, ulong currentTime)
+    private bool MoveToward(NpcBrain npc, Vector3 goal, AiBrainState state, ulong elapsedMs, ulong currentTime, bool routineMovement)
     {
         var entity = npc.Entity;
-        var waypoint = GetNavigationWaypoint(npc, goal, state, currentTime);
+        var waypoint = GetNavigationWaypoint(npc, goal, state, currentTime, routineMovement);
         if (!waypoint.HasValue)
         {
             return false;
@@ -1210,10 +1302,15 @@ public class AiEngine
         var delta = waypoint.Value - entity.Position;
         delta.Z = 0f;
         float horizontal = delta.Length();
+        if (!float.IsFinite(horizontal))
+        {
+            return false;
+        }
+
         if (horizontal <= _navigationOptions.WaypointTolerance)
         {
             npc.Navigation.Advance();
-            waypoint = GetNavigationWaypoint(npc, goal, state, currentTime, forceReplan: false);
+            waypoint = GetNavigationWaypoint(npc, goal, state, currentTime, routineMovement);
             if (!waypoint.HasValue)
             {
                 return false;
@@ -1229,13 +1326,13 @@ public class AiEngine
         }
 
         var direction = delta / horizontal;
-        float speed = state == AiBrainState.Attack ? npc.MoveSpeed : npc.ChaseSpeed;
+        float speed = UsesWalking(npc, state, routineMovement) ? npc.MoveSpeed : npc.ChaseSpeed;
         float step = speed * (elapsedMs / 1000f);
 
         // The path ends at the target's ground point, but combat movement must stop at the
         // weapon's standoff distance. Clamping here avoids stepping through a target on the
         // final tick and keeps ranged NPCs at their database-defined combat distance.
-        if (state != AiBrainState.Return)
+        if (!routineMovement && state != AiBrainState.Return)
         {
             float targetDistance = AiVectors.HorizontalDistance(entity.Position, goal);
             float stopDistance = ResolveNavigationStopDistance(npc, currentTime);
@@ -1248,38 +1345,22 @@ public class AiEngine
             return false;
         }
 
-        var candidate = entity.Position + (direction * step);
-        if (IsBlocked(entity.Position, candidate, entity.EntityId))
+        var desired = entity.Position + (direction * step);
+        var agent = new NpcNavigationAgent(entity.EntityId, npc.NavigationRadius, npc.NavigationHeight);
+        if (!_navigation.TryStep(entity.Position, desired, agent, out var candidate) || !NpcGroundMovement.Finite(candidate))
         {
-            // A moving target, a newly streamed chunk or a changed collision pose can
-            // invalidate a route between replans. Rebuild once before giving the NPC a
-            // stationary tick; never walk through the obstruction as a fallback.
-            npc.Navigation.Reset();
-            waypoint = GetNavigationWaypoint(npc, goal, state, currentTime, forceReplan: true);
-            if (!waypoint.HasValue)
+            // A cached route can become obstructed. No direct-line or long downward fallback:
+            // abandon ambient goals with backoff; combat retries on its normal replan cadence.
+            npc.Navigation.Waypoints.Clear();
+            npc.Navigation.WaypointIndex = 0;
+            npc.Navigation.NextReplanAt = currentTime + _navigationReplanIntervalMs;
+            if (routineMovement)
             {
-                return false;
+                npc.Routine.Blocked(currentTime);
             }
 
-            delta = waypoint.Value - entity.Position;
-            delta.Z = 0f;
-            horizontal = delta.Length();
-            if (horizontal <= _navigationOptions.WaypointTolerance)
-            {
-                npc.Navigation.Advance();
-                return false;
-            }
-
-            direction = delta / horizontal;
-            step = MathF.Min(step, horizontal);
-            candidate = entity.Position + (direction * step);
-            if (IsBlocked(entity.Position, candidate, entity.EntityId))
-            {
-                return false;
-            }
+            return false;
         }
-
-        candidate = ProbeGround(entity, candidate);
 
         entity.SetPosition(candidate);
         entity.SetOrientation(AiVectors.OrientationFacing(direction));
@@ -1287,6 +1368,18 @@ public class AiEngine
         _shard.Physics?.UpdateEntity(entity);
 
         return true;
+    }
+
+    private static bool UsesWalking(NpcBrain npc, AiBrainState state, bool routineMovement)
+    {
+        if (routineMovement)
+        {
+            return npc.Routine.Profile.Walk;
+        }
+
+        return state == AiBrainState.Return
+            ? npc.Routine.Profile.LeashWalk ?? false
+            : npc.Routine.Profile.CombatWalk ?? state == AiBrainState.Attack;
     }
 
     /// <summary>
@@ -1346,58 +1439,46 @@ public class AiEngine
         Vector3 goal,
         AiBrainState state,
         ulong currentTime,
-        bool forceReplan = false)
+        bool routineMovement)
     {
-        var intent = state == AiBrainState.Return ? AiMovementIntent.TowardHome : AiMovementIntent.TowardTarget;
+        var intent = routineMovement ? AiMovementIntent.TowardRoutine
+            : state == AiBrainState.Return ? AiMovementIntent.TowardHome : AiMovementIntent.TowardTarget;
         var navigation = npc.Navigation;
         bool goalMoved = navigation.HasGoal &&
-            AiVectors.HorizontalDistance(navigation.Goal, goal) > _navigationGoalRefreshDistance;
-        bool expired = currentTime >= navigation.NextReplanAt;
-        if (forceReplan || !navigation.HasAttempted || navigation.Intent != intent || goalMoved || expired)
+            AiVectors.HorizontalDistance(navigation.Goal, goal) > (routineMovement ? _navigationOptions.WaypointTolerance : _navigationGoalRefreshDistance);
+        // A stationary ambient goal keeps its successful corridor until arrival/obstruction. It
+        // does not need the moving combat target's 750 ms replan loop.
+        bool expired = currentTime >= navigation.NextReplanAt &&
+            (!routineMovement || navigation.Waypoints.Count == 0);
+        if (!navigation.HasAttempted || navigation.Intent != intent || goalMoved || expired)
         {
+            if (routineMovement && _routinePathQueriesLeft-- <= 0)
+            {
+                return null;
+            }
+
             navigation.Reset();
             navigation.Intent = intent;
             navigation.Goal = goal;
             navigation.HasAttempted = true;
 
-            // Without collision data the adapter returns a flat fallback for every sample and
-            // the pathfinder immediately returns the direct point. That preserves the useful
-            // no-map development mode without manufacturing an obstacle map.
-            var physics = _shard.Physics;
-            var blocked = new Func<Vector3, Vector3, bool>(
-                (from, to) => IsBlocked(from, to, npc.Entity.EntityId));
-            IReadOnlyList<Vector3> path;
-            if (physics?.HasNavigationMesh == true)
-            {
-                // The collision-derived mesh is the authoritative route once a zone has
-                // supplied its surfaces. Do not silently fall back to the old local grid when
-                // the mesh says the endpoints are disconnected: the original CAIS query also
-                // reports an unreachable request rather than inventing a new map.
-                path = physics.FindNavigationPath(
-                    npc.Entity.Position,
-                    goal,
-                    blocked,
-                    _navigationOptions.MaxStepHeight,
-                    _navigationOptions.MaxSearchDistance) ?? Array.Empty<Vector3>();
-            }
-            else
-            {
-                path = NpcPathfinder.FindPath(
-                    npc.Entity.Position,
-                    goal,
-                    point => GroundForNavigation(npc.Entity, point),
-                    blocked,
-                    _navigationOptions,
-                    pathingCostAt: null,
-                    excludedAt: physics?.HasNavigationExclusions == true
-                        ? physics.IsNavigationExcluded
-                        : null);
-            }
+            var agent = new NpcNavigationAgent(npc.EntityId, npc.NavigationRadius, npc.NavigationHeight);
+            var path = _navigation.FindPath(npc.Entity.Position, goal, agent) ?? Array.Empty<Vector3>();
 
-            if (path.Count == 0)
+            if (path.Count == 0 || path.Any(point => !NpcGroundMovement.Finite(point)))
             {
                 navigation.NextReplanAt = currentTime + _navigationReplanIntervalMs;
+                if (routineMovement)
+                {
+                    npc.Routine.Blocked(currentTime);
+                }
+
                 return null;
+            }
+
+            if (routineMovement)
+            {
+                npc.Routine.ProjectGoal(path[^1]);
             }
 
             navigation.Waypoints.AddRange(path);
@@ -1413,93 +1494,6 @@ public class AiEngine
         return navigation.WaypointIndex < navigation.Waypoints.Count
             ? navigation.Waypoints[navigation.WaypointIndex]
             : null;
-    }
-
-    private Vector3? GroundForNavigation(CharacterEntity entity, Vector3 point)
-    {
-        var physics = _shard.Physics;
-        if (physics == null)
-        {
-            return new Vector3(point.X, point.Y, entity.Position.Z);
-        }
-
-        // FindGround uses static geometry only. If maps are configured but a chunk has not
-        // loaded (or the point is outside the loaded zone), retain the current plane rather
-        // than making the entire route unusable.
-        var ground = physics.FindGround(point, entity.EntityId);
-        return ground ?? new Vector3(point.X, point.Y, entity.Position.Z);
-    }
-
-    private bool IsBlocked(Vector3 from, Vector3 to, ulong selfEntityId)
-    {
-        var physics = _shard.Physics;
-        if (physics == null)
-        {
-            return false;
-        }
-
-        var delta = to - from;
-        delta.Z = 0f;
-        float distance = delta.Length();
-        if (distance <= 0.01f)
-        {
-            return false;
-        }
-
-        var direction = delta / distance;
-        float radius = _navigationAgentRadius;
-        float height = _navigationAgentHeight;
-        if (_brains.TryGetValue(selfEntityId, out var npc))
-        {
-            radius = npc.NavigationRadius;
-            height = npc.NavigationHeight;
-        }
-
-        var side = new Vector3(-direction.Y, direction.X, 0f) * radius;
-        // Static geometry is the navigation world. Dynamic characters are deliberately not
-        // obstacles: a crowd must not deadlock because each NPC sees the other NPC's kinematic
-        // hitbox, and the target's body must not block the last step into melee range.
-        float[] probeHeights = [height * 0.45f, height * 0.8f];
-        Vector3[] lateralOffsets = [Vector3.Zero, side, -side];
-        foreach (var probeHeight in probeHeights)
-        {
-            foreach (var offset in lateralOffsets)
-            {
-                var hit = physics.SegmentRayCast(
-                    from + offset + new Vector3(0f, 0f, probeHeight),
-                    to + offset + new Vector3(0f, 0f, probeHeight),
-                    selfEntityId,
-                    staticOnly: true);
-                if (hit.Hit && hit.T < distance - 0.05f)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private Vector3 ProbeGround(CharacterEntity entity, Vector3 candidate)
-    {
-        var physics = _shard.Physics;
-        if (!_rules.SnapToGround || physics == null)
-        {
-            return candidate;
-        }
-
-        var from = new Vector3(candidate.X, candidate.Y, candidate.Z + _groundProbeUp);
-        var to = new Vector3(candidate.X, candidate.Y, candidate.Z - _groundProbeDown);
-
-        // Only static geometry counts as ground; another mob or player standing
-        // nearby must not be mistaken for terrain.
-        var hit = physics.SegmentRayCast(from, to, entity.EntityId, staticOnly: true);
-        if (!hit.Hit)
-        {
-            return candidate;
-        }
-
-        return new Vector3(candidate.X, candidate.Y, hit.HitPosition.Z + _rules.GroundOffset);
     }
 
     /// <summary>
@@ -1618,6 +1612,8 @@ public class AiEngine
         public ulong EntityId;
         public CharacterEntity Entity;
         public AiBrain Brain;
+        public NpcRoutine Routine;
+        public AeroMessages.GSS.Character.WeaponIndexData? RoutineWeapon;
         public ulong TargetId;
         public Vector3 Home;
         public float MoveSpeed;
@@ -1671,6 +1667,7 @@ public class AiEngine
 
         /// <summary>Whether <see cref="BehaviorEmoteId" /> has already played out its own duration.</summary>
         public bool EmotePlayedOut;
+        public bool WorkingEmote;
 
         /// <summary>
         ///     Seconds the behaviour wants the emote held (<c>emoteDuration</c>), or -1 for "until the

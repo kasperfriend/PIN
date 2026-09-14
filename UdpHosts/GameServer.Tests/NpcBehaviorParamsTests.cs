@@ -192,4 +192,38 @@ public class NpcBehaviorParamsTests
         Assert.Equal(12, count);
         Assert.False(parsed.TryGetInt("missing", out _));
     }
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("1", true)]
+    [InlineData("false", false)]
+    [InlineData("0", false)]
+    public void TryGetBool_ReadsBothDatabaseSpellings(string text, bool expected)
+    {
+        var parsed = NpcBehaviorParams.Parse($"Wander(walk={text})");
+        Assert.True(parsed.TryGetBool("walk", out bool actual));
+        Assert.Equal(expected, actual);
+        Assert.False(parsed.TryGetBool("missing", out _));
+    }
+
+    [Fact]
+    public void NestedAndQuotedArgumentsDoNotEscapeIntoTheParent()
+    {
+        var parsed = NpcBehaviorParams.Parse(
+            "ChainWithPush(behaviorA=\"Crouch\",behaviorB=\"LookAtNearestPlayer(maxDistance=15,emote=guard)\",walk=true)");
+        Assert.Equal("LookAtNearestPlayer(maxDistance=15,emote=guard)", parsed.Values["behaviorB"]);
+        Assert.False(parsed.Values.ContainsKey("maxDistance"));
+        Assert.Equal(string.Empty, parsed.EmoteName);
+        Assert.True(parsed.TryGetBool("walk", out bool walk) && walk);
+    }
+
+    [Fact]
+    public void UnquotedChildAndQuotedCommaStayIntact()
+    {
+        var parsed = NpcBehaviorParams.Parse("Wander(child=Other(a=1,b=2),text=\"hello, world\",distance=12)");
+        Assert.Equal("Other(a=1,b=2)", parsed.Values["child"]);
+        Assert.Equal("hello, world", parsed.Values["text"]);
+        Assert.Equal("12", parsed.Values["distance"]);
+        Assert.False(parsed.Values.ContainsKey("b"));
+    }
+
 }

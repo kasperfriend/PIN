@@ -613,7 +613,7 @@ public class SDBInterface
     public static Dictionary<byte, CharCreateLoadoutSlots> GetCharCreateLoadoutSlots(uint id) => _charCreateLoadoutSlots.GetValueOrDefault(id);
     public static Deployable GetDeployable(uint id) => _deployable?.GetValueOrDefault(id);
     public static IReadOnlyDictionary<uint, Deployable> GetDeployables() => _deployable;
-    public static DeployableFunction GetDeployableFunction(uint id) => _deployableFunction.GetValueOrDefault(id);
+    public static DeployableFunction GetDeployableFunction(uint id) => _deployableFunction?.GetValueOrDefault(id);
     public static DeployableCategory GetDeployableCategory(uint id) => _deployableCategory.GetValueOrDefault(id);
     public static DamageType GetDamageType(byte id) => _damageType?.GetValueOrDefault(id);
     public static DamageResponse GetDamageResponse(byte id) => _damageResponse?.GetValueOrDefault(id);

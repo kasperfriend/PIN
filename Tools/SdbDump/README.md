@@ -102,3 +102,22 @@ cat Tools/clientdb.zip.001 Tools/clientdb.zip.002 > /tmp/clientdb.zip
 unzip -o /tmp/clientdb.zip -d /tmp/sdb
 python3 Tools/SdbDump/spawn_reference.py /tmp/sdb/clientdb.sd2
 ```
+
+## Complete NPC movement census
+
+```sh
+python npc_movement_audit.py                 # uses the two bundled clientdb ZIP parts
+python npc_movement_audit.py --check         # reproducibility check (also run in CI)
+python -m unittest discover -s . -p 'test_*.py'
+```
+
+`Docs/NpcMovement` contains the all-monster movement/behaviour reference, the
+complete table census with spatial/blob columns and loaded/unloaded distinctions,
+and every behaviour-bearing deployable/function/emote join. Quoted/nested
+arguments are parsed at their own level, not flattened by a comma regex.
+
+Table-name harvesting now includes `StaticDB/Records/<schema>/<Table>.cs`,
+resolving all **575/575** table names in the bundled build. Merely having a record
+class is not counted as loading that table at runtime. This audit does not claim
+to decode the missing original CAIS trees, external route assignments or every
+opaque payload. Runtime policy and remaining gaps are in `Docs/NPC_ROUTINES.md`.

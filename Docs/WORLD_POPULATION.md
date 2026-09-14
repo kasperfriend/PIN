@@ -10,7 +10,7 @@ It is the answer to "the zone is empty except for the handful of entities
 `dbcharacter::Monster` row that belongs to the loaded zone**, on ground the zone
 itself says an NPC can stand on, around the players who are in it.
 
-> **Placement is database-driven, not guessed.** The shipped `clientdb.sd2` has
+> **Placement is a reconstruction from database/collision inputs, not recovered original spawn assignments.** The shipped `clientdb.sd2` has
 > no per-zone spawn table - that lived in the live server's spawn groups, which
 > never shipped - so the plan derives both halves from data that *is* there:
 > *which* rows belong to which kind of ground from the row's own `behavior`,
@@ -47,6 +47,11 @@ itself says an NPC can stand on, around the players who are in it.
 > over a couple of seconds rather than in one tick.
 
 ---
+
+> **What happens after spawning:** [NPC routines](NPC_ROUTINES.md) now interpret
+> declared wander/work/rest settings and move through checked ground navigation.
+> Unknown or missing original patrol definitions are not replaced by invented
+> routes. Population placement and NPC routine execution are separate systems.
 
 ## 1. Where the code lives
 

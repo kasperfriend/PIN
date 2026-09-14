@@ -1,5 +1,11 @@
 # NPC AI Dev Notes
 
+> **Ambient movement:** declared wanderers now walk/run, pause and visit compatible
+> live work/rest objects through the same navigation service. See
+> [NPC routines](NPC_ROUTINES.md) and the [full movement census](NpcMovement/README.md)
+> for the exact data coverage and missing original-route/CAIS content. This does not
+> turn every idle template into a patrol.
+
 This document explains the server side NPC AI: what a spawned mob actually does,
 where the code lives, how to tune it and how to exercise it from the game client.
 
@@ -244,7 +250,8 @@ otherwise graph waypoints are followed, with an NPC-sized corridor probe at tors
 every edge. If no route exists, the NPC holds position instead of walking through geometry.
 When a zone has no usable navigation mesh, the bounded collision grid remains as a
 compatibility fallback. With no collision data loaded (`LoadMapsCollision` off) the sampler
-is flat and nothing can block or occlude, so every target counts as visible.
+is flat for combat and nothing can block or occlude, so every target counts as visible.
+Ambient travel is disabled without real ground.
 
 **Original-game parity status.** This is not a claim that the planner is the original
 Firefall implementation. The repository contains the inputs (`dbphysicsmaterials`
@@ -717,7 +724,8 @@ Available in the in-game chat (with a `\` prefix) and on the Admin channel
 | `\ai` / `\ai status` | Reports whether AI is on and how many NPCs are tracked |
 | `\ai on`         | Enables the engine (`enable`, `1` also work)               |
 | `\ai off`        | Disables it; NPCs freeze where they stand (`disable`, `0`) |
-| `\ai list`       | Lists every tracked entity id with its current state       |
+| `\ai list`       | Lists every tracked entity id with combat/routine states   |
+| `\ai routines`   | Routine-state counts, missing definitions and ground status |
 
 The switch is per shard and not persisted.
 
@@ -755,11 +763,12 @@ Everything is an `IAiRules` property. `AiEngine` takes an optional instance; pas
 ### Movement speeds come from the database
 
 `SdbAiMonsterStats` reads `dbcharacter::Monster.normal_speed` into the walk speed
-and `fast_speed` into the chase speed. Plenty of rows are `0` and some look like
-they are expressed in a different unit, so `AiSpeeds.Resolve` only trusts values
-inside `[MinTrustedSpeed, MaxTrustedSpeed]` and falls back to the configured
-defaults otherwise. That is what keeps a bad row from producing frozen or
-teleporting mobs.
+and `fast_speed` into the chase speed. The prod-1962 census finds 3,102 normal
+speeds and 3,094 fast speeds of `-1` (inherit), and one row with both speeds zero.
+`AiSpeeds.Resolve` retains the existing compatibility rule: trust values inside
+`[MinTrustedSpeed, MaxTrustedSpeed]`, otherwise use the configured fallback.
+The inherited species/pose locomotion defaults are not supplied here, so the
+fallback speeds are not claimed as recovered original-game speeds.
 
 ### Health and attack damage come from the database
 
@@ -957,19 +966,20 @@ bursts. See [Known gaps](#6-known-gaps).
 
 ### Ground snapping
 
-`SnapToGround` is on. The character origin sits at the feet, so `GroundOffset` is
-`0`: the downward ray cast pulls the NPC's origin onto the top surface of the
-static geometry and the mob walks along the terrain instead of floating or
-sinking. Spawned mobs are snapped the same way before they are scoped in
-(`PhysicsEngine.FindGround`), so zone entries with a placeholder `Z` of `0` land
-on the ground instead of spawning deep under it.
+The character origin sits at the feet (`GroundOffset=0`). Ordinary authored
+spawning still uses `PhysicsEngine.FindGround`; population placement is validated
+locally and passes `snapToGround:false` so it is not moved onto a roof.
 
-The ground sampler only tests static geometry (a nearby player or mob cannot be mistaken
-for the ground). Navigation uses the same static geometry for a small, NPC-sized corridor
-probe at two torso heights and routes around blocked cells with `NpcPathfinder`; a direct
-route remains the fast path. When no zone collision data is loaded (`LoadMapsCollision`
-off, or no map files), both probes are no-ops and movement stays horizontal, exactly as
-before.
+Movement is different: `PhysicsNpcNavigation` / `NpcGroundMovement` check the
+whole displacement in samples no farther than 0.5 m apart, using bounded ground
+probes (1.25 m up/down from the preceding surface), a walkable slope, exclusions
+and static body clearance. There is no 100 m post-movement drop or 10 km navigation
+probe. Missing collision chunks/holes are failures, not a fabricated flat plane.
+`SnapToGround=false` disables the final Z snap but not the ground-support check.
+
+Combat retains the no-collision development mode. Ambient travel does not:
+without real ground it waits. Loaded disconnected mesh routes never authorize a
+direct fallback. See [routine navigation safety](NPC_ROUTINES.md#navigation-and-lifecycle-safety).
 
 ---
 
@@ -993,9 +1003,11 @@ before.
   guards, a citizen works and a dancer dances, and a monster that engages drops the pose
   (see [What an NPC animates](#what-an-npc-animates), which lists the animation rows
   that are and are not used, and `Docs/EMOTES.md` §7). What is still untouched: the
-  engine does not run a monster's behaviour tree, so the *tree's* other actions (taunts,
-  wander idles and interaction poses) do not happen - the emote parameter of the set it is in,
-  its `am1`/`am2` modules and their `am*NavToDist`/`am*NavTimeout` approach request do;
+  engine does not execute the original CAIS trees. Declared ambient wandering,
+  waits and compatible work/rest interactions now run through `NpcRoutine`
+  ([scope and limitations](NPC_ROUTINES.md)); taunts, dialog triggers, named routes
+  and other unrecovered tree logic do not. The emote parameter of the set it is in,
+  its `am1`/`am2` modules and their `am*NavToDist`/`am*NavTimeout` approach request run;
   a module's own movement *is* applied now (`MovementSlide`, above - the dodge
   pair's 5 m in 667 ms, the Move Then Fire lunge's 20 m in 1 s, 39066's rise), so the only
   placeholders left on the animation paths are the ones whose semantics this build cannot
