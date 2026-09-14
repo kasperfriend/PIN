@@ -22,6 +22,16 @@ public abstract class PacketServer : IPacketSender
     protected CancellationTokenSource Source;
 
     private readonly ManualResetEventSlim _stopped = new(false);
+
+    /// <summary>Signalled by the listen thread once the socket bind has either succeeded or failed.</summary>
+    private readonly ManualResetEventSlim _listenReady = new(false);
+
+    /// <summary>
+    ///     The reason the bind failed, set by the listen thread before it signals
+    ///     <see cref="_listenReady" />; <c>null</c> when the socket is listening.
+    /// </summary>
+    private Exception _listenError;
+
     private PosixSignalRegistration _sigterm;
 
     protected PacketServer(ushort port, ILogger logger)
@@ -73,6 +83,29 @@ public abstract class PacketServer : IPacketSender
         var listenThread = Utils.RunThread(ListenThreadAsync, ct);
         var runThread = Utils.RunThread(ServerRunThreadAsync, ct);
         var sendThread = Utils.RunThread(SendThreadAsync, ct);
+
+        // The bind is the first thing that can make this process not be a server, so wait for its
+        // result before spending the zone-loading time. Left to its own devices the failure escaped
+        // the async void listen thread as an unobserved task exception: the process went on to load
+        // the zone, logged that it was ready, and received no packet at all — while the process that
+        // actually owns the port served the clients (or rejected them until it finished loading).
+        // A port that cannot be bound is a startup failure, not a warning.
+        _listenReady.Wait();
+
+        if (_listenError != null)
+        {
+            var error = _listenError;
+
+            if (!Source.IsCancellationRequested)
+            {
+                Source.Cancel();
+            }
+
+            ServerSocket.Close();
+            _sigterm?.Dispose();
+
+            throw error;
+        }
 
         Startup(ct);
 
@@ -151,12 +184,43 @@ public abstract class PacketServer : IPacketSender
 
     private async void ListenThreadAsync(CancellationToken ct)
     {
-        ServerSocket.Blocking = true;
-        ServerSocket.DontFragment = true;
-        ServerSocket.ReceiveBufferSize = MTU * 100;
-        ServerSocket.SendBufferSize = MTU * 100;
-        ServerSocket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.PacketInformation, true);
-        ServerSocket.Bind(ListenEndpoint);
+        try
+        {
+            ServerSocket.Blocking = true;
+            ServerSocket.DontFragment = true;
+
+            try
+            {
+                // Optional tuning: a platform that refuses one of these still answers UDP with its
+                // defaults, so it is a note, not a startup failure. The bind below is the failure.
+                ServerSocket.ReceiveBufferSize = MTU * 100;
+                ServerSocket.SendBufferSize = MTU * 100;
+                ServerSocket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.PacketInformation, true);
+            }
+            catch (Exception ex) when (ex is SocketException or PlatformNotSupportedException or InvalidOperationException)
+            {
+                Logger.Debug(ex, "Could not fully configure the UDP socket; continuing with the platform defaults");
+            }
+
+            ServerSocket.Bind(ListenEndpoint);
+        }
+        catch (Exception ex)
+        {
+            // A taken port (a second instance, a leftover process from an earlier run) or an unusable
+            // socket means this process will never receive a client. Say so with the port named, and
+            // let Run() turn it into a startup failure instead of a process that claims to be ready.
+            _listenError = ex;
+            Logger.Fatal(
+                ex,
+                "Could not bind UDP port {Port}: {Reason}. Another process is already listening there - " +
+                "find it (netstat -ano | findstr :{Port} on Windows), stop it, and start again.",
+                ListenEndpoint.Port,
+                ex.Message);
+            _listenReady.Set();
+            return;
+        }
+
+        _listenReady.Set();
 
         Logger.Information("Listening on {0}", ListenEndpoint);
 
