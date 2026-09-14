@@ -54,23 +54,24 @@ Generated with `python3 Tools/SdbDump/sdb_dump.py coverage clientdb.sd2`:
 
 ```
 tables in file : 575
-identified     : 255      (names recovered by hashing candidates)
-loaded by PIN  : 241
-unidentified   : 320      (name unknown; content still decodable by hash)
-rows           : 814,488 of 1,523,277 (53.5%) in PIN-loaded tables
+identified     : 264      (names recovered by hashing candidates)
+loaded by PIN  : 254
+unidentified   : 311      (name unknown; content still decodable by hash)
+rows           : 924,062 of 1,523,277 (60.7%) in PIN-loaded tables
 ```
 
 | Schema | Tables loaded / identified | Rows |
 |--------|---------------------------|------|
 | `apt` (aptitude/abilities) | 59 / 59 | 237,835 |
 | `aptfs` (aptitude command defs) | 121 / 121 | 31,027 |
-| `dbcharacter` | 18 / 31 | 32,396 |
+| `dbcharacter` | 24 / 33 | 32,406 |
+| `dbdialogdata` (dialog) | 3 / 3 | 39,426 |
 | `dbencounterdata` | 2 / 2 | 1,002 |
-| `dbitems` | 23 / 23 | 341,569 |
+| `dbitems` | 24 / 24 | 341,619 |
 | `dblocalization` | 1 / 2 | 182,958 |
 | `dbphysicsmaterials` | 1 / 1 | 49 |
-| `dbvisualrecords` | 2 / 2 | 12,509 |
-| `dbzonemetadata` | 1 / 1 | 39 |
+| `dbvisualrecords` | 3 / 3 | 56,323 |
+| `dbzonemetadata` | 3 / 3 | 10,232 |
 | `vcs` (vehicles) | 13 / 13 | 3,447 |
 
 **Identified but still unused by PIN** — the obvious next implementation
@@ -82,15 +83,13 @@ targets, all mob-related:
 | `dbcharacter::MonsterMoodName` | 6 | Mood name lookup. |
 | `dbcharacter::MonsterItemTags` | 1,032 | Item tags used by loot rolls. |
 | `dbcharacter::MonsterTitle` | 419 | Titles shown above an NPC's name. |
-| `dbcharacter::MonsterAttributeRange` | 167 | Per-level attribute curves for NPCs. |
 | `dbcharacter::VoiceSet` | 463 | NPC voice sets (`voice_set` column). |
-| `dbcharacter::EmoteRecord` | 382 | Emote definitions. |
 | `dbcharacter::FactionGroup(Members)` | 97 / 146 | Faction groupings above the flat faction list. |
 | `dbcharacter::XPRewardType` | 99 | Kill reward types (`xpreward_type`). |
 | `dbcharacter::Head` | 67 | Head visual records. |
 | `dblocalization::UITextMap` | 7,665 | UI string keys. |
 
-The remaining 320 tables are decodable but nobody has guessed their names yet;
+The remaining 311 tables are decodable but nobody has guessed their names yet;
 `sdb_dump.py dump clientdb.sd2 0xC79FA24C` still works on them.
 
 ### 2.1 New in this change

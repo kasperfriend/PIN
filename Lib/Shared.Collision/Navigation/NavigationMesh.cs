@@ -63,6 +63,24 @@ public sealed class NavigationMesh
     public int FaceCount => _faces.Length;
 
     /// <summary>
+    ///     The centroid of the walkable face at <paramref name="faceIndex" />, or false when the
+    ///     index is outside the mesh. Face centroids are the points this mesh's own pathfinding
+    ///     walks between, so enumerating them yields every spot the baked collision considers
+    ///     standable - which is what world population plans its spawn positions against.
+    /// </summary>
+    public bool TryGetFaceCentroid(int faceIndex, out Vector3 centroid)
+    {
+        if (faceIndex < 0 || faceIndex >= _faces.Length)
+        {
+            centroid = default;
+            return false;
+        }
+
+        centroid = _faces[faceIndex].Centroid;
+        return true;
+    }
+
+    /// <summary>
     ///     Finds a corridor through the baked collision surfaces. The returned points do not include
     ///     the start point. A null/empty result means that one endpoint is outside the walkable mesh,
     ///     the faces are disconnected, or a supplied runtime clearance probe rejected the corridor.

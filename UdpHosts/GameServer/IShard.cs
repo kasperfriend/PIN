@@ -17,6 +17,7 @@ using GameServer.Systems.EntityManager;
 using GameServer.Systems.MovementRelay;
 using GameServer.Systems.PlayerRespawn;
 using GameServer.Systems.ProjectileSim;
+using GameServer.Systems.Spawning.Population;
 using GameServer.Systems.WeaponSim;
 using Serilog;
 using Shared.Udp;
@@ -47,6 +48,14 @@ public interface IShard : IPacketSender
     FallDamageSystem FallDamage { get; }
     CharacterLifecycleService CharacterLifecycle { get; }
     PlayerRespawnService PlayerRespawn { get; }
+
+    /// <summary>
+    ///     Streams the zone's world population - every <c>dbcharacter::Monster</c> row the database
+    ///     says belongs in this zone, placed on the zone's own walkable ground - around the players
+    ///     in it. Null on a shard that runs without it (the minimal test shards), so callers ask
+    ///     before they use it.
+    /// </summary>
+    WorldPopulationService WorldPopulation { get; }
     uint ZoneId { get; }
     ILogger Logger { get; }
     GameServerSettings Settings { get; }

@@ -75,7 +75,40 @@ public class EntityManager
         return _scopedPlayersByEntity.TryGetValue(entityId, out var players) && players.Contains(player);
     }
 
-    public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null, bool canBleedout = false, Quaternion? orientation = null, byte level = 0)
+    /// <summary>
+    ///     Spawns an NPC from a <c>dbcharacter::Monster</c> row, gives it a physics body, registers
+    ///     it with the AI and introduces it to the clients that should see it.
+    /// </summary>
+    /// <param name="typeId">The <c>dbcharacter::Monster</c> row to spawn.</param>
+    /// <param name="position">Where to put it.</param>
+    /// <param name="owner">Owning character, for pets and turrets.</param>
+    /// <param name="canBleedout">Whether the character may bleed out instead of dying outright.</param>
+    /// <param name="orientation">Explicit facing; null derives one from the entity's aim direction.</param>
+    /// <param name="level">
+    ///     Level override; 0 resolves the level from the zone's level band (see
+    ///     <see cref="CharacterEntity.LoadMonster"/>).
+    /// </param>
+    /// <param name="snapToGround">
+    ///     Whether to snap <paramref name="position"/> down onto the terrain. Turn it off for a caller
+    ///     that validated its own spot: this snap searches 10 km down and so reports the topmost
+    ///     surface at that X/Y, which moves a spot that was chosen under a bridge or a roof onto the
+    ///     structure above it.
+    /// </param>
+    /// <param name="scopeToNearbyClientsOnly">
+    ///     Whether to introduce the new character only to the clients whose scope range it is inside,
+    ///     instead of to every connected client. A caller spawning in volume wants this: the periodic
+    ///     scope check would retract the entity from the far away clients within seconds anyway,
+    ///     after every one of its keyframes had been sent to them for nothing.
+    /// </param>
+    public CharacterEntity SpawnCharacter(
+        uint typeId,
+        Vector3 position,
+        CharacterEntity owner = null,
+        bool canBleedout = false,
+        Quaternion? orientation = null,
+        byte level = 0,
+        bool snapToGround = true,
+        bool scopeToNearbyClientsOnly = false)
     {
         var monsterInfo = SDBInterface.GetMonster(typeId);
         if (monsterInfo == null)
@@ -90,8 +123,9 @@ public class EntityManager
         characterEntity.SetCharacterState(CharacterStateData.CharacterStatus.Living, _shard.CurrentTime);
 
         // Snap the spawn point down onto the ground so mobs don't spawn sunk into the
-        // terrain or floating above it. A no-op when no zone collision data is loaded.
-        if (_shard.Physics != null)
+        // terrain or floating above it. A no-op when no zone collision data is loaded, and
+        // skipped entirely for a caller that already placed the body itself.
+        if (snapToGround && _shard.Physics != null)
         {
             var grounded = _shard.Physics.FindGround(position);
             if (grounded.HasValue)
@@ -129,7 +163,7 @@ public class EntityManager
         _shard.Physics.CreateKineticEntity(characterEntity);
         _shard.Physics.UpdateEntity(characterEntity);
         _shard.CharacterLifecycle.OnCharacterCreated(characterEntity);
-        Add(characterEntity.EntityId, characterEntity);
+        Add(characterEntity.EntityId, characterEntity, scopeToNearbyClientsOnly);
 
         // Spawned characters are NPCs; the engine ignores player controlled ones.
         _shard.AI?.Register(characterEntity);
@@ -658,11 +692,17 @@ public class EntityManager
         }
     }
 
-    public void Add(ulong guid, IEntity entity)
+    /// <param name="guid">The entity id the entity is filed under.</param>
+    /// <param name="entity">The entity to add.</param>
+    /// <param name="scopeToNearbyClientsOnly">
+    ///     Whether to introduce the entity only to the clients whose scope range it is inside,
+    ///     instead of to every connected client. See <see cref="IsWithinScopeRange"/>.
+    /// </param>
+    public void Add(ulong guid, IEntity entity, bool scopeToNearbyClientsOnly = false)
     {
         _ = _scopedPlayersByEntity.TryAdd(guid, []);
         _shard.Entities.Add(guid, entity);
-        OnAddedEntity(entity);
+        OnAddedEntity(entity, scopeToNearbyClientsOnly);
     }
 
     public void Add(IEntity entity)
@@ -2047,17 +2087,56 @@ public class EntityManager
         }
     }
 
-    private void OnAddedEntity(IEntity entity)
+    private void OnAddedEntity(IEntity entity, bool nearbyOnly = false)
     {
         // TEMP: Hack to introduce new entities to connected players. This should be replaced with tick logic that sends down entities based on scope and distance.
+        // A caller that spawns in volume can ask for that distance logic here instead, so a new
+        // entity is only sent to the players who would be told to keep it.
         foreach (var client in _shard.Clients.Values)
         {
             // We don't want to inform players that are still in the early steps of connecting
-            if (client.CanReceiveGSS)
+            if (!client.CanReceiveGSS)
             {
-                ScopeIn(client, entity);
+                continue;
             }
+
+            if (nearbyOnly && !IsWithinScopeRange(entity, client))
+            {
+                continue;
+            }
+
+            ScopeIn(client, entity);
         }
+    }
+
+    /// <summary>
+    ///     Whether <paramref name="player"/> is close enough to <paramref name="entity"/> to be told
+    ///     about it. The same rule the periodic scope check in <see cref="Tick"/> applies, so an
+    ///     entity filtered out here is one the scope check would have scoped out again at its next
+    ///     pass - after every one of its keyframes had been sent for nothing.
+    /// </summary>
+    private static bool IsWithinScopeRange(IEntity entity, INetworkPlayer player)
+    {
+        if (entity.IsGlobalScope())
+        {
+            return true;
+        }
+
+        var character = player.CharacterEntity;
+        if (character == null)
+        {
+            // A player without a character in the world has no position to measure from; the scope
+            // check skips them the same way.
+            return false;
+        }
+
+        if (entity == character || entity == character.AttachedToEntity)
+        {
+            return true;
+        }
+
+        float range = entity.GetScopeRange();
+        return Vector3.DistanceSquared(entity.Position, character.Position) <= range * range;
     }
 
     private void OnRemovedEntity(IEntity entity)

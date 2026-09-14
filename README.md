@@ -350,6 +350,7 @@ you a UI tab rather than your textures.)
 - Health, damage, shields, bleedout/death/respawn and fall damage (see `Docs/HEALTH_SYSTEM.md`)
 - Projectile combat against spawned NPCs (`Docs/SPAWNING_AND_COMBAT.md`)
 - Server side NPC AI: spawned mobs notice you, chase, shoot back, give up when they are dragged too far from their spawn point (see `Docs/NPC_AI.md`)
+- World population: every mob/NPC the database puts in a zone, placed on the zone's own walkable ground, at the level its area carries, and streamed around the players in it (see `Docs/WORLD_POPULATION.md`)
 
 ### Limitations
 

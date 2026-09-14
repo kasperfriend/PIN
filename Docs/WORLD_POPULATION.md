@@ -1,0 +1,507 @@
+# World Population Dev Notes
+
+This document explains the world population system: how a zone gets filled with
+the monsters and NPCs the database says belong in it, where their positions come
+from, what keeps it from costing the server anything it should not, and how to
+inspect or turn it off at runtime.
+
+It is the answer to "the zone is empty except for the handful of entities
+`character_spawn.json` authors". The server now spawns **every
+`dbcharacter::Monster` row that belongs to the loaded zone**, on ground the zone
+itself says an NPC can stand on, around the players who are in it.
+
+> **Placement is database-driven, not guessed.** The shipped `clientdb.sd2` has
+> no per-zone spawn table - that lived in the live server's spawn groups, which
+> never shipped - so the plan derives both halves from data that *is* there:
+> *which* rows belong to which kind of ground from the row's own `behavior`,
+> `faction_id` and `vendor_id` columns, and *where* that ground is from the
+> zone's own baked collision (its navigation mesh), its authored outposts /
+> deployables / Melding perimeters (`StaticDB/CustomData`) and its chunk metadata
+> (`dbzonemetadata`). See [What the data does not contain](#8-what-the-data-does-not-contain).
+
+> **Only where players are.** Nothing is planned, and nothing is spawned, in a
+> zone without a player in it. Cells come alive inside 200 m of a player and are
+> removed again beyond 300 m, so the world exists around the players instead of
+> all at once.
+
+> **Both kinds of collision are checked before anything appears.** The physical
+> one (ground probe, walkable slope, standing volume clear of the world and of
+> every body the simulation knows) and the server side one (a placement grid that
+> refuses a spot another planned or spawned body already holds, which no ray can
+> see because that body may not exist yet).
+
+> **The cost is bounded by four independent brakes**: a live NPC cap, a spawn
+> budget per time window, an update interval, and the plan's own work budget while
+> it is being built. A player sprinting into an empty corner of the zone fills it
+> over a couple of seconds rather than in one tick.
+
+---
+
+## 1. Where the code lives
+
+```
+UdpHosts/GameServer/Systems/Spawning/Population/
+├── WorldPopulationService.cs           shard integration: streaming, budgets, refills, clearing
+├── WorldPopulationPlanner.cs           zone + monster table -> cells of ground -> slots
+├── WorldPopulationCell.cs              one 32 m patch: habitat, level, slots
+├── WorldPopulationSlot.cs              one planned NPC: row, anchor, facing, entity id
+├── WorldPopulationCandidate.cs         one admitted monster row + the WorldPopulationAnchor record
+├── WorldPopulationHabitat.cs           Wilderness / Settlement / Melding (flags) + Accepts
+├── MonsterHabitatClassifier.cs         row -> "is this world content, and which ground does it fit"
+├── SpawnOccupancyGrid.cs               server side collision: spatial hash of placed bodies
+├── WorldPopulationHash.cs              the deterministic pseudo-randomness the plan uses
+├── PopulationCommand.cs                the `population` command's behaviour (chat + admin)
+├── IWorldPopulationRules.cs            every number the system decides by itself
+├── StandardWorldPopulationRules.cs     the out of the box tuning + FromSettings
+├── IWorldPopulationDataSource.cs       the database seam
+├── SdbWorldPopulationDataSource.cs     reads it: SDBInterface + CustomDBInterface + dbzonemetadata
+├── IWorldPopulationTerrain.cs          the ground seam
+├── PhysicsWorldPopulationTerrain.cs    reads it: navigation mesh, chunk refs, ray casts
+├── IWorldPopulationSpawner.cs          the spawn seam
+└── EntityManagerWorldPopulationSpawner.cs  spawns through EntityManager.SpawnCharacter
+```
+
+Supporting changes outside that folder:
+
+* `Physics/PhysicsEngine.cs` — `TryGetGroundSurface` (ground probe **with the
+  surface normal**), `IsStandingVolumeClear` (the body-volume check),
+  `HasZoneCollision`, `WalkableFaceCount`, `TryGetWalkableFaceCentroid`,
+  `ZoneChunks`
+* `Lib/Shared.Collision/Navigation/NavigationMesh.cs` — `TryGetFaceCentroid`, so
+  the plan can enumerate every walkable spot the mesh baked
+* `Lib/Shared.Collision/ZoneLoading/ZoneLoader.cs` — `ChunkRefs`, so a world
+  position can be answered with the chunk it falls in
+* `Systems/EntityManager/EntityManager.cs` — `SpawnCharacter` gained
+  `snapToGround` and `scopeToNearbyClientsOnly`; `Add`/`OnAddedEntity` gained the
+  distance filter behind it
+* `StaticDB/SDBInterface.cs`, `StaticDB/Loaders/*` — the `dbzonemetadata::
+  ZoneChunkLinker` table (which chunks a zone is built from, and which of them the
+  server never simulated)
+* `Shard.cs`, `IShard.cs`, `GameServerSettings.cs`, `GameServerModule.cs`,
+  `App.Default.config` — construction, tick order, settings and their parsing
+* `Systems/Chat/Commands/PopulationChatCommand.cs`,
+  `Systems/Admin/Commands/PopulationServerCommand.cs` — the two spellings of the
+  command, both thin wrappers over `PopulationCommand`
+
+Tests: `UdpHosts/GameServer.Tests/MonsterHabitatClassifierTests.cs`,
+`SpawnOccupancyGridTests.cs`, `WorldPopulationPlannerTests.cs`,
+`WorldPopulationServiceTests.cs` and `Fakes/WorldPopulationFakes.cs` (see
+[Testing](#10-testing)).
+
+---
+
+## 2. What gets spawned: the roster
+
+`MonsterHabitatClassifier.TryClassify` reads four things off a
+`dbcharacter::Monster` row and answers two questions - *may this row be spawned as
+ambient world content at all*, and *which kinds of ground does it belong to*.
+
+**Refused** (not world population):
+
+| Rule | Why | Rows |
+|------|-----|------|
+| no `chassis_id` **and** no `posetype_id` | nothing to render and nothing to collide with; `CharacterEntity.LoadMonster` keeps such a row alive with a synthesized sphere, which is a debug affordance | 89 |
+| `behavior` is one of the exclusion set | see below | 167 |
+
+The exclusion set is behaviours the game attaches to something that is *not* an
+inhabitant of the zone: `Null` (173 rows ask for no AI at all), the pets
+(`PlayerPet`, `PassivePet`, `Pet_Earthbreaker`, `TestElfPet`, `TestFollowPlayer` -
+created by their owner's ability, not by the world), the turret/teleporter props
+(`EngineerTurret`, `EngineerTurretTeleporter`, `TurretTeleporterDropshipCannon`,
+`TurretTeleporterTarget`), level fixtures (`Elevator`, `DoorUpInteract`) and
+development leftovers (`AvoidMatt`, `CraterTest`, `Config`, `Meta`, `MRU`,
+`_inst`). The behaviour name is the part before the first `(` and is read with
+`NpcBehaviorParams.Parse`, the same parser the AI uses, so
+`PeacetimeCityWanderer(wanderRadius=30)` and `PeacetimeCityWanderer` classify
+identically.
+
+**Habitat** of an admitted row:
+
+| Signal | Habitat |
+|--------|---------|
+| `behavior` in the settlement set (`BasicCivilian`, `PeacetimeCityWanderer*`, `GuardCityWanderer`, `*Dialog`, `Stand`, `PerformEmote`, `UseAbilityOnInteract*`, `TraumaDoc`, ...) | `Settlement` |
+| `vendor_id != 0` (102 rows) | `Settlement` |
+| `faction_id`'s `internal_name` is `melding`, **or** `behavior` starts with `Melding` | `Melding` |
+| `faction_id`'s `internal_name` is `chosen` | `Melding \| Wilderness` |
+| none of the above (including an empty behaviour - 1,068 rows) | `Wilderness` |
+
+Two of those rules exist because the data is not tidy: a couple of the Melding's
+own creatures are filed under other factions (`MeldingAcolyte` under gaea,
+`MeldingPuker` under chosen), and the Chosen are the Melding's army - they come
+through it and patrol the field around it, so their rows fit both. `vendor_id` is
+used rather than `terminal_type_name` because the latter carries its `VENDOR`
+default on 3,087 of the 3,109 rows, wildlife included.
+
+Against the shipped database this admits **2,853 of 3,109** rows: 1,023 fit
+settlements, 1,731 the wilderness, 351 the Melding.
+
+Every admitted row also carries four columns the plan uses:
+
+| Column | Values in the shipped DB | Use |
+|--------|--------------------------|-----|
+| `difficulty_cost` | `0` ×2203, `20-100` ×~760, `300` ×35, `1000` ×1 | the encounter budget a cell may spend, and the row's density weight |
+| `ai_spawn_delay_ms` | `2000` ×2822, `0` ×234 | delay between a cell being activated and its NPCs appearing |
+| `body_radius` | `-1` (inherit) ×3103 | how much room the body needs; `-1` resolves to `0.7` m |
+| `body_height` | `-1` (inherit) ×3103 | how much headroom it needs; `-1` resolves to `1.8` m |
+
+`body_radius`/`body_height` fall back to the same numbers the AI uses for its
+navigation agent, so a mob is given as much room standing as it is walking.
+
+---
+
+## 3. Where it gets spawned: the plan
+
+The planner turns a loaded zone into cells of ground, each with a habitat and a
+level, each holding the slots of the NPCs that belong there. It runs once per
+shard, spread over several ticks, and only starts when a player is in the zone.
+
+**Phase 1 - surfaces.** The zone's navigation mesh (`NavigationMesh`, baked from
+the zone's own collision) is enumerated face by face. A face exists only if the
+triangle was walkable (`normal.Z >= 0.35`) and not excluded from pathing by the
+chunk metadata, so every face centroid is a spot the zone itself says an NPC can
+stand on. Up to `PlanWorkPerTick` (20,000) faces are accumulated per update.
+
+**Phase 2 - cells.** Centroids are accumulated into 32 m cells; a cell's centre is
+the average of the ground that landed in it, so a cell is not a flat square of the
+world but the ground the zone actually has inside that square (its Z is a height a
+body can start from). Building is incremental too - a cell is classified against
+every anchor near it, and on a real zone that is the expensive phase. Per cell:
+
+* **Chunk rule** — the cell's centre is answered with the `dbzonemetadata::
+  ChunkRecord` it falls in (from the chunk references the zone file was loaded
+  with, measured from the zone's smallest chunk origin because a zone's origins
+  are not necessarily multiples of 512 m). A chunk is refused when
+  `ZoneChunkLinker.clientonly != 0` (the server never simulated it) or
+  `ChunkRecord.remove_in_production != 0` (stripped from the shipped build). Coral
+  Forest has 93 chunks of which 64 are server-side, so this is what keeps NPCs out
+  of the client-only scenery.
+* **Habitat** — from the authored anchors around the cell: outposts (with their own
+  radius, 150-550 m in Coral Forest), the zone's deployables (469 of them: sized
+  by `DeployableInfluenceRadius`), and every Melding perimeter control point
+  (16 Meldings, 4-23 points each: sized by `MeldingInfluenceRadius`). A settlement
+  wins over the Melding around it - an outpost inside a Melding perimeter is still
+  a place players respawn in. Anchors are bucketed into 1024 m squares so
+  classification is a 3×3 bucket scan rather than a scan of all 509 anchors.
+* **Level** — the `level_band_id` of the **nearest** banded anchor, however far
+  away that anchor is, resolved through `SDBUtils.ResolveNpcLevel`; the zone's own
+  band when no anchor carries one. This is what reproduces the original level
+  gradient: Coral Forest's outposts carry bands 1-5 at the starter outpost up to
+  29-30 in its far corners, while the zone band alone says 1-30.
+* **Facing** — a settlement's NPCs face their settlement, the Melding's face the
+  Melding, open field gets a deterministic yaw. Each slot turns up to ~34° away
+  from it so a group does not stand in one formation.
+
+A zone with no walkable surfaces at all (no maps configured, or collision that
+produced nothing standable) falls back to the authored anchor positions as its
+cells - the only positions left whose height the data vouches for - and says so in
+the plan's log line and in `population status`.
+
+**Phase 3 - slots.** Two passes over the cells:
+
+1. **Coverage** gives *every admitted row* one slot in a cell of a habitat it fits,
+   so the zone's plan carries the whole roster the zone can host rather than a
+   sample of it. A per-habitat cursor makes the probes land on cells the previous
+   rows did not use. The difficulty budget is **not** enforced here (a row priced
+   above a whole cell's budget still gets its one slot; the cell then simply has no
+   room for anything else), but the per-cell count and the plan's slot ceiling are.
+   A row is refused when the zone has no ground of its kind at all - a
+   settlement NPC in a zone with no outpost, a Melding creature in a zone with no
+   Melding - or when the plan has already hit its slot ceiling, and those rows are
+   counted and **reported**, not silently dropped.
+2. **Density** fills the remaining room in a scattered but deterministic order,
+   picking rows by the frequency `WorldPopulationCandidate.DensityWeight` reads out
+   of their `difficulty_cost` (`0` → 8, `<=25` → 6, `<=60` → 4, `<=120` → 2, else
+   1) and charging that cost against the cell's `MaxDifficultyPerCell`. A row with
+   no cost is charged `UnbudgetedDifficultyCost` so a cell cannot fill with
+   unlimited free NPCs. The shape this reproduces is the one the original game's
+   encounters had: common ambient rows in groups, expensive ones alone.
+
+Slots sit at their cell's centre plus a deterministic jitter inside 0.4 of the cell
+size, which keeps a slot in its own cell with room for the body's own radius.
+
+**Determinism.** Roster order (ascending monster id), cell order (ascending grid
+key), density order (a hash permutation of the keys), jitter, facing and density
+picks all come from `WorldPopulationHash` seeded with the cell key and the slot
+index. Two servers with the same database and the same zone plan the same world,
+and a cell that is deactivated and reactivated shows the player the same NPCs in
+the same places rather than a reshuffle.
+
+---
+
+## 4. Streaming around the players
+
+`WorldPopulationService.Tick` is called from `Shard.Tick` **after** the entity
+manager's tick - that is where the zone's own entities are spawned on the first
+tick, and population plans around them, seeds its placement grid from them and
+spawns through them. It does its work at most every `TickIntervalMs` (250 ms; the
+shard itself ticks every 5 ms) and returns immediately otherwise.
+
+Per update:
+
+1. **No players?** Everything this service spawned is removed, the activations are
+   forgotten and the update ends. The plan survives (it is only memory), so the zone
+   comes back without being planned again. Turning the feature off does exactly the
+   same, and touches nothing else - the zone's own entities stay.
+2. **Plan not complete?** One `Work` call, then return. Nothing spawns until the plan
+   exists.
+3. **Seed the placement grid** from everything already in the world (the zone's
+   authored NPCs, its deployables and outposts, every player), once per plan
+   lifetime. Bodies that appear later are caught by the physical check instead,
+   which sees every body the simulation knows.
+4. **Activation** — cells inside `ActivationRadius` (200 m) of any player that are
+   not already active get their slots queued; active cells outside
+   `DeactivationRadius` (300 m) of every player get despawned. The 100 m gap is
+   hysteresis: a player standing on the boundary does not make the same cell spawn
+   and despawn every tick.
+5. **Spawns** — the queue is drained under two limits at once: `SpawnBudget` (12)
+   per `SpawnBudgetWindowMs` (100 ms) and `MaxLiveNpcs` (600) minus what is alive.
+   A slot is filled no earlier than its row's `ai_spawn_delay_ms` after its cell was
+   activated, which both honours the column and staggers a cell's NPCs over a couple
+   of seconds instead of letting them all land in one update.
+6. **Reconcile** — a slot whose NPC is no longer in the world (killed, despawned by
+   a mission, removed by a lifetime) gets its slot back and refills after
+   `RespawnDelayMs` (30 s) plus the row's own spawn delay: a corpse is not instantly
+   replaced by its successor.
+
+Spawning goes through `EntityManager.SpawnCharacter`, the same path an authored
+`character_spawn.json` entry takes, so a population NPC is an ordinary NPC
+everywhere else in the server: physics body, AI brain, loot, hostility, scope. Two
+differences, both deliberate:
+
+* `snapToGround: false` — the placement already probed the ground with a short
+  window, while `SpawnCharacter`'s own snap searches 10 km down and reports the
+  topmost surface at that X/Y, which would move a validated spot under a bridge or
+  a roof onto the structure above it.
+* `scopeToNearbyClientsOnly: true` — `EntityManager` introduces a new entity to
+  **every** connected client (its own comment calls that a temporary hack), which is
+  fine for the handful of entities a zone loads at startup and wasteful for a system
+  whose whole job is spawning hundreds of them: a mob 4 km away would be sent to a
+  player who is then told to forget it at the next scope check. The filter applies
+  the same rule the periodic scope check does, so an entity filtered out here is one
+  the scope check would have retracted anyway.
+
+Removal goes through `EntityManager.Remove`, and `Despawn` refuses to remove
+anything that is not an NPC this system spawned - a player character is left alone
+whatever id it carries.
+
+**When something goes wrong.** The update runs inside the shard's tick and never
+throws into it: an update that throws is logged and counted, and after three in a
+row the service turns itself off (taking its NPCs with it) instead of throwing four
+times a second for the life of the process. Spawning is guarded the same way -
+`EntityManagerWorldPopulationSpawner` catches whatever `SpawnCharacter` throws for a
+row the entity manager cannot build, reports that row once, and answers `0`, which
+the service counts as a refusal and parks the slot after a few of those. A bad row
+in the database therefore costs that row, not the shard.
+
+---
+
+## 5. Collisions
+
+A planned position is checked twice, and both checks have to pass.
+
+**Physical** (`PhysicsWorldPopulationTerrain.TryResolveStandingSpot`):
+
+1. No physics engine (a shard without it, the test shards) → refused; nothing can be
+   validated.
+2. No zone collision at all (`HasZoneCollision` false: no maps configured) →
+   **accepted** unchanged, which keeps such a shard working exactly as its authored
+   spawns already do.
+3. Ground probe 1.5 m up / 3 m down from the planned spot. The short reach is the
+   point: the spot comes from a surface the zone's collision baked, so the surface it
+   belongs to is at its feet, and a long reach would snap a spot under a bridge onto
+   whatever is below it. 1.5 m up is also the AI's own probe distance, so a spot
+   validated here is a fixed point of the AI's snap and is not moved by the first AI
+   tick.
+4. `|normal.Z| >= MinimumWalkableNormalZ` (0.35) - the same cutoff the navigation
+   mesh was baked with, so the system never calls ground what the mesh already
+   refused. Absolute because a floor and a ceiling are equally unwalkable when they
+   are this steep.
+5. `IsStandingVolumeClear` - horizontal static probes at ankle, waist and shoulder
+   height along both axes (plus 0.1 m of slack), one vertical probe for headroom
+   (plus 0.2 m), and a broad phase query for the non-static bodies (players, mobs,
+   vehicles, deployables) that already overlap the box.
+
+**Server side** (`SpawnOccupancyGrid` + player distance):
+
+* A spatial hash of every body the plan has already placed and every entity that was
+  in the world when the plan finished. A spot is refused when it comes closer to a
+  registered body than the two radii plus `MinSeparation` (0.5 m) - so two 0.7 m mobs
+  need 1.9 m between their centres. Distances are horizontal with a height window,
+  because two NPCs at clearly different heights (a balcony and the street under it)
+  are not in each other's way; the exact three dimensional answer is the physics
+  check's job.
+* `MinPlayerDistance` (25 m) from every player, checked both before and after the
+  ground snap, so a cell the player is standing in does not materialise mobs on top
+  of them.
+
+This grid is the half no ray can do: what it catches is a body that is *planned but
+not spawned yet*, which is how a cell would otherwise end up with its four NPCs
+stacked in one place the instant they all appear.
+
+**Refusal policy.** One slot tries `MaxPlacementAttempts` (6) positions per round:
+its own anchor first, then jittered ones up to half a cell away (which may cross into
+the neighbouring cell - better a mob 20 m from where it was planned than a cell that
+never fills). Then:
+
+| Refused by | Treated as | Consequence |
+|------------|-----------|-------------|
+| ground (no surface, too steep, inside the world, row not spawnable) | permanent | counts a failure; after `MaxPlacementFailures` (8) the slot is **parked** and reported, instead of being spun on forever |
+| room (a player, another body) | transient | retried after `PlacementRetryDelayMs` (1 s), never parked |
+
+A parked slot is not retried and is counted in `population status`, so a zone whose
+plan does not fit its ground is visible instead of silently short.
+
+---
+
+## 6. Configuration
+
+Three operator-facing keys in `UdpHosts/GameServer/App.config` (defaults in
+`App.Default.config`, parsed in `GameServerModule`):
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `SpawnWorldPopulation` | `true` | Master switch. Off means an empty zone (only the authored `character_spawn.json` entities remain) |
+| `WorldPopulationMaxLiveNpcs` | `600` | Hard ceiling on live population NPCs, whatever the plan could hold |
+| `WorldPopulationActivationRadius` | `200` | Metres from a player within which cells activate; NPCs are removed beyond 1.5× this |
+
+Everything else is an `IWorldPopulationRules` property. `StandardWorldPopulationRules`
+carries the defaults; a test or a tuning pass can replace the whole set by handing a
+custom implementation to `WorldPopulationService` - the same seam `IAiRules` gives
+the AI.
+
+| Property | Default | Meaning |
+|----------|---------|---------|
+| `Enabled` | `true` | From `SpawnWorldPopulation` |
+| `MaxLiveNpcs` | `600` | Live NPC ceiling |
+| `ActivationRadius` | `200` | Metres at which a cell comes alive |
+| `DeactivationRadius` | `300` | Metres beyond which an active cell is removed (1.5× activation) |
+| `CellSize` | `32` | Metres per planning cell; a little over twice a monster's perception radius, so a cell reads as one encounter-sized patch |
+| `MaxNpcsPerCell` | `4` | Most NPCs one cell may hold |
+| `MaxDifficultyPerCell` | `400` | Total `difficulty_cost` one cell may hold (density pass only) |
+| `UnbudgetedDifficultyCost` | `25` | Charged to a row whose `difficulty_cost` is 0 |
+| `MaxPlannedSlots` | `20000` | Ceiling on the plan's slots for the whole zone |
+| `SpawnBudget` | `12` | Most NPCs spawned per window |
+| `SpawnBudgetWindowMs` | `100` | Length of that window |
+| `TickIntervalMs` | `250` | Milliseconds between two population updates |
+| `PlanWorkPerTick` | `20000` | Mesh faces scanned / cells built per update while planning |
+| `MinSeparation` | `0.5` | Extra metres of gap between two bodies |
+| `MinPlayerDistance` | `25` | Metres of clearance from every player |
+| `MaxPlacementAttempts` | `6` | Positions one slot tries per round |
+| `PlacementRetryDelayMs` | `1000` | Wait after a failed round |
+| `MaxPlacementFailures` | `8` | Failed rounds after which a slot is parked |
+| `RespawnDelayMs` | `30000` | Wait after an NPC died before its slot refills |
+| `MinimumWalkableNormalZ` | `0.35` | Steepest surface a spawn may sit on |
+| `DefaultBodyRadius` | `0.7` | For a row whose `body_radius` is the `-1` sentinel |
+| `DefaultBodyHeight` | `1.8` | For a row whose `body_height` is the `-1` sentinel |
+| `DeployableInfluenceRadius` | `25` | Metres around a deployable that count as settlement ground |
+| `MeldingInfluenceRadius` | `120` | Metres around a Melding control point that count as Melding ground |
+
+---
+
+## 7. Commands
+
+Available in the in-game chat (with a `\` prefix) and on the Admin channel (without
+it). Both spellings run the same code (`PopulationCommand`), so they cannot drift
+apart.
+
+| Command | Effect |
+|---------|--------|
+| `\population` / `\population status` | Four lines: the switch, the plan, the streaming state, the lifetime counters |
+| `\population on` | Enables it (`enable`, `1` also work); the zone fills in around players over the next few seconds |
+| `\population off` | Disables it (`disable`, `0`); every NPC it spawned is removed at the next update, the zone's own entities stay |
+| `\population near [radius]` | Up to 15 live population NPCs within `radius` (default 100 m) of the caller, nearest first, with name, monster id, position and distance |
+
+`status` answers with one chat line per report line, because the chat channel sends
+one message and does not split it. The switch is per shard and not persisted.
+
+Example:
+
+```
+\population
+World population: on (live 412/600 NPCs of 2853 monster rows, 96 kinds in the world)
+Plan: 9841 cells, 20000 slots, 2853 rows placed, 214 cells refused by chunk rules
+Streaming: 118 active cells, 1437 slots queued, 1 players, activate 200 m / deactivate 300 m
+Lifetime: 1904 spawned, 1492 despawned, 37 lost, 214 placements refused, 9 slots parked, 431 bodies in the placement grid
+```
+
+---
+
+## 8. What the data does not contain
+
+Stated plainly, because each of these shaped a decision above:
+
+* **There is no per-zone spawn table in `clientdb.sd2`.** The live server's spawn
+  groups held "which mob, how many, where" per zone, and they never shipped. No
+  table in the shipped database carries per-zone monster positions, so positions
+  come from the zone's own walkable collision and the authored anchors instead.
+* **`dbmissions::MissionWaypoint.location` is chunk-local** (±256), not a world
+  coordinate, so it cannot be used as a spawn position without knowing which chunk
+  it belongs to.
+* **The faction tables carry no faction→zone link**, so "belongs to this zone" is
+  answered by habitat fit (does this zone contain outposts / Melding at all?) and by
+  the level band of the area, not by a faction→zone mapping.
+* **`respawn_flags` is not decoded** - its bits are not recoverable from the shipped
+  data - so respawning uses one delay for every row (`RespawnDelayMs` plus the row's
+  `ai_spawn_delay_ms`) instead of per-row respawn semantics.
+* **`body_radius`/`body_height` are the `-1` "inherit" sentinel on 3,103 of 3,109
+  rows**, so almost every body is sized by the rules' defaults, which are the AI's
+  navigation agent numbers.
+* **Deployables and Melding control points carry no radius**, so the planner sizes
+  them (`DeployableInfluenceRadius`, `MeldingInfluenceRadius`); outposts do carry
+  one and use their own.
+
+What this means in practice: the system is faithful to the data that exists - every
+row that can be a world inhabitant is placed, on ground the zone vouches for, at the
+level its area carries, in the kind of place its behaviour and faction imply - and it
+cannot be faithful to a spawn table that was never shipped.
+
+---
+
+## 9. Cost and limits
+
+| Concern | Bound |
+|---------|-------|
+| Live NPCs | `MaxLiveNpcs` (600). A 200 m activation radius covers ~123 cells of 32 m (the cell keys considered are the radius' bounding box, 13×13 = 169, of which only the ones with planned ground activate), i.e. ~490 slots at the 4-per-cell cap - so one player walking through a zone keeps the world populated without running into the cap. Several players share the same cap: the cost of the feature is bounded by this number, not by how many players are connected |
+| Spawn rate | 12 per 100 ms = 120/s worst case. `EntityManager` drains its scope-in queue at 16 per 20 ms (800/s), so a player walking into an empty area cannot make that queue grow |
+| Update cost | One update per 250 ms: a bounding-box scan of cell keys per player, one queue drain under budget, one pass over the live slots |
+| Planning cost | Spread over ticks: 20,000 mesh faces and 20,000 cells per update, so a large zone is planned in a couple of seconds of updates that each stay well under a millisecond of extra work. Planning does not start until a player is in the zone |
+| Plan memory | `MaxPlannedSlots` (20,000) slots, tens of thousands of cells; the drafts are dropped as soon as the cells exist |
+| Placement queries | The occupancy grid hashes at 1/4 of the cell size (min 4 m) and scans a range derived from the largest registered radius, so a query is a handful of hash cells rather than a scan of the zone |
+| Idle zone | Zero. No players means no plan work, no cells, no NPCs |
+| A row or a zone that misbehaves | Contained. A spawn that throws is caught per row and the slot is parked; an update that throws is caught per update and the feature turns itself off after three in a row |
+
+The failure mode of a zone whose plan does not fit its ground is reported, not
+hidden: `placements refused` and `slots parked` in `status`, `rows have no ground of
+their kind in this zone` for rows the zone cannot host, and `cells refused by chunk
+rules` for the client-only chunks.
+
+---
+
+## 10. Testing
+
+| File | Covers |
+|------|--------|
+| `MonsterHabitatClassifierTests.cs` | the exclusion set, each habitat rule, behaviour arguments being stripped, an empty behaviour being eligible |
+| `SpawnOccupancyGridTests.cs` | radius + separation, a body bigger than a hash cell, the height window, remove/re-add/clear, negative coordinates |
+| `WorldPopulationPlannerTests.cs` | cells from ground, coverage and habitat fit, unplaceable rows, habitat/level from anchors, the level gradient, settlement over Melding, chunk refusals, the count/difficulty/slot caps, the budget-exempt expensive row, jitter bounds, the anchor fallback, work spreading, determinism |
+| `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, body separation, the level of the area, `ListLiveNear`, `status`, the command |
+| `Fakes/WorldPopulationFakes.cs` | a fixed roster/anchor/level/chunk source, a plane of walkable ground with switches for refusing a placement, and a spawner that records spawns and can kill or despawn one |
+
+The fakes are why the plan and the streaming can be asserted on without a loaded
+`clientdb.sd2` or a zone with collision: `IWorldPopulationDataSource`,
+`IWorldPopulationTerrain`, `IWorldPopulationSpawner` and `IWorldPopulationRules` are
+the seams.
+
+---
+
+## 11. Quick reference
+
+| Action | Command |
+|--------|---------|
+| See what population is doing | `\population` |
+| Fill the zone around you | `\population on` |
+| Empty the zone again | `\population off` |
+| See what is standing near you | `\population near 50` |
+| Spawn one specific row by hand | `\spawn monster 1196` |
+| Freeze every mob (AI, not population) | `\ai off` |
+| Turn the feature off permanently | `SpawnWorldPopulation` = `false` in `App.config` |

@@ -97,6 +97,7 @@ public class SDBInterface
     // dbzonemetadata
     private static Dictionary<uint, ZoneRecord> _zoneRecord;
     private static Dictionary<uint, ChunkRecord> _chunkRecord;
+    private static Dictionary<uint, List<ZoneChunkLinker>> _zoneChunkLinker;
 
     // apt
     private static Dictionary<uint, BaseCommandDef> _baseCommandDef;
@@ -375,6 +376,7 @@ public class SDBInterface
         // dbzonemetadata
         _zoneRecord = loader.LoadZoneRecord();
         _chunkRecord = loader.LoadChunkRecord();
+        _zoneChunkLinker = loader.LoadZoneChunkLinker();
 
         // apt
         _statusEffectData = loader.LoadStatusEffectData();
@@ -846,6 +848,14 @@ public class SDBInterface
     // dbzonemetadata
     public static ZoneRecord GetZoneRecord(uint id) => _zoneRecord.GetValueOrDefault(id);
     public static ChunkRecord GetChunkRecord(uint id) => _chunkRecord?.GetValueOrDefault(id);
+
+    /// <summary>
+    ///     The <c>dbzonemetadata::ZoneChunkLinker</c> rows of a zone: which chunks it is built from
+    ///     and whether the server simulates them (<c>clientonly</c>). Empty for a zone the table
+    ///     carries no rows for (39 of the shipped zones have some).
+    /// </summary>
+    public static IReadOnlyList<ZoneChunkLinker> GetZoneChunks(uint zoneId) =>
+        _zoneChunkLinker?.GetValueOrDefault(zoneId) ?? [];
 
     // apt
     public static BaseCommandDef GetBaseCommandDef(uint id) => _baseCommandDef.GetValueOrDefault(id);

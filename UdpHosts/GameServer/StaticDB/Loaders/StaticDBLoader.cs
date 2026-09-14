@@ -1523,6 +1523,20 @@ public class StaticDBLoader : ISDBLoader
             .ToDictionary(row => row.Id);
     }
 
+    /// <summary>
+    ///     Which chunks a zone is built from, and whether the server simulates them. The shipped
+    ///     database has 447 rows over 39 zones; <c>clientonly</c> is set on 126 of them — the
+    ///     chunks only the client renders (a zone's decorative outer shell; Coral Forest has 29 of
+    ///     its 93 chunks flagged). That is why world population asks this table before placing an
+    ///     NPC in a chunk.
+    /// </summary>
+    public Dictionary<uint, List<ZoneChunkLinker>> LoadZoneChunkLinker()
+    {
+        return LoadStaticDB<ZoneChunkLinker>("dbzonemetadata::ZoneChunkLinker")
+            .GroupBy(row => row.Zoneid)
+            .ToDictionary(group => group.Key, group => group.ToList());
+    }
+
     public Dictionary<uint, ResourceNodeBeacon> LoadResourceNodeBeacon()
     {
         return LoadStaticDB<ResourceNodeBeacon>("dbitems::ResourceNodeBeacon")
