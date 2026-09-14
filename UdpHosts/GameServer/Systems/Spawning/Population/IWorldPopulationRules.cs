@@ -2,11 +2,10 @@ namespace GameServer.Systems.Spawning.Population;
 
 /// <summary>
 ///     Every number the world population system is allowed to decide by itself. The defaults live
-///     in <see cref="StandardWorldPopulationRules"/>; the operator facing ones (the toggle, the
-///     live cap and the activation radius) are read from <c>App.config</c>, and a test or a tuning
-///     pass can replace the whole set by handing a custom implementation to
-///     <see cref="WorldPopulationService"/> — the same seam <see cref="Systems.Ai.IAiRules"/> gives
-///     the AI.
+///     in <see cref="StandardWorldPopulationRules"/> and every value can be overridden through
+///     <c>App.config</c>; a test or a tuning pass can still replace the whole set by handing a
+///     custom implementation to <see cref="WorldPopulationService"/> — the same seam
+///     <see cref="Systems.Ai.IAiRules"/> gives the AI.
 /// </summary>
 public interface IWorldPopulationRules
 {

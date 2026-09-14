@@ -2,9 +2,8 @@ namespace GameServer.Systems.Spawning.Population;
 
 /// <summary>
 ///     The out of the box world population tuning. Every value can be replaced by passing a custom
-///     <see cref="IWorldPopulationRules"/> to <see cref="WorldPopulationService"/>; the three the
-///     operator is expected to touch come from <c>App.config</c> through
-///     <see cref="FromSettings(GameServerSettings)"/>.
+///     <see cref="IWorldPopulationRules"/> to <see cref="WorldPopulationService"/> or configured
+///     through <c>App.config</c> with <see cref="FromSettings(GameServerSettings)"/>.
 /// </summary>
 /// <remarks>
 ///     The defaults describe the "balanced" preset: a zone around one player carries a few hundred
@@ -84,7 +83,8 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
 
     /// <summary>
     ///     Builds the rules from the server's settings. Null settings (which is what the test
-    ///     shard carries) give the defaults.
+    ///     shard carries) give the defaults. Invalid values fail independently: one malformed or
+    ///     unsafe setting cannot disable the other explicitly configured population limits.
     /// </summary>
     public static StandardWorldPopulationRules FromSettings(GameServerSettings settings)
     {
@@ -93,14 +93,50 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
             return new StandardWorldPopulationRules();
         }
 
+        float activationRadius = PositiveOrDefault(settings.WorldPopulationActivationRadius, 150f);
+        float requestedDeactivationRadius = settings.WorldPopulationDeactivationRadius.GetValueOrDefault();
+
         return new StandardWorldPopulationRules
         {
             Enabled = settings.SpawnWorldPopulation,
-            MaxLiveNpcs = settings.WorldPopulationMaxLiveNpcs > 0 ? settings.WorldPopulationMaxLiveNpcs : 150,
-            ActivationRadius = settings.WorldPopulationActivationRadius > 0f ? settings.WorldPopulationActivationRadius : 150f,
-            DeactivationRadius = settings.WorldPopulationActivationRadius > 0f
-                ? settings.WorldPopulationActivationRadius * 1.5f
-                : 225f,
+            MaxLiveNpcs = PositiveOrDefault(settings.WorldPopulationMaxLiveNpcs, 150),
+            ActivationRadius = activationRadius,
+            // Older App.config files did not have this key. Preserve their documented 1.5x
+            // relationship instead of unexpectedly widening a custom activation radius.
+            DeactivationRadius = requestedDeactivationRadius > activationRadius && float.IsFinite(requestedDeactivationRadius)
+                ? requestedDeactivationRadius
+                : activationRadius * 1.5f,
+            CellSize = PositiveOrDefault(settings.WorldPopulationCellSize, 32f),
+            MaxNpcsPerCell = PositiveOrDefault(settings.WorldPopulationMaxNpcsPerCell, 4),
+            MaxDifficultyPerCell = NonNegativeOrDefault(settings.WorldPopulationMaxDifficultyPerCell, 400),
+            UnbudgetedDifficultyCost = NonNegativeOrDefault(settings.WorldPopulationUnbudgetedDifficultyCost, 25),
+            MaxPlannedSlots = PositiveOrDefault(settings.WorldPopulationMaxPlannedSlots, 20_000),
+            SpawnBudget = PositiveOrDefault(settings.WorldPopulationSpawnBudget, 4),
+            SpawnBudgetWindowMs = PositiveOrDefault(settings.WorldPopulationSpawnBudgetWindowMs, 100),
+            TickIntervalMs = PositiveOrDefault(settings.WorldPopulationTickIntervalMs, 250),
+            PlanWorkPerTick = PositiveOrDefault(settings.WorldPopulationPlanWorkPerTick, 20_000),
+            MinSeparation = NonNegativeOrDefault(settings.WorldPopulationMinSeparation, 0.5f),
+            MinPlayerDistance = NonNegativeOrDefault(settings.WorldPopulationMinPlayerDistance, 25f),
+            MaxPlacementAttempts = PositiveOrDefault(settings.WorldPopulationMaxPlacementAttempts, 6),
+            PlacementRetryDelayMs = NonNegativeOrDefault(settings.WorldPopulationPlacementRetryDelayMs, 1_000),
+            MaxPlacementFailures = PositiveOrDefault(settings.WorldPopulationMaxPlacementFailures, 8),
+            RespawnDelayMs = NonNegativeOrDefault(settings.WorldPopulationRespawnDelayMs, 30_000),
+            MinimumWalkableNormalZ = WalkableNormalOrDefault(settings.WorldPopulationMinimumWalkableNormalZ, 0.35f),
+            DefaultBodyRadius = PositiveOrDefault(settings.WorldPopulationDefaultBodyRadius, 0.7f),
+            DefaultBodyHeight = PositiveOrDefault(settings.WorldPopulationDefaultBodyHeight, 1.8f),
+            DeployableInfluenceRadius = NonNegativeOrDefault(settings.WorldPopulationDeployableInfluenceRadius, 25f),
+            MeldingInfluenceRadius = NonNegativeOrDefault(settings.WorldPopulationMeldingInfluenceRadius, 120f),
         };
     }
+
+    private static int PositiveOrDefault(int value, int defaultValue) => value > 0 ? value : defaultValue;
+
+    private static int NonNegativeOrDefault(int value, int defaultValue) => value >= 0 ? value : defaultValue;
+
+    private static float PositiveOrDefault(float value, float defaultValue) => value > 0f && float.IsFinite(value) ? value : defaultValue;
+
+    private static float NonNegativeOrDefault(float value, float defaultValue) => value >= 0f && float.IsFinite(value) ? value : defaultValue;
+
+    private static float WalkableNormalOrDefault(float value, float defaultValue) =>
+        value > 0f && value <= 1f && float.IsFinite(value) ? value : defaultValue;
 }

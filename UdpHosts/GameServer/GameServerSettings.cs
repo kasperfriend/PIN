@@ -118,19 +118,77 @@ public class GameServerSettings
     /// </summary>
     public bool SpawnWorldPopulation { get; set; } = true;
 
-    /// <summary>
-    ///    Hard ceiling on how many world population NPCs are alive at once, whatever the zone's plan
-    ///    could hold. This is the setting that bounds what the feature costs the server: every live
-    ///    NPC is an entity, a physics body, an AI brain and a stream of keyframes.
-    /// </summary>
+    /// <summary>Hard ceiling on simultaneously live world-population NPCs.</summary>
     public int WorldPopulationMaxLiveNpcs { get; set; } = 150;
 
-    /// <summary>
-    ///    Metres from a player within which world population is spawned. NPCs are removed again
-    ///    beyond 1.5x this distance, so the value also decides how much of the zone is populated at
-    ///    any moment; nothing is spawned at all in a zone without players.
-    /// </summary>
+    /// <summary>Metres from a player within which planned cells activate.</summary>
     public float WorldPopulationActivationRadius { get; set; } = 150f;
+
+    /// <summary>
+    ///    Metres from a player beyond which active cells deactivate. A null, zero, or value no
+    ///    greater than the activation radius retains the legacy 1.5x activation-radius fallback.
+    /// </summary>
+    public float? WorldPopulationDeactivationRadius { get; set; }
+
+    /// <summary>Metres per planning and streaming cell.</summary>
+    public float WorldPopulationCellSize { get; set; } = 32f;
+
+    /// <summary>Maximum NPCs one planning cell may hold.</summary>
+    public int WorldPopulationMaxNpcsPerCell { get; set; } = 4;
+
+    /// <summary>Total encounter difficulty one cell may hold during density planning.</summary>
+    public int WorldPopulationMaxDifficultyPerCell { get; set; } = 400;
+
+    /// <summary>Difficulty charged to a row whose database difficulty is zero.</summary>
+    public int WorldPopulationUnbudgetedDifficultyCost { get; set; } = 25;
+
+    /// <summary>Maximum slots retained by a whole-zone population plan.</summary>
+    public int WorldPopulationMaxPlannedSlots { get; set; } = 20_000;
+
+    /// <summary>Maximum NPCs started in one population spawn-budget window.</summary>
+    public int WorldPopulationSpawnBudget { get; set; } = 4;
+
+    /// <summary>Length of a population spawn-budget window, in milliseconds.</summary>
+    public int WorldPopulationSpawnBudgetWindowMs { get; set; } = 100;
+
+    /// <summary>Minimum interval between population streaming updates, in milliseconds.</summary>
+    public int WorldPopulationTickIntervalMs { get; set; } = 250;
+
+    /// <summary>Navigation faces processed by the incremental planner per update.</summary>
+    public int WorldPopulationPlanWorkPerTick { get; set; } = 20_000;
+
+    /// <summary>Extra clearance in metres required between two population bodies.</summary>
+    public float WorldPopulationMinSeparation { get; set; } = 0.5f;
+
+    /// <summary>Minimum clearance in metres from a player before an NPC may be placed.</summary>
+    public float WorldPopulationMinPlayerDistance { get; set; } = 25f;
+
+    /// <summary>Placement positions tried by a slot during one placement round.</summary>
+    public int WorldPopulationMaxPlacementAttempts { get; set; } = 6;
+
+    /// <summary>Wait after a failed placement round, in milliseconds.</summary>
+    public int WorldPopulationPlacementRetryDelayMs { get; set; } = 1_000;
+
+    /// <summary>Failed placement rounds after which a slot is parked.</summary>
+    public int WorldPopulationMaxPlacementFailures { get; set; } = 8;
+
+    /// <summary>Base wait after an NPC dies before its slot can refill, in milliseconds.</summary>
+    public int WorldPopulationRespawnDelayMs { get; set; } = 30_000;
+
+    /// <summary>Smallest allowed Z component of a walkable surface normal.</summary>
+    public float WorldPopulationMinimumWalkableNormalZ { get; set; } = 0.35f;
+
+    /// <summary>Fallback NPC body radius in metres for database rows with an inherited radius.</summary>
+    public float WorldPopulationDefaultBodyRadius { get; set; } = 0.7f;
+
+    /// <summary>Fallback NPC body height in metres for database rows with an inherited height.</summary>
+    public float WorldPopulationDefaultBodyHeight { get; set; } = 1.8f;
+
+    /// <summary>Settlement influence radius in metres around an authored deployable.</summary>
+    public float WorldPopulationDeployableInfluenceRadius { get; set; } = 25f;
+
+    /// <summary>Melding influence radius in metres around a Melding control point.</summary>
+    public float WorldPopulationMeldingInfluenceRadius { get; set; } = 120f;
 
     /// <summary>
     ///    Force reload zone from source files, bypassing cache.

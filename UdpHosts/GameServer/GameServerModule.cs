@@ -132,41 +132,7 @@ public class GameServerModule : Module
                 }
             }
 
-            if (appSettings["SpawnWorldPopulation"] != null)
-            {
-                if (bool.TryParse(appSettings["SpawnWorldPopulation"], out bool spawnWorldPopulation))
-                {
-                    settings.SpawnWorldPopulation = spawnWorldPopulation;
-                }
-                else
-                {
-                    Log.Error($"Cannot parse SpawnWorldPopulation setting value");
-                }
-            }
-
-            if (appSettings["WorldPopulationMaxLiveNpcs"] != null)
-            {
-                if (int.TryParse(appSettings["WorldPopulationMaxLiveNpcs"], NumberStyles.Integer, CultureInfo.InvariantCulture, out int maxLiveNpcs))
-                {
-                    settings.WorldPopulationMaxLiveNpcs = maxLiveNpcs;
-                }
-                else
-                {
-                    Log.Error($"Cannot parse WorldPopulationMaxLiveNpcs setting value");
-                }
-            }
-
-            if (appSettings["WorldPopulationActivationRadius"] != null)
-            {
-                if (float.TryParse(appSettings["WorldPopulationActivationRadius"], NumberStyles.Float, CultureInfo.InvariantCulture, out float activationRadius))
-                {
-                    settings.WorldPopulationActivationRadius = activationRadius;
-                }
-                else
-                {
-                    Log.Error($"Cannot parse WorldPopulationActivationRadius setting value");
-                }
-            }
+            ApplyWorldPopulationSettings(appSettings, settings);
 
             if (appSettings["AssetDBPath"] != null)
             {
@@ -346,6 +312,49 @@ public class GameServerModule : Module
     }
 
     /// <summary>
+    ///     Apply all population entries in an <c>appSettings</c> collection. Kept separate from
+    ///     container construction so the exact operator-facing keys are regression-tested.
+    /// </summary>
+    internal static void ApplyWorldPopulationSettings(NameValueCollection appSettings, GameServerSettings settings)
+    {
+        if (appSettings["SpawnWorldPopulation"] != null)
+        {
+            if (bool.TryParse(appSettings["SpawnWorldPopulation"], out bool spawnWorldPopulation))
+            {
+                settings.SpawnWorldPopulation = spawnWorldPopulation;
+            }
+            else
+            {
+                Log.Error("Cannot parse SpawnWorldPopulation setting value");
+            }
+        }
+
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationMaxLiveNpcs", value => settings.WorldPopulationMaxLiveNpcs = value);
+        ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationActivationRadius", value => settings.WorldPopulationActivationRadius = value);
+        ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationDeactivationRadius", value => settings.WorldPopulationDeactivationRadius = value);
+        ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationCellSize", value => settings.WorldPopulationCellSize = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationMaxNpcsPerCell", value => settings.WorldPopulationMaxNpcsPerCell = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationMaxDifficultyPerCell", value => settings.WorldPopulationMaxDifficultyPerCell = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationUnbudgetedDifficultyCost", value => settings.WorldPopulationUnbudgetedDifficultyCost = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationMaxPlannedSlots", value => settings.WorldPopulationMaxPlannedSlots = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationSpawnBudget", value => settings.WorldPopulationSpawnBudget = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationSpawnBudgetWindowMs", value => settings.WorldPopulationSpawnBudgetWindowMs = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationTickIntervalMs", value => settings.WorldPopulationTickIntervalMs = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationPlanWorkPerTick", value => settings.WorldPopulationPlanWorkPerTick = value);
+        ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationMinSeparation", value => settings.WorldPopulationMinSeparation = value);
+        ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationMinPlayerDistance", value => settings.WorldPopulationMinPlayerDistance = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationMaxPlacementAttempts", value => settings.WorldPopulationMaxPlacementAttempts = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationPlacementRetryDelayMs", value => settings.WorldPopulationPlacementRetryDelayMs = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationMaxPlacementFailures", value => settings.WorldPopulationMaxPlacementFailures = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationRespawnDelayMs", value => settings.WorldPopulationRespawnDelayMs = value);
+        ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationMinimumWalkableNormalZ", value => settings.WorldPopulationMinimumWalkableNormalZ = value);
+        ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationDefaultBodyRadius", value => settings.WorldPopulationDefaultBodyRadius = value);
+        ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationDefaultBodyHeight", value => settings.WorldPopulationDefaultBodyHeight = value);
+        ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationDeployableInfluenceRadius", value => settings.WorldPopulationDeployableInfluenceRadius = value);
+        ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationMeldingInfluenceRadius", value => settings.WorldPopulationMeldingInfluenceRadius = value);
+    }
+
+    /// <summary>
     ///     Project the <c>serilog:</c> entries of the legacy appSettings into the key-value form Serilog's own
     ///     settings reader consumes. This replaces <c>ReadFrom.AppSettings()</c>, which reads
     ///     <c>ConfigurationManager.AppSettings</c> and therefore crashes the single-file GameServer.exe with
@@ -370,6 +379,46 @@ public class GameServerModule : Module
                 key[SerilogPrefix.Length..],
                 Environment.ExpandEnvironmentVariables(value));
         }
+    }
+
+    /// <summary>
+    ///     Read an integer population setting when it is present. Semantic validation happens in
+    ///     <see cref="Systems.Spawning.Population.StandardWorldPopulationRules.FromSettings"/>, so
+    ///     a valid number can still be rejected independently without preventing startup.
+    /// </summary>
+    private static void ApplyWorldPopulationIntSetting(NameValueCollection appSettings, string key, Action<int> apply)
+    {
+        var rawValue = appSettings[key];
+        if (rawValue == null)
+        {
+            return;
+        }
+
+        if (int.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
+        {
+            apply(value);
+            return;
+        }
+
+        Log.Error("Cannot parse {SettingName} setting value '{SettingValue}'", key, rawValue);
+    }
+
+    /// <summary>Read a floating-point population setting when it is present.</summary>
+    private static void ApplyWorldPopulationFloatSetting(NameValueCollection appSettings, string key, Action<float> apply)
+    {
+        var rawValue = appSettings[key];
+        if (rawValue == null)
+        {
+            return;
+        }
+
+        if (float.TryParse(rawValue, NumberStyles.Float, CultureInfo.InvariantCulture, out float value))
+        {
+            apply(value);
+            return;
+        }
+
+        Log.Error("Cannot parse {SettingName} setting value '{SettingValue}'", key, rawValue);
     }
 
     /// <summary>

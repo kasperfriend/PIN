@@ -355,52 +355,51 @@ plan does not fit its ground is visible instead of silently short.
 
 ## 6. Configuration
 
-Three operator-facing keys in `UdpHosts/GameServer/App.config` (defaults in
-`App.Default.config`, parsed in `GameServerModule`):
+Every world-population rule is configurable in `UdpHosts/GameServer/App.config` (the
+checked-in defaults are in `App.Default.config` and parsing happens in
+`GameServerModule`). Values use invariant-culture numbers: use a period for decimal
+values, not a comma.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `SpawnWorldPopulation` | `true` | Master switch. Off means an empty zone (only the authored `character_spawn.json` entities remain) |
 | `WorldPopulationMaxLiveNpcs` | `150` | Hard ceiling on live population NPCs, whatever the plan could hold |
-| `WorldPopulationActivationRadius` | `150` | Metres from a player within which cells activate; NPCs are removed beyond 1.5× this |
+| `WorldPopulationActivationRadius` | `150` | Metres from a player within which cells activate |
+| `WorldPopulationDeactivationRadius` | `225` | Metres from a player beyond which an active cell is removed; must be greater than activation radius |
+| `WorldPopulationCellSize` | `32` | Metres per planning / streaming cell |
+| `WorldPopulationMaxNpcsPerCell` | `4` | Most NPCs one cell may hold |
+| `WorldPopulationMaxDifficultyPerCell` | `400` | Total `difficulty_cost` one cell may hold during density planning |
+| `WorldPopulationUnbudgetedDifficultyCost` | `25` | Difficulty charged to a row whose `difficulty_cost` is 0 |
+| `WorldPopulationMaxPlannedSlots` | `20000` | Ceiling on the whole zone plan's retained slots |
+| `WorldPopulationSpawnBudget` | `4` | Most NPCs spawned per budget window |
+| `WorldPopulationSpawnBudgetWindowMs` | `100` | Length of the spawn budget window, in milliseconds |
+| `WorldPopulationTickIntervalMs` | `250` | Milliseconds between population streaming updates |
+| `WorldPopulationPlanWorkPerTick` | `20000` | Navigation faces processed by the incremental planner per update |
+| `WorldPopulationMinSeparation` | `0.5` | Extra metres of gap required between two NPC bodies |
+| `WorldPopulationMinPlayerDistance` | `25` | Metres of clearance from every player before an NPC may be placed |
+| `WorldPopulationMaxPlacementAttempts` | `6` | Positions one slot tries in each placement round |
+| `WorldPopulationPlacementRetryDelayMs` | `1000` | Wait after a failed placement round, in milliseconds |
+| `WorldPopulationMaxPlacementFailures` | `8` | Failed placement rounds after which a slot is parked |
+| `WorldPopulationRespawnDelayMs` | `30000` | Base wait after an NPC dies before its slot refills, in milliseconds |
+| `WorldPopulationMinimumWalkableNormalZ` | `0.35` | Smallest allowed Z component of a walkable surface normal (0–1) |
+| `WorldPopulationDefaultBodyRadius` | `0.7` | Body-radius fallback for a row whose `body_radius` is the `-1` sentinel |
+| `WorldPopulationDefaultBodyHeight` | `1.8` | Body-height fallback for a row whose `body_height` is the `-1` sentinel |
+| `WorldPopulationDeployableInfluenceRadius` | `25` | Metres around a deployable that count as settlement ground |
+| `WorldPopulationMeldingInfluenceRadius` | `120` | Metres around a Melding control point that count as Melding ground |
+
+The service validates every value independently at startup. A non-finite, negative,
+or otherwise unsafe value falls back only to that rule's conservative default; a
+malformed value is also logged. Zero is intentional and accepted for delays, extra
+gaps, influence radii, and the two difficulty-cost values. A deactivation radius
+that is absent or not greater than activation keeps the legacy `1.5 × activation`
+relationship, so existing configs that only set `WorldPopulationActivationRadius`
+continue to work.
 
 > **Upgrading an existing server:** `App.config` is machine-local and intentionally
-> ignored by Git, so its existing values override `App.Default.config`. To adopt this
-> recovery preset, change its two keys to `150` (or remove the keys and recreate the
-> local config from `App.Default.config`) before restarting. Do not assume a source
-> update lowers a persisted `600`/`200` deployment automatically.
-
-Everything else is an `IWorldPopulationRules` property. `StandardWorldPopulationRules`
-carries the defaults; a test or a tuning pass can replace the whole set by handing a
-custom implementation to `WorldPopulationService` - the same seam `IAiRules` gives
-the AI.
-
-| Property | Default | Meaning |
-|----------|---------|---------|
-| `Enabled` | `true` | From `SpawnWorldPopulation` |
-| `MaxLiveNpcs` | `150` | Live NPC ceiling |
-| `ActivationRadius` | `150` | Metres at which a cell comes alive |
-| `DeactivationRadius` | `225` | Metres beyond which an active cell is removed (1.5× activation) |
-| `CellSize` | `32` | Metres per planning cell; a little over twice a monster's perception radius, so a cell reads as one encounter-sized patch |
-| `MaxNpcsPerCell` | `4` | Most NPCs one cell may hold |
-| `MaxDifficultyPerCell` | `400` | Total `difficulty_cost` one cell may hold (density pass only) |
-| `UnbudgetedDifficultyCost` | `25` | Charged to a row whose `difficulty_cost` is 0 |
-| `MaxPlannedSlots` | `20000` | Ceiling on the plan's slots for the whole zone |
-| `SpawnBudget` | `4` | Most NPCs spawned per window |
-| `SpawnBudgetWindowMs` | `100` | Length of that window |
-| `TickIntervalMs` | `250` | Milliseconds between two population updates |
-| `PlanWorkPerTick` | `20000` | Mesh faces scanned / cells built per update while planning |
-| `MinSeparation` | `0.5` | Extra metres of gap between two bodies |
-| `MinPlayerDistance` | `25` | Metres of clearance from every player |
-| `MaxPlacementAttempts` | `6` | Positions one slot tries per round |
-| `PlacementRetryDelayMs` | `1000` | Wait after a failed round |
-| `MaxPlacementFailures` | `8` | Failed rounds after which a slot is parked |
-| `RespawnDelayMs` | `30000` | Wait after an NPC died before its slot refills |
-| `MinimumWalkableNormalZ` | `0.35` | Steepest surface a spawn may sit on |
-| `DefaultBodyRadius` | `0.7` | For a row whose `body_radius` is the `-1` sentinel |
-| `DefaultBodyHeight` | `1.8` | For a row whose `body_height` is the `-1` sentinel |
-| `DeployableInfluenceRadius` | `25` | Metres around a deployable that count as settlement ground |
-| `MeldingInfluenceRadius` | `120` | Metres around a Melding control point that count as Melding ground |
+> ignored by Git, so it does not gain these keys during a source update. Copy the
+> complete world-population block from `App.Default.config` into the deployed
+> `App.config`, adjust the values for the target machine, and restart the server.
+> `\population status` shows the active cap and radii after it starts.
 
 ---
 
