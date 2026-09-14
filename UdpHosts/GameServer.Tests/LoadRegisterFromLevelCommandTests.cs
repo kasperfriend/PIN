@@ -1,4 +1,4 @@
-using GameServer.Controllers.Character;
+using AeroMessages.GSS.Character.Controller;
 using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.apt;
 using GameServer.Systems.Aptitude;
