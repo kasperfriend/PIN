@@ -112,7 +112,7 @@ public class Shard : IShard
             populationRules,
             new SdbWorldPopulationDataSource(),
             new PhysicsWorldPopulationTerrain(Physics, populationRules),
-            new EntityManagerWorldPopulationSpawner(this));
+            new EntityManagerWorldPopulationSpawner(this, populationRules.DeactivationRadius));
     }
 
     public DateTime StartTime => DateTimeExtensions.Epoch.AddSeconds(_startTime);

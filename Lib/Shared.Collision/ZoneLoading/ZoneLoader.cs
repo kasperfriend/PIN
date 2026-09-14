@@ -77,7 +77,7 @@ public class ZoneLoader
 
         if (!File.Exists(zoneFilePath))
         {
-            _logger.Error("Zone file not found: {Path}", zoneFilePath);
+            _logger.Error("Zone file not found for zone {ZoneId}: {Path} (maps path: {MapsPath})", zoneId, zoneFilePath, _mapsPath);
             return null;
         }
 
