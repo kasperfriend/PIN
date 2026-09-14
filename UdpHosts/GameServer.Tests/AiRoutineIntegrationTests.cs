@@ -255,6 +255,7 @@ public class AiRoutineIntegrationTests
         var shard = new FakeShard();
         var npc = AddCharacter(shard, Vector3.Zero);
         var engine = new AiEngine(shard, shard.EventBus,
+            hostility: new NeverHostileAiHostility(),
             monsterStats: new FakeAiMonsterStats { Behavior = "Null" });
         Assert.False(engine.Register(npc));
         Assert.Equal(0, engine.TrackedCount);
