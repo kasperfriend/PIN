@@ -1187,7 +1187,7 @@ public class AiEngine
                 ? _movementStateIdle
                 : decision.State == AiBrainState.Attack ? _movementStateWalking : _movementStateRunning;
         entity.SetMovementState(movementState);
-        BroadcastPose(entity, movementState);
+        BroadcastPoseIfChanged(npc, entity, movementState);
     }
 
     private bool MoveToward(NpcBrain npc, Vector3 goal, AiBrainState state, ulong elapsedMs, ulong currentTime)
@@ -1494,6 +1494,35 @@ public class AiEngine
         return new Vector3(candidate.X, candidate.Y, hit.HitPosition.Z + _rules.GroundOffset);
     }
 
+    /// <summary>
+    ///     Broadcasts the NPC's pose when it changed since the last one that went out. A mob standing at
+    ///     home with no target produces a byte-identical pose every movement tick; skipping those removes
+    ///     the idle share of the pose stream, which with a populated zone is most NPCs most of the time.
+    ///     The first pose after registration is always sent, so a client scoping in to an NPC that has not
+    ///     moved since still receives an update from this stream on top of the MovementView keyframe the
+    ///     scope-in itself delivers.
+    /// </summary>
+    private void BroadcastPoseIfChanged(NpcBrain npc, CharacterEntity entity, short movementState)
+    {
+        bool changed = !npc.HasBroadcastPose
+            || npc.LastBroadcastMovementState != movementState
+            || npc.LastBroadcastPosition != entity.Position
+            || npc.LastBroadcastOrientation != entity.Orientation
+            || npc.LastBroadcastAim != entity.AimDirection;
+        if (!changed)
+        {
+            return;
+        }
+
+        BroadcastPose(entity, movementState);
+
+        npc.LastBroadcastPosition = entity.Position;
+        npc.LastBroadcastOrientation = entity.Orientation;
+        npc.LastBroadcastAim = entity.AimDirection;
+        npc.LastBroadcastMovementState = movementState;
+        npc.HasBroadcastPose = true;
+    }
+
     private void BroadcastPose(CharacterEntity entity, short movementState)
     {
         var pose = new AeroMessages.GSS.Character.Event.CurrentPoseUpdate
@@ -1510,18 +1539,12 @@ public class AiEngine
             },
         };
 
-        // Same delivery path MovementRelay uses for player movement: every playing client,
-        // regardless of scope. Narrowing this to EntityMan.HasScopedInEntity would cut the
-        // packet count on a busy shard, but a player whose scope-in is still queued would see
-        // a frozen NPC, so stay on the path that is known to work.
-        foreach (var client in _shard.Clients.Values)
-        {
-            if (client.Status.Equals(IPlayer.PlayerStatus.Playing) &&
-                client.NetChannels.TryGetValue(ChannelType.UnreliableGss, out var channel))
-            {
-                channel.SendMessage(pose, entity.EntityId);
-            }
-        }
+        // Deliver only to the players scoped to this NPC. Sending every pose to every connected client
+        // was O(NPCs x clients) per movement tick - with a populated zone the dominant upstream traffic
+        // source and a real contributor to the periodic connection problem. A late scope-in cannot see a
+        // frozen NPC: ScopeIn sends the character's MovementView keyframe (the current pose) over the
+        // reliable channel, and this stream takes over from there.
+        _shard.EntityMan.SendToScoped(entity, pose);
     }
 
     /// <summary>One behaviour-set ability module and the engine's own bookkeeping for it.</summary>
@@ -1615,6 +1638,13 @@ public class AiEngine
 
         /// <summary>The current collision-aware route, retained between movement ticks.</summary>
         public NpcNavigationState Navigation = new();
+
+        /// <summary>The pose fields last broadcast for this NPC, so unchanged poses are not re-sent.</summary>
+        public Vector3 LastBroadcastPosition;
+        public Quaternion LastBroadcastOrientation;
+        public Vector3 LastBroadcastAim;
+        public short LastBroadcastMovementState;
+        public bool HasBroadcastPose;
 
         /// <summary>The emote the monster's base behaviour string names, or 0 when it names none.</summary>
         public ushort IdleEmoteId;

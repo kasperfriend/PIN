@@ -34,6 +34,15 @@ public sealed class TurretAi
     /// <summary>Chest height used for aim and line of sight, matching <c>AiEngine</c>.</summary>
     public const float EyeHeight = 1.4f;
 
+    /// <summary>
+    ///     How often an unmanned turret that finds no target retries the scan. Firing is gated by each
+    ///     weapon's own interval (see <see cref="NpcAttackDamageMath.MinimumAttackIntervalMs"/>), but a
+    ///     turret that never fires records no last-fire time, so without this its target scan - and the
+    ///     line of sight casts it makes - would run on every shard tick (~200 Hz, ten times the NPC
+    ///     perception cadence).
+    /// </summary>
+    private const ulong ScanIntervalMs = 200;
+
     private readonly ConcurrentDictionary<ulong, TurretBrain> _turrets = new();
     private readonly IShard _shard;
     private readonly IAiHostility _hostility;
@@ -141,6 +150,14 @@ public sealed class TurretAi
             return;
         }
 
+        // A turret that found no target last scan does not get to rescan on the very next tick: the shard
+        // ticks far faster than anything in the scene moves, and an idle turret would otherwise run this
+        // scan (and its line of sight casts) on every one of them.
+        if (currentTime < brain.NextScanAt)
+        {
+            return;
+        }
+
         float range = profile.AttackRange > 0f ? profile.AttackRange : profile.Range;
         if (range <= 0f)
         {
@@ -150,6 +167,7 @@ public sealed class TurretAi
         var target = FindTarget(turret, source, range);
         if (target == null)
         {
+            brain.NextScanAt = currentTime + ScanIntervalMs;
             return;
         }
 
@@ -251,5 +269,8 @@ public sealed class TurretAi
     {
         public TurretEntity Turret;
         public ulong LastFireAt;
+
+        /// <summary>Earliest shard time the next idle target scan may run, see <see cref="ScanIntervalMs"/>.</summary>
+        public ulong NextScanAt;
     }
 }

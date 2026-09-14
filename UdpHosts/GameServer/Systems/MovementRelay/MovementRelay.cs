@@ -135,33 +135,22 @@ public class MovementRelay
                 Aim = character.AimDirection,
             }
         };
-        foreach (var remoteClient in _shard.Clients.Values)
+
+        // Deliver the pose to the players scoped to this character instead of every connected client,
+        // matching the NPC path (see AiEngine.BroadcastPose). The authoring client is excluded from the
+        // pose - it already got the authoritative answer as a ConfirmedPoseUpdate above (or is
+        // deliberately waiting for the pending launch to be confirmed), and re-applying its own pose on
+        // every movement tick is what made the first person animation flicker between states while
+        // sprinting. But the authoring client still needs the JumpActioned acknowledgement to commit a
+        // self-initiated jump/launch (a glider pad reports its launch as a jump via TimeSinceLastJump
+        // resetting): without it the client starts the launch/wings state and aborts when the ack never
+        // arrives, and remote clients need it too. The authoring client is always scoped to its own
+        // character, so a scoped JumpActioned reaches it as well.
+        _shard.EntityMan.SendToScoped(character, currentPose, except: client as INetworkPlayer);
+
+        if (jumpActioned != null)
         {
-            if (!remoteClient.Status.Equals(IPlayer.PlayerStatus.Playing))
-            {
-                continue;
-            }
-
-            bool isSelf = remoteClient.SocketId == client.SocketId;
-
-            // Never re-apply the "remote avatar" CurrentPoseUpdate to the client that authored it:
-            // it already got the authoritative answer as a ConfirmedPoseUpdate above (or is deliberately
-            // waiting for the pending launch to be confirmed), and re-applying its own pose on every
-            // movement tick is what made the first person animation flicker between states while sprinting.
-            // So only the pose broadcast is skipped for self.
-            if (!isSelf)
-            {
-                remoteClient.NetChannels[ChannelType.UnreliableGss].SendMessage(currentPose, character.EntityId);
-            }
-
-            // But the authoring client still needs the JumpActioned acknowledgement to commit a
-            // self-initiated jump/launch (a glider pad reports its launch as a jump via
-            // TimeSinceLastJump resetting). Without it the client starts the launch/wings state and
-            // aborts when the ack never arrives. Remote clients need it too.
-            if (jumpActioned != null)
-            {
-                remoteClient.NetChannels[ChannelType.UnreliableGss].SendMessage(jumpActioned, character.EntityId);
-            }
+            _shard.EntityMan.SendToScoped(character, jumpActioned);
         }
     }
 
