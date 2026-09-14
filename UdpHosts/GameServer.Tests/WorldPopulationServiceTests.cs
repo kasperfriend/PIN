@@ -232,8 +232,8 @@ public class WorldPopulationServiceTests
 
         // Past the activation radius but inside the deactivation one: the cells stay active rather
         // than blinking out and back in behind a player who is walking around. Every cell of the
-        // test plane is within 300 m of the new position, so nothing may go away.
-        world.Player.SetPosition(new Vector3(56f + 220f, 56f, 0f));
+        // test plane remains within the default 225 m deactivation radius, so nothing may go away.
+        world.Player.SetPosition(new Vector3(56f + 160f, 56f, 0f));
         Tick(world);
 
         Assert.Equal(live, world.Service.LiveCount);
