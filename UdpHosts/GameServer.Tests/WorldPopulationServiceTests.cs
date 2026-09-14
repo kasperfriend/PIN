@@ -288,6 +288,7 @@ public class WorldPopulationServiceTests
         {
             MinPlayerDistance = 0f,
             PlanWorkPerTick = 100_000,
+            SpawnBudget = 12,
             RespawnDelayMs = 1_000,
         };
         var world = CreateWorld(rules);
