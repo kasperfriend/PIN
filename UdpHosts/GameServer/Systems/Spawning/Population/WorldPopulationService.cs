@@ -533,16 +533,15 @@ public sealed class WorldPopulationService
             // belong to the shard's ZoneId. A player in any other zone (the character selection
             // screen is a zone picker) stands on ground this plan knows nothing about, so they
             // neither activate cells nor count as present - populating around their position
-            // would plan New Eden's NPCs onto Sertao's coordinates. A null zone (not placed
-            // anywhere yet) counts as here: there is no other zone to attribute it to.
-            var zone = client.CurrentZone;
-            if (zone != null && zone.ID != _shard.ZoneId)
+            // would plan New Eden's NPCs onto Sertao's coordinates.
+            if (!ShardZone.IsPlayerInZone(_shard, client))
             {
                 PlayersElsewhereCount++;
 
                 if (_elsewhereZones.Count < MaxElsewhereZonesListed)
                 {
-                    string label = DescribeZone(zone);
+                    // Non-null here: a null zone counts as in-zone, so the gate above passed it.
+                    string label = DescribeZone(client.CurrentZone);
                     if (!_elsewhereZones.Contains(label))
                     {
                         _elsewhereZones.Add(label);

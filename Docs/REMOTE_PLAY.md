@@ -642,4 +642,5 @@ people you know; it is not a service you should expose further:
   instead of spawning (`are in other zones`). To play somewhere else, set `ZoneId`
   to that zone's id and restart. For a co-op session this is also what makes it
   work without a zone browser: everyone who picks the shard's own entry lands in
-  the same populated zone.
+  the same populated zone. See [Single Zone](SINGLE_ZONE.md) for the whole
+  one-shard-one-zone model.

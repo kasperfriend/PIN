@@ -208,6 +208,14 @@ public sealed class TurretAi
                 continue;
             }
 
+            // One shard simulates one zone: a player in another zone stands on ground this
+            // simulation knows nothing about, so their position can only coincide with a
+            // turret's range by accident. Never fire across that boundary.
+            if (!ShardZone.IsPlayerInZone(_shard, client))
+            {
+                continue;
+            }
+
             if (!_hostility.IsHostile(turret, candidate))
             {
                 continue;

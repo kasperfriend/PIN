@@ -32,7 +32,8 @@ itself says an NPC can stand on, around the players who are in it.
 > shard's zone the log says so (`are in other zones … set ZoneId to its id …`)
 > instead of spawning nothing in silence. The same mismatch is warned about at
 > login (`entered zone … but this shard runs zone …`). To populate another zone,
-> set `ZoneId` to its id and restart.
+> set `ZoneId` to its id and restart. See [Single Zone](SINGLE_ZONE.md) for the whole
+> one-shard-one-zone model.
 
 > **Both kinds of collision are checked before anything appears.** The physical
 > one (ground probe, walkable slope, standing volume clear of the world and of

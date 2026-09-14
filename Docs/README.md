@@ -12,6 +12,7 @@ PIN is split into two areas:
 - [Health System](HEALTH_SYSTEM.md) — health, damage, death, respawn and fall damage
 - [NPC AI](NPC_AI.md) — how spawned mobs target, chase, attack and leash, and how to tune it
 - [World Population](WORLD_POPULATION.md) — how a zone gets filled with every mob/NPC the database puts there: where the positions come from, what the two collision checks are, what bounds the cost, and the `\population` command
+- [Single Zone](SINGLE_ZONE.md) — one shard simulates one zone: what `ZoneId` controls, which zones have authored data, and what players in other zones experience
 - [Web Assets](ASSETS.md) — what the client streams from the server: the asset stream, the high-resolution texture chunks, where they live, and why an empty `Assets` folder means blurry terrain
 - [Remote Play & Networking](REMOTE_PLAY.md) — what the servers bind to, what they advertise to clients, and how to let a second player in over LAN / RadminVPN (config, firewall, TLS, ports, troubleshooting)
 
