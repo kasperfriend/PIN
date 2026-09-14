@@ -1,0 +1,31 @@
+name: tmp-nuget-cache
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  pack:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet restore
+      - name: Pack nupkgs
+        run: |
+          set -e
+          mkdir -p /tmp/np
+          find ~/.nuget/packages -name "*.nupkg" -exec cp {} /tmp/np/ \;
+          ls /tmp/np | wc -l
+          cd /tmp && tar -czf nupkgs.tar.gz np && ls -la nupkgs.tar.gz
+          mkdir -p "$GITHUB_WORKSPACE/tmp-nupkgs" && split -b 90m -d nupkgs.tar.gz "$GITHUB_WORKSPACE/tmp-nupkgs/nupkgs.tar.gz.part-"
+          ls -la "$GITHUB_WORKSPACE/tmp-nupkgs"
+      - name: Commit
+        run: |
+          git config user.name tmp-nuget-cache
+          git config user.email tmp@example.invalid
+          git add -f tmp-nupkgs
+          git commit -m "tmp: nuget package cache (to be dropped)"
+          git push origin HEAD:${GITHUB_REF_NAME}
