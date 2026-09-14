@@ -72,11 +72,20 @@ public class ProjectileSim
     /// </summary>
     public void FireProjectile(CharacterEntity entity, uint trace, Vector3 origin, Vector3 direction, Ammo ammo, float range, float projectileSpeed, float impactRadius, float maxRadius, int damage)
     {
+        // A negative radius is the database's "this round has no splash", not a malformed input:
+        // 1165 of the 1264 dbitems::Ammo rows in the shipped clientdb carry max_radius = -1 (the
+        // assault rifle's own "Normal Bullet" among them, and three more carry a negative
+        // impact_radius). Both radii are descriptive - the simulation below never reads them back -
+        // so refusing the shot over them discarded every round fired with 92% of the game's ammo,
+        // which is what made NPCs immune to the player's weapons. Clamp to 0 instead.
+        impactRadius = ClampRadius(impactRadius);
+        maxRadius = ClampRadius(maxRadius);
+
         float directionLengthSquared = direction.LengthSquared();
         if (entity == null || ammo == null || !IsFinite(origin) || !IsFinite(direction) ||
             !float.IsFinite(directionLengthSquared) || directionLengthSquared < 0.0001f ||
             !float.IsFinite(projectileSpeed) || projectileSpeed <= 0f || !float.IsFinite(range) || range <= 0f ||
-            !float.IsFinite(impactRadius) || impactRadius < 0f || !float.IsFinite(maxRadius) || maxRadius < 0f)
+            !float.IsFinite(impactRadius) || !float.IsFinite(maxRadius))
         {
             if (OnceLog.ShouldLog((nameof(ProjectileSim), "invalid fire input", ammo?.Id ?? 0u)))
             {
@@ -367,6 +376,14 @@ public class ProjectileSim
             }
         }
     }
+
+    /// <summary>
+    ///     Reads a splash radius the way <c>dbitems::Ammo</c> writes one. A finite negative value is
+    ///     the table's sentinel for "no splash" (1165 of its 1264 rows carry <c>max_radius = -1</c>),
+    ///     so it becomes 0; anything non-finite is passed through untouched for the caller's own
+    ///     finiteness check to reject rather than being laundered into a fireable 0.
+    /// </summary>
+    internal static float ClampRadius(float radius) => float.IsFinite(radius) && radius < 0f ? 0f : radius;
 
     private static bool IsFinite(Vector3 value) =>
         float.IsFinite(value.X) && float.IsFinite(value.Y) && float.IsFinite(value.Z);

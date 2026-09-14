@@ -232,13 +232,18 @@ public class Shard : IShard
 
     public bool MigrateIn(INetworkPlayer player)
     {
-        // TryAdd keeps the ContainsKey/Add pair atomic, so Init cannot run twice for the
-        // same player when two threads race to migrate the same socket in.
-        if (((ConcurrentDictionary<uint, INetworkPlayer>)Clients).TryAdd(player.SocketId, player))
-        {
-            player.Init(this);
-            return true;
-        }
+        // Init runs *before* the client is published to the map, not after. The shard thread ticks
+        // this map, and a client that is in it but not yet initialised has no channels and no send
+        // queue, so the very next NetworkTick threw a NullReferenceException on it - logged as
+        // "Shard {id} failed to process network traffic for client {socket}" a moment after the
+        // player's character was created. Init only fills this object in (its channels, its sender,
+        // its status) and touches nothing else on the shard, so running it first is safe, and a
+        // lost insert race now discards an initialised object instead of publishing an unusable one.
+        player.Init(this);
+
+        // TryAdd keeps the insert atomic, so a racing pair of first packets still publishes exactly
+        // one of the two clients it built.
+        _ = ((ConcurrentDictionary<uint, INetworkPlayer>)Clients).TryAdd(player.SocketId, player);
 
         return true;
     }
