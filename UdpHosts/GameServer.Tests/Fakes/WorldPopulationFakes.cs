@@ -109,6 +109,17 @@ public sealed class FakeWorldPopulationTerrain : IWorldPopulationTerrain
 
     public int SurfaceCount => Surfaces.Count;
 
+    public Vector3? ZoneBoundsMin { get; set; }
+    public Vector3? ZoneBoundsMax { get; set; }
+
+    public bool IsInsideZoneBounds(Vector3 position)
+    {
+        if (ZoneBoundsMin == null || ZoneBoundsMax == null) return true;
+        var min = ZoneBoundsMin.Value;
+        var max = ZoneBoundsMax.Value;
+        return position.X >= min.X && position.X <= max.X && position.Y >= min.Y && position.Y <= max.Y && position.Z >= min.Z && position.Z <= max.Z;
+    }
+
     /// <summary>
     ///     Lays out a lattice of walkable spots. A spacing of half the plan's cell size gives four
     ///     spots per cell, which is what a real navigation mesh looks like at that resolution.

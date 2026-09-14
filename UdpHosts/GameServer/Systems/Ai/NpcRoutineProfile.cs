@@ -67,6 +67,7 @@ public sealed record NpcRoutineProfile
     public bool? LeashWalk { get; init; }
     public float WanderDistance { get; init; }
     public float HomeRadius { get; init; }
+    public float MaxDistJitter { get; init; }
     public bool NearSpawn { get; init; }
     public int RestMinMs { get; init; }
     public int RestMaxMs { get; init; }
@@ -75,6 +76,11 @@ public sealed record NpcRoutineProfile
     public float WanderChance { get; init; } = 1f;
     public string WorkFunction { get; init; } = string.Empty;
     public float? LeashDistance { get; init; }
+    public bool LeashToSpawn { get; init; }
+    public bool DespawnWhenStuck { get; init; }
+    public float DespawnDistance { get; init; }
+    public float SwarmRadiusMin { get; init; }
+    public float SwarmRadiusMax { get; init; }
     public string MissingData { get; init; } = string.Empty;
 
     public bool HasRoutine => Kind is NpcRoutineKind.Wander or NpcRoutineKind.Work;
@@ -101,8 +107,9 @@ public sealed record NpcRoutineProfile
             ?? NonNegative(behavior, "distance")
             ?? Positive(rules.WanderDistance, 10f);
         bool nearSpawn = Bool(behavior, "nearSpawn") == true || Bool(behavior, "calmNearSpawn") == true;
-        float homeRadius = MathF.Min(safetyRadius,
-            NonNegative(behavior, "maxDistFromSpawn") ?? (nearSpawn ? distance : MathF.Max(distance, Positive(rules.HomeRadius, 30f))));
+        float baseHome = NonNegative(behavior, "maxDistFromSpawn") ?? (nearSpawn ? distance : MathF.Max(distance, Positive(rules.HomeRadius, 30f)));
+        float maxDistJitter = NonNegative(behavior, "maxDistJitter") ?? 0f;
+        float homeRadius = MathF.Min(safetyRadius, baseHome);
         distance = MathF.Min(distance, homeRadius);
         float chance = Math.Clamp(NonNegative(behavior, "calmWanderChance") ?? 1f, 0f, 1f);
 
@@ -152,6 +159,7 @@ public sealed record NpcRoutineProfile
             LeashWalk = Bool(behavior, "leashWalk"),
             WanderDistance = distance,
             HomeRadius = homeRadius,
+            MaxDistJitter = maxDistJitter,
             NearSpawn = nearSpawn,
             RestMinMs = restMin,
             RestMaxMs = restMax,
@@ -160,6 +168,11 @@ public sealed record NpcRoutineProfile
             WanderChance = chance,
             WorkFunction = function,
             LeashDistance = leash is > 0f ? leash : null,
+            LeashToSpawn = Bool(behavior, "leashToSpawn") == true,
+            DespawnWhenStuck = Bool(behavior, "despawnWhenStuck") == true,
+            DespawnDistance = NonNegative(behavior, "despawnDist") ?? 0f,
+            SwarmRadiusMin = NonNegative(behavior, "swarmRadiusMin") ?? 0f,
+            SwarmRadiusMax = NonNegative(behavior, "swarmRadiusMax") ?? 0f,
             MissingData = missing,
         };
     }

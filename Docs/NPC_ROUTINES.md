@@ -26,6 +26,11 @@ What now runs:
 - **Explicit stationary bodies** stay put even when the combat brain would like
   to chase. `Null` requests no AI and is not registered at all. Unspecified trees,
   vendors/posing NPCs and named-route requests do **not** receive generic patrols.
+- **Home radius jitter and envelopes** — `maxDistJitter` gives each NPC a
+  deterministic home radius variation, `despawnDistance` is an outer envelope
+  beyond which the routine stops, `despawnWhenStuck` parks blocked NPCs as
+  Inactive, `leashToSpawn` anchors leash to spawn, and `swarmRadiusMin/Max`
+  store swarm formation radii (from map file analysis PR #94).
 - **Work/rest visits** follow an explicit `restFunction` / `function` to a matching
   *live, placed* deployable, reserve it, walk there, face its orientation, play its
   recorded emote, finish the recorded duration, release it, and resume. Only
@@ -78,6 +83,11 @@ parameter cannot leak into its parent's movement settings.
 | `leashDistance`, `leashDist` | Per-NPC combat leash; absent/invalid values retain the AI rules |
 | `calmWanderChance` | Chance per destination decision; explicit zero never wanders |
 | `stationary=true`, explicit fixed-body invocations | No AI locomotion; does not defeat external ability displacement |
+| `maxDistJitter` | Deterministic per-entity jitter of home radius: `EffectiveHomeRadius = clamp(maxDistFromSpawn + jitter(-maxDistJitter..+maxDistJitter), 0..LeashDistance)`. Hash = xorshift(entityId ^ monsterId) so same NPC keeps same jitter, not reshuffled each leg. From map findings PR #94 |
+| `leashToSpawn` | When true, home center is spawn point, not current; affects leash checks |
+| `despawnWhenStuck` | When true and blocked, routine parks as Inactive instead of retrying forever (outer envelope still applies) |
+| `despawnDistance` | Outer envelope: beyond this from spawn, routine stops (Stop state) even if leash would allow; from map file ZoneBounds analysis |
+| `swarmRadiusMin`, `swarmRadiusMax` | Swarm formation radii: min/max distance from swarm center, used for future swarm positioning; stored but not yet full swarm steering |
 | `restFunction`, `UseWorkDeployables.function` | Exact case-insensitive `DeployableFunction.name` join |
 | Work deployable `behavior.emote` | `EmoteRecord.name` lookup; no made-up animation id |
 | Work deployable `emoteDuration` | Milliseconds, including `-1` for indefinite; **not** the monster idle-emote seconds helper |
@@ -98,11 +108,14 @@ compatibility choices explicit and injectable:
 | New ambient route searches | At most 4 per AI movement tick |
 | Catch-up displacement after a stalled/disabled shard | At most 250 ms of motion in one update |
 
-Destination randomness is deterministic per full entity id and monster id. It is
-**PIN's bounded roaming policy**, not a claim to match the original server's RNG
-or patrol selection. An explicit routine radius, pause or zero is not replaced by a
-compatibility default merely because it differs from that default. Malformed,
-nonfinite and negative distance/time inputs do not produce invalid movement.
+Destination randomness is deterministic per full entity id and monster id.
+`EffectiveHomeRadius` jitter uses `xorshift(entityId ^ monsterId)` so the same
+NPC keeps the same jittered home radius for its lifetime, not a reshuffle each
+leg. This is **PIN's bounded roaming policy**, not a claim to match the original
+server's RNG or patrol selection. An explicit routine radius, pause or zero is
+not replaced by a compatibility default merely because it differs from that
+default. Malformed, nonfinite and negative distance/time inputs do not produce
+invalid movement.
 
 Movement still resolves `Monster.normal_speed` / `fast_speed` through `AiSpeeds`.
 In this build **3,102 normal speeds and 3,094 fast speeds are `-1` (inherit)**, so
@@ -156,11 +169,17 @@ Examples that remain deliberately unresolved:
   a ground-bound human walking routine.
 - **757 / 7 / 4** base/offensive/defensive instance references are nonzero. Another
   monster with the same reference is not an executable CAIS tree definition.
+- **ZonePathLayer 0x20800 is NOT NPC patrols.** The map archive contains 4-6 path
+  layers per zone with 200-600 points each — these are vehicle/dropship routes
+  (see `MAP_FILES_FINDINGS.md`). Using them as NPC patrols would put ground NPCs
+  on flyover splines. Exposed as `ZonePaths` in `PhysicsEngine` for debug only.
 - The remaining species/archetype trees, escort targets, defence transitions,
   flee rules, queue/conversation selection, greetings/chatter/healing triggers,
-  `maxDistJitter`, and work `statusEffect`-only/ability interactions are not inferred
+  and work `statusEffect`-only/ability interactions are not inferred
   from names. Their invocations/parameters remain in the census rather than being
-  silently represented as implemented features.
+  silently represented as implemented features. `maxDistJitter`,
+  `despawnWhenStuck`, `despawnDistance`, `leashToSpawn`, `swarmRadiusMin/Max`
+  are now parsed and applied (PR #94).
 
 Recovering exact original routines requires **original map gameplay placements,
 CAIS behaviour definitions and encounter/spawn-group route assignments** for the

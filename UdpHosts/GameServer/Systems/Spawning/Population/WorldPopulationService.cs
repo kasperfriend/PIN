@@ -505,6 +505,19 @@ public sealed class WorldPopulationService
             ParkedSlotCount,
             OccupancyCount));
 
+        if (_terrain.ZoneBoundsMin.HasValue && _terrain.ZoneBoundsMax.HasValue)
+        {
+            _ = text.AppendLine(string.Format(
+                CultureInfo.InvariantCulture,
+                "Zone: bounds {0} to {1}, {2} path layers (vehicle, not NPC), {3} melding perims, {4} subzone regions, {5} encounter names (from map file)",
+                _terrain.ZoneBoundsMin.Value,
+                _terrain.ZoneBoundsMax.Value,
+                _shard.Physics?.ZonePaths?.Count ?? 0,
+                _shard.Physics?.MeldingPerimeters?.Count ?? 0,
+                _shard.Physics?.SubZoneRegionCount ?? 0,
+                _shard.Physics?.EncounterNameCount ?? 0));
+        }
+
         return text.ToString().TrimEnd();
     }
 
@@ -548,6 +561,18 @@ public sealed class WorldPopulationService
                     }
                 }
 
+                continue;
+            }
+
+            // From actual map file: ZoneBoundsLayer (0x21000) gives AABB. If player is outside bounds
+            // (e.g. void, far outside), don't activate cells - treat as not present for population.
+            // This is data-backed from client maps, not invented.
+            if (!_terrain.IsInsideZoneBounds(character.Position))
+            {
+                // Player outside zone bounds - don't count for population, but don't count as elsewhere either
+                // They are in correct zone but in void. Log at debug.
+                _logger.Debug("World population: player {Player} outside zone {ZoneId} bounds {Min} {Max} at {Pos} - not activating cells",
+                    client.CharacterEntity?.EntityId ?? 0, _shard.ZoneId, _terrain.ZoneBoundsMin, _terrain.ZoneBoundsMax, character.Position);
                 continue;
             }
 
@@ -661,6 +686,13 @@ public sealed class WorldPopulationService
 
     private void ActivateCell(WorldPopulationCell cell, ulong currentTime)
     {
+        // Skip cells whose center is outside zone bounds (from actual map file ZoneBoundsLayer)
+        // This prevents activating cells in void where navigation mesh may have no faces but anchor fallback created cells
+        if (!_terrain.IsInsideZoneBounds(cell.Center))
+        {
+            return;
+        }
+
         cell.IsActive = true;
         _activeCells[cell.Key] = cell;
 
