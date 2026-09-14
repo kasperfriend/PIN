@@ -106,9 +106,28 @@ public class LaunchWindowTests
         Assert.False(notStanding.Execute(context));
 
         // And an airborne pose outside the window satisfies the falling/gliding arms normally.
+        character.IsAirborne = true;
         character.MovementStateContainer.MovementStateValue = 0x3000;
         var falling = new RequireMovestateCommand(new RequireMovestateCommandDef { Falling = 1 });
         Assert.True(falling.Execute(context));
+    }
+
+    [Fact]
+    public void RequireMovestate_GroundedPoseWinsOverAStaleGliderNibble()
+    {
+        var (shard, character, _) = CreateRuntime(10_000);
+        var gliding = new RequireMovestateCommand(new RequireMovestateCommandDef { Gliding = 1 });
+        var context = new Context(shard, character);
+
+        // The client sometimes reports ground time first and only changes the movement nibble in
+        // the following packet. That packet is a landing, not a reason to retain the glider HUD.
+        character.IsAirborne = false;
+        character.MovementStateContainer.MovementStateValue = 0x7000;
+
+        Assert.False(gliding.Execute(context));
+
+        character.IsAirborne = true;
+        Assert.True(gliding.Execute(context));
     }
 
     [Fact]

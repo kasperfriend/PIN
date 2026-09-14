@@ -546,6 +546,10 @@ public class AbilitySystem
             return true;
         }
 
+        // A compatible status effect may share an existing replication slot. Its command
+        // actives still have their own lifetime and must be unwound with that slot later.
+        bool isAdditionalStack = !ReferenceEquals(effectState.Context, applyContext);
+
         context.AppliedEffects?.Add(new AppliedEffectRecord(target, effectState));
 
         bool applyResult = effect.ApplyChain?.Execute(applyContext) ?? true;
@@ -563,6 +567,11 @@ public class AbilitySystem
         {
             ICommand activeCommand = pair.Key;
             activeCommand.OnApply(applyContext, pair.Value);
+        }
+
+        if (isAdditionalStack)
+        {
+            effectState.StackedContexts.Add(applyContext);
         }
 
         return true;
@@ -589,18 +598,32 @@ public class AbilitySystem
         // Unwind the expired effect BEFORE running its removal chain. That chain can grant successor
         // effects (9495 -> 3417 for the glider): restoring the old profile afterwards overwrites the new
         // one. Cleanup is unconditional; an optional RequireHasItem at the end of the removal chain must
-        // not leave permissions, combat flags or stat modifiers behind. Reverse order unwinds snapshots.
+        // not leave permissions, combat flags or stat modifiers behind. A replicated effect can contain
+        // several compatible stacks, each with its own apply context; unwind later stacks first so the
+        // temporary state they own does not outlive the single status-effect slot.
+        foreach (var stackedContext in activeEffect.StackedContexts.AsEnumerable().Reverse())
+        {
+            stackedContext.ExecutionHint = ExecutionHint.RemoveEffect;
+            UnwindActiveCommands(stackedContext);
+        }
+
+        activeEffect.StackedContexts.Clear();
+        UnwindActiveCommands(context);
+
+        var removeContext = Context.CopyContext(context);
+        removeContext.EffectApplicationTime = _shard.CurrentTime;
+        removeContext.ExecutionHint = ExecutionHint.RemoveEffect;
+        return activeEffect.Effect.RemoveChain?.Execute(removeContext) ?? true;
+    }
+
+    private static void UnwindActiveCommands(Context context)
+    {
         foreach (var pair in context.Actives.Reverse().ToArray())
         {
             pair.Key.OnRemove(context, pair.Value);
         }
 
         context.Actives.Clear();
-
-        var removeContext = Context.CopyContext(context);
-        removeContext.EffectApplicationTime = _shard.CurrentTime;
-        removeContext.ExecutionHint = ExecutionHint.RemoveEffect;
-        return activeEffect.Effect.RemoveChain?.Execute(removeContext) ?? true;
     }
 
     public bool DoRemoveEffect(IAptitudeTarget entity, uint effectId)

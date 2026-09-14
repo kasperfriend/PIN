@@ -64,6 +64,11 @@ public class WorldPopulationServiceTests
         {
             MinPlayerDistance = 0f,
             PlanWorkPerTick = 100_000,
+
+            // These service tests exercise the full 64-slot plan in a short test window;
+            // production's intentionally gentler default spawn rate is covered by the
+            // explicit budget tests below.
+            SpawnBudget = 12,
         };
 
         var service = new WorldPopulationService(shard, rules, data, terrain, spawner);
@@ -227,8 +232,8 @@ public class WorldPopulationServiceTests
 
         // Past the activation radius but inside the deactivation one: the cells stay active rather
         // than blinking out and back in behind a player who is walking around. Every cell of the
-        // test plane is within 300 m of the new position, so nothing may go away.
-        world.Player.SetPosition(new Vector3(56f + 220f, 56f, 0f));
+        // test plane remains within the default 225 m deactivation radius, so nothing may go away.
+        world.Player.SetPosition(new Vector3(56f + 160f, 56f, 0f));
         Tick(world);
 
         Assert.Equal(live, world.Service.LiveCount);
@@ -283,6 +288,7 @@ public class WorldPopulationServiceTests
         {
             MinPlayerDistance = 0f,
             PlanWorkPerTick = 100_000,
+            SpawnBudget = 12,
             RespawnDelayMs = 1_000,
         };
         var world = CreateWorld(rules);

@@ -16,10 +16,10 @@ namespace GameServer.Tests;
 ///     The commands that grant state a character has to hand back: <c>ModifyPermission</c> (the client side
 ///     permissions, like gliding) and <c>SetGliderParameters</c> (which glider flight profile the client uses).
 ///
-///     Both write a single value on the character, and both used to have no proper revert: permissions were
-///     "restored" by writing the negation of whatever the effect granted, which silently switched a permission off
-///     for every other effect that had granted it first, and the glider profile was never restored at all, so a
-///     player who used a boost pad kept its flight profile for the rest of the session.
+///     Both write a single value on the character while several effects can overlap. Their temporary layers
+///     therefore need to reveal the next active writer when one effect ends, and restore the value from before
+///     the first writer only when the final effect ends. Otherwise one completed pad/glider stage can leave the
+///     glider permission or the flight profile behind for the next jump.
 /// </summary>
 public class PermissionAndGliderProfileCommandTests
 {
@@ -40,6 +40,26 @@ public class PermissionAndGliderProfileCommandTests
         RemoveEffect(command, context);
 
         Assert.True(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
+    }
+
+    [Fact]
+    public void ModifyPermission_OverlappingTemporaryGrantsRestoreTheOriginalValueAfterBothEnd()
+    {
+        var shard = new FakeShard();
+        var character = CreateCharacter(shard);
+        var first = new ModifyPermissionCommand(new ModifyPermissionCommandDef { Id = 1, Glider = true });
+        var second = new ModifyPermissionCommand(new ModifyPermissionCommandDef { Id = 2, Glider = true });
+        var firstContext = RunEffect(first, character);
+        var secondContext = RunEffect(second, character);
+
+        // The first stage may end while the successor is still responsible for the permission.
+        RemoveEffect(first, firstContext);
+        Assert.True(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
+
+        // The successor must restore the value from before either stage, not the true value it
+        // observed while the first stage was active. This is the stuck-glider regression.
+        RemoveEffect(second, secondContext);
+        Assert.False(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
     }
 
     [Fact]
@@ -97,6 +117,24 @@ public class PermissionAndGliderProfileCommandTests
         RemoveEffect(command, context);
 
         Assert.Equal(81423u, character.GliderProfileId);
+    }
+
+    [Fact]
+    public void SetGliderParameters_OverlappingStagesRestoreTheProfileBeforeTheLaunch()
+    {
+        var shard = new FakeShard();
+        var character = CreateCharacter(shard);
+        character.SetGliderProfileId(7);
+        var first = new SetGliderParametersCommand(new SetGliderParametersCommandDef { Id = 1, Value = 18 });
+        var second = new SetGliderParametersCommand(new SetGliderParametersCommandDef { Id = 2, Value = 25 });
+        var firstContext = RunEffect(first, character);
+        var secondContext = RunEffect(second, character);
+
+        RemoveEffect(first, firstContext);
+        Assert.Equal(25u, character.GliderProfileId);
+
+        RemoveEffect(second, secondContext);
+        Assert.Equal(7u, character.GliderProfileId);
     }
 
     [Fact]

@@ -112,13 +112,36 @@ public class EffectLifecycleTests
         Assert.Equal(18u, character.GliderProfileId);
         Assert.False(permission.Removed);
 
+        // Landing is authoritative from the signed ground/air timer. The movement state nibble
+        // can still say Glider for this first landed pose, but it must not keep the pad effects
+        // and its HUD permission alive until a later packet changes that nibble.
         character.IsAirborne = false;
-        character.MovementStateContainer.MovementStateValue = 0x1000;
+        character.MovementStateContainer.MovementStateValue = 0x7000;
         Tick(shard, character, 20_601);
         Assert.All(character.GetActiveEffects(), Assert.Null);
         Assert.False(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
         Assert.False(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider_hud]);
         Assert.Equal(7u, character.GliderProfileId);
+    }
+
+    [Fact]
+    public void StackedGliderPermissionEffect_UnwindsEachApplicationsTemporaryState()
+    {
+        var (shard, factory, character) = CreateRuntime();
+        factory.Effects[1] = MakeEffect(1, apply: Commands(
+            new ModifyPermissionCommand(new ModifyPermissionCommandDef { Id = 1, Glider = true })));
+        factory.Effects[1].Data.MaxStackCount = 2;
+
+        Assert.True(shard.Abilities.DoApplyEffect(1, character, new Context(shard, character)));
+        Assert.True(shard.Abilities.DoApplyEffect(1, character, new Context(shard, character)));
+        var effect = Active(character, 1);
+        Assert.Equal(2, effect.Stacks);
+        Assert.True(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
+
+        // AddEffect stores compatible stacks in one effect slot. Both apply contexts must
+        // still receive OnRemove, or the second temporary layer survives forever.
+        Assert.True(shard.Abilities.DoRemoveEffect(effect));
+        Assert.False(character.CurrentPermissions[PermissionFlagsData.CharacterPermissionFlags.glider]);
     }
 
     [Fact]

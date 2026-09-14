@@ -2,9 +2,8 @@ namespace GameServer.Systems.Spawning.Population;
 
 /// <summary>
 ///     The out of the box world population tuning. Every value can be replaced by passing a custom
-///     <see cref="IWorldPopulationRules"/> to <see cref="WorldPopulationService"/>; the three the
-///     operator is expected to touch come from <c>App.config</c> through
-///     <see cref="FromSettings(GameServerSettings)"/>.
+///     <see cref="IWorldPopulationRules"/> to <see cref="WorldPopulationService"/> or configured
+///     through <c>App.config</c> with <see cref="FromSettings(GameServerSettings)"/>.
 /// </summary>
 /// <remarks>
 ///     The defaults describe the "balanced" preset: a zone around one player carries a few hundred
@@ -17,22 +16,20 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
     public bool Enabled { get; init; } = true;
 
     /// <summary>
-    ///     600 live NPCs is roughly what a single player's activation radius can cover at the
-    ///     default density (a 200 m radius holds ~123 cells of 32 m, and a cell holds up to
-    ///     <see cref="MaxNpcsPerCell"/>), so one player walking through a zone keeps the world
-    ///     populated without the cap being what they run into. A shard with several players shares
-    ///     the same cap, which is the point: the cost of the feature is bounded by this number, not
-    ///     by how many players are connected.
+    ///     150 live NPCs keeps a zone visibly populated while leaving enough CPU, physics and
+    ///     reliable-channel headroom for actual combat. A shard with several players shares the
+    ///     same cap, which is the point: the cost is bounded by this number, not by how many
+    ///     players are connected. Operators who have measured headroom can raise it in config.
     /// </summary>
-    public int MaxLiveNpcs { get; init; } = 600;
+    public int MaxLiveNpcs { get; init; } = 150;
 
-    public float ActivationRadius { get; init; } = 200f;
+    public float ActivationRadius { get; init; } = 150f;
 
     /// <summary>
-    ///     1.5x the activation radius. The 100 m gap is wider than a player covers in the ~2 s it
+    ///     1.5x the activation radius. The 75 m gap is wider than a player covers in the ~2 s it
     ///     takes to walk it, so leaving and coming back does not thrash a cell.
     /// </summary>
-    public float DeactivationRadius { get; init; } = 300f;
+    public float DeactivationRadius { get; init; } = 225f;
 
     public float CellSize { get; init; } = 32f;
 
@@ -45,13 +42,11 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
     public int MaxPlannedSlots { get; init; } = 20_000;
 
     /// <summary>
-    ///     12 spawns per 100 ms = 120/s worst case. Each spawn is an entity, a physics body, an AI
-    ///     registration and a scope-in to the players who can see it, and
-    ///     <see cref="Systems.EntityManager.EntityManager"/> drains its scope-in queue at 16 per
-    ///     20 ms (800/s) — this budget stays an order of magnitude under that drain rate, so a
-    ///     player walking into an empty area cannot make the scope queue grow.
+    ///     Four spawns per 100 ms = 40/s worst case. Each spawn is an entity, a physics body, an AI
+    ///     registration and a scope-in to the players who can see it. This deliberately leaves room
+    ///     for the zone's existing traffic rather than competing with it during a streaming burst.
     /// </summary>
-    public int SpawnBudget { get; init; } = 12;
+    public int SpawnBudget { get; init; } = 4;
 
     public int SpawnBudgetWindowMs { get; init; } = 100;
 
@@ -88,7 +83,8 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
 
     /// <summary>
     ///     Builds the rules from the server's settings. Null settings (which is what the test
-    ///     shard carries) give the defaults.
+    ///     shard carries) give the defaults. Invalid values fail independently: one malformed or
+    ///     unsafe setting cannot disable the other explicitly configured population limits.
     /// </summary>
     public static StandardWorldPopulationRules FromSettings(GameServerSettings settings)
     {
@@ -97,14 +93,50 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
             return new StandardWorldPopulationRules();
         }
 
+        float activationRadius = PositiveOrDefault(settings.WorldPopulationActivationRadius, 150f);
+        float requestedDeactivationRadius = settings.WorldPopulationDeactivationRadius.GetValueOrDefault();
+
         return new StandardWorldPopulationRules
         {
             Enabled = settings.SpawnWorldPopulation,
-            MaxLiveNpcs = settings.WorldPopulationMaxLiveNpcs > 0 ? settings.WorldPopulationMaxLiveNpcs : 600,
-            ActivationRadius = settings.WorldPopulationActivationRadius > 0f ? settings.WorldPopulationActivationRadius : 200f,
-            DeactivationRadius = settings.WorldPopulationActivationRadius > 0f
-                ? settings.WorldPopulationActivationRadius * 1.5f
-                : 300f,
+            MaxLiveNpcs = PositiveOrDefault(settings.WorldPopulationMaxLiveNpcs, 150),
+            ActivationRadius = activationRadius,
+            // Older App.config files did not have this key. Preserve their documented 1.5x
+            // relationship instead of unexpectedly widening a custom activation radius.
+            DeactivationRadius = requestedDeactivationRadius > activationRadius && float.IsFinite(requestedDeactivationRadius)
+                ? requestedDeactivationRadius
+                : activationRadius * 1.5f,
+            CellSize = PositiveOrDefault(settings.WorldPopulationCellSize, 32f),
+            MaxNpcsPerCell = PositiveOrDefault(settings.WorldPopulationMaxNpcsPerCell, 4),
+            MaxDifficultyPerCell = NonNegativeOrDefault(settings.WorldPopulationMaxDifficultyPerCell, 400),
+            UnbudgetedDifficultyCost = NonNegativeOrDefault(settings.WorldPopulationUnbudgetedDifficultyCost, 25),
+            MaxPlannedSlots = PositiveOrDefault(settings.WorldPopulationMaxPlannedSlots, 20_000),
+            SpawnBudget = PositiveOrDefault(settings.WorldPopulationSpawnBudget, 4),
+            SpawnBudgetWindowMs = PositiveOrDefault(settings.WorldPopulationSpawnBudgetWindowMs, 100),
+            TickIntervalMs = PositiveOrDefault(settings.WorldPopulationTickIntervalMs, 250),
+            PlanWorkPerTick = PositiveOrDefault(settings.WorldPopulationPlanWorkPerTick, 20_000),
+            MinSeparation = NonNegativeOrDefault(settings.WorldPopulationMinSeparation, 0.5f),
+            MinPlayerDistance = NonNegativeOrDefault(settings.WorldPopulationMinPlayerDistance, 25f),
+            MaxPlacementAttempts = PositiveOrDefault(settings.WorldPopulationMaxPlacementAttempts, 6),
+            PlacementRetryDelayMs = NonNegativeOrDefault(settings.WorldPopulationPlacementRetryDelayMs, 1_000),
+            MaxPlacementFailures = PositiveOrDefault(settings.WorldPopulationMaxPlacementFailures, 8),
+            RespawnDelayMs = NonNegativeOrDefault(settings.WorldPopulationRespawnDelayMs, 30_000),
+            MinimumWalkableNormalZ = WalkableNormalOrDefault(settings.WorldPopulationMinimumWalkableNormalZ, 0.35f),
+            DefaultBodyRadius = PositiveOrDefault(settings.WorldPopulationDefaultBodyRadius, 0.7f),
+            DefaultBodyHeight = PositiveOrDefault(settings.WorldPopulationDefaultBodyHeight, 1.8f),
+            DeployableInfluenceRadius = NonNegativeOrDefault(settings.WorldPopulationDeployableInfluenceRadius, 25f),
+            MeldingInfluenceRadius = NonNegativeOrDefault(settings.WorldPopulationMeldingInfluenceRadius, 120f),
         };
     }
+
+    private static int PositiveOrDefault(int value, int defaultValue) => value > 0 ? value : defaultValue;
+
+    private static int NonNegativeOrDefault(int value, int defaultValue) => value >= 0 ? value : defaultValue;
+
+    private static float PositiveOrDefault(float value, float defaultValue) => value > 0f && float.IsFinite(value) ? value : defaultValue;
+
+    private static float NonNegativeOrDefault(float value, float defaultValue) => value >= 0f && float.IsFinite(value) ? value : defaultValue;
+
+    private static float WalkableNormalOrDefault(float value, float defaultValue) =>
+        value > 0f && value <= 1f && float.IsFinite(value) ? value : defaultValue;
 }

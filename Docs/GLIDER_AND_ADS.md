@@ -41,6 +41,15 @@ restores its previous profile. That overwrites the profile the successor just gr
 Also, a failing optional removal-chain tail (e.g. `RequireHasItem` at command **1508711**)
 could skip cleanup entirely, leaving modifiers or flags behind.
 
+Two further cases explain the observed "landed but still gliding" state:
+
+- The client can report a positive ground-time value in one pose while its movement-state
+  nibble still says `Glider` until the next pose. The old movement-state requirement accepted
+  that stale nibble indefinitely, so effect **3418** continued to own the wings/HUD permission.
+- Separate overlapping effects restored the value they happened to see at application. If one
+  temporary glider effect saw another's `true` permission/profile and they ended in the wrong
+  order, the last removal restored the stale temporary value rather than the pre-launch one.
+
 ## Effect clocks and cleanup
 
 The runtime now keeps these values distinct:
@@ -62,8 +71,17 @@ Removal marks the old state removed, frees its slot, unwinds its active commands
 order, and **then** runs the removal chain. A failed removal-chain requirement cannot suppress
 that cleanup. A tick's snapshot skips states already removed by another effect; an old state
 cannot clear a replacement that reused its slot. A missing/zero `SetGliderParameters` value
-does not register a restoration snapshot: removing that no-op must not overwrite a valid
-profile granted later by another effect.
+does not register a temporary layer: removing that no-op cannot overwrite a valid profile
+granted later by another effect.
+
+Temporary glider permissions and profiles now have a unique owner layer per active command.
+The newest active layer is replicated; removing a layer reveals the next one, and removing the
+last layer restores the pre-launch value. Compatible stacks share one replicated status-effect
+slot, but retain every application context so all of their temporary layers receive cleanup when
+that shared slot ends. This makes overlapping effects order-safe instead of letting their stale
+snapshots leave gliding enabled. For the airborne movement states, a positive
+`GroundTimePositiveAirTimeNegative` is additionally authoritative over a stale movement nibble,
+except during the bounded server launch handoff window.
 
 `ImpactApplyEffect` also honours `PassRegister`, `PassBonus` and `InheritInitPos` instead of
 copying those payloads unconditionally. Activation identity and cooldown bookkeeping still
@@ -76,7 +94,7 @@ follow the original caster.
 | Flight profile | `Character_CombatController.GliderProfileIdProp`, a `dbcharacter::GliderParameters` id | `SetGliderParameters` |
 | Wings permission | `PermissionFlags.glider` | `ModifyPermission` |
 | Glider HUD | `PermissionFlags.glider_hud` | `ModifyPermission` |
-| Movement state | `MovementStateContainer`; glider nibble is 7 (`0x7000` in the full state) | Client `MovementInput` |
+| Movement state | `MovementStateContainer`; glider nibble is 7 (`0x7000` in the full state). For airborne states, a positive ground-time value is a landing even if this nibble has not caught up. | Client `MovementInput` |
 | Provisional launch window | `CharacterEntity.ServerLaunchPendingSince/UntilTime` | `ForcePush` (opens), first decisive `MovementInput` or expiry (closes) |
 | Landing damage exemption | Actual glider/jetpack movement during the fall | `FallDamageSystem` |
 
@@ -89,6 +107,8 @@ The relevant `prod-1962` graph for shared pad ability **35181**, chain **1001671
    item/projectile tail. These effects now start at the handoff, not at the original launch.
 4. **3418** grants wings and HUD permissions. Its duration is an OR chain: falling/gliding/
    glider-thruster/stall movement, **or** its first 500 ms (commands **1508823**, **1508822**).
+   Those airborne states require a negative air-time pose after the launch window: a stale glider
+   nibble on a grounded pose cannot keep the permission alive after landing.
 5. Its profile effect **9495** uses a 2000 ms duration plus `AirborneDuration`, then applies
    **3417**. The latter lasts until landing. The recovered/custom parameter rows used here
    both select profile 18; cleanup of 9495 must not overwrite 3417's grant.
@@ -284,9 +304,6 @@ pose/camera itself remains client work, so the in-game checks below are still th
   `ImpactRemoveEffect` rows, contain only ids. They remain non-destructive no-ops until the
   missing fields are recovered. `ScopeBubbleInfo` is not established to be a weapon zoom
   control; do not invent a layer to repair ADS.
-- Independent, overlapping effects that overwrite the same permission/profile still use
-  snapshots rather than a general ownership stack. The sequential glider handoff and
-  reverse-order cleanup within one effect are covered here, not every overlap scenario.
 - Client-only `PlayAnimation`, `SetAnimCtrlParam`, audio and camera commands remain client
   work. Server logs and field tests alone cannot validate their rendering or reconciliation.
 
@@ -323,8 +340,10 @@ Use one continuous log covering scope-in/launch through scope-out/landing:
    (regression); a standing / positive air time handoff while still on the pad means the
    client never started the forced movement, and the retrigger cadence (was ~2 s) plus the
    post-handoff `[Effect]` ages are the numbers to report.
-4. Land, then reuse the pad. Permissions and profile must reset on landing, and one launch
-   must not leave the next launch disabled or continuously retrigger while still active.
+5. Land, then reuse the pad. Permissions and profile must reset on the first grounded pose,
+   even if its movement-state nibble still says glider; the next jump must not open wings or
+   keep the glider HUD. Repeated/overlapping launches must also return to the pre-launch
+   profile and permissions when their final stage ends.
 
 ## Regression tests
 
@@ -339,9 +358,11 @@ dotnet test UdpHosts/GameServer.Tests/GameServer.Tests.csproj -c Release
   replicated controller fields, scope-out, death/external cleanup, stale packets and zero
   timestamps at clock wrap, the combat log confirmation rows, and the local-effects slots
   (self-applied effects stay out of them, foreign-initiated ones are mirrored and cleared).
-- Existing `PermissionAndGliderProfileCommandTests`, `CombatFlagsCommandTests`,
-  `RequirementServerCommandTests`, `RegisterMovementEffectCommandTests`,
-  `ProximityAbilityRetriggerTests` and `ChannelReliableTests` cover the related components.
+- `PermissionAndGliderProfileCommandTests` also covers overlapping temporary permission
+  and profile stages; `LaunchWindowTests` covers a grounded pose with a stale glider nibble.
+  `CombatFlagsCommandTests`, `RequirementServerCommandTests`,
+  `RegisterMovementEffectCommandTests`, `ProximityAbilityRetriggerTests` and
+  `ChannelReliableTests` cover the related components.
 
 The new tests inject small effect graphs through `FakeAptitudeFactory` rather than altering
 static SDB dictionaries or requiring a local Firefall installation. They do not emulate the

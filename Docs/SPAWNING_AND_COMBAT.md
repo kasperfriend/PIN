@@ -226,6 +226,14 @@ CombatController.FireWeaponProjectile      (client fire packet)
         already has the echo; a second UnreliableGss copy would double the tracer)
 ```
 
+`ProjectileSim` keeps at most **256** rounds in flight and steps them every 20 ms.
+A terminal collision is removed from the active set *before* it delivers damage or
+runs touch/impact abilities, so an incomplete DB ability can fail only that hook —
+it cannot hit again on the next tick. Period abilities are similarly capped at four
+catch-up calls after a long stall; missed periods resynchronise instead of replaying
+an unbounded backlog. These bounds deliberately favour connection recovery over
+replaying outdated combat work.
+
 When a player fires a turret they are seated on, the shot is the turret's own
 weapon, not the gunner's equipped one:
 

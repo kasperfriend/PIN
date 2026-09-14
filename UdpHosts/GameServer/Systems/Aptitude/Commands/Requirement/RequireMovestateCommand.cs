@@ -35,8 +35,12 @@ public class RequireMovestateCommand : Command, ICommand
             // the first duration gates of the launch effects run while the client is still playing the forced
             // movement. Treat the character as gliding for the provisional launch window
             // (see CharacterEntity.MarkServerLaunchPending) so those gates cannot tear the launch down before
-            // the client's poses confirm the flight or the window expires.
+            // the client's poses confirm the flight or the window expires. Once a client reports
+            // ground time, an old glider/falling nibble is not enough to keep flight effects alive:
+            // clients can send that stale state for a pose after landing, and treating it as a
+            // continued glide leaves the HUD permission active for the next jump.
             var movestate = character.IsServerLaunchPending ? Movestate.Glider : character.MovementStateContainer.Movestate;
+            bool airborne = character.IsAirborne || character.IsServerLaunchPending;
 
             if (Params.Standing == 1 && (movestate == Movestate.Standing))
             {
@@ -46,7 +50,7 @@ public class RequireMovestateCommand : Command, ICommand
             {
                 result = true;
             }
-            else if (Params.Falling == 1 && (movestate == Movestate.Falling))
+            else if (Params.Falling == 1 && airborne && (movestate == Movestate.Falling))
             {
                 result = true;
             }
@@ -58,19 +62,19 @@ public class RequireMovestateCommand : Command, ICommand
             {
                 result = true;
             }
-            else if (Params.Jetpack == 1 && (movestate == Movestate.Jetpack))
+            else if (Params.Jetpack == 1 && airborne && (movestate == Movestate.Jetpack))
             {
                 result = true;
             }
-            else if (Params.Gliding == 1 && (movestate == Movestate.Glider))
+            else if (Params.Gliding == 1 && airborne && (movestate == Movestate.Glider))
             {
                 result = true;
             }
-            else if (Params.Thruster == 1 && (movestate == Movestate.GliderThrusters))
+            else if (Params.Thruster == 1 && airborne && (movestate == Movestate.GliderThrusters))
             {
                 result = true;
             }
-            else if (Params.Stall == 1 && (movestate == Movestate.GliderStalling))
+            else if (Params.Stall == 1 && airborne && (movestate == Movestate.GliderStalling))
             {
                 result = true;
             }
@@ -78,11 +82,11 @@ public class RequireMovestateCommand : Command, ICommand
             {
                 result = true;
             }
-            else if (Params.KnockdownFalling == 1 && (movestate == Movestate.KnockdownFalling))
+            else if (Params.KnockdownFalling == 1 && airborne && (movestate == Movestate.KnockdownFalling))
             {
                 result = true;
             }
-            else if (Params.JetpackSprint == 1 && (movestate == Movestate.JetpackSprint))
+            else if (Params.JetpackSprint == 1 && airborne && (movestate == Movestate.JetpackSprint))
             {
                 result = true;
             }

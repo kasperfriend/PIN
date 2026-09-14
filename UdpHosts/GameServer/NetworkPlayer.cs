@@ -282,7 +282,17 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         {
             InstanceId = AssignedShard.InstanceId,
             ZoneId = CurrentZone.ID,
-            ZoneTimestamp = AssignedShard.Physics.ZoneFileTimestamp ?? (long)CurrentZone.Timestamp,
+
+            // The shard only loads one collision map (Settings.ZoneId). Its timestamp belongs to
+            // that map, not to every entry in the character-selection zone picker. Advertising
+            // New Eden's loaded timestamp together with (for example) Sertao's ZoneId makes the
+            // client reject the pair as a missing/incorrect required zone before it can send its
+            // EnterZoneAck. Use the loaded timestamp only when it actually belongs to this zone;
+            // the per-zone protocol timestamp from DataUtils is the authoritative fallback for
+            // every other selection.
+            ZoneTimestamp = AssignedShard.ZoneId == CurrentZone.ID && AssignedShard.Physics?.ZoneFileTimestamp is long loadedTimestamp
+                ? loadedTimestamp
+                : (long)CurrentZone.Timestamp,
             ZoneFlags = 0,
             ZoneOwner = "r5_exec",
             StreamingProtocol = 0x4c5f,
