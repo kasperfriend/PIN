@@ -12,6 +12,7 @@ PIN is split into two areas:
 - [Health System](HEALTH_SYSTEM.md) — health, damage, death, respawn and fall damage
 - [NPC AI](NPC_AI.md) — how spawned mobs target, chase, attack and leash, and how to tune it
 - [World Population](WORLD_POPULATION.md) — how a zone gets filled with every mob/NPC the database puts there: where the positions come from, what the two collision checks are, what bounds the cost, and the `\population` command
+- [Web Assets](ASSETS.md) — what the client streams from the server: the asset stream, the high-resolution texture chunks, where they live, and why an empty `Assets` folder means blurry terrain
 - [Remote Play & Networking](REMOTE_PLAY.md) — what the servers bind to, what they advertise to clients, and how to let a second player in over LAN / RadminVPN (config, firewall, TLS, ports, troubleshooting)
 
 ## UdpHosts
@@ -70,7 +71,10 @@ PIN implements some of those end points and has split them into the following pr
 - WebHost.OperatorApi - Basic operation info, such as current API versions
 - WebHost.Replay - Handling of replay actions
 - WebHost.Store - RedBean store information
-- WebHost.WebAsset - Assets of all sorts, from icons, to JavaScript, to streamed audio or textures
+- WebHost.WebAsset - Assets of all sorts, from icons, to JavaScript, to streamed audio or
+  textures; it is the host the client's `AssetStreamPath`/`VTRemotePath` point at, and the
+  high-resolution texture chunks it serves are what decides whether the world is sharp
+  ([ASSETS.md](ASSETS.md))
 
 ### Binding and advertised hosts
 
@@ -87,6 +91,16 @@ certificate the https endpoints are served with, since a client dialling
 (`Lib/Shared.Common/Certificates/TlsCertificateStore.cs`, `certs/` next to the
 binary) and serves its public half at `GET /certificate.cer`. See
 [Remote Play & Networking](REMOTE_PLAY.md).
+
+### Asset roots
+
+`WebHost.WebAsset` answers everything the client streams, and it answers it out of
+the folders on disk — `<content root>\Assets` plus the folders named by
+`Firefall:Assets:Paths` — through `Shared.Web.Assets.WebAssetFileProvider`. The
+repository ships that folder empty (`.gitignore`), and `Assets/README.md` next to
+the binary says what goes into it; `AssetRootProbe` is the read-only scan behind
+the startup report, and `VirtualTextureChunks` knows the chunk names the client
+probes for. See [ASSETS.md](ASSETS.md).
 
 ### References
 
