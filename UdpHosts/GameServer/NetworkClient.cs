@@ -131,6 +131,14 @@ public class NetworkClient : INetworkClient
 
     public virtual void NetworkTick(double deltaTime, ulong currentTime, CancellationToken ct)
     {
+        // An uninitialised client has neither channels nor a send queue. Shard.MigrateIn now
+        // initialises before it publishes a client, so this is the belt to that brace: a tick must
+        // never throw on a half-built client, whatever the order that let one through.
+        if (NetChannels == null || SequencedMessages == null)
+        {
+            return;
+        }
+
         while (SequencedMessages.TryDequeue(out var qi))
         {
             Send(qi);

@@ -78,9 +78,20 @@ public sealed class FakeShard : IShard
 
     public uint ZoneId { get; set; } = 448;
 
-    public ILogger Logger { get; } = Log.Logger;
+    /// <summary>
+    ///     The global (silent) logger by default. Settable so a test can capture what a system says
+    ///     through a <see cref="CapturingLogger"/> instead; note that only systems constructed
+    ///     <em>after</em> the assignment read it, because the ones built in the constructor above
+    ///     took the logger they were handed at the time.
+    /// </summary>
+    public ILogger Logger { get; set; } = Log.Logger;
 
-    public GameServerSettings Settings { get; } = null;
+    /// <summary>
+    ///     Null by default: the systems under test that read settings fall back to their documented
+    ///     defaults for it. Tests that initialise a real <see cref="NetworkClient" /> need a real
+    ///     settings object, because the client reads the outgoing-batching flag off it.
+    /// </summary>
+    public GameServerSettings Settings { get; set; } = null;
 
     public IDictionary<ulong, IEntity> Entities { get; } = new ConcurrentDictionary<ulong, IEntity>();
 
@@ -154,8 +165,12 @@ public sealed class FakeShard : IShard
         return false;
     }
 
+    /// <summary>Every datagram handed to <see cref="SendAsync" />, in order, for tests that assert on what went out.</summary>
+    public List<byte[]> SentPackets { get; } = [];
+
     public Task<bool> SendAsync(Memory<byte> packet, IPEndPoint endPoint)
     {
+        SentPackets.Add(packet.ToArray());
         return Task.FromResult(true);
     }
 }

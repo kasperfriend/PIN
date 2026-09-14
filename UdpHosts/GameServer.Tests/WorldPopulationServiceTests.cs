@@ -6,6 +6,7 @@ using System.Threading;
 using GameServer.Entities.Character;
 using GameServer.Systems.Spawning.Population;
 using GameServer.Tests.Fakes;
+using Serilog;
 using Xunit;
 
 namespace GameServer.Tests;
@@ -52,9 +53,14 @@ public class WorldPopulationServiceTests
     private static World CreateWorld(
         StandardWorldPopulationRules rules = null,
         Vector3? playerAt = null,
-        bool withPlayer = true)
+        bool withPlayer = true,
+        ILogger logger = null)
     {
         var shard = new FakeShard();
+
+        // Before the service is built: it reads the shard's logger in its constructor.
+        shard.Logger = logger ?? Log.Logger;
+
         var data = new FakeWorldPopulationDataSource();
         var terrain = new FakeWorldPopulationTerrain();
         var spawner = new FakeWorldPopulationSpawner();
@@ -552,5 +558,84 @@ public class WorldPopulationServiceTests
         PopulationCommand.Run(shard, ["status"], null, lines.Add);
 
         Assert.Contains(lines, line => line.Contains("not available on this shard"));
+    }
+
+    [Fact]
+    public void SpawningNothingBecauseTheFeatureIsOff_SaysSoOnce_AndNamesTheSetting()
+    {
+        var logger = new CapturingLogger();
+        var world = CreateWorld(
+            new StandardWorldPopulationRules { Enabled = false, PlanWorkPerTick = 100_000 },
+            logger: logger.Logger);
+        AddGroundAndRoster(world);
+
+        Tick(world, 10);
+
+        Assert.Empty(world.Spawner.Spawned);
+
+        // Once, not once per update: this runs a few times a second for the life of the process.
+        Assert.Equal(1, logger.CountContaining("SpawnWorldPopulation is false in the server settings"));
+    }
+
+    [Fact]
+    public void SpawningNothingBecauseNobodyIsInTheZone_SaysSoOnce()
+    {
+        var logger = new CapturingLogger();
+        var world = CreateWorld(withPlayer: false, logger: logger.Logger);
+        AddGroundAndRoster(world);
+
+        Tick(world, 10);
+
+        Assert.Empty(world.Spawner.Spawned);
+        Assert.Equal(1, logger.CountContaining("no player counts as present yet"));
+    }
+
+    [Fact]
+    public void APlanThatTakesAWhileToBuild_SaysItIsStillBuilding_InsteadOfGoingQuiet()
+    {
+        var logger = new CapturingLogger();
+
+        // One unit of plan work an update, over a plane big enough that the plan needs a few
+        // hundred of them: the shape a zone takes when its navigation mesh is large.
+        var world = CreateWorld(
+            new StandardWorldPopulationRules { MinPlayerDistance = 0f, PlanWorkPerTick = 1 },
+            logger: logger.Logger);
+        world.Terrain.AddPlane(Vector3.Zero, 16, 16, 16f);
+        for (uint id = 10; id < 15; id++)
+        {
+            world.Data.AddMonster(id);
+        }
+
+        Tick(world, 3);
+        Assert.False(world.Service.Plan.IsComplete);
+        Assert.Empty(world.Spawner.Spawned);
+
+        // A plan that is getting along is not news yet.
+        Assert.Equal(0, logger.CountContaining("still building the plan"));
+
+        // Past the announcement interval it says so, with how far it has got, and keeps saying so:
+        // this is the one reason that resolves on its own, so a plan that has stopped advancing
+        // has to be visible in the log rather than indistinguishable from a feature switched off.
+        Tick(world, 37);
+        Assert.False(world.Service.Plan.IsComplete);
+        Assert.Equal(1, logger.CountContaining("still building the plan"));
+        Assert.Equal(1, logger.CountContaining("walkable surfaces scanned"));
+
+        Tick(world, 40);
+        Assert.Equal(2, logger.CountContaining("still building the plan"));
+    }
+
+    [Fact]
+    public void AZoneThatSpawnsNormally_DoesNotReportThatItIsSpawningNothing()
+    {
+        var logger = new CapturingLogger();
+        var world = CreateWorld(logger: logger.Logger);
+        AddGroundAndRoster(world);
+
+        Tick(world, 3);
+
+        Assert.NotEmpty(world.Spawner.Spawned);
+        Assert.Equal(0, logger.CountContaining("spawning nothing"));
+        Assert.Equal(0, logger.CountContaining("still building the plan"));
     }
 }
