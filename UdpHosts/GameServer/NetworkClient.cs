@@ -264,6 +264,19 @@ public class NetworkClient : INetworkClient
 
     private void Matrix_PacketAvailable(GamePacket packet)
     {
+        // A truncated Matrix packet used to index PacketData at zero and escape through the
+        // client's network tick. Drop it here: a malformed/retried datagram must not delay every
+        // other queued packet for this player.
+        if (packet.BytesRemaining < 1)
+        {
+            if (OnceLog.ShouldLog((nameof(NetworkClient), "empty Matrix packet")))
+            {
+                Logger.Warning("Dropping an empty Matrix packet");
+            }
+
+            return;
+        }
+
         var wireId = packet.Read<byte>();
         var ordinal = MatrixTables.FindMessage(AssignedShard.Settings.MatrixProtocolVersion, wireId);
 
@@ -296,7 +309,23 @@ public class NetworkClient : INetworkClient
                 Player.ExitZoneAck();
                 break;
             case MatrixMessage.KeyframeRequest:
-                var query = packet.Unpack<KeyframeRequest>();
+                KeyframeRequest query;
+                try
+                {
+                    query = packet.Unpack<KeyframeRequest>();
+                }
+                catch (Exception ex)
+                {
+                    // This payload comes directly from the client. In particular, a short
+                    // EntityRequests array must not escape to shard-level exception recovery.
+                    if (OnceLog.ShouldLog((nameof(NetworkClient), "malformed KeyframeRequest", ex.GetType().Name)))
+                    {
+                        Logger.Warning(ex, "Dropping malformed Matrix KeyframeRequest");
+                    }
+
+                    break;
+                }
+
                 // Guarded: GetNumberOfScopedEntities scans the scoped set of every entity in the zone,
                 // and log arguments are evaluated even when the Verbose level is off — this fires once
                 // per requested entity during the scope-in burst of a login.
@@ -308,7 +337,7 @@ public class NetworkClient : INetworkClient
                         AssignedShard.EntityMan.GetNumberOfScopedEntities(Player));
                 }
 
-                foreach (var request in query.EntityRequests)
+                foreach (var request in query.EntityRequests ?? [])
                 {
                     byte typecode = (byte)(request.Entity & 0x00000000000000FFul);
                     AssignedShard.Entities.TryGetValue(request.Entity & 0xffffffffffffff00, out IEntity entity);

@@ -1,4 +1,6 @@
+using System;
 using GameServer.Entities.Character;
+using GameServer.Extensions;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Aptitude;
 
@@ -57,11 +59,31 @@ public static class AmmoAbilityHooks
             return;
         }
 
-        shard.Abilities.HandleActivateAbility(
-            shard,
-            source,
-            abilityId,
-            shard.CurrentTime,
-            target != null ? new AptitudeTargets(target) : new AptitudeTargets());
+        // Ammo rows are data supplied by the client database. An incomplete chain must make this
+        // one hook fail, not abort ProjectileSim.Tick before the terminal projectile can be retired.
+        // Without this boundary one malformed impact ability re-ran the same collision, damage and
+        // stack trace every projectile update and starved the shard's network loop.
+        try
+        {
+            shard.Abilities.HandleActivateAbility(
+                shard,
+                source,
+                abilityId,
+                shard.CurrentTime,
+                target != null ? new AptitudeTargets(target) : new AptitudeTargets());
+        }
+        catch (Exception ex)
+        {
+            // A repeating automatic weapon can legitimately hit the same broken ability many times;
+            // log enough to identify the SDB row without turning its diagnostics into another load
+            // source for the overloaded server.
+            if (OnceLog.ShouldLog((nameof(AmmoAbilityHooks), abilityId, ex.GetType().FullName)))
+            {
+                shard.Logger.Warning(
+                    ex,
+                    "Projectile ammo ability {AbilityId} threw and was ignored for this projectile",
+                    abilityId);
+            }
+        }
     }
 }

@@ -20,8 +20,8 @@ itself says an NPC can stand on, around the players who are in it.
 > (`dbzonemetadata`). See [What the data does not contain](#8-what-the-data-does-not-contain).
 
 > **Only where players are.** Nothing is planned, and nothing is spawned, in a
-> zone without a player in it. Cells come alive inside 200 m of a player and are
-> removed again beyond 300 m, so the world exists around the players instead of
+> zone without a player in it. Cells come alive inside 150 m of a player and are
+> removed again beyond 225 m, so the world exists around the players instead of
 > all at once.
 
 > **Both kinds of collision are checked before anything appears.** The physical
@@ -248,13 +248,13 @@ Per update:
    authored NPCs, its deployables and outposts, every player), once per plan
    lifetime. Bodies that appear later are caught by the physical check instead,
    which sees every body the simulation knows.
-4. **Activation** — cells inside `ActivationRadius` (200 m) of any player that are
+4. **Activation** — cells inside `ActivationRadius` (150 m) of any player that are
    not already active get their slots queued; active cells outside
-   `DeactivationRadius` (300 m) of every player get despawned. The 100 m gap is
+   `DeactivationRadius` (225 m) of every player get despawned. The 75 m gap is
    hysteresis: a player standing on the boundary does not make the same cell spawn
    and despawn every tick.
-5. **Spawns** — the queue is drained under two limits at once: `SpawnBudget` (12)
-   per `SpawnBudgetWindowMs` (100 ms) and `MaxLiveNpcs` (600) minus what is alive.
+5. **Spawns** — the queue is drained under two limits at once: `SpawnBudget` (4)
+   per `SpawnBudgetWindowMs` (100 ms) and `MaxLiveNpcs` (150) minus what is alive.
    A slot is filled no earlier than its row's `ai_spawn_delay_ms` after its cell was
    activated, which both honours the column and staggers a cell's NPCs over a couple
    of seconds instead of letting them all land in one update.
@@ -361,8 +361,14 @@ Three operator-facing keys in `UdpHosts/GameServer/App.config` (defaults in
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `SpawnWorldPopulation` | `true` | Master switch. Off means an empty zone (only the authored `character_spawn.json` entities remain) |
-| `WorldPopulationMaxLiveNpcs` | `600` | Hard ceiling on live population NPCs, whatever the plan could hold |
-| `WorldPopulationActivationRadius` | `200` | Metres from a player within which cells activate; NPCs are removed beyond 1.5× this |
+| `WorldPopulationMaxLiveNpcs` | `150` | Hard ceiling on live population NPCs, whatever the plan could hold |
+| `WorldPopulationActivationRadius` | `150` | Metres from a player within which cells activate; NPCs are removed beyond 1.5× this |
+
+> **Upgrading an existing server:** `App.config` is machine-local and intentionally
+> ignored by Git, so its existing values override `App.Default.config`. To adopt this
+> recovery preset, change its two keys to `150` (or remove the keys and recreate the
+> local config from `App.Default.config`) before restarting. Do not assume a source
+> update lowers a persisted `600`/`200` deployment automatically.
 
 Everything else is an `IWorldPopulationRules` property. `StandardWorldPopulationRules`
 carries the defaults; a test or a tuning pass can replace the whole set by handing a
@@ -372,15 +378,15 @@ the AI.
 | Property | Default | Meaning |
 |----------|---------|---------|
 | `Enabled` | `true` | From `SpawnWorldPopulation` |
-| `MaxLiveNpcs` | `600` | Live NPC ceiling |
-| `ActivationRadius` | `200` | Metres at which a cell comes alive |
-| `DeactivationRadius` | `300` | Metres beyond which an active cell is removed (1.5× activation) |
+| `MaxLiveNpcs` | `150` | Live NPC ceiling |
+| `ActivationRadius` | `150` | Metres at which a cell comes alive |
+| `DeactivationRadius` | `225` | Metres beyond which an active cell is removed (1.5× activation) |
 | `CellSize` | `32` | Metres per planning cell; a little over twice a monster's perception radius, so a cell reads as one encounter-sized patch |
 | `MaxNpcsPerCell` | `4` | Most NPCs one cell may hold |
 | `MaxDifficultyPerCell` | `400` | Total `difficulty_cost` one cell may hold (density pass only) |
 | `UnbudgetedDifficultyCost` | `25` | Charged to a row whose `difficulty_cost` is 0 |
 | `MaxPlannedSlots` | `20000` | Ceiling on the plan's slots for the whole zone |
-| `SpawnBudget` | `12` | Most NPCs spawned per window |
+| `SpawnBudget` | `4` | Most NPCs spawned per window |
 | `SpawnBudgetWindowMs` | `100` | Length of that window |
 | `TickIntervalMs` | `250` | Milliseconds between two population updates |
 | `PlanWorkPerTick` | `20000` | Mesh faces scanned / cells built per update while planning |
@@ -418,10 +424,10 @@ Example:
 
 ```
 \population
-World population: on (live 412/600 NPCs of 2853 monster rows, 96 kinds in the world)
+World population: on (live 124/150 NPCs of 2853 monster rows, 82 kinds in the world)
 Plan: 9841 cells, 20000 slots, 2853 rows placed, 214 cells refused by chunk rules
-Streaming: 118 active cells, 1437 slots queued, 1 players, activate 200 m / deactivate 300 m
-Lifetime: 1904 spawned, 1492 despawned, 37 lost, 214 placements refused, 9 slots parked, 431 bodies in the placement grid
+Streaming: 68 active cells, 213 slots queued, 1 players, activate 150 m / deactivate 225 m
+Lifetime: 422 spawned, 298 despawned, 17 lost, 214 placements refused, 9 slots parked, 143 bodies in the placement grid
 ```
 
 ---
@@ -461,8 +467,8 @@ cannot be faithful to a spawn table that was never shipped.
 
 | Concern | Bound |
 |---------|-------|
-| Live NPCs | `MaxLiveNpcs` (600). A 200 m activation radius covers ~123 cells of 32 m (the cell keys considered are the radius' bounding box, 13×13 = 169, of which only the ones with planned ground activate), i.e. ~490 slots at the 4-per-cell cap - so one player walking through a zone keeps the world populated without running into the cap. Several players share the same cap: the cost of the feature is bounded by this number, not by how many players are connected |
-| Spawn rate | 12 per 100 ms = 120/s worst case. `EntityManager` drains its scope-in queue at 16 per 20 ms (800/s), so a player walking into an empty area cannot make that queue grow |
+| Live NPCs | `MaxLiveNpcs` (150). A 150 m activation radius covers roughly 70 cells of 32 m (the cell keys considered are the radius' bounding box, 11×11 = 121, of which only the ones with planned ground activate), i.e. ~280 slots at the 4-per-cell cap. The 150-NPC ceiling leaves headroom for combat and reliable entity state; several players still share that cap |
+| Spawn rate | 4 per 100 ms = 40/s worst case. This keeps the scope-in burst below the ordinary zone's traffic budget rather than relying on the scope queue's 800/s drain capacity |
 | Update cost | One update per 250 ms: a bounding-box scan of cell keys per player, one queue drain under budget, one pass over the live slots |
 | Planning cost | Spread over ticks: 20,000 mesh faces and 20,000 cells per update, so a large zone is planned in a couple of seconds of updates that each stay well under a millisecond of extra work. Planning does not start until a player is in the zone |
 | Plan memory | `MaxPlannedSlots` (20,000) slots, tens of thousands of cells; the drafts are dropped as soon as the cells exist |

@@ -64,6 +64,11 @@ public class WorldPopulationServiceTests
         {
             MinPlayerDistance = 0f,
             PlanWorkPerTick = 100_000,
+
+            // These service tests exercise the full 64-slot plan in a short test window;
+            // production's intentionally gentler default spawn rate is covered by the
+            // explicit budget tests below.
+            SpawnBudget = 12,
         };
 
         var service = new WorldPopulationService(shard, rules, data, terrain, spawner);

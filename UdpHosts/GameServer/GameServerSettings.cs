@@ -123,14 +123,14 @@ public class GameServerSettings
     ///    could hold. This is the setting that bounds what the feature costs the server: every live
     ///    NPC is an entity, a physics body, an AI brain and a stream of keyframes.
     /// </summary>
-    public int WorldPopulationMaxLiveNpcs { get; set; } = 600;
+    public int WorldPopulationMaxLiveNpcs { get; set; } = 150;
 
     /// <summary>
     ///    Metres from a player within which world population is spawned. NPCs are removed again
     ///    beyond 1.5x this distance, so the value also decides how much of the zone is populated at
     ///    any moment; nothing is spawned at all in a zone without players.
     /// </summary>
-    public float WorldPopulationActivationRadius { get; set; } = 200f;
+    public float WorldPopulationActivationRadius { get; set; } = 150f;
 
     /// <summary>
     ///    Force reload zone from source files, bypassing cache.

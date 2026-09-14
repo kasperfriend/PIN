@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Threading;
 using GameServer.Entities.Character;
 using GameServer.Enums;
+using GameServer.Extensions;
 using GameServer.Physics;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Aptitude;
@@ -28,6 +29,21 @@ public class ProjectileSim
     /// 20 ms matches the ability system's cadence and keeps impact detection snappy.
     /// </summary>
     private const ulong UpdateIntervalMs = 20;
+
+    /// <summary>
+    /// A global upper bound on in-flight rounds. Each one issues a physics ray every 20 ms; without
+    /// this backpressure a crowded NPC encounter can retain tens of thousands of slow rounds and
+    /// turn every shard update into a ray-cast storm. New rounds are dropped while full — existing
+    /// rounds still complete, so the simulation recovers by itself rather than growing a queue.
+    /// </summary>
+    private const int MaxActiveProjectiles = 256;
+
+    /// <summary>
+    /// A delayed shard must not replay an unbounded number of period abilities for one projectile in
+    /// a single update. Four preserves normal catch-up while a long pause resynchronises instead of
+    /// making the recovery tick slower than the pause that caused it.
+    /// </summary>
+    private const int MaxPeriodAbilityActivationsPerUpdate = 4;
 
     private readonly Shard _shard;
     private readonly Serilog.ILogger _logger;
@@ -56,6 +72,40 @@ public class ProjectileSim
     /// </summary>
     public void FireProjectile(CharacterEntity entity, uint trace, Vector3 origin, Vector3 direction, Ammo ammo, float range, float projectileSpeed, float impactRadius, float maxRadius, int damage)
     {
+        float directionLengthSquared = direction.LengthSquared();
+        if (entity == null || ammo == null || !IsFinite(origin) || !IsFinite(direction) ||
+            !float.IsFinite(directionLengthSquared) || directionLengthSquared < 0.0001f ||
+            !float.IsFinite(projectileSpeed) || projectileSpeed <= 0f || !float.IsFinite(range) || range <= 0f ||
+            !float.IsFinite(impactRadius) || impactRadius < 0f || !float.IsFinite(maxRadius) || maxRadius < 0f)
+        {
+            if (OnceLog.ShouldLog((nameof(ProjectileSim), "invalid fire input", ammo?.Id ?? 0u)))
+            {
+                _logger.Warning(
+                    "Discarding projectile with invalid input (source {Source}, ammo {AmmoId}, speed {Speed}, range {Range}, impact radius {ImpactRadius}, max radius {MaxRadius})",
+                    entity?.EntityId ?? 0,
+                    ammo?.Id ?? 0,
+                    projectileSpeed,
+                    range,
+                    impactRadius,
+                    maxRadius);
+            }
+
+            return;
+        }
+
+        if (_activeProjectiles.Count >= MaxActiveProjectiles)
+        {
+            if (OnceLog.ShouldLog((nameof(ProjectileSim), "active projectile cap", _shard.InstanceId)))
+            {
+                _logger.Warning(
+                    "Projectile simulation reached its {MaxActiveProjectiles} active-round cap; dropping new rounds until it recovers",
+                    MaxActiveProjectiles);
+            }
+
+            return;
+        }
+
+        direction = Vector3.Normalize(direction);
         var ammoFlags = new AmmoFlags(ammo.Flags);
         bool isDrunk = DrunkMissile.IsActive(ammo);
 
@@ -65,6 +115,20 @@ public class ProjectileSim
             ? ammo.ConstLifetime
             : ComputeDefaultLifetimeMs(range, actualSpeed);
         var endPosition = origin + (velocity * (lifetimeMs / 1000f));
+        if (!IsFinite(velocity) || !float.IsFinite(actualSpeed) || !IsFinite(endPosition))
+        {
+            if (OnceLog.ShouldLog((nameof(ProjectileSim), "unrepresentable trajectory", ammo.Id)))
+            {
+                _logger.Warning(
+                    "Discarding projectile with an unrepresentable trajectory (source {Source}, ammo {AmmoId}, speed {Speed}, lifetime {Lifetime})",
+                    entity.EntityId,
+                    ammo.Id,
+                    projectileSpeed,
+                    lifetimeMs);
+            }
+
+            return;
+        }
 
         var projectile = new ActiveProjectile
         {
@@ -98,7 +162,21 @@ public class ProjectileSim
             IsDrunk = isDrunk
         };
 
-        _activeProjectiles.TryAdd((entity.EntityId, trace), projectile);
+        if (!_activeProjectiles.TryAdd((entity.EntityId, trace), projectile))
+        {
+            // Trace ids originate with the firing protocol. A duplicate must not replace a round
+            // that is already in flight: doing so makes its impact/lifetime depend on packet order.
+            if (OnceLog.ShouldLog((nameof(ProjectileSim), "duplicate trace", entity.EntityId, trace)))
+            {
+                _logger.Warning(
+                    "Discarding duplicate in-flight projectile trace {Trace} from entity {EntityId}",
+                    trace,
+                    entity.EntityId);
+            }
+
+            return;
+        }
+
         _logger.Debug("Spawned {Type} projectile trace={Trace}, speed={Speed}, range={Range}, lifetime={Lifetime}ms, impactRadius={ImpactRadius}, maxRadius={MaxRadius}", ammoFlags.Simulation, trace, projectileSpeed, range, lifetimeMs, impactRadius, maxRadius);
         SendDebugSpawn(entity, trace, origin, direction, projectileSpeed);
     }
@@ -182,8 +260,22 @@ public class ProjectileSim
             projectile.CurrentPosition = basePosition + projectile.DrunkOffset;
 
             var source = GetSourceEntity(projectile);
+            var periodActivations = 0;
             while (projectile.IsAlive && AmmoAbilityHooks.TryPeriod(projectile.Ammo, elapsedMs, ref projectile.LastPeriodElapsedMs, out uint periodAbility))
             {
+                if (periodActivations++ >= MaxPeriodAbilityActivationsPerUpdate)
+                {
+                    // The time was already missed. Advance to now rather than replaying hundreds
+                    // of expired ticks and turning a single long frame into an exception/ability
+                    // storm that prevents recovery.
+                    projectile.LastPeriodElapsedMs = elapsedMs;
+                    _logger.Debug(
+                        "Projectile trace={Trace} skipped delayed period abilities after {MaxPeriodAbilityActivationsPerUpdate} catch-up activations",
+                        projectile.TraceId,
+                        MaxPeriodAbilityActivationsPerUpdate);
+                    break;
+                }
+
                 AmmoAbilityHooks.Activate(_shard, source, periodAbility);
             }
 
@@ -212,6 +304,14 @@ public class ProjectileSim
                 {
                     projectile.IsAlive = false;
                     projectile.HitsRemaining = 0;
+
+                    // Retire before delivering gameplay callbacks. Ability chains are database
+                    // supplied and can fail; if one throws before the old end-of-loop removal,
+                    // this same round remains active and impacts again every tick. That was the
+                    // source of the repeated damage/ability/NullReferenceException loop in the
+                    // supplied server log. Removal first makes a terminal impact exactly once.
+                    _activeProjectiles.TryRemove(key, out _);
+
                     _logger.Debug("Projectile trace={Trace} impact entity={Entity} at {Pos} after {Distance}m", projectile.TraceId, hit.HitEntityId, hit.HitPosition, projectile.DistanceTravelled);
                     if (source != null)
                     {
@@ -228,6 +328,11 @@ public class ProjectileSim
 
                     AmmoAbilityHooks.Activate(_shard, source, AmmoAbilityHooks.TouchAbility(projectile.Ammo), hitTarget);
                     AmmoAbilityHooks.Activate(_shard, source, AmmoAbilityHooks.ImpactAbility(projectile.Ammo), hitTarget);
+
+                    // The entry has already been removed. In particular, do not reach the generic
+                    // removal below: a synchronous callback is allowed to fire a new round with
+                    // the same protocol trace id, and that new round must not be removed here.
+                    continue;
                 }
             }
             else
@@ -238,12 +343,15 @@ public class ProjectileSim
 
             if (elapsedMs >= projectile.LifetimeMs)
             {
+                // Airburst is also a terminal callback and can synchronously start another round
+                // with this trace. Remove the expiring round first for the same reason as impact.
+                _activeProjectiles.TryRemove(key, out _);
+
                 if (projectile.IsAlive)
                 {
                     AmmoAbilityHooks.Activate(_shard, source, AmmoAbilityHooks.AirburstAbility(projectile.Ammo));
                 }
 
-                _activeProjectiles.TryRemove(key, out _);
                 _logger.Debug("Projectile trace={Trace} expired at {Elapsed}/{Lifetime}ms", projectile.TraceId, elapsedMs, projectile.LifetimeMs);
                 SendDebugTimeout(projectile, projectile.CurrentPosition);
                 continue;
@@ -259,6 +367,9 @@ public class ProjectileSim
             }
         }
     }
+
+    private static bool IsFinite(Vector3 value) =>
+        float.IsFinite(value.X) && float.IsFinite(value.Y) && float.IsFinite(value.Z);
 
     private static uint ComputeDefaultLifetimeMs(float range, float speed)
     {

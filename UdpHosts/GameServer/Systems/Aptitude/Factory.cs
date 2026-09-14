@@ -651,7 +651,25 @@ public class Factory
             // case CommandType.TemporaryEquipmentStatMapping:
             //     return new TemporaryEquipmentStatMappingCommand(CustomDBInterface.GetTemporaryEquipmentStatMappingCommandDef(commandId));
             case CommandType.LoadRegisterFromLevel:
-                return new LoadRegisterFromLevelCommand(SDBInterface.GetLoadRegisterFromLevelCommandDef(commandId));
+            {
+                var levelDef = SDBInterface.GetLoadRegisterFromLevelCommandDef(commandId);
+                if (levelDef == null)
+                {
+                    // BaseCommandDef and its typed parameter row are separate SDB tables. Some
+                    // client-only/malformed chains retain the former without the latter; never
+                    // let that missing optional row turn an impact into a shard-tick exception.
+                    if (_reportedPlaceholders.Add(commandId))
+                    {
+                        _logger.Warning(
+                            "Aptitude command {CommandId} is LoadRegisterFromLevel but has no typed parameter row; using a safe no-op",
+                            commandId);
+                    }
+
+                    return new CustomNOOPCommand("LoadRegisterFromLevel missing parameters", commandId);
+                }
+
+                return new LoadRegisterFromLevelCommand(levelDef);
+            }
             // case CommandType.UnlockCerts:
             //     return new UnlockCertsCommand(CustomDBInterface.GetUnlockCertsCommandDef(commandId));
             // case CommandType.UnlockPatterns:

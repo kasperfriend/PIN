@@ -17,22 +17,20 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
     public bool Enabled { get; init; } = true;
 
     /// <summary>
-    ///     600 live NPCs is roughly what a single player's activation radius can cover at the
-    ///     default density (a 200 m radius holds ~123 cells of 32 m, and a cell holds up to
-    ///     <see cref="MaxNpcsPerCell"/>), so one player walking through a zone keeps the world
-    ///     populated without the cap being what they run into. A shard with several players shares
-    ///     the same cap, which is the point: the cost of the feature is bounded by this number, not
-    ///     by how many players are connected.
+    ///     150 live NPCs keeps a zone visibly populated while leaving enough CPU, physics and
+    ///     reliable-channel headroom for actual combat. A shard with several players shares the
+    ///     same cap, which is the point: the cost is bounded by this number, not by how many
+    ///     players are connected. Operators who have measured headroom can raise it in config.
     /// </summary>
-    public int MaxLiveNpcs { get; init; } = 600;
+    public int MaxLiveNpcs { get; init; } = 150;
 
-    public float ActivationRadius { get; init; } = 200f;
+    public float ActivationRadius { get; init; } = 150f;
 
     /// <summary>
-    ///     1.5x the activation radius. The 100 m gap is wider than a player covers in the ~2 s it
+    ///     1.5x the activation radius. The 75 m gap is wider than a player covers in the ~2 s it
     ///     takes to walk it, so leaving and coming back does not thrash a cell.
     /// </summary>
-    public float DeactivationRadius { get; init; } = 300f;
+    public float DeactivationRadius { get; init; } = 225f;
 
     public float CellSize { get; init; } = 32f;
 
@@ -45,13 +43,11 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
     public int MaxPlannedSlots { get; init; } = 20_000;
 
     /// <summary>
-    ///     12 spawns per 100 ms = 120/s worst case. Each spawn is an entity, a physics body, an AI
-    ///     registration and a scope-in to the players who can see it, and
-    ///     <see cref="Systems.EntityManager.EntityManager"/> drains its scope-in queue at 16 per
-    ///     20 ms (800/s) — this budget stays an order of magnitude under that drain rate, so a
-    ///     player walking into an empty area cannot make the scope queue grow.
+    ///     Four spawns per 100 ms = 40/s worst case. Each spawn is an entity, a physics body, an AI
+    ///     registration and a scope-in to the players who can see it. This deliberately leaves room
+    ///     for the zone's existing traffic rather than competing with it during a streaming burst.
     /// </summary>
-    public int SpawnBudget { get; init; } = 12;
+    public int SpawnBudget { get; init; } = 4;
 
     public int SpawnBudgetWindowMs { get; init; } = 100;
 
@@ -100,11 +96,11 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
         return new StandardWorldPopulationRules
         {
             Enabled = settings.SpawnWorldPopulation,
-            MaxLiveNpcs = settings.WorldPopulationMaxLiveNpcs > 0 ? settings.WorldPopulationMaxLiveNpcs : 600,
-            ActivationRadius = settings.WorldPopulationActivationRadius > 0f ? settings.WorldPopulationActivationRadius : 200f,
+            MaxLiveNpcs = settings.WorldPopulationMaxLiveNpcs > 0 ? settings.WorldPopulationMaxLiveNpcs : 150,
+            ActivationRadius = settings.WorldPopulationActivationRadius > 0f ? settings.WorldPopulationActivationRadius : 150f,
             DeactivationRadius = settings.WorldPopulationActivationRadius > 0f
                 ? settings.WorldPopulationActivationRadius * 1.5f
-                : 300f,
+                : 225f,
         };
     }
 }
