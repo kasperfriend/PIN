@@ -64,6 +64,13 @@ public sealed class WorldPopulationService
     /// </summary>
     private const int MaxConsecutiveFailures = 3;
 
+    /// <summary>
+    ///     Updates between two "the plan is still building" lines. The reason is worth repeating
+    ///     because it is the only one that resolves on its own, and a zone that stays empty for a
+    ///     minute should say so rather than fall silent.
+    /// </summary>
+    private const int PlanningAnnouncementTicks = 40;
+
     private readonly IShard _shard;
     private readonly ILogger _logger;
     private readonly IWorldPopulationRules _rules;
@@ -85,6 +92,22 @@ public sealed class WorldPopulationService
     private int _spawnedThisWindow;
     private int _consecutiveFailures;
     private bool _occupancySeeded;
+    private IdleReason _announcedIdle = IdleReason.None;
+
+    /// <summary>
+    ///     Starts at zero so a plan that builds in a second or two never reports itself: "still
+    ///     building" is only worth saying once the wait is long enough to notice.
+    /// </summary>
+    private int _ticksSincePlanningAnnouncement;
+
+    /// <summary>Why the most recent update spawned nothing, so it is announced once per change.</summary>
+    private enum IdleReason
+    {
+        None,
+        Disabled,
+        NoPlayers,
+        Planning,
+    }
 
     public WorldPopulationService(
         IShard shard,
@@ -220,6 +243,7 @@ public sealed class WorldPopulationService
                 Clear("turned off");
             }
 
+            AnnounceDisabled();
             return;
         }
 
@@ -233,6 +257,7 @@ public sealed class WorldPopulationService
                 Clear("no players in the zone");
             }
 
+            AnnounceNoPlayers();
             return;
         }
 
@@ -241,9 +266,13 @@ public sealed class WorldPopulationService
             _ = _planner.Work(Math.Max(1, _rules.PlanWorkPerTick));
             if (!_planner.IsComplete)
             {
+                AnnouncePlanning();
                 return;
             }
         }
+
+        _announcedIdle = IdleReason.None;
+        _ticksSincePlanningAnnouncement = 0;
 
         // Every update rather than only when the plan finished: a Clear (nobody in the zone, or the
         // feature turned off) forgets the grid, and the world it is seeded from has moved since.
@@ -252,6 +281,71 @@ public sealed class WorldPopulationService
         UpdateActivation(currentTime);
         ProcessSpawns(currentTime);
         Reconcile(currentTime);
+    }
+
+    /// <summary>Says the feature is off, and which of the two switches is off.</summary>
+    private void AnnounceDisabled()
+    {
+        if (_announcedIdle == IdleReason.Disabled)
+        {
+            return;
+        }
+
+        _announcedIdle = IdleReason.Disabled;
+
+        _logger.Information(
+            "World population: spawning nothing in zone {ZoneId} - {Reason}",
+            _shard.ZoneId,
+            _rules.Enabled
+                ? "the service turned itself off after its update kept failing (see the error above)"
+                : "SpawnWorldPopulation is false in the server settings");
+    }
+
+    /// <summary>Says an update found nobody to populate around, once until that changes.</summary>
+    private void AnnounceNoPlayers()
+    {
+        if (_announcedIdle == IdleReason.NoPlayers)
+        {
+            return;
+        }
+
+        _announcedIdle = IdleReason.NoPlayers;
+
+        _logger.Information(
+            "World population: spawning nothing in zone {ZoneId} - no player counts as present yet, and a client only does " +
+            "once it can receive entity state and has a character in the world ({Clients} clients on the shard)",
+            _shard.ZoneId,
+            _shard.Clients.Count);
+    }
+
+    /// <summary>
+    ///     Says the plan is still being built, with its progress, every
+    ///     <see cref="PlanningAnnouncementTicks"/> updates rather than once.
+    /// </summary>
+    /// <remarks>
+    ///     Every path out of <see cref="Update"/> that spawns nothing used to return in silence, so a
+    ///     zone that stayed empty was indistinguishable in the log from one where the feature was
+    ///     never switched on - and "the zone is empty" had nothing to point at. This is the one
+    ///     reason that resolves by itself, so it repeats: a plan that is not advancing says so.
+    /// </remarks>
+    private void AnnouncePlanning()
+    {
+        _announcedIdle = IdleReason.Planning;
+
+        if (++_ticksSincePlanningAnnouncement < PlanningAnnouncementTicks)
+        {
+            return;
+        }
+
+        _ticksSincePlanningAnnouncement = 0;
+
+        _logger.Information(
+            "World population: still building the plan for zone {ZoneId} ({Surfaces} walkable surfaces scanned, {Cells} cells so far, " +
+            "{Budget} per update); nothing spawns until it finishes",
+            _shard.ZoneId,
+            _planner.ScannedSurfaces,
+            _planner.CellCount,
+            _rules.PlanWorkPerTick);
     }
 
     /// <summary>How many distinct monster rows are in the world right now.</summary>

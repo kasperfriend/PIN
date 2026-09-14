@@ -78,7 +78,13 @@ public sealed class FakeShard : IShard
 
     public uint ZoneId { get; set; } = 448;
 
-    public ILogger Logger { get; } = Log.Logger;
+    /// <summary>
+    ///     The global (silent) logger by default. Settable so a test can capture what a system says
+    ///     through a <see cref="CapturingLogger"/> instead; note that only systems constructed
+    ///     <em>after</em> the assignment read it, because the ones built in the constructor above
+    ///     took the logger they were handed at the time.
+    /// </summary>
+    public ILogger Logger { get; set; } = Log.Logger;
 
     /// <summary>
     ///     Null by default: the systems under test that read settings fall back to their documented
