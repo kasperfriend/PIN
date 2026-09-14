@@ -112,11 +112,22 @@ public class FactionHostility
                 // every faction against every other one. The shipped table's first row is exactly
                 // that, so it seeds the whole matrix and the later, specific rows overwrite the
                 // pairs they name.
+                //
+                // A row that wildcards *both* sides already expands to every ordered pair, so its
+                // bidirectional write only re-derives pairs the expansion produces itself - and
+                // derives them from the other faction's default stance. Honouring it made the
+                // table depend on the order factions happen to come out of the SDB dictionary:
+                // over the shipped rows, 201 different faction orders produced 201 different
+                // tables, 375 of the 2500 pairs flipping between them. The expansion is symmetric,
+                // so skip the mirror there and let every pair be written exactly once.
+                var bidirectional = relation.HostilityBidirectional == 1
+                    && !(relation.FactionA == NoFaction && relation.FactionB == NoFaction);
+
                 foreach (var primaryFaction in Expand(relation.FactionA, factionsById, unknownFactions))
                 {
                     foreach (var secondaryFaction in Expand(relation.FactionB, factionsById, unknownFactions))
                     {
-                        ProcessFactionRelation(primaryFaction, secondaryFaction, relation);
+                        ProcessFactionRelation(primaryFaction, secondaryFaction, relation, bidirectional);
                     }
                 }
             }
@@ -170,7 +181,7 @@ public class FactionHostility
         return false;
     }
 
-    private void ProcessFactionRelation(Faction primaryFaction, Faction secondaryFaction, FactionRelations relation)
+    private void ProcessFactionRelation(Faction primaryFaction, Faction secondaryFaction, FactionRelations relation, bool bidirectional)
     {
         var key = (primaryFaction.Id, secondaryFaction.Id);
         bool friendly = false;
@@ -187,7 +198,7 @@ public class FactionHostility
 
         ProcessFactionRelationSet(key, friendly, hostile);
 
-        if (relation.HostilityBidirectional == 1)
+        if (bidirectional)
         {
             var bikey = (secondaryFaction.Id, primaryFaction.Id);
             ProcessFactionRelationSet(bikey, friendly, hostile);

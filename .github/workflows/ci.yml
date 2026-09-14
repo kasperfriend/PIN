@@ -51,6 +51,11 @@ jobs:
         run: |
           log="$RUNNER_TEMP/test-output.log"
           if [ -f "$log" ]; then
+            # Name every failing test up front. The block below can only show one failure (the last
+            # marker in the log) and the job log that lists the rest is not always retrievable.
+            grep -oE '^ *(Failed|X) +[A-Za-z0-9_.]+' "$log" \
+              | sed -E 's/^ *(Failed|X) +//' | sort -u | head -n 8 \
+              | while IFS= read -r test; do echo "::error::FAILED TEST: $test"; done
             # GitHub keeps only the first few step annotations, so put the failing-test block from the
             # end of the detailed xunit log first; plain pass lines used to hide the [FAIL] block.
             last_fail=$(grep -nE '\[FAIL\]|Error Message:|Failed!' "$log" | tail -n 1 | cut -d: -f1)
