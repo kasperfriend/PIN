@@ -140,7 +140,8 @@ public class WebServer : BaseWebServer
         }
 
         var builds = AssetRootProbe.ServedBuilds(statuses);
-        if (builds.Count > 0)
+
+        if (AssetRootProbe.ServesHighResolutionChunks(statuses) && builds.Count > 0)
         {
             Log.Information(
                 "Web asset host serves {RootCount} root(s), with high-resolution texture chunks for {Builds}: {Served}",
@@ -150,7 +151,7 @@ public class WebServer : BaseWebServer
             return;
         }
 
-        if (AssetRootProbe.ServesChunks(statuses))
+        if (AssetRootProbe.ServesHighResolutionChunks(statuses))
         {
             Log.Information(
                 "Web asset host serves {RootCount} root(s) with high-resolution texture chunks held loose, answered for any build a client names: {Served}",
@@ -159,13 +160,34 @@ public class WebServer : BaseWebServer
             return;
         }
 
+        // The last two cases are the same screenshot: a client that renders the mips it shipped with. They
+        // are told apart here only because they are fixed differently - one is a folder to fill in and the
+        // other is a folder that is already full of the wrong files.
+        if (AssetRootProbe.ServesChunks(statuses))
+        {
+            // "I put the vtex files in Assets and nothing changed", answered: a stock install of the game
+            // already carries the page-table index and the coarse levels (static.vtex_idx, static.vtex3 and
+            // up), so a host answering with those is answering every probe the client makes and handing it
+            // levels it already has. The three it does not have are the only ones that matter, and they are
+            // the twelve gigabytes Red5's CDN used to serve - see Docs/ASSETS.md on where they went.
+            Log.Warning(
+                "Blurry textures ahead: every chunk file these roots hold is one the client's own install already carries - {Roots}. {Served}. {Names} are the sharp mips and the only chunk files that change how the game looks; put them straight into {Root}, or into {Build} to answer one build by the exact name the client asks for, or point Firefall:Assets:Paths at a folder that holds them. See Docs/ASSETS.md",
+                string.Join(", ", roots),
+                served,
+                string.Join(", ", VirtualTextureChunks.HighResolutionChunkNames()),
+                roots[0],
+                Path.Combine(roots[0], VirtualTextureChunks.BuildFolder, "<env>-<build>"));
+            return;
+        }
+
         // The blurry-textures answer, said once here so it never has to be guessed from a 404: the client
         // probes for the chunks, gets nothing, and keeps rendering the low-resolution mips of its own archives.
         Log.Information("Web asset host serves {RootCount} root(s) and no texture chunks: {Served}", roots.Count, served);
 
         Log.Warning(
-            "Blurry textures ahead: no asset root holds a chunk file for a client to fetch - {Roots}. Copy static.vtex0, static.vtex1 and static.vtex2 straight into {Root}, or into {Build} to answer one build by the exact name the client asks for, or point Firefall:Assets:Paths at a folder that already holds them (the client's own system\\vt does). See Docs/ASSETS.md",
+            "Blurry textures ahead: no asset root holds a chunk file for a client to fetch - {Roots}. Copy {Names} straight into {Root}, or into {Build} to answer one build by the exact name the client asks for, or point Firefall:Assets:Paths at a folder that already holds them (the client's own system\\vt does). See Docs/ASSETS.md",
             string.Join(", ", roots),
+            string.Join(", ", VirtualTextureChunks.HighResolutionChunkNames()),
             roots[0],
             Path.Combine(roots[0], VirtualTextureChunks.BuildFolder, "<env>-<build>"));
     }

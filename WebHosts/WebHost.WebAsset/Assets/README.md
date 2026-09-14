@@ -20,6 +20,12 @@ when nothing answers, renders the low-resolution mips baked into its own archive
 world, at every graphics setting, because the setting controls the streamer and there is no
 stream to run.
 
+**`static.vtex_idx` and `static.vtex3` … `static.vtex6` are not those chunks.** They are the
+page table a stock Firefall install already carries in its own `system\vt`. Copying them here
+produces a folder that is full and a game that is exactly as blurry as before, with no 404 in
+the log to explain it. The three that matter are `static.vtex0`, `static.vtex1` and
+`static.vtex2` — roughly 12 GB, and no longer downloadable from Red5's CDN.
+
 Put the chunks where the probe looks for them:
 
 ```
