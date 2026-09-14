@@ -633,6 +633,13 @@ people you know; it is not a service you should expose further:
   makes a plain http world reachable, and the trust step is per machine
   (`--trust-cert` here, the downloaded `.cer` there) — PIN will not write to a
   trust store on its own.
-* **The zone is the one the GameServer was started with** (`ZoneId`, default 448)
-  — every player lands in the same zone, which is also what makes a co-op session
-  work without a zone browser.
+* **Only the zone the GameServer was started with is a real zone** (`ZoneId`,
+  default 448). One shard runs one zone: its collision, its authored entities and
+  its world population all belong to that `ZoneId`. The character selection screen
+  is a zone picker, so a player can still land anywhere else — and that zone is
+  then empty, with physics answering from the wrong map. The server warns at login
+  (`entered zone … but this shard runs zone …`) and world population says so
+  instead of spawning (`are in other zones`). To play somewhere else, set `ZoneId`
+  to that zone's id and restart. For a co-op session this is also what makes it
+  work without a zone browser: everyone who picks the shard's own entry lands in
+  the same populated zone.

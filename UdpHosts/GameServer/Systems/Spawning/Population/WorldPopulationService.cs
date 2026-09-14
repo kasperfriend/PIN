@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Text;
 using System.Threading;
+using GameServer.Data;
 using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.StaticDB;
@@ -24,7 +25,9 @@ namespace GameServer.Systems.Spawning.Population;
 ///         last player leaves. Cells are activated inside
 ///         <see cref="IWorldPopulationRules.ActivationRadius"/> and deactivated outside
 ///         <see cref="IWorldPopulationRules.DeactivationRadius"/>, so the world exists around the
-///         players rather than all at once.
+///         players rather than all at once. Only players in the shard's own zone count: one shard
+///         runs one zone, and a player in any other zone stands on ground this plan knows nothing
+///         about.
 ///     </para>
 ///     <para>
 ///         <b>Bounded cost.</b> Four independent brakes: the live NPC cap, the spawn budget per time
@@ -71,6 +74,14 @@ public sealed class WorldPopulationService
     /// </summary>
     private const int PlanningAnnouncementTicks = 40;
 
+    /// <summary>
+    ///     How many distinct other zones are named in the "players are elsewhere" announcement and
+    ///     in <see cref="DescribeStatus"/>. The count is exact however many zones there are; only the
+    ///     listing is capped, so a crowd spread over the whole zone picker does not produce a
+    ///     paragraph-long log line.
+    /// </summary>
+    private const int MaxElsewhereZonesListed = 4;
+
     private readonly IShard _shard;
     private readonly ILogger _logger;
     private readonly IWorldPopulationRules _rules;
@@ -85,6 +96,7 @@ public sealed class WorldPopulationService
     private readonly Queue<WorldPopulationSlot> _pending = new();
     private readonly List<WorldPopulationSlot> _liveSlots = [];
     private readonly List<Vector3> _players = [];
+    private readonly List<string> _elsewhereZones = [];
     private readonly List<WorldPopulationCell> _deactivating = [];
 
     private ulong _lastUpdate;
@@ -106,6 +118,7 @@ public sealed class WorldPopulationService
         None,
         Disabled,
         NoPlayers,
+        PlayersElsewhere,
         Planning,
     }
 
@@ -172,6 +185,19 @@ public sealed class WorldPopulationService
 
     /// <summary>How many players the last update measured the world against.</summary>
     public int PlayerCount => _players.Count;
+
+    /// <summary>
+    ///     How many connected players the last update found in zones other than the shard's own.
+    ///     They neither activate cells nor count as present: one shard runs one zone, and this
+    ///     plan's ground is the shard's.
+    /// </summary>
+    public int PlayersElsewhereCount { get; private set; }
+
+    /// <summary>
+    ///     The other zones those players are in, as display strings, up to
+    ///     <c>MaxElsewhereZonesListed</c>. Empty when nobody is elsewhere.
+    /// </summary>
+    public IReadOnlyList<string> PlayersElsewhereZones => _elsewhereZones;
 
     /// <summary>The plan, for its statistics. Never null; incomplete until its work is done.</summary>
     public WorldPopulationPlanner Plan => _planner;
@@ -251,6 +277,20 @@ public sealed class WorldPopulationService
 
         if (_players.Count == 0)
         {
+            if (PlayersElsewhereCount > 0)
+            {
+                // The shard has players, but none of them are in its zone. Same treatment as
+                // nobody at all: the plan stays (it is only memory), the world does not - and
+                // the plan is not built either, since there is nobody here to stream it to.
+                if (LiveCount > 0 || _activeCells.Count > 0)
+                {
+                    Clear("no players in this shard's zone");
+                }
+
+                AnnouncePlayersElsewhere();
+                return;
+            }
+
             // Nothing to populate for. The plan stays (it is only memory), the world does not.
             if (LiveCount > 0 || _activeCells.Count > 0)
             {
@@ -316,6 +356,31 @@ public sealed class WorldPopulationService
             "once it can receive entity state and has a character in the world ({Clients} clients on the shard)",
             _shard.ZoneId,
             _shard.Clients.Count);
+    }
+
+    /// <summary>
+    ///     Says an update found players only in other zones, once until that changes. This is the
+    ///     announcement that answers "the zone is empty" when the operator is looking at the wrong
+    ///     zone: the character selection screen is a zone picker, but the shard only runs the zone
+    ///     it was started with (<c>ZoneId</c>), so a player anywhere else stands on ground this plan
+    ///     knows nothing about.
+    /// </summary>
+    private void AnnouncePlayersElsewhere()
+    {
+        if (_announcedIdle == IdleReason.PlayersElsewhere)
+        {
+            return;
+        }
+
+        _announcedIdle = IdleReason.PlayersElsewhere;
+
+        _logger.Information(
+            "World population: spawning nothing in zone {ZoneId} - {ElsewhereCount} connected player(s) are in other zones " +
+            "({ElsewhereZones}), and one shard runs one zone: its collision, entities and population all belong to zone {ZoneId}. " +
+            "To play in one of those zones instead, set ZoneId to its id in the server config and restart",
+            _shard.ZoneId,
+            PlayersElsewhereCount,
+            string.Join(", ", _elsewhereZones));
     }
 
     /// <summary>
@@ -416,12 +481,18 @@ public sealed class WorldPopulationService
               (_planner.RefusedChunkCells > 0 ? $", {_planner.RefusedChunkCells} cells refused by chunk rules" : string.Empty) +
               (_planner.UsedAnchorFallback ? ", built from authored anchors (no walkable surfaces)" : string.Empty)
             : $"Plan: building ({_planner.ScannedSurfaces} surfaces scanned, {_planner.CellCount} cells so far)");
+        string players = PlayerCount.ToString(CultureInfo.InvariantCulture) + " players";
+        if (PlayersElsewhereCount > 0)
+        {
+            players += $" ({PlayersElsewhereCount} in other zones: {string.Join(", ", _elsewhereZones)})";
+        }
+
         _ = text.AppendLine(string.Format(
             CultureInfo.InvariantCulture,
-            "Streaming: {0} active cells, {1} slots queued, {2} players, activate {3:0} m / deactivate {4:0} m",
+            "Streaming: {0} active cells, {1} slots queued, {2}, activate {3:0} m / deactivate {4:0} m",
             ActiveCellCount,
             PendingSlotCount,
-            PlayerCount,
+            players,
             _rules.ActivationRadius,
             _rules.DeactivationRadius));
         _ = text.AppendLine(string.Format(
@@ -440,6 +511,8 @@ public sealed class WorldPopulationService
     private void CollectPlayers()
     {
         _players.Clear();
+        PlayersElsewhereCount = 0;
+        _elsewhereZones.Clear();
 
         foreach (var client in _shard.Clients.Values)
         {
@@ -456,9 +529,35 @@ public sealed class WorldPopulationService
                 continue;
             }
 
+            // One shard runs one zone: its collision, its authored entities and this plan all
+            // belong to the shard's ZoneId. A player in any other zone (the character selection
+            // screen is a zone picker) stands on ground this plan knows nothing about, so they
+            // neither activate cells nor count as present - populating around their position
+            // would plan New Eden's NPCs onto Sertao's coordinates. A null zone (not placed
+            // anywhere yet) counts as here: there is no other zone to attribute it to.
+            var zone = client.CurrentZone;
+            if (zone != null && zone.ID != _shard.ZoneId)
+            {
+                PlayersElsewhereCount++;
+
+                if (_elsewhereZones.Count < MaxElsewhereZonesListed)
+                {
+                    string label = DescribeZone(zone);
+                    if (!_elsewhereZones.Contains(label))
+                    {
+                        _elsewhereZones.Add(label);
+                    }
+                }
+
+                continue;
+            }
+
             _players.Add(character.Position);
         }
     }
+
+    private static string DescribeZone(Zone zone) =>
+        string.IsNullOrEmpty(zone.Name) ? $"zone {zone.ID}" : $"{zone.Name} ({zone.ID})";
 
     private void SeedOccupancy()
     {
