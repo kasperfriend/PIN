@@ -19,6 +19,7 @@ using GameServer.Systems.ProjectileSim;
 using GameServer.Systems.SystemEvents;
 using Serilog;
 using Shared.Collision;
+using Shared.Collision.Layers;
 using Shared.Collision.Navigation;
 using Shared.Collision.ZoneLoading;
 

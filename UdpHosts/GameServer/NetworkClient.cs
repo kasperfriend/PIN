@@ -355,7 +355,7 @@ public class NetworkClient : INetworkClient
                     }
                     else
                     {
-                        Logger.Warning("KeyframeRequest failed to find {Entity} ({TypeCode})", request.Entity, typecode);
+                        Logger.Verbose("KeyframeRequest failed to find {Entity} ({TypeCode})", request.Entity, typecode);
                     }
                 }
 
