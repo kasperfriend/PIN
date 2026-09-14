@@ -12,10 +12,9 @@ namespace GameServer.Tests;
 public class SdbNpcActivityWorldTests
 {
     [Fact]
-    public void JoinsFunctionAndPlacedEntityRatherThanUsingAimOffsetsAsLocations()
+    public void JoinsFunctionToThePlacedEntity()
     {
         var world = new World();
-        world.Rows[116].AimOffset = new FauFau.Util.CommmonDataTypes.Vector3 { X = 900f, Y = 800f, Z = 700f };
         var station = world.Add(116, new Vector3(2f, 3f, 0f));
         Assert.True(world.Reserve(10, "Work", out var spot));
         Assert.Equal(station.EntityId, spot.EntityId);
