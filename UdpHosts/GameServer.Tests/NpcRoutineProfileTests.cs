@@ -111,6 +111,18 @@ public class NpcRoutineProfileTests
     }
 
     [Fact]
+    public void ExplicitDistanceIsNotReducedByTheCompatibilityHomeDefault()
+    {
+        var profile = Resolve("FastWander(distance=35.0)");
+        Assert.Equal(35f, profile.WanderDistance);
+        Assert.Equal(35f, profile.HomeRadius);
+        profile = Resolve("EliteStationary(wanderDistance=10,leashDistance=40)");
+        Assert.Equal(NpcRoutineKind.Wander, profile.Kind);
+        Assert.Equal(10f, profile.WanderDistance);
+        Assert.Equal(40f, profile.LeashDistance);
+    }
+
+    [Fact]
     public void WorkFunctionUsesTheDatabaseNameNotTheVisualName()
     {
         Assert.Equal("Repair Work", Resolve("PeacetimeCityWanderer(restFunction=\"Repair Work\")").WorkFunction);

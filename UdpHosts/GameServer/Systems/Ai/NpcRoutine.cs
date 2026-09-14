@@ -52,6 +52,7 @@ public sealed class NpcRoutine
     private ulong _lastSpotId;
     private bool _returnBeforeResuming;
     private ushort _endEmote;
+    private bool _stopped;
 
     public NpcRoutine(ulong entityId, uint monsterId, Vector3 home, NpcRoutineProfile profile, ulong now, INpcActivityWorld activities)
     {
@@ -87,6 +88,11 @@ public sealed class NpcRoutine
 
     public void Update(ulong now, Vector3 position, bool idle, bool canMove, bool navigationAvailable)
     {
+        if (_stopped)
+        {
+            return;
+        }
+
         if (!idle)
         {
             Suspend();
@@ -179,7 +185,7 @@ public sealed class NpcRoutine
             return;
         }
 
-        if (_returnBeforeResuming || AiVectors.HorizontalDistance(position, Home) > Profile.HomeRadius)
+        if (_returnBeforeResuming || AiVectors.HorizontalDistance(position, Home) > Profile.HomeRadius + ArrivalRadius)
         {
             if (!Arrived(position, Home))
             {
@@ -269,6 +275,7 @@ public sealed class NpcRoutine
 
     public void Stop()
     {
+        _stopped = true;
         ReleaseSpot();
         Goal = null;
         _endEmote = 0;

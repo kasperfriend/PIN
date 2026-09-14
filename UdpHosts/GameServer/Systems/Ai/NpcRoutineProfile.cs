@@ -36,8 +36,8 @@ public sealed record NpcRoutineRules
 /// </summary>
 public sealed record NpcRoutineProfile
 {
-    // Explicit names, not a substring match: EliteStationary(wanderDistance=10) and
-    // BasicCivilian_Stationary must not accidentally acquire a city's walking routine.
+    // Explicit names, not a substring match. EliteStationary is handled separately for its
+    // explicit wanderDistance; BasicCivilian_Stationary never acquires a city's walking routine.
     private static readonly HashSet<string> Wanderers = new(StringComparer.OrdinalIgnoreCase)
     {
         "Wander", "FastWander", "FastWanderCore", "WanderWithEmoteVocalized",
@@ -102,7 +102,7 @@ public sealed record NpcRoutineProfile
             ?? Positive(rules.WanderDistance, 10f);
         bool nearSpawn = Bool(behavior, "nearSpawn") == true || Bool(behavior, "calmNearSpawn") == true;
         float homeRadius = MathF.Min(safetyRadius,
-            NonNegative(behavior, "maxDistFromSpawn") ?? (nearSpawn ? distance : Positive(rules.HomeRadius, 30f)));
+            NonNegative(behavior, "maxDistFromSpawn") ?? (nearSpawn ? distance : MathF.Max(distance, Positive(rules.HomeRadius, 30f))));
         distance = MathF.Min(distance, homeRadius);
         float chance = Math.Clamp(NonNegative(behavior, "calmWanderChance") ?? 1f, 0f, 1f);
 
@@ -120,7 +120,8 @@ public sealed record NpcRoutineProfile
         }
 
         var kind = fixedBody ? NpcRoutineKind.Stationary
-            : Wanderers.Contains(name) ? NpcRoutineKind.Wander
+            : Wanderers.Contains(name) || (name.Equals("EliteStationary", StringComparison.OrdinalIgnoreCase) &&
+                NonNegative(behavior, "wanderDistance").HasValue) ? NpcRoutineKind.Wander
             : name.Equals("UseWorkDeployables", StringComparison.OrdinalIgnoreCase) ? NpcRoutineKind.Work
             : NpcRoutineKind.Unspecified;
         string missing = string.Empty;

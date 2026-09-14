@@ -221,6 +221,17 @@ public class NpcRoutineTests
         Assert.Equal(ulong.MaxValue, routine.NextActionAt);
     }
 
+    [Fact]
+    public void StopIsTerminalUntilANewRoutineIsRegistered()
+    {
+        var routine = Create();
+        routine.Update(0, Vector3.Zero, true, true, true);
+        routine.Stop();
+        routine.Update(60_000, Vector3.Zero, true, true, true);
+        Assert.Null(routine.Goal);
+        Assert.Equal(NpcRoutineState.Inactive, routine.State);
+    }
+
     private static NpcRoutine Create(string behavior = "Wander", Vector3 home = default, ulong id = 0x1000, INpcActivityWorld activities = null)
         => new(id, 179, home, NpcRoutineProfile.Resolve(NpcBehaviorParams.Parse(behavior), rules: Immediate), 0, activities);
 

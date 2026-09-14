@@ -201,6 +201,12 @@ public class AiEngine
         var (bodyRadius, bodyHeight) = _monsterStats.GetBodyDimensions(npc.StaticInfo.CharacterTypeId);
         var (baseBehavior, offensiveBehavior) = _monsterStats.GetBehaviors(npc.StaticInfo.CharacterTypeId);
         var baseParams = NpcBehaviorParams.Parse(baseBehavior);
+        if (baseParams.Name.Equals("Null", StringComparison.OrdinalIgnoreCase))
+        {
+            // This CAIS invocation explicitly requests no AI, not a generic melee brain.
+            return false;
+        }
+
         var offensiveParams = NpcBehaviorParams.Parse(offensiveBehavior);
         var routineProfile = NpcRoutineProfile.Resolve(baseParams, offensiveParams, _routineRules, _rules.LeashRadius);
         int dbDamageRating = _monsterStats.GetAttackDamage(npc.StaticInfo.CharacterTypeId, npc.MonsterLevel);
@@ -662,7 +668,9 @@ public class AiEngine
             _ => npc.Routine.EmoteOverride ?? npc.IdleEmoteId,
         };
 
-        if (behaviorEmote != npc.BehaviorEmoteId)
+        bool activityChanged = npc.WorkingEmote != npc.Routine.IsWorking;
+        npc.WorkingEmote = npc.Routine.IsWorking;
+        if (behaviorEmote != npc.BehaviorEmoteId || activityChanged)
         {
             // A different behaviour set is running (or a different emote inside it): a length that ran out
             // under the old one does not carry over, so the emote of the new set starts fresh.
@@ -671,7 +679,7 @@ public class AiEngine
         }
 
         ushort wanted = npc.EmotePlayedOut ? EmoteService.NoEmote : behaviorEmote;
-        if (wanted != npc.EmoteId && _emotes.Perform(npc.Entity, wanted, (uint)currentTime))
+        if ((wanted != npc.EmoteId || activityChanged) && _emotes.Perform(npc.Entity, wanted, (uint)currentTime))
         {
             npc.EmoteId = wanted;
             npc.EmoteStartedAt = currentTime;
@@ -1283,6 +1291,11 @@ public class AiEngine
         var delta = waypoint.Value - entity.Position;
         delta.Z = 0f;
         float horizontal = delta.Length();
+        if (!float.IsFinite(horizontal))
+        {
+            return false;
+        }
+
         if (horizontal <= _navigationOptions.WaypointTolerance)
         {
             npc.Navigation.Advance();
@@ -1323,7 +1336,7 @@ public class AiEngine
 
         var desired = entity.Position + (direction * step);
         var agent = new NpcNavigationAgent(entity.EntityId, npc.NavigationRadius, npc.NavigationHeight);
-        if (!_navigation.TryStep(entity.Position, desired, agent, out var candidate))
+        if (!_navigation.TryStep(entity.Position, desired, agent, out var candidate) || !NpcGroundMovement.Finite(candidate))
         {
             // A cached route can become obstructed. No direct-line or long downward fallback:
             // abandon ambient goals with backoff; combat retries on its normal replan cadence.
@@ -1421,7 +1434,7 @@ public class AiEngine
             : state == AiBrainState.Return ? AiMovementIntent.TowardHome : AiMovementIntent.TowardTarget;
         var navigation = npc.Navigation;
         bool goalMoved = navigation.HasGoal &&
-            AiVectors.HorizontalDistance(navigation.Goal, goal) > _navigationGoalRefreshDistance;
+            AiVectors.HorizontalDistance(navigation.Goal, goal) > (routineMovement ? _navigationOptions.WaypointTolerance : _navigationGoalRefreshDistance);
         // A stationary ambient goal keeps its successful corridor until arrival/obstruction. It
         // does not need the moving combat target's 750 ms replan loop.
         bool expired = currentTime >= navigation.NextReplanAt &&
@@ -1441,7 +1454,7 @@ public class AiEngine
             var agent = new NpcNavigationAgent(npc.EntityId, npc.NavigationRadius, npc.NavigationHeight);
             var path = _navigation.FindPath(npc.Entity.Position, goal, agent) ?? Array.Empty<Vector3>();
 
-            if (path.Count == 0)
+            if (path.Count == 0 || path.Any(point => !NpcGroundMovement.Finite(point)))
             {
                 navigation.NextReplanAt = currentTime + _navigationReplanIntervalMs;
                 if (routineMovement)
@@ -1643,6 +1656,7 @@ public class AiEngine
 
         /// <summary>Whether <see cref="BehaviorEmoteId" /> has already played out its own duration.</summary>
         public bool EmotePlayedOut;
+        public bool WorkingEmote;
 
         /// <summary>
         ///     Seconds the behaviour wants the emote held (<c>emoteDuration</c>), or -1 for "until the

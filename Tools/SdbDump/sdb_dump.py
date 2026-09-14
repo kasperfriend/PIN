@@ -561,6 +561,19 @@ def harvest_pin_names(game_dir):
     return table_names, col_by_hash
 
 
+def harvest_record_table_names(game_dir):
+    """Candidate table names from ALL record schemas, including runtime-unloaded tables.
+
+    The loader-call census is deliberately separate: a record declaration proves a
+    name candidate, not that PIN loads or executes the table. Matching its FFnv32
+    against the file proves presence. In prod-1962 these candidates identify all
+    575 tables, rather than stopping at the loader's ~260 tables.
+    """
+    from pathlib import Path
+    root = Path(game_dir) / "StaticDB" / "Records"
+    return sorted(f"{path.parent.name}::{path.stem}" for path in root.glob("*/*.cs"))
+
+
 def apply_column_names(db, col_by_hash):
     count = 0
     for t in db.tables:
@@ -1011,7 +1024,7 @@ def main(argv=None):
     # Prefer exact names harvested from PIN's source when available.
     if os.path.isdir(args.game_dir):
         table_names, col_by_hash = harvest_pin_names(args.game_dir)
-        known = KNOWN_TABLES + [n for n in table_names if n not in KNOWN_TABLES]
+        known = KNOWN_TABLES + table_names + harvest_record_table_names(args.game_dir)
         by_id = {ffnv32(n): n for n in known}
         for t in db.tables:
             if t["id"] in by_id:
