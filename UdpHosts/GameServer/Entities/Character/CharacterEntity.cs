@@ -49,6 +49,13 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     private ActiveWeaponDetails[,] _weaponDetailsCache;
     private byte? _monsterDamageResponseOverride;
 
+    // Effects can overlap while a glider is handed from one stage to another (or while a pad
+    // retriggers near its owner). Permission/profile state is a single replicated field, so the
+    // effect commands keep their temporary writes here as last-writer-wins layers rather than
+    // each restoring a stale snapshot on removal.
+    private readonly Dictionary<PermissionFlagsData.CharacterPermissionFlags, TemporaryPermissionOverrideState> _temporaryPermissionOverrides = [];
+    private TemporaryGliderProfileOverrideState _temporaryGliderProfileOverrides;
+
     /// <summary>
     ///     The scope (<c>dbitems::WeaponScope.Statusfx</c>) currently held because the character is looking down
     ///     the sights of the weapon in its hands. 0 when it is not.
@@ -1692,6 +1699,56 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         Character_CombatController?.PermissionFlagsProp = PermissionFlags;
     }
 
+    /// <summary>
+    ///     Applies a permission for the lifetime of one aptitude command. The newest active
+    ///     command wins; when it is removed the next active command (or the pre-effect value)
+    ///     becomes visible. This prevents a pair of overlapping glider effects from restoring
+    ///     each other's stale snapshots and leaving gliding enabled after they have both ended.
+    /// </summary>
+    public void ApplyTemporaryPermissionFlag(PermissionFlagsData.CharacterPermissionFlags flag, bool value, Guid ownerId)
+    {
+        if (!_temporaryPermissionOverrides.TryGetValue(flag, out var state))
+        {
+            state = new TemporaryPermissionOverrideState(CurrentPermissions[flag]);
+            _temporaryPermissionOverrides.Add(flag, state);
+        }
+
+        int existing = state.Overrides.FindIndex(overrideState => overrideState.OwnerId == ownerId);
+        if (existing >= 0)
+        {
+            state.Overrides[existing] = new TemporaryPermissionOverride(ownerId, value);
+        }
+        else
+        {
+            state.Overrides.Add(new TemporaryPermissionOverride(ownerId, value));
+        }
+
+        SetPermissionFlag(flag, state.Overrides[^1].Value);
+    }
+
+    /// <summary>Removes a lifetime permission written by <see cref="ApplyTemporaryPermissionFlag"/>.</summary>
+    public void RemoveTemporaryPermissionFlag(PermissionFlagsData.CharacterPermissionFlags flag, Guid ownerId)
+    {
+        if (!_temporaryPermissionOverrides.TryGetValue(flag, out var state))
+        {
+            return;
+        }
+
+        state.Overrides.RemoveAll(overrideState => overrideState.OwnerId == ownerId);
+        bool value;
+        if (state.Overrides.Count == 0)
+        {
+            value = state.BaseValue;
+            _temporaryPermissionOverrides.Remove(flag);
+        }
+        else
+        {
+            value = state.Overrides[^1].Value;
+        }
+
+        SetPermissionFlag(flag, value);
+    }
+
     public void SetGliderProfileId(uint profileId)
     {
         if (profileId != GliderProfileId)
@@ -1702,6 +1759,48 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
         GliderProfileId = profileId;
         Character_CombatController?.GliderProfileIdProp = profileId;
+    }
+
+    /// <summary>
+    ///     Applies a glider profile for one active aptitude command. This uses the same layering
+    ///     rule as temporary permissions: a departing earlier stage cannot reset the profile of a
+    ///     newer glider stage, and removing the last stage restores the original profile.
+    /// </summary>
+    public void ApplyTemporaryGliderProfileId(uint profileId, Guid ownerId)
+    {
+        _temporaryGliderProfileOverrides ??= new TemporaryGliderProfileOverrideState(GliderProfileId);
+
+        int existing = _temporaryGliderProfileOverrides.Overrides.FindIndex(overrideState => overrideState.OwnerId == ownerId);
+        if (existing >= 0)
+        {
+            _temporaryGliderProfileOverrides.Overrides[existing] = new TemporaryGliderProfileOverride(ownerId, profileId);
+        }
+        else
+        {
+            _temporaryGliderProfileOverrides.Overrides.Add(new TemporaryGliderProfileOverride(ownerId, profileId));
+        }
+
+        SetGliderProfileId(_temporaryGliderProfileOverrides.Overrides[^1].ProfileId);
+    }
+
+    /// <summary>Removes a lifetime profile written by <see cref="ApplyTemporaryGliderProfileId"/>.</summary>
+    public void RemoveTemporaryGliderProfileId(Guid ownerId)
+    {
+        if (_temporaryGliderProfileOverrides == null)
+        {
+            return;
+        }
+
+        _temporaryGliderProfileOverrides.Overrides.RemoveAll(overrideState => overrideState.OwnerId == ownerId);
+        if (_temporaryGliderProfileOverrides.Overrides.Count == 0)
+        {
+            uint baseProfileId = _temporaryGliderProfileOverrides.BaseProfileId;
+            _temporaryGliderProfileOverrides = null;
+            SetGliderProfileId(baseProfileId);
+            return;
+        }
+
+        SetGliderProfileId(_temporaryGliderProfileOverrides.Overrides[^1].ProfileId);
     }
 
     public void SetHoverProfileId(uint profileId)
@@ -2731,6 +2830,22 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     {
         Character_MissionAndMarkerController?.GetType().GetProperty($"PersonalMapMarkers_{index}Prop")
                                             ?.SetValue(Character_MissionAndMarkerController, data);
+    }
+
+    private readonly record struct TemporaryPermissionOverride(Guid OwnerId, bool Value);
+
+    private sealed class TemporaryPermissionOverrideState(bool baseValue)
+    {
+        public bool BaseValue { get; } = baseValue;
+        public List<TemporaryPermissionOverride> Overrides { get; } = [];
+    }
+
+    private readonly record struct TemporaryGliderProfileOverride(Guid OwnerId, uint ProfileId);
+
+    private sealed class TemporaryGliderProfileOverrideState(uint baseProfileId)
+    {
+        public uint BaseProfileId { get; } = baseProfileId;
+        public List<TemporaryGliderProfileOverride> Overrides { get; } = [];
     }
 
     public class ActiveStatModifier

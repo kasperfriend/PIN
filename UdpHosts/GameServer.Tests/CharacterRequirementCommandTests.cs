@@ -95,6 +95,7 @@ public class CharacterRequirementCommandTests
         var shard = new FakeShard();
         var pad = CreateDeployable(shard);
         var player = CreateCharacter(shard, CharacterStateData.CharacterStatus.Living);
+        player.IsAirborne = true;
         player.MovementStateContainer.MovementStateValue = (ushort)((ushort)Movestate.Glider << 8);
 
         var context = new Context(shard, player) { Self = pad };
