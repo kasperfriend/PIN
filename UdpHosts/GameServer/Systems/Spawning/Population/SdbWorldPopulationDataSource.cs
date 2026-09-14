@@ -1,8 +1,9 @@
 using System;
-using System.Numerics;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using GameServer.StaticDB;
+using GameServer.Systems.Ai;
 using Serilog;
 
 namespace GameServer.Systems.Spawning.Population;
@@ -127,20 +128,20 @@ public sealed class SdbWorldPopulationDataSource : IWorldPopulationDataSource
                 meldingPoints++;
             }
 
-            if (points.Count > 1)
+            if (points.Length > 1)
             {
-                for (int i = 0; i < points.Count; i++)
+                for (int i = 0; i < points.Length; i++)
                 {
                     var a = points[i];
-                    var b = points[(i + 1) % points.Count];
-                    float edge = GameServer.Systems.Ai.AiVectors.HorizontalDistance(a, b);
+                    var b = points[(i + 1) % points.Length];
+                    float edge = AiVectors.HorizontalDistance(a, b);
                     if (!float.IsFinite(edge) || edge <= 60f)
                         continue;
                     int steps = (int)(edge / 60f);
                     for (int s = 1; s < steps; s++)
                     {
                         float t = s / (float)steps;
-                        var mid = new System.Numerics.Vector3(
+                        var mid = new Vector3(
                             a.X + ((b.X - a.X) * t),
                             a.Y + ((b.Y - a.Y) * t),
                             a.Z + ((b.Z - a.Z) * t));
