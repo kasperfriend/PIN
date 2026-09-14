@@ -276,7 +276,7 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
             // choice is made, rather than leaving "the zone is empty" to be debugged from
             // the population log lines alone.
             Logger.Warning(
-                "Character {Character} entered zone {ZoneId} ({ZoneName}) but this shard runs zone {ShardZoneId}: " +
+                "Character {Character:l} entered zone {ZoneId} ({ZoneName:l}) but this shard runs zone {ShardZoneId}: " +
                 "collision, authored entities and world population all belong to the shard's zone, so that zone will be empty. " +
                 "To play there, set ZoneId to {ZoneId} in the server config and restart",
                 CharacterEntity?.ToString() ?? CharacterId.ToString(),

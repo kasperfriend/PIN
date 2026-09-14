@@ -376,7 +376,7 @@ public sealed class WorldPopulationService
 
         _logger.Information(
             "World population: spawning nothing in zone {ZoneId} - {ElsewhereCount} connected player(s) are in other zones " +
-            "({ElsewhereZones}), and one shard runs one zone: its collision, entities and population all belong to zone {ZoneId}. " +
+            "({ElsewhereZones:l}), and one shard runs one zone: its collision, entities and population all belong to zone {ZoneId}. " +
             "To play in one of those zones instead, set ZoneId to its id in the server config and restart",
             _shard.ZoneId,
             PlayersElsewhereCount,
