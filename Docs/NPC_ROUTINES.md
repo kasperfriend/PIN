@@ -81,13 +81,11 @@ parameter cannot leak into its parent's movement settings.
 | `combatWalk` | Offensive behaviour overrides the base value; applies to combat travel, not the calm routine |
 | `leashWalk` | Base behaviour's return-home gait when present |
 | `leashDistance`, `leashDist` | Per-NPC combat leash; absent/invalid values retain the AI rules |
+| `leashToSpawn` | When true, leash is measured from spawn; stored and clamped against jittered home radius |
 | `calmWanderChance` | Chance per destination decision; explicit zero never wanders |
-| `stationary=true`, explicit fixed-body invocations | No AI locomotion; does not defeat external ability displacement |
-| `maxDistJitter` | Deterministic per-entity jitter of home radius: `EffectiveHomeRadius = clamp(maxDistFromSpawn + jitter(-maxDistJitter..+maxDistJitter), 0..LeashDistance)`. Hash = xorshift(entityId ^ monsterId) so same NPC keeps same jitter, not reshuffled each leg. From map findings PR #94 |
-| `leashToSpawn` | When true, home center is spawn point, not current; affects leash checks |
-| `despawnWhenStuck` | When true and blocked, routine parks as Inactive instead of retrying forever (outer envelope still applies) |
-| `despawnDistance` | Outer envelope: beyond this from spawn, routine stops (Stop state) even if leash would allow; from map file ZoneBounds analysis |
-| `swarmRadiusMin`, `swarmRadiusMax` | Swarm formation radii: min/max distance from swarm center, used for future swarm positioning; stored but not yet full swarm steering |
+| `maxDistJitter` | Per-NPC random add-on to `maxDistFromSpawn` (0..jitter), deterministic per entity id + monster id |
+| `despawnWhenStuck`, `despawnDist` | Explicit authored limits; `despawnWhenStuck` parks the NPC instead of retrying forever, `despawnDist` is an outer authored despawn envelope beyond the jittered home radius |
+| `swarmRadiusMin` / `swarmRadiusMax` | 13 swarm rows carry formation radii; stored and visible in `\ai routines`, not invented as a crowd solver |
 | `restFunction`, `UseWorkDeployables.function` | Exact case-insensitive `DeployableFunction.name` join |
 | Work deployable `behavior.emote` | `EmoteRecord.name` lookup; no made-up animation id |
 | Work deployable `emoteDuration` | Milliseconds, including `-1` for indefinite; **not** the monster idle-emote seconds helper |
@@ -140,8 +138,11 @@ world geometry for ambient movement.
 - Ground probes are local to the current floor. They no longer search 10 km up
   for navigation samples or pull a moving NPC down a 100 m cliff. A hole/missing
   chunk is not imaginary flat ground when world collision is loaded.
-- An unreachable/stuck routine releases its reservation and waits before retrying.
-  It neither teleports nor despawns the NPC as a guessed `despawnWhenStuck` rule.
+- An unreachable/stuck routine releases its reservation and waits before retrying;
+  when `despawnWhenStuck=true` (32 rows) the routine parks as `Inactive` instead of
+  retrying forever - the world-population slot still owns the NPC's lifetime, so no
+  guessed teleport or respawn is introduced. `despawnDist` (2 rows) is treated as an
+  outer envelope beyond the jittered home radius.
 - Death, unregister, entity removal/replacement and shard clear release work
   reservations. A missing/dead/moved station invalidates its reservation too.
 - Work is exclusive per station; player-owned objects, vehicle-owned deployables
@@ -177,9 +178,9 @@ Examples that remain deliberately unresolved:
   flee rules, queue/conversation selection, greetings/chatter/healing triggers,
   and work `statusEffect`-only/ability interactions are not inferred
   from names. Their invocations/parameters remain in the census rather than being
-  silently represented as implemented features. `maxDistJitter`,
-  `despawnWhenStuck`, `despawnDistance`, `leashToSpawn`, `swarmRadiusMin/Max`
-  are now parsed and applied (PR #94).
+  silently represented as implemented features. `maxDistJitter`, `despawnWhenStuck`,
+  `despawnDist` (`despawnDistance`), `leashToSpawn` and `swarmRadiusMin/Max` are now read and stored;
+  swarm formation itself is still not a crowd solver.
 
 Recovering exact original routines requires **original map gameplay placements,
 CAIS behaviour definitions and encounter/spawn-group route assignments** for the

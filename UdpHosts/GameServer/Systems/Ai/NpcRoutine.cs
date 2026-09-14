@@ -67,27 +67,20 @@ public sealed class NpcRoutine
             _random = 1;
         }
 
-        // Per-NPC deterministic EffectiveHomeRadius = base + rand(0..jitter) seeded from entityId^monsterId
-        // Different swarm members get different radii, same id replays exactly. Clamped to leash safety in profile.
-        float jitter = 0f;
-        if (profile.MaxDistJitter > 0f)
+        // maxDistJitter is per-instance variation of the home envelope, not a shared template constant.
+        // Deterministic per entity: a SwarmWanderer with maxDistFromSpawn=30, maxDistJitter=5 gets 30..35
+        // depending on its id, while a row without jitter keeps the exact profile radius.
+        EffectiveHomeRadius = profile.HomeRadius;
+        if (profile.MaxDistJitter > 0f && float.IsFinite(profile.MaxDistJitter))
         {
-            // Use UnitRandom once for jitter, but keep _random for future rest durations - replayable because _random is seeded
-            // We need a separate deterministic rand for jitter that doesn't consume the main _random sequence for rest
-            // Use a hash of entityId+monsterId for jitter
-            uint jitterHash = unchecked((uint)entityId ^ monsterId ^ 0x9E3779B9u ^ 0x85EBCA6Bu);
+            // Use a hash of the id for the jitter so the main PRNG sequence for wander legs stays
+            // identical for non-jitter rows and the jitter itself is deterministic per NPC.
+            uint jitterHash = unchecked((uint)entityId ^ (uint)(entityId >> 16) ^ monsterId ^ 0x85EBCA6Bu);
             if (jitterHash == 0) jitterHash = 1;
-            jitterHash ^= jitterHash << 13;
-            jitterHash ^= jitterHash >> 17;
-            jitterHash ^= jitterHash << 5;
-            float unit = (jitterHash >> 8) * (1f / 16777216f);
-            jitter = unit * profile.MaxDistJitter;
-        }
-
-        EffectiveHomeRadius = profile.HomeRadius + jitter;
-        if (profile.LeashDistance is float leash && leash > 0f)
-        {
-            EffectiveHomeRadius = MathF.Min(EffectiveHomeRadius, leash);
+            float jitterRand = (jitterHash >> 8) * (1f / 16777216f);
+            EffectiveHomeRadius = profile.HomeRadius + (jitterRand * profile.MaxDistJitter);
+            if (profile.LeashDistance.HasValue && profile.LeashDistance.Value > 0f)
+                EffectiveHomeRadius = MathF.Min(EffectiveHomeRadius, profile.LeashDistance.Value);
         }
 
         State = profile.Kind == NpcRoutineKind.ExternalRoute ? NpcRoutineState.MissingRoute
@@ -133,6 +126,9 @@ public sealed class NpcRoutine
         // invent a teleport - the world-population slot still owns its lifetime.
         if (Profile.DespawnDistance > 0f && AiVectors.HorizontalDistance(position, Home) > Profile.DespawnDistance + ArrivalRadius)
         {
+            // Treat as if it should return home, but if it cannot reach home within the
+            // normal retry budget it will park. This is the faithful interpretation of the
+            // authored despawnDist without guessing a server-side despawn.
             if (AiVectors.HorizontalDistance(position, Home) > EffectiveHomeRadius + Profile.DespawnDistance)
             {
                 Stop();

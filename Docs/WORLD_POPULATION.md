@@ -526,8 +526,9 @@ Stated plainly, because each of these shaped a decision above:
   rows**, so almost every body is sized by the rules' defaults, which are the AI's
   navigation agent numbers.
 * **Deployables and Melding control points carry no radius**, so the planner sizes
-  them (`DeployableInfluenceRadius`, `MeldingInfluenceRadius`); outposts do carry
-  one and use their own.
+  them (`DeployableInfluenceRadius`, `MeldingInfluenceRadius`; Melding edges are
+  interpolated every 60 m from the shipped spline knots so the wall is continuous);
+  outposts do carry one and use their own.
 
 What this means in practice: the system is faithful to the data that exists - every
 row that can be a world inhabitant is placed, on ground the zone vouches for, at the
