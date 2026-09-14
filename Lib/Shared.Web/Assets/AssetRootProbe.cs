@@ -136,10 +136,57 @@ public static class AssetRootProbe
     }
 
     /// <summary>
-    ///     The chunk names a root does not hold, out of the set a client probes for.
+    ///     Whether any root holds one of the levels an install of the game does not carry - the only chunk
+    ///     files whose presence a player can see.
+    /// </summary>
+    /// <param name="statuses">The roots, as <see cref="Inspect(IEnumerable{string})"/> read them.</param>
+    /// <returns>
+    ///     <c>true</c> when a client streaming from this host would get mip levels sharper than the ones it
+    ///     already has.
+    ///     <para>
+    ///     </para>
+    ///     Deliberately stricter than <see cref="ServesChunks"/>: a stock install ships the page-table index
+    ///     and the coarse levels, so a root holding <c>static.vtex_idx</c> and <c>static.vtex3</c> to
+    ///     <c>static.vtex6</c> answers every probe the client makes and changes nothing on screen. That is
+    ///     the state a player reports as "I put the vtex files in Assets and nothing happened", and it has to
+    ///     be told apart from a root that actually holds the textures, because the client cannot.
+    /// </returns>
+    public static bool ServesHighResolutionChunks(IEnumerable<AssetRootStatus> statuses)
+    {
+        foreach (var status in statuses ?? Array.Empty<AssetRootStatus>())
+        {
+            if (status == null)
+            {
+                continue;
+            }
+
+            foreach (var entry in status.Chunks)
+            {
+                foreach (var file in entry.Value)
+                {
+                    if (VirtualTextureChunks.IsHighResolutionChunkName(Path.GetFileName(file)))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     The high-resolution chunk names a root does not hold, i.e. the sharp mips a client would still be
+    ///     missing after streaming everything this root serves.
     /// </summary>
     /// <param name="status">One scanned root.</param>
-    /// <returns>Missing names, in the order the client asks for them; empty for a complete set.</returns>
+    /// <returns>Missing names, in the order the client asks for them; empty for a root that holds them all.</returns>
+    /// <remarks>
+    ///     Only <see cref="VirtualTextureChunks.HighResolutionChunkNames"/> counts, and that is the point. The
+    ///     index and the coarse levels are what an install of the game already carries, so a root missing them
+    ///     is a root missing nothing anybody can see - while naming them would make a perfectly good server
+    ///     look half-configured in its own startup log.
+    /// </remarks>
     public static IReadOnlyList<string> MissingChunks(AssetRootStatus status)
     {
         var held = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -152,7 +199,7 @@ public static class AssetRootProbe
             }
         }
 
-        return VirtualTextureChunks.ChunkNames()
+        return VirtualTextureChunks.HighResolutionChunkNames()
                                   .Where(n => !held.Contains(n))
                                   .ToList();
     }
@@ -185,19 +232,30 @@ public static class AssetRootProbe
             else if (!status.HasChunks)
             {
                 lines.Add(
-                    $"asset root {status.Path} holds no texture chunks - a client wants {string.Join(", ", VirtualTextureChunks.ChunkNames())}, under {VirtualTextureChunks.BuildFolder}/<env>-<build>/ or loose in this folder");
+                    $"asset root {status.Path} holds no texture chunks - a client wants {string.Join(", ", VirtualTextureChunks.HighResolutionChunkNames())}, under {VirtualTextureChunks.BuildFolder}/<env>-<build>/ or loose in this folder");
             }
             else
             {
                 lines.Add($"asset root {status.Path} serves {DescribeChunks(status)}");
 
-                // All three chunks are probed, and each holds a different level of the page table: a root
-                // with only static.vtex0 sharpens what it covers and leaves the rest soft, which reads like a
-                // half-working fix unless the log says which half is missing.
+                // All of the sharp levels are probed, and each holds a different part of the page table: a
+                // root with only static.vtex0 sharpens what it covers and leaves the rest soft, which reads
+                // like a half-working fix unless the log says which half is missing.
                 var incomplete = MissingChunks(status);
-                if (incomplete.Count > 0)
+
+                // The whole set missing is a different sentence from part of it, because "the client already
+                // has these" and "the client will get some of them" are not the same picture. This is the
+                // state a player describes as "I copied the vtex files in and nothing changed": the folder is
+                // full, the probe is answered, and the only files that would have made a difference are
+                // still the ones nobody has.
+                if (incomplete.Count == VirtualTextureChunks.HighResolutionChunkNames().Count)
                 {
-                    lines.Add($"asset root {status.Path} has no {string.Join(", ", incomplete)} - a client probes all three, so the rest of the page table stays at its cached resolution");
+                    lines.Add(
+                        $"asset root {status.Path} holds none of {string.Join(", ", VirtualTextureChunks.HighResolutionChunkNames())} - those are the sharp mips no Firefall install carries, so a client fed from here is exactly as blurry as one fed from an empty folder");
+                }
+                else if (incomplete.Count > 0)
+                {
+                    lines.Add($"asset root {status.Path} has no {string.Join(", ", incomplete)} - a client probes all of them, so the rest of the page table stays at its cached resolution");
                 }
             }
         }
@@ -263,7 +321,10 @@ public static class AssetRootProbe
             return null;
         }
 
-        return "Put " + string.Join(", ", VirtualTextureChunks.ChunkNames()) +
+        // The sharp levels, not every chunk name: a client's own install carries the index and the coarse
+        // levels, so "put static.vtex_idx and static.vtex3..6 here" is advice that can be followed to the
+        // letter and change nothing.
+        return "Put " + string.Join(", ", VirtualTextureChunks.HighResolutionChunkNames()) +
                " straight at the top of an asset root, or under " + Path.Combine(VirtualTextureChunks.BuildFolder, build) +
                " to answer this client's path exactly, or name a folder that already holds them in " +
                "Firefall:Assets:Paths (the client's own system" + Path.DirectorySeparatorChar + "vt does). Until one " +
@@ -364,10 +425,33 @@ public static class AssetRootProbe
                              ? "loose"
                              : entry.Key;
 
-            builder.Append($"{folder}: {string.Join(", ", entry.Value.Select(ReadableName))}");
+            builder.Append($"{folder}: {string.Join(", ", entry.Value.OrderBy(OrderOf).Select(ReadableName))}");
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    ///     Where a chunk file belongs in the report: the index first, then the levels from the sharpest mip
+    ///     to the coarsest, which is the order a client reads the page table in and the order a person reads
+    ///     a list of "static.vtexN" in - a directory listing gives neither.
+    /// </summary>
+    /// <param name="file">Full path of a chunk file.</param>
+    /// <returns>A sort key; names that are not a level sort last, and keep the order the disk gave them.</returns>
+    private static int OrderOf(string file)
+    {
+        var name = Path.GetFileName(file);
+
+        // The index first; then level + 1, so that level 0 sorts ahead of the index would be wrong and
+        // level 0 sorts ahead of level 1 is right.
+        if (VirtualTextureChunks.IsIndexName(name))
+        {
+            return 0;
+        }
+
+        var level = VirtualTextureChunks.LevelOf(name);
+
+        return level == null ? int.MaxValue : level.Value + 1;
     }
 
     private static string ReadableName(string file)

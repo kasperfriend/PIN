@@ -16,6 +16,9 @@ namespace GameServer.Tests;
 /// </summary>
 public class WebAssetTests : IDisposable
 {
+    /// <summary>What a chunk name that carries no mip level at all is asserted to be.</summary>
+    private const int NoLevel = -1;
+
     private readonly string _root;
 
     public WebAssetTests()
@@ -43,6 +46,8 @@ public class WebAssetTests : IDisposable
     [InlineData("vtex/beta-1858/static.vtex2", true)]
     [InlineData(@"vtex\prod-1962\static.vtex2", true)]
     [InlineData("VTEX/PROD-1962/static.vtex0", true)]
+    [InlineData("vtex/prod-1962/static.vtex_idx", true)]
+    [InlineData("vtex/prod-1962/static.vtex6", true)]
     [InlineData("vtex/prod-1962/static.vtex", false)]
     [InlineData("AssetStream/prod-1962/textures.vtex0", false)]
     [InlineData("static.vtex0", false)]
@@ -66,10 +71,20 @@ public class WebAssetTests : IDisposable
         Assert.Equal("static.vtex1", VirtualTextureChunks.GetChunkName("vtex/prod-1962/static.vtex1"));
     }
 
-    [Fact]
-    public void Extensions_AreTheChunksTheClientProbesForInOrder()
+    [Theory]
+    [InlineData("static.vtex0", 0)]
+    [InlineData("static.vtex2", 2)]
+    [InlineData("static.vtex6", 6)]
+    [InlineData("static.vtex_idx", NoLevel)]
+    [InlineData("static.vtex", NoLevel)]
+    [InlineData("static.vtex_", NoLevel)]
+    [InlineData("static.vtex.bak", NoLevel)]
+    [InlineData("", NoLevel)]
+    public void LevelOf_IsTheMipLevelANameCarriesAndNothingForAnythingElse(string name, int expected)
     {
-        Assert.Equal(new[] { ".vtex0", ".vtex1", ".vtex2" }, VirtualTextureChunks.Extensions);
+        // -1 stands in for null: an InlineData null for a nullable value type is an analyzer warning, and
+        // "which level is this" has a spare integer to mean "no level at all" anyway.
+        Assert.Equal(expected, VirtualTextureChunks.LevelOf(name) ?? NoLevel);
     }
 
     [Fact]
@@ -91,9 +106,41 @@ public class WebAssetTests : IDisposable
     }
 
     [Fact]
-    public void ChunkNames_AreTheThreeFilesASetConsistsOf()
+    public void ChunkNames_AreTheIndexAndEveryLevelOfThePageTable()
     {
-        Assert.Equal(new[] { "static.vtex0", "static.vtex1", "static.vtex2" }, VirtualTextureChunks.ChunkNames());
+        // Wider than the three that matter: the client asks this host for the index and for every level it
+        // does not already hold, and a name it asks for is a name the host has to be able to find on disk.
+        Assert.Equal(
+            new[]
+            {
+                "static.vtex_idx",
+                "static.vtex0",
+                "static.vtex1",
+                "static.vtex2",
+                "static.vtex3",
+                "static.vtex4",
+                "static.vtex5",
+                "static.vtex6",
+            },
+            VirtualTextureChunks.ChunkNames());
+    }
+
+    [Fact]
+    public void HighResolutionChunkNames_AreTheLevelsNoFirefallInstallCarries()
+    {
+        Assert.Equal(
+            new[] { "static.vtex0", "static.vtex1", "static.vtex2" },
+            VirtualTextureChunks.HighResolutionChunkNames());
+    }
+
+    [Fact]
+    public void Candidates_AnswerTheIndexByNameLikeAnyOtherChunk()
+    {
+        var candidates = VirtualTextureChunks.Candidates("vtex/prod-1962/static.vtex_idx");
+
+        Assert.Equal(
+            new[] { "vtex/prod-1962/static.vtex_idx", "static.vtex_idx", "vtex/static.vtex_idx" },
+            candidates);
     }
 
     // --- which root answers a request -------------------------------------------------------------------
@@ -147,6 +194,24 @@ public class WebAssetTests : IDisposable
 
         Assert.True(info.Exists);
         Assert.Equal(Path.Combine(root, "vtex", "static.vtex1"), info.PhysicalPath);
+    }
+
+    [Fact]
+    public void GetFileInfo_FindsTheIndexAndTheCoarseLevelsByNameToo()
+    {
+        // A stock install's system\\vt dropped in exactly as it is: the page-table index and the mips the
+        // game ships with, none of which sharpens anything. They are still files a client asks this host
+        // for by name, and a 404 on the index is a client that never gets as far as asking for a tile.
+        var root = Prepare("Install");
+        File.WriteAllText(Path.Combine(root, "static.vtex_idx"), "index");
+        File.WriteAllText(Path.Combine(root, "static.vtex4"), "coarse");
+        File.WriteAllText(Path.Combine(root, "static.vtex6"), "coarsest");
+
+        Assert.True(Provider(root).GetFileInfo("vtex/prod-1962/static.vtex_idx").Exists);
+        Assert.True(Provider(root).GetFileInfo("vtex/prod-1962/static.vtex4").Exists);
+        Assert.Equal(
+            Path.Combine(root, "static.vtex6"),
+            Provider(root).GetFileInfo("vtex/prod-1962/static.vtex6").PhysicalPath);
     }
 
     [Fact]
@@ -329,6 +394,61 @@ public class WebAssetTests : IDisposable
     {
         Assert.False(AssetRootProbe.ServesChunks(AssetRootProbe.Inspect(new[] { Prepare("Empty") })));
         Assert.False(AssetRootProbe.ServesChunks(Array.Empty<AssetRootStatus>()));
+    }
+
+    [Fact]
+    public void ServesHighResolutionChunks_IsFalseWhenOnlyTheLevelsTheClientAlreadyHasAreThere()
+    {
+        // The confusing state, and the whole reason this is a second question rather than the first: a stock
+        // install's own vt folder is full of chunk files, every probe this host gets is answered, and the
+        // world is exactly as blurry as it was with an empty folder. ServesChunks cannot tell them apart.
+        var root = Prepare("Install");
+        foreach (var name in new[] { "static.vtex_idx", "static.vtex3", "static.vtex4", "static.vtex5", "static.vtex6" })
+        {
+            File.WriteAllText(Path.Combine(root, name), "x");
+        }
+
+        var statuses = AssetRootProbe.Inspect(new[] { root });
+
+        Assert.True(AssetRootProbe.ServesChunks(statuses));
+        Assert.False(AssetRootProbe.ServesHighResolutionChunks(statuses));
+    }
+
+    [Fact]
+    public void ServesHighResolutionChunks_IsTrueAsSoonAsOneSharpMipIsThere()
+    {
+        var root = Prepare("Install");
+        File.WriteAllText(Path.Combine(root, "static.vtex2"), "x");
+
+        Assert.True(AssetRootProbe.ServesHighResolutionChunks(AssetRootProbe.Inspect(new[] { root })));
+        Assert.False(AssetRootProbe.ServesHighResolutionChunks(AssetRootProbe.Inspect(new[] { Prepare("Empty") })));
+        Assert.False(AssetRootProbe.ServesHighResolutionChunks(Array.Empty<AssetRootStatus>()));
+    }
+
+    [Fact]
+    public void MissingChunks_IgnoresTheLevelsTheClientAlreadyCarries()
+    {
+        var root = Prepare("Root");
+        File.WriteAllText(Path.Combine(root, "static.vtex_idx"), "x");
+        File.WriteAllText(Path.Combine(root, "static.vtex6"), "y");
+
+        Assert.Equal(
+            new[] { "static.vtex0", "static.vtex1", "static.vtex2" },
+            AssetRootProbe.MissingChunks(AssetRootProbe.Inspect(root)));
+    }
+
+    [Fact]
+    public void Describe_ARootHoldingOnlyTheCoarseLevelsSaysTheyChangeNothing()
+    {
+        var root = Prepare("Root");
+        File.WriteAllText(Path.Combine(root, "static.vtex_idx"), "x");
+        File.WriteAllText(Path.Combine(root, "static.vtex3"), "y");
+
+        var lines = AssetRootProbe.Describe(AssetRootProbe.Inspect(new[] { root }));
+
+        Assert.Contains(lines, l => l.Contains("serves loose: static.vtex_idx"));
+        Assert.Contains(lines, l => l.Contains("holds none of static.vtex0, static.vtex1, static.vtex2"));
+        Assert.Contains(lines, l => l.Contains("as blurry as one fed from an empty folder"));
     }
 
     [Fact]

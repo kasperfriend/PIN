@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 
 namespace Shared.Web.Assets;
@@ -8,16 +9,31 @@ namespace Shared.Web.Assets;
 ///     The path shape of the streamed high-resolution virtual-texture chunks.
 /// </summary>
 /// <remarks>
-///     <c>VTRemotePath</c> in <c>firefall.ini</c> names a build -
-///     <c>…/vtex/%ENVMNEMONIC%-%BUILDNUM%/static.vtex</c> - and the client probes that base for the chunks
-///     holding its high resolution mip levels
-///     (<c>HEAD …/vtex/prod-1962/static.vtex0</c>, then <c>…1</c> and <c>…2</c>). With no answer it keeps the
-///     low-resolution mips baked into its own archives, which is what a blurry Firefall looks like. The build
-///     the client names comes from *its* install, so chunks copied out of another one - or simply dropped in
-///     the <c>Assets</c> folder somebody said to fill in, instead of the build directory inside it - miss on
-///     the literal path. <see cref="Candidates"/> is the small generosity that turns that "nothing changed"
-///     into sharp textures: the same file answers, wherever in the root it was put, while every other asset
-///     stays on its literal path.
+///     <c>VTRemotePath</c> in <c>firefall.ini</c> names a base, not a file -
+///     <c>…/vtex/%ENVMNEMONIC%-%BUILDNUM%/static.vtex</c> - and the client appends a suffix to it for every
+///     part of the page table it wants: <c>static.vtex_idx</c>, the index that says which tile lives where,
+///     and <c>static.vtex0</c>, <c>static.vtex1</c> and so on - the levels themselves, <c>0</c> being the
+///     sharpest mip and every number after it a coarser one. With no answer it keeps the levels baked into
+///     its own archives, which is what a blurry Firefall looks like.
+///     <para>
+///     </para>
+///     The build the client names comes from *its* install, so chunks copied out of another one - or simply
+///     dropped in the <c>Assets</c> folder somebody said to fill in, instead of the build directory inside
+///     it - miss on the literal path. <see cref="Candidates"/> is the small generosity that turns that
+///     "nothing changed" into sharp textures: the same file answers, wherever in the root it was put, while
+///     every other asset stays on its literal path.
+///     <para>
+///     </para>
+///     Which brings up the part that is easy to get wrong, and worth more than the rest of this class: a
+///     stock install of the game <em>does</em> carry a page table. It ships the index and the coarse levels
+///     - <c>static.vtex_idx</c> and <c>static.vtex3</c> up to <c>static.vtex6</c> - which is why a client
+///     with an empty <c>Assets</c> folder and a client with the wrong half of the set in it look exactly
+///     alike. Only the first <see cref="HighResolutionLevelCount"/> levels (roughly twelve gigabytes the
+///     install never carried, and the client once downloaded from Red5's CDN) are what a player means by
+///     "high-resolution textures". So the host both serves every name a client can ask for and keeps those
+///     apart from the rest in what it <see cref="HighResolutionChunkNames">says</see>: a root holding the
+///     index and levels 3 to 6 is not a root that holds textures, and the log has to say so in as many
+///     words, because from the client's side the two states are the same screenshot.
 /// </remarks>
 public static class VirtualTextureChunks
 {
@@ -27,13 +43,42 @@ public static class VirtualTextureChunks
     /// <summary>File stem the chunks share, from the <c>static.vtex</c> the ini names.</summary>
     public const string ChunkStem = "static";
 
-    /// <summary>Chunk suffixes a client probes for, biggest (and sharpest) first.</summary>
-    public static readonly IReadOnlyList<string> Extensions = new[]
-                                                               {
-                                                                   ".vtex0",
-                                                                   ".vtex1",
-                                                                   ".vtex2",
-                                                               };
+    /// <summary>The body every chunk name carries between its stem and its suffix: <c>static.vtex0</c>.</summary>
+    public const string FileBase = "vtex";
+
+    /// <summary>Suffix of the page-table index: <c>static.vtex_idx</c>.</summary>
+    public const string IndexSuffix = "_idx";
+
+    /// <summary>
+    ///     The coarsest level a client's page table carries. Level <c>0</c> is the sharpest mip and every
+    ///     level after it is a quarter of the one before, so this is the last name that can exist rather
+    ///     than the last one anybody has seen: recognition (<see cref="LevelOf"/>) is not bounded by it,
+    ///     and a file carrying a higher number is still served under whatever name the client asked for.
+    /// </summary>
+    public const int MaxLevel = 6;
+
+    /// <summary>
+    ///     How many levels, counted from the sharpest, an install of the game does not carry: <c>0</c>,
+    ///     <c>1</c> and <c>2</c> are the ones the client has to be sent, and the only ones that change how
+    ///     the world looks. Everything else a root may hold is a level the client already owns.
+    /// </summary>
+    public const int HighResolutionLevelCount = 3;
+
+    /// <summary>
+    ///     The name of the page-table index, the chunk that says which tile lives where.
+    /// </summary>
+    /// <param name="stem">File stem; <see cref="ChunkStem"/> is what <c>VTRemotePath</c> names.</param>
+    /// <returns><c>static.vtex_idx</c>.</returns>
+    public static string IndexName(string stem = ChunkStem) => $"{stem}.{FileBase}{IndexSuffix}";
+
+    /// <summary>
+    ///     The name of one level of the page table.
+    /// </summary>
+    /// <param name="level">The level, <c>0</c> being the sharpest mip.</param>
+    /// <param name="stem">File stem; <see cref="ChunkStem"/> is what <c>VTRemotePath</c> names.</param>
+    /// <returns><c>static.vtex0</c> for level <c>0</c>.</returns>
+    public static string LevelName(int level, string stem = ChunkStem) =>
+        $"{stem}.{FileBase}{level.ToString(CultureInfo.InvariantCulture)}";
 
     /// <summary>
     ///     Whether a request path is one of the virtual-texture chunks.
@@ -45,7 +90,7 @@ public static class VirtualTextureChunks
         // The client asks for <root>/vtex/<build>/<chunk>; a path that is shallower than that is not a chunk
         // request (and, for instance, an asset stream path that happens to end in .vtex0 must stay a miss).
         return FindBuildFolder(subpath) != null &&
-               HasChunkExtension(GetChunkName(subpath));
+               IsChunkName(GetChunkName(subpath));
     }
 
     /// <summary>
@@ -61,17 +106,45 @@ public static class VirtualTextureChunks
     }
 
     /// <summary>
-    ///     The chunk names a complete set consists of, i.e. the files a client probes for.
+    ///     Every chunk name a client can ask for: the index first, then the levels from the sharpest down.
     /// </summary>
     /// <param name="stem">File stem; <see cref="ChunkStem"/> is what <c>VTRemotePath</c> names.</param>
-    /// <returns><c>static.vtex0</c>, <c>.vtex1</c>, <c>.vtex2</c> - in the order a client asks for them.</returns>
+    /// <returns>
+    ///     <c>static.vtex_idx</c>, then <c>static.vtex0</c> through <c>static.vtex6</c>. This is the set a
+    ///     root is <em>recognised</em> by, and it is wider than the set that decides anything - see
+    ///     <see cref="HighResolutionChunkNames"/>.
+    /// </returns>
     public static IReadOnlyList<string> ChunkNames(string stem = ChunkStem)
     {
-        var names = new List<string>(Extensions.Count);
+        var names = new List<string>(MaxLevel + 2)
+                    {
+                        IndexName(stem),
+                    };
 
-        foreach (var extension in Extensions)
+        for (var level = 0; level <= MaxLevel; level++)
         {
-            names.Add(stem + extension);
+            names.Add(LevelName(level, stem));
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    ///     The chunk names that decide whether the world is sharp: the levels no install of the game
+    ///     carries, and therefore the only files whose absence a player can see.
+    /// </summary>
+    /// <param name="stem">File stem; <see cref="ChunkStem"/> is what <c>VTRemotePath</c> names.</param>
+    /// <returns>
+    ///     <c>static.vtex0</c>, <c>static.vtex1</c>, <c>static.vtex2</c> - in the order a client asks for
+    ///     them. A root missing all three renders exactly as blurry as an empty one, whatever else it holds.
+    /// </returns>
+    public static IReadOnlyList<string> HighResolutionChunkNames(string stem = ChunkStem)
+    {
+        var names = new List<string>(HighResolutionLevelCount);
+
+        for (var level = 0; level < HighResolutionLevelCount; level++)
+        {
+            names.Add(LevelName(level, stem));
         }
 
         return names;
@@ -110,8 +183,86 @@ public static class VirtualTextureChunks
     ///     Whether a file name is one of the chunk files a client asks for.
     /// </summary>
     /// <param name="fileName">A file name, without a path.</param>
-    /// <returns><c>true</c> for <c>static.vtex0</c>, <c>static.vtex1</c> and <c>static.vtex2</c>.</returns>
-    public static bool IsChunkName(string fileName) => HasChunkExtension(fileName);
+    /// <returns>
+    ///     <c>true</c> for <c>static.vtex_idx</c> and for <c>static.vtex&lt;level&gt;</c> at any level.
+    /// </returns>
+    public static bool IsChunkName(string fileName) => IsIndexName(fileName) || LevelOf(fileName) != null;
+
+    /// <summary>
+    ///     Whether a file name is the page-table index rather than a level of it.
+    /// </summary>
+    /// <param name="fileName">A file name, without a path.</param>
+    /// <returns><c>true</c> for <c>static.vtex_idx</c>.</returns>
+    public static bool IsIndexName(string fileName) =>
+        !string.IsNullOrEmpty(fileName) &&
+        fileName.EndsWith($".{FileBase}{IndexSuffix}", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///     Whether a file name is one of the levels an install of the game does not carry.
+    /// </summary>
+    /// <param name="fileName">A file name, without a path.</param>
+    /// <returns>
+    ///     <c>true</c> for <c>static.vtex0</c>, <c>static.vtex1</c> and <c>static.vtex2</c> - the files
+    ///     whose presence is the difference between a sharp world and a blurry one.
+    /// </returns>
+    public static bool IsHighResolutionChunkName(string fileName)
+    {
+        var level = LevelOf(fileName);
+
+        return level != null && level.Value < HighResolutionLevelCount;
+    }
+
+    /// <summary>
+    ///     The level of the page table a chunk name carries.
+    /// </summary>
+    /// <param name="fileName">A file name, without a path.</param>
+    /// <returns>
+    ///     <c>0</c> for <c>static.vtex0</c> (the sharpest mip), <c>6</c> for <c>static.vtex6</c>, and
+    ///     <c>null</c> for the index, for <c>static.vtex</c> with no level at all, and for anything else.
+    /// </returns>
+    public static int? LevelOf(string fileName)
+    {
+        if (string.IsNullOrEmpty(fileName))
+        {
+            return null;
+        }
+
+        // After the last dot, because a chunk name is <stem>.vtex<level> and the stem is the client's to
+        // choose: the ini says static.vtex, but what identifies a chunk is the suffix, not the name in
+        // front of it, and a folder holding world.vtex0 deserves to be served under that name too.
+        var dot = fileName.LastIndexOf('.');
+        if (dot < 0)
+        {
+            return null;
+        }
+
+        var suffix = fileName.Substring(dot + 1);
+        if (!suffix.StartsWith(FileBase, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var digits = suffix.Substring(FileBase.Length);
+        if (digits.Length == 0)
+        {
+            return null;
+        }
+
+        foreach (var character in digits)
+        {
+            if (character < '0' || character > '9')
+            {
+                return null;
+            }
+        }
+
+        // NumberStyles.None: no sign, no separator, no whitespace - a level is a bare run of digits. A name
+        // too long to be one is not a level rather than a level that overflowed, which is the honest answer
+        // for a file nobody's client is ever going to ask for.
+        return int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var level)
+                   ? level
+                   : null;
+    }
 
     /// <summary>
     ///     The folder under <c>vtex</c> a path names, i.e. the build it was made for.
@@ -171,24 +322,6 @@ public static class VirtualTextureChunks
                          };
 
         return subpath.Split(separators, StringSplitOptions.RemoveEmptyEntries);
-    }
-
-    private static bool HasChunkExtension(string fileName)
-    {
-        if (string.IsNullOrEmpty(fileName))
-        {
-            return false;
-        }
-
-        foreach (var extension in Extensions)
-        {
-            if (fileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static void AddDistinct(ICollection<string> candidates, string candidate)

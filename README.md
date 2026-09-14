@@ -281,6 +281,15 @@ the folder the host reads is the one next to the binary. The startup log now say
 which roots it read, what each holds, and — when nothing does — that textures
 will stay blurry. See [High-resolution textures](#high-resolution-textures-and-why-everything-looks-blurry).
 
+**The `Assets` folder has `static.vtex_idx` and `static.vtex3`–`static.vtex6` in
+it, the log shows no 404, and the textures are still blurry**
+
+Those four files are the page table a stock Firefall install already carries in
+its own `system\vt`; the host serves them correctly and the client already has
+them. The three that sharpen anything are `static.vtex0`, `static.vtex1` and
+`static.vtex2`, the ~12 GB that used to come from Red5's CDN — see
+[“But I already put the vtex files in Assets”](Docs/ASSETS.md#but-i-already-put-the-vtex-files-in-assets).
+
 ### firefall.ini
 
 ```ini

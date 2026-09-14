@@ -16,7 +16,8 @@ PIN is split into two areas:
 - [Map Files Findings](MAP_FILES_FINDINGS.md) — **new** — full breakdown of actual client map files (`*.zone`, `*.gtchunk`) from `maps.zip` (3.2GB, 38 zones, 281 chunks): format, layers, path routes (vehicle, not NPC), Melding wall, subzone grids, encounter names
 - [Map Analysis for Server](MAP_ANALYSIS_FOR_SERVER.md) — **new** — actionable guide translating map findings into concrete server tasks: ZoneBounds early-out, SubZoneGrid for habitat, PropDoodad for work stations, path layers clarified as vehicle routes
 - [Single Zone](SINGLE_ZONE.md) — one shard simulates one zone: what `ZoneId` controls, which zones have authored data, and what players in other zones experience
-- [Web Assets](ASSETS.md) — what the client streams from the server: the asset stream, the high-resolution texture chunks, where they live, and why an empty `Assets` folder means blurry terrain
+- [Web Assets](ASSETS.md) — what the client streams from the server: the asset stream, the high-resolution texture chunks, where they live, why an empty `Assets` folder means blurry terrain, and why a folder holding `static.vtex_idx`/`static.vtex3`–`6` is the same thing
+- [Client Performance](CLIENT_PERFORMANCE.md) — why `Firefall.exe` pins a CPU on a modern machine: the population count PIN controls, VOIP, the texture streamer, framerate and core parking, in the order worth trying
 - [Remote Play & Networking](REMOTE_PLAY.md) — what the servers bind to, what they advertise to clients, and how to let a second player in over LAN / RadminVPN (config, firewall, TLS, ports, troubleshooting)
 
 ## UdpHosts
