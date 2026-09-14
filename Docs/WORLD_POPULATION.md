@@ -82,7 +82,20 @@ Supporting changes outside that folder:
 * `Physics/PhysicsEngine.cs` — `TryGetGroundSurface` (ground probe **with the
   surface normal**), `IsStandingVolumeClear` (the body-volume check),
   `HasZoneCollision`, `WalkableFaceCount`, `TryGetWalkableFaceCentroid`,
-  `ZoneChunks`
+  `ZoneChunks`, `ZoneBoundsMin/Max`, `ZonePaths` (vehicle/dropship, not NPC),
+  `MeldingPerimeters`, `SubZoneRegionCount`, `EncounterNameCount`,
+  `IsInsideZoneBounds`
+* `Lib/Shared.Collision/ZoneLoading/ZoneLoader.cs` — `ZoneBoundsLayer` 0x21000,
+  `ZonePathLayer` 0x20800, `MeldingPerimeterLayer` type 5, `SubZoneRegion`
+  0x21700, `EncounterName` 0x21200, `IsInsideZoneBounds()`, plus full map file
+  extraction documented in `Docs/MAP_FILES_FINDINGS.md` and
+  `MAP_ANALYSIS_FOR_SERVER.md`
+* `Lib/Shared.Collision/ZoneLoading/ChunkProcessor.cs` — `SubZoneGrid`
+  0x40102 (64×64, 4096-8192 bytes, Ids 1-4 per cell, 7% coverage, not reliable
+  habitat), LOD3 collision 0x40003
+* `UdpHosts/GameServer/Systems/Spawning/Population/IWorldPopulationTerrain.cs`,
+  `PhysicsWorldPopulationTerrain.cs`, `WorldPopulationService.cs` — early-out
+  players and cells outside `ZoneBoundsLayer` AABB (from actual client map file)
 * `Lib/Shared.Collision/Navigation/NavigationMesh.cs` — `TryGetFaceCentroid`, so
   the plan can enumerate every walkable spot the mesh baked
 * `Lib/Shared.Collision/ZoneLoading/ZoneLoader.cs` — `ChunkRefs`, so a world
@@ -196,10 +209,11 @@ every anchor near it, and on a real zone that is the expensive phase. Per cell:
   by `DeployableInfluenceRadius`), and every Melding perimeter control point
   (16 Meldings, 4-23 points each: sized by `MeldingInfluenceRadius`; the shipped
   knots are the spline - the planner interpolates edges every 60 m so the
-  influence follows the wall instead of a dotted line). A settlement
-  wins over the Melding around it - an outpost inside a Melding perimeter is still
-  a place players respawn in. Anchors are bucketed into 1024 m squares so
-  classification is a 3×3 bucket scan rather than a scan of all 509 anchors.
+  influence follows the wall instead of a dotted line, see `MAP_FILES_FINDINGS.md`).
+  A settlement wins over the Melding around it - an outpost inside a Melding
+  perimeter is still a place players respawn in. Anchors are bucketed into 1024 m
+  squares so classification is a 3×3 bucket scan rather than a scan of all 509
+  anchors.
 * **Level** — the `level_band_id` of the **nearest** banded anchor, however far
   away that anchor is, resolved through `SDBUtils.ResolveNpcLevel`; the zone's own
   band when no anchor carries one. This is what reproduces the original level
@@ -452,7 +466,46 @@ Lifetime: 422 spawned, 298 despawned, 17 lost, 214 placements refused, 9 slots p
 
 ---
 
-## 8. What the data does not contain
+## 8. Map file findings and what they mean for the server
+
+The client maps archive (3.2 GB, 38 zones, 281 chunks, see
+`Docs/MAP_FILES_FINDINGS.md` and `MAP_ANALYSIS_FOR_SERVER.md`) was fully
+unpacked and parsed to see what the original client shipped that the server
+can reuse without inventing data.
+
+* **ZoneBoundsLayer 0x21000** — AABB Min/Max per zone, from the real zone file.
+  Now extracted in `ZoneLoader` and exposed through `PhysicsEngine` → `IWorldPopulationTerrain`.
+  `WorldPopulationService` uses it as an early-out: a player outside the AABB
+  is not counted as present for activation, and cells outside it are not
+  activated at all. This is the zone's own void cull, cheaper than a navmesh
+  query, and it comes from the same file the navigation mesh comes from.
+* **ZonePathLayer 0x20800** — vehicle/dropship splines, NOT NPC patrols.
+  Documented in findings: 4-6 layers per zone, 200-600 points each, used for
+  dropship flyovers and vehicle routes. NPC routines must not use these as
+  patrol paths; `Docs/NPC_ROUTINES.md` explicitly calls this out. Exposed as
+  `ZonePaths` for debug tooling but not used for population or AI.
+* **MeldingPerimeterLayer type 5 inside ZoneMeldingLayer 0x21400** — the shipped
+  knots of the Melding wall spline. The server now interpolates every 60 m
+  between knots (see `SdbWorldPopulationDataSource`) so habitat classification
+  follows the wall instead of a dotted line of control points.
+* **SubZoneRegion 0x21700** — 3-15 regions per zone, named sub-zones (e.g.
+  "Coral Forest - South"). Count exposed for `population status` diagnostics.
+* **EncounterName 0x21200** — 0-12 names per zone, authored encounter labels.
+  Count exposed for diagnostics; not a spawn table (no per-zone monster list
+  exists in the shipped DB).
+* **SubZoneGrid 0x40102** — 64×64 grid per chunk, 4096-8192 bytes, Ids 1-4 per
+  cell, ~7% coverage, inspected in `ChunkProcessor`. Not reliable for habitat:
+  sparse, chunk-local, and overlaps with outpost/melding anchors which already
+  give better coverage. Kept documented but not used as a data source.
+* **PropDoodad work stations** — inspected but not yet a separate habitat;
+  settlement detection already covers deployables and outposts.
+
+The findings doc (`MAP_FILES_FINDINGS.md`, 89 KB) contains the full breakdown
+of every layer type, counts per zone, and which layers are server-usable vs
+client-only. `MAP_ANALYSIS_FOR_SERVER.md` (16 KB) summarizes the server-side
+application decisions.
+
+## 9. What the shipped DB does not contain
 
 Stated plainly, because each of these shaped a decision above:
 
@@ -484,7 +537,7 @@ cannot be faithful to a spawn table that was never shipped.
 
 ---
 
-## 9. Cost and limits
+## 10. Cost and limits
 
 | Concern | Bound |
 |---------|-------|
@@ -504,7 +557,7 @@ rules` for the client-only chunks.
 
 ---
 
-## 10. Testing
+## 11. Testing
 
 | File | Covers |
 |------|--------|
@@ -521,7 +574,7 @@ the seams.
 
 ---
 
-## 11. Quick reference
+## 12. Quick reference
 
 | Action | Command |
 |--------|---------|
