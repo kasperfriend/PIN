@@ -431,19 +431,6 @@ public class AiEngineTests
 
     [Fact]
     public void BrainIsDroppedWhenTheEntityLeavesTheShard()
-    _) = CreateWorld(
-            Vector3.Zero,
-            new Vector3(20f, 0f, 0f),
-            rules,
-            new FakeAiMonsterStats(normalSpeed: 0f, fastSpeed: 0f));
-
-        Tick(shard, FirstTick);
-
-        Assert.Equal(0.3f, npc.Position.X, 3); // 6 m/s over 50ms
-    }
-
-    [Fact]
-    public void BrainIsDroppedWhenTheEntityLeavesTheShard()
     {
         var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(10f, 0f, 0f));
 
