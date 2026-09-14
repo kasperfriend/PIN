@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Sockets;
 using Autofac;
 using CommandLine;
 using CommandLine.Text;
@@ -60,6 +61,14 @@ internal static class Program
             Console.Error.WriteLine("This is a bug in the build, not a problem with your configuration: the server tried to read its");
             Console.Error.WriteLine("settings through an API that is unsupported inside a single-file executable. Editing");
             Console.Error.WriteLine("GameServer.config.json cannot work around it - download the latest PIN release instead.");
+            return;
+        }
+
+        if (reason is SocketException)
+        {
+            Console.Error.WriteLine("The UDP port is already in use: another GameServer (or a leftover process from an earlier run)");
+            Console.Error.WriteLine("is still listening on it. Find it with 'netstat -ano | findstr :25001', stop that process, and");
+            Console.Error.WriteLine("start again. Only one GameServer can serve a port.");
             return;
         }
 

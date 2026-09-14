@@ -74,7 +74,10 @@ internal class GameServer : PacketServer
         }
 
         _isReady = true;
-        Logger.Information("Server is ready to accept connections.");
+        // The port in the line: with two GameServer processes on one machine the consoles look
+        // alike, and the one that fails to bind the port is the one to suspect when a client
+        // talks to the other.
+        Logger.Information("Server is ready to accept connections on UDP port {Port}.", _settings.Port);
     }
 
     protected override void HandlePacket(Packet packet, CancellationToken ct)
@@ -125,7 +128,13 @@ internal class GameServer : PacketServer
         {
             var rejected = new NetworkClient(packet.RemoteEndpoint, socketId, Logger);
             rejected.NetClientStatus = ClientStatus.Aborted;
-            Logger.Information("Rejected connection from {Endpoint} — server not ready.", packet.RemoteEndpoint);
+            // The client keeps retrying until the shard is up, so this is expected while the zone
+            // loads. If it keeps printing in a process that already said it was ready, the client
+            // is talking to a different process than the one being read - the port belongs to
+            // whoever is still loading (or never finished loading), not to this one.
+            Logger.Information(
+                "Rejected connection from {Endpoint} — server not ready (zone still loading).",
+                packet.RemoteEndpoint);
             return rejected;
         }
 
@@ -161,7 +170,14 @@ internal class GameServer : PacketServer
             }
             catch (Exception ex)
             {
-                Logger.ForContext(typeof(GRPCService)).Error(ex, "Failed to establish GRPC stream, retrying in 30 seconds");
+                // A "connection refused" in the details is this dial being answered by an OS with
+                // nothing listening: WebHostManager hosts the GameServerAPI on this address, so the
+                // question to ask is whether it is running. The stream keeps retrying, and logins
+                // fall back to the built-in character data meanwhile.
+                Logger.ForContext(typeof(GRPCService)).Error(
+                    ex,
+                    "Failed to establish GRPC stream to {Address}, retrying in 30 seconds (is WebHostManager running?)",
+                    _settings.GrpcChannelAddress);
                 await Task.Delay(TimeSpan.FromSeconds(30), ct);
             }
         }
