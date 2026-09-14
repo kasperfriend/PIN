@@ -23,6 +23,12 @@ public class ZoneLoader
     private readonly List<ZoneNavigationRegion> _excludedRegions = [];
     private readonly List<NavigationTriangle> _navigationTriangles = [];
     private readonly List<ZoneChunkRef> _chunkRefs = [];
+    private Vector3? _zoneBoundsMin;
+    private Vector3? _zoneBoundsMax;
+    private readonly List<ZonePathLayer> _zonePaths = [];
+    private readonly List<MeldingPerimeterLayer> _meldingPerimeters = [];
+    private int _subZoneRegionCount;
+    private int _encounterNameCount;
 
     public ZoneLoader(
         Simulation simulation,
@@ -52,6 +58,28 @@ public class ZoneLoader
     /// </summary>
     public IReadOnlyList<ZoneChunkRef> ChunkRefs => _chunkRefs;
 
+    /// <summary>Zone bounds from ZoneBoundsLayer (0x21000) if present.</summary>
+    public Vector3? ZoneBoundsMin => _zoneBoundsMin;
+    public Vector3? ZoneBoundsMax => _zoneBoundsMax;
+
+    /// <summary>Authored path layers (0x20800) - vehicle/dropship routes, NOT NPC patrols (see MAP_FILES_FINDINGS.md).</summary>
+    public IReadOnlyList<ZonePathLayer> ZonePaths => _zonePaths;
+
+    /// <summary>Melding perimeter layers (type 5) from the zone file.</summary>
+    public IReadOnlyList<MeldingPerimeterLayer> MeldingPerimeters => _meldingPerimeters;
+
+    public int SubZoneRegionCount => _subZoneRegionCount;
+    public int EncounterNameCount => _encounterNameCount;
+
+    /// <summary>Whether position is inside zone bounds, or true when no bounds are known.</summary>
+    public bool IsInsideZoneBounds(Vector3 pos)
+    {
+        if (_zoneBoundsMin == null || _zoneBoundsMax == null) return true;
+        var min = _zoneBoundsMin.Value;
+        var max = _zoneBoundsMax.Value;
+        return pos.X >= min.X && pos.X <= max.X && pos.Y >= min.Y && pos.Y <= max.Y && pos.Z >= min.Z && pos.Z <= max.Z;
+    }
+
     /// <summary>Returns true when the original zone metadata excludes this point from AI pathing.</summary>
     public bool IsNavigationExcluded(Vector3 point)
     {
@@ -71,6 +99,12 @@ public class ZoneLoader
         _excludedRegions.Clear();
         _navigationTriangles.Clear();
         _chunkRefs.Clear();
+        _zoneBoundsMin = null;
+        _zoneBoundsMax = null;
+        _zonePaths.Clear();
+        _meldingPerimeters.Clear();
+        _subZoneRegionCount = 0;
+        _encounterNameCount = 0;
         var stopwatch = Stopwatch.StartNew();
 
         var zoneFilePath = Path.Combine(_mapsPath, $"{zoneId}.zone");
@@ -87,6 +121,51 @@ public class ZoneLoader
         {
             _logger.Error("Invalid zone root layer for zone {ZoneId}", zoneId);
             return null;
+        }
+
+        // Extract zone metadata from root children - based on MAP_FILES_FINDINGS.md
+        // ZoneBoundsLayer (0x21000) gives AABB, ZonePathLayer (0x20800) are vehicle routes (not NPC patrols),
+        // MeldingPerimeterLayer (type 5) gives Melding wall, SubZoneRegion (0x21700) and EncounterName (0x21200) for stats
+        foreach (var child in rootLayer.Children)
+        {
+            if (child is ZoneBoundsLayer bounds)
+            {
+                _zoneBoundsMin = new Vector3(bounds.Min.X, bounds.Min.Y, bounds.Min.Z);
+                _zoneBoundsMax = new Vector3(bounds.Max.X, bounds.Max.Y, bounds.Max.Z);
+            }
+            else if (child is ZonePathLayer path)
+            {
+                _zonePaths.Add(path);
+            }
+            else if (child is ZoneMeldingLayer meldingLayer)
+            {
+                foreach (var sub in meldingLayer.Children)
+                {
+                    if (sub is MeldingPerimeterLayer perim)
+                    {
+                        _meldingPerimeters.Add(perim);
+                    }
+                }
+            }
+            else if (child is ZoneSubZoneRegionLayer)
+            {
+                _subZoneRegionCount++;
+            }
+            else if (child is ZonePropEncounterNameRegistryLayer enc)
+            {
+                _encounterNameCount += enc.Names.Length;
+            }
+        }
+
+        if (_zoneBoundsMin.HasValue && _zoneBoundsMax.HasValue)
+        {
+            _logger.Information("Zone {ZoneId}: Bounds Min {Min} Max {Max} Paths {PathCount} MeldingPerims {MeldingCount} SubZoneRegions {SubZoneCount} EncounterNames {EncCount}",
+                zoneId, _zoneBoundsMin.Value, _zoneBoundsMax.Value, _zonePaths.Count, _meldingPerimeters.Count, _subZoneRegionCount, _encounterNameCount);
+        }
+        else
+        {
+            _logger.Information("Zone {ZoneId}: No bounds layer, Paths {PathCount} MeldingPerims {MeldingCount} SubZoneRegions {SubZoneCount} EncounterNames {EncCount}",
+                zoneId, _zonePaths.Count, _meldingPerimeters.Count, _subZoneRegionCount, _encounterNameCount);
         }
 
         var chunkRefs = ChunkOriginCalculator.ExtractChunks(rootLayer, zoneId);

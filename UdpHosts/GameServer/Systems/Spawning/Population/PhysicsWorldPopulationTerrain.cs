@@ -59,6 +59,11 @@ public sealed class PhysicsWorldPopulationTerrain : IWorldPopulationTerrain
 
     public int SurfaceCount => _physics?.WalkableFaceCount ?? 0;
 
+    public Vector3? ZoneBoundsMin => _physics?.ZoneBoundsMin;
+    public Vector3? ZoneBoundsMax => _physics?.ZoneBoundsMax;
+
+    public bool IsInsideZoneBounds(Vector3 position) => _physics == null || _physics.IsInsideZoneBounds(position);
+
     public bool TryGetSurface(int index, out Vector3 position)
     {
         position = default;

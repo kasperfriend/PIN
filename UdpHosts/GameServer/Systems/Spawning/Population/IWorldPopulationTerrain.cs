@@ -48,4 +48,11 @@ public interface IWorldPopulationTerrain
     /// <param name="position">The validated spot; <paramref name="candidate"/> when nothing moved it.</param>
     /// <returns>Whether a body of that size can stand there.</returns>
     bool TryResolveStandingSpot(Vector3 candidate, float bodyRadius, float bodyHeight, out Vector3 position);
+
+    /// <summary>Zone bounds from ZoneBoundsLayer (0x21000) if present, from actual client map file.</summary>
+    Vector3? ZoneBoundsMin { get; }
+    Vector3? ZoneBoundsMax { get; }
+
+    /// <summary>Whether position is inside zone bounds, or true when no bounds are known.</summary>
+    bool IsInsideZoneBounds(Vector3 position);
 }

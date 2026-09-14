@@ -229,6 +229,22 @@ public partial class PhysicsEngine
     /// </summary>
     public IReadOnlyList<ZoneChunkRef> ZoneChunks => _zoneLoader.ChunkRefs;
 
+    /// <summary>Zone bounds from ZoneBoundsLayer (0x21000) if present, from actual client map file.</summary>
+    public Vector3? ZoneBoundsMin => _zoneLoader.ZoneBoundsMin;
+    public Vector3? ZoneBoundsMax => _zoneLoader.ZoneBoundsMax;
+
+    /// <summary>Authored path layers (0x20800) - vehicle/dropship routes, NOT NPC patrols (see MAP_FILES_FINDINGS.md).</summary>
+    public IReadOnlyList<ZonePathLayer> ZonePaths => _zoneLoader.ZonePaths;
+
+    /// <summary>Melding perimeter layers from zone file.</summary>
+    public IReadOnlyList<MeldingPerimeterLayer> MeldingPerimeters => _zoneLoader.MeldingPerimeters;
+
+    public int SubZoneRegionCount => _zoneLoader.SubZoneRegionCount;
+    public int EncounterNameCount => _zoneLoader.EncounterNameCount;
+
+    /// <summary>Whether position is inside zone bounds, or true when no bounds are known.</summary>
+    public bool IsInsideZoneBounds(Vector3 pos) => _zoneLoader.IsInsideZoneBounds(pos);
+
     /// <summary>Queries the loaded collision-derived navigation mesh, if one is available.</summary>
     public IReadOnlyList<Vector3>? FindNavigationPath(
         Vector3 start,
