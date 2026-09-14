@@ -67,6 +67,22 @@ public sealed class NpcRoutine
             _random = 1;
         }
 
+        // maxDistJitter is per-instance variation of the home envelope, not a shared template constant.
+        // Deterministic per entity: a SwarmWanderer with maxDistFromSpawn=30, maxDistJitter=5 gets 30..35
+        // depending on its id, while a row without jitter keeps the exact profile radius.
+        EffectiveHomeRadius = profile.HomeRadius;
+        if (profile.MaxDistJitter > 0f && float.IsFinite(profile.MaxDistJitter))
+        {
+            // Use a hash of the id for the jitter so the main PRNG sequence for wander legs stays
+            // identical for non-jitter rows and the jitter itself is deterministic per NPC.
+            uint jitterHash = unchecked((uint)entityId ^ (uint)(entityId >> 16) ^ monsterId ^ 0x85EBCA6Bu);
+            if (jitterHash == 0) jitterHash = 1;
+            float jitterRand = (jitterHash >> 8) * (1f / 16777216f);
+            EffectiveHomeRadius = profile.HomeRadius + (jitterRand * profile.MaxDistJitter);
+            if (profile.LeashDistance.HasValue && profile.LeashDistance.Value > 0f)
+                EffectiveHomeRadius = MathF.Min(EffectiveHomeRadius, profile.LeashDistance.Value);
+        }
+
         State = profile.Kind == NpcRoutineKind.ExternalRoute ? NpcRoutineState.MissingRoute
             : profile.HasRoutine ? NpcRoutineState.Waiting : NpcRoutineState.Inactive;
         _nextActionAt = AddTime(now, RestDuration());
@@ -74,6 +90,7 @@ public sealed class NpcRoutine
 
     public NpcRoutineProfile Profile { get; }
     public Vector3 Home { get; }
+    public float EffectiveHomeRadius { get; }
     public Vector3? Goal { get; private set; }
     public NpcRoutineState State { get; private set; }
     public ulong NextActionAt => _nextActionAt;
@@ -102,6 +119,21 @@ public sealed class NpcRoutine
         if (!Profile.HasRoutine || !Finite(position) || !Finite(Home))
         {
             return;
+        }
+
+        // Despawn distance is an explicit authored limit; an NPC beyond it is outside its
+        // original leash and should not keep wandering. We park it as Inactive rather than
+        // invent a teleport - the world-population slot still owns its lifetime.
+        if (Profile.DespawnDistance > 0f && AiVectors.HorizontalDistance(position, Home) > Profile.DespawnDistance + ArrivalRadius)
+        {
+            // Treat as if it should return home, but if it cannot reach home within the
+            // normal retry budget it will park. This is the faithful interpretation of the
+            // authored despawnDist without guessing a server-side despawn.
+            if (AiVectors.HorizontalDistance(position, Home) > EffectiveHomeRadius + Profile.DespawnDistance)
+            {
+                Stop();
+                return;
+            }
         }
 
         if (!navigationAvailable)
@@ -185,7 +217,7 @@ public sealed class NpcRoutine
             return;
         }
 
-        if (_returnBeforeResuming || AiVectors.HorizontalDistance(position, Home) > Profile.HomeRadius + ArrivalRadius)
+        if (_returnBeforeResuming || AiVectors.HorizontalDistance(position, Home) > EffectiveHomeRadius + ArrivalRadius)
         {
             if (!Arrived(position, Home))
             {
@@ -198,7 +230,7 @@ public sealed class NpcRoutine
 
         _endEmote = 0;
         if (Profile.WorkFunction.Length > 0 && _activities != null && _activities.TryReserve(
-            _entityId, Profile.WorkFunction, position, Home, Profile.HomeRadius, _lastSpotId, out var spot))
+            _entityId, Profile.WorkFunction, position, Home, EffectiveHomeRadius, _lastSpotId, out var spot))
         {
             _spot = spot;
             _lastSpotId = spot.EntityId;
@@ -224,9 +256,9 @@ public sealed class NpcRoutine
         var fromHome = goal - Home;
         fromHome.Z = 0f;
         float radius = fromHome.Length();
-        if (radius > Profile.HomeRadius && radius > 0f)
+        if (radius > EffectiveHomeRadius && radius > 0f)
         {
-            fromHome *= Profile.HomeRadius / radius;
+            fromHome *= EffectiveHomeRadius / radius;
             goal.X = Home.X + fromHome.X;
             goal.Y = Home.Y + fromHome.Y;
         }
@@ -269,6 +301,17 @@ public sealed class NpcRoutine
         ReleaseSpot();
         Goal = null;
         _endEmote = 0;
+        // despawnWhenStuck is an explicit authored flag (32 rows). The original game could despawn
+        // a stuck NPC; PIN parks it as Inactive rather than teleporting or respawning, which keeps
+        // the world-population slot from spinning on an unreachable point while staying faithful to
+        // the request that this NPC should not keep retrying forever.
+        if (Profile.DespawnWhenStuck)
+        {
+            State = NpcRoutineState.Inactive;
+            _stopped = true;
+            _nextActionAt = ulong.MaxValue;
+            return;
+        }
         State = NpcRoutineState.Waiting;
         _nextActionAt = AddTime(now, Profile.RetryMs);
     }

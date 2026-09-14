@@ -194,7 +194,9 @@ every anchor near it, and on a real zone that is the expensive phase. Per cell:
 * **Habitat** — from the authored anchors around the cell: outposts (with their own
   radius, 150-550 m in Coral Forest), the zone's deployables (469 of them: sized
   by `DeployableInfluenceRadius`), and every Melding perimeter control point
-  (16 Meldings, 4-23 points each: sized by `MeldingInfluenceRadius`). A settlement
+  (16 Meldings, 4-23 points each: sized by `MeldingInfluenceRadius`; the shipped
+  knots are the spline - the planner interpolates edges every 60 m so the
+  influence follows the wall instead of a dotted line). A settlement
   wins over the Melding around it - an outpost inside a Melding perimeter is still
   a place players respawn in. Anchors are bucketed into 1024 m squares so
   classification is a 3×3 bucket scan rather than a scan of all 509 anchors.
@@ -471,8 +473,9 @@ Stated plainly, because each of these shaped a decision above:
   rows**, so almost every body is sized by the rules' defaults, which are the AI's
   navigation agent numbers.
 * **Deployables and Melding control points carry no radius**, so the planner sizes
-  them (`DeployableInfluenceRadius`, `MeldingInfluenceRadius`); outposts do carry
-  one and use their own.
+  them (`DeployableInfluenceRadius`, `MeldingInfluenceRadius`; Melding edges are
+  interpolated every 60 m from the shipped spline knots so the wall is continuous);
+  outposts do carry one and use their own.
 
 What this means in practice: the system is faithful to the data that exists - every
 row that can be a world inhabitant is placed, on ground the zone vouches for, at the

@@ -62,9 +62,40 @@ public class NpcRoutineProfileTests
     {
         var profile = Resolve("SwarmWanderer(ability=\"Leap\", chanceAbilityAttack=0.00, maxDistFromSpawn=30, maxDistJitter=5, swarmRadiusMax=10, swarmRadiusMin=8, maxMeleeCombatBursts=3, attackLimit=3, idleEmoteMinTime=7000, idleEmoteMaxTime=12000, wanderDistance=10)");
         Assert.Equal(30f, profile.HomeRadius);
+        Assert.Equal(5f, profile.MaxDistJitter);
+        Assert.Equal(8f, profile.SwarmRadiusMin);
+        Assert.Equal(10f, profile.SwarmRadiusMax);
         Assert.Equal(10f, profile.WanderDistance);
         Assert.Equal(7000, profile.RestMinMs);
         Assert.Equal(12000, profile.RestMaxMs);
+    }
+
+    [Fact]
+    public void MaxDistJitterIsStoredSeparatelyFromHomeRadius()
+    {
+        var noJitter = Resolve("Wander(maxDistFromSpawn=30, wanderDistance=10)");
+        Assert.Equal(30f, noJitter.HomeRadius);
+        Assert.Equal(0f, noJitter.MaxDistJitter);
+        var withJitter = Resolve("Wander(maxDistFromSpawn=30, maxDistJitter=5, wanderDistance=10)");
+        Assert.Equal(30f, withJitter.HomeRadius);
+        Assert.Equal(5f, withJitter.MaxDistJitter);
+    }
+
+    [Fact]
+    public void DespawnFlagsAreReadWithoutInventingBehavior()
+    {
+        var profile = Resolve("Wander(despawnWhenStuck=1, despawnDist=45)");
+        Assert.True(profile.DespawnWhenStuck);
+        Assert.Equal(45f, profile.DespawnDistance);
+        Assert.False(Resolve("Wander").DespawnWhenStuck);
+        Assert.Equal(0f, Resolve("Wander").DespawnDistance);
+    }
+
+    [Fact]
+    public void LeashToSpawnFlagIsPreserved()
+    {
+        Assert.True(Resolve("Wander(leashToSpawn=1)").LeashToSpawn);
+        Assert.False(Resolve("Wander").LeashToSpawn);
     }
 
     [Fact]

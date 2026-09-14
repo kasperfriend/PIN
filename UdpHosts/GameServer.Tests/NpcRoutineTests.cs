@@ -249,6 +249,49 @@ public class NpcRoutineTests
         Assert.Equal(NpcRoutineState.Inactive, routine.State);
     }
 
+    [Fact]
+    public void MaxDistJitterCreatesPerInstanceHomeVariation()
+    {
+        var home = new Vector3(0f, 0f, 0f);
+        var a = Create("Wander(maxDistFromSpawn=30, maxDistJitter=10, wanderDistance=5)", home: home, id: 0x1000);
+        var b = Create("Wander(maxDistFromSpawn=30, maxDistJitter=10, wanderDistance=5)", home: home, id: 0x2000);
+        Assert.Equal(30f, a.Profile.HomeRadius);
+        Assert.Equal(10f, a.Profile.MaxDistJitter);
+        // Effective radius is base 30 + jitter*rand(0..1) => 30..40, deterministic per id
+        Assert.InRange(a.EffectiveHomeRadius, 30f, 40f);
+        Assert.InRange(b.EffectiveHomeRadius, 30f, 40f);
+        // Different ids must give different effective radii with very high probability
+        // (hash uses id, so two different ids jitter differently)
+        Assert.NotEqual(a.EffectiveHomeRadius, b.EffectiveHomeRadius);
+        // Same id replays exactly
+        var a2 = Create("Wander(maxDistFromSpawn=30, maxDistJitter=10, wanderDistance=5)", home: home, id: 0x1000);
+        Assert.Equal(a.EffectiveHomeRadius, a2.EffectiveHomeRadius);
+    }
+
+    [Fact]
+    public void DespawnWhenStuckParksInsteadOfRetrying()
+    {
+        var routine = Create("Wander(despawnWhenStuck=1)");
+        routine.Update(0, Vector3.Zero, true, true, true);
+        Assert.Equal(NpcRoutineState.Walking, routine.State);
+        routine.Blocked(100);
+        Assert.Equal(NpcRoutineState.Inactive, routine.State);
+        // Stopped is terminal - further updates do not revive
+        routine.Update(10_000, Vector3.Zero, true, true, true);
+        Assert.Null(routine.Goal);
+        Assert.Equal(NpcRoutineState.Inactive, routine.State);
+    }
+
+    [Fact]
+    public void DespawnDistanceBeyondHomeIsTreatedAsStuck()
+    {
+        var home = new Vector3(0f, 0f, 0f);
+        var routine = Create("Wander(despawnDist=10)", home: home);
+        // Position far beyond despawnDist + arrival should stop the routine
+        routine.Update(0, new Vector3(100f, 0f, 0f), true, true, true);
+        Assert.Equal(NpcRoutineState.Inactive, routine.State);
+    }
+
     private static NpcRoutine Create(string behavior = "Wander", Vector3 home = default, ulong id = 0x1000, INpcActivityWorld activities = null)
         => new(id, 179, home, NpcRoutineProfile.Resolve(NpcBehaviorParams.Parse(behavior), rules: Immediate), 0, activities);
 

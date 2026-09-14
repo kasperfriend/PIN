@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using GameServer.StaticDB;
+using GameServer.Systems.Ai;
 using Serilog;
 
 namespace GameServer.Systems.Spawning.Population;
@@ -108,10 +110,15 @@ public sealed class SdbWorldPopulationDataSource : IWorldPopulationDataSource
         }
 
         // The Melding's perimeters are splines of control points (4-23 per Melding, 16 Meldings in
-        // Coral Forest); every control point anchors the ground around it as Melding.
+        // Coral Forest); every control point anchors the ground around it as Melding. The shipped
+        // points are the spline knots - treating them as isolated 120m circles leaves gaps along
+        // the wall between knots. Interpolating the edges with 60m steps makes the habitat
+        // classification follow the perimeter line instead of a dotted line, still using only
+        // the shipped control points and the configured MeldingInfluenceRadius.
         foreach (var melding in CustomDBInterface.GetZoneMeldings(zoneId).Values)
         {
-            foreach (var controlPoint in melding.ControlPoints)
+            var points = melding.ControlPoints;
+            foreach (var controlPoint in points)
             {
                 anchors.Add(new WorldPopulationAnchor(
                     controlPoint,
@@ -119,6 +126,29 @@ public sealed class SdbWorldPopulationDataSource : IWorldPopulationDataSource
                     WorldPopulationHabitat.Melding,
                     0u));
                 meldingPoints++;
+            }
+
+            if (points.Length > 1)
+            {
+                for (int i = 0; i < points.Length; i++)
+                {
+                    var a = points[i];
+                    var b = points[(i + 1) % points.Length];
+                    float edge = AiVectors.HorizontalDistance(a, b);
+                    if (!float.IsFinite(edge) || edge <= 60f)
+                        continue;
+                    int steps = (int)(edge / 60f);
+                    for (int s = 1; s < steps; s++)
+                    {
+                        float t = s / (float)steps;
+                        var mid = new Vector3(
+                            a.X + ((b.X - a.X) * t),
+                            a.Y + ((b.Y - a.Y) * t),
+                            a.Z + ((b.Z - a.Z) * t));
+                        anchors.Add(new WorldPopulationAnchor(mid, 0f, WorldPopulationHabitat.Melding, 0u));
+                        meldingPoints++;
+                    }
+                }
             }
         }
 
