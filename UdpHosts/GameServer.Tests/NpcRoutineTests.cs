@@ -10,11 +10,15 @@ public class NpcRoutineTests
 {
     private static readonly NpcRoutineRules Immediate = new() { RestMinMs = 0, RestMaxMs = 0 };
 
-    [Fact]
-    public void RepeatedWanderingStaysWithinItsHomeAndPerLegBounds()
+    [Theory]
+    [InlineData("Wander")]
+    [InlineData("Wander(nearSpawn=true)")]
+    [InlineData("FastWander(distance=35)")]
+    [InlineData("SwarmWanderer(wanderDistance=10,maxDistFromSpawn=30)")]
+    public void RepeatedWanderingStaysWithinItsHomeAndPerLegBounds(string behavior)
     {
         var home = new Vector3(100f, -50f, 12f);
-        var routine = Create(home: home);
+        var routine = Create(behavior, home: home);
         var position = home;
         for (ulong now = 0; now < 20_000; now += 100)
         {
@@ -25,8 +29,8 @@ public class NpcRoutineTests
             }
 
             var goal = routine.Goal.Value;
-            Assert.InRange(AiVectors.HorizontalDistance(home, goal), 0f, 30.0001f);
-            Assert.InRange(AiVectors.HorizontalDistance(position, goal), 0f, 10.0001f);
+            Assert.InRange(AiVectors.HorizontalDistance(home, goal), 0f, routine.Profile.HomeRadius + 0.0001f);
+            Assert.InRange(AiVectors.HorizontalDistance(position, goal), 0f, routine.Profile.WanderDistance + 0.0001f);
             Assert.Equal(home.Z, goal.Z);
             position = goal; // simulate successful navigation, not a scheduler-owned teleport
         }

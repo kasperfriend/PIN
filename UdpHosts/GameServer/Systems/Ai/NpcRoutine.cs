@@ -231,6 +231,18 @@ public sealed class NpcRoutine
             goal.Y = Home.Y + fromHome.Y;
         }
 
+        // nearSpawn changes the sampling centre, not permission to take a leg twice as long
+        // between opposite sides of the home circle. Keep both envelopes bounded.
+        var leg = goal - position;
+        leg.Z = 0f;
+        float legLength = leg.Length();
+        if (legLength > Profile.WanderDistance)
+        {
+            leg *= Profile.WanderDistance / legLength;
+            goal.X = position.X + leg.X;
+            goal.Y = position.Y + leg.Y;
+        }
+
         // Navigation determines Z, relative to the NPC's current floor, not a roof above its home.
         goal.Z = position.Z;
         if (Arrived(position, goal))
