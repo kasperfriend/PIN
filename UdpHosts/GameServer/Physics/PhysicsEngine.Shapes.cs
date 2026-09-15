@@ -13,6 +13,14 @@ namespace GameServer.Physics;
 public struct CompoundCacheEntry
 {
     public TypedIndex ShapeIndex;
+
+    /// <summary>
+    ///     The middle of the compound's bounds in body space (feet at the origin): the point a
+    ///     shot aimed at the middle of the model actually hits. <see cref="HasAimCenter" /> is
+    ///     false when the bounds could not be computed, in which case callers estimate.
+    /// </summary>
+    public Vector3 AimCenter;
+    public bool HasAimCenter;
 }
 
 public struct ActivePoseShapeData
@@ -178,7 +186,58 @@ public partial class PhysicsEngine
             ShapeIndex = Simulation.Shapes.Add(compound)
         };
 
+        // The middle of the model in body space, computed once per asset (the shape is cached
+        // per AssetCompoundKey and never mutated afterwards). Shots aim at this point through
+        // TryGetCharacterAimPoint instead of an arbitrary height above the feet.
+        if (TryGetCompoundAimCenter(entry.ShapeIndex, out var aimCenter))
+        {
+            entry.AimCenter = aimCenter;
+            entry.HasAimCenter = true;
+        }
+
         return (entry, result);
+    }
+
+    /// <summary>
+    ///     The centre of a compound shape's bounds in body space: all children, each rotated
+    ///     and translated the way the collider holds them. This is where a shot aimed at the
+    ///     middle of the model lands, which is why it is cached on the compound entry rather
+    ///     than recomputed per shot.
+    /// </summary>
+    private bool TryGetCompoundAimCenter(TypedIndex compoundIndex, out Vector3 localCenter)
+    {
+        localCenter = Vector3.Zero;
+        if (Simulation.Shapes[compoundIndex.Type] is not ShapeBatch<Compound> batch)
+        {
+            return false;
+        }
+
+        ref var compound = ref batch[compoundIndex.Index];
+        var min = Vector3.PositiveInfinity;
+        var max = Vector3.NegativeInfinity;
+
+        for (int i = 0; i < compound.Children.Length; i++)
+        {
+            ref var child = ref compound.Children[i];
+            if (Simulation.Shapes[child.ShapeIndex.Type] is not { } childBatch)
+            {
+                return false;
+            }
+
+            childBatch.ComputeBounds(child.ShapeIndex.Index, child.LocalPosition, child.LocalOrientation, out var childMin, out var childMax);
+            min = Vector3.Min(min, childMin);
+            max = Vector3.Max(max, childMax);
+        }
+
+        // A body whose top does not rise above its feet is not a standing model; the caller
+        // estimates instead of aiming at its floor.
+        if (!float.IsFinite(min.Z) || !float.IsFinite(max.Z) || max.Z <= 0f)
+        {
+            return false;
+        }
+
+        localCenter = (min + max) * 0.5f;
+        return float.IsFinite(localCenter.Z) && localCenter.Z > 0f;
     }
 
     public TypedIndex GetAssetShape(uint assetId, Vector3 offset, float scale = 1f)
@@ -292,5 +351,33 @@ public partial class PhysicsEngine
 
         AssetCompoundKey key = GetCharacterPoseAsset(character);
         return GetAssetShape(key);
+    }
+
+    /// <summary>
+    ///     The middle of the character's current collision volume, in world space: the point a
+    ///     shot at the model actually hits. It follows the collision the character is using
+    ///     right now (standing, crouched, sprinting, falling, prone - the same resolution
+    ///     <see cref="GetCharacterPoseAsset" /> applies), so the aim tracks the pose the model
+    ///     is in. False when the shape does not resolve (no pose data, or the asset failed to
+    ///     load) and the caller falls back to its own estimate.
+    /// </summary>
+    public bool TryGetCharacterAimPoint(CharacterEntity character, out Vector3 worldPoint)
+    {
+        worldPoint = Vector3.Zero;
+        if (character == null)
+        {
+            return false;
+        }
+
+        AssetCompoundKey key = GetCharacterPoseAsset(character);
+        if (!_compoundCache.TryGetValue(key, out var entry) || !entry.HasAimCenter)
+        {
+            return false;
+        }
+
+        // The body is posed at the feet with the inverse of the entity orientation (see
+        // UpdateEntity), so the local centre rotates the same way a muzzle offset does.
+        worldPoint = character.Position + QuaternionEx.Transform(entry.AimCenter, QuaternionEx.Inverse(character.Orientation));
+        return true;
     }
 }

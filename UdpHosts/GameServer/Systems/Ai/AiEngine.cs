@@ -8,6 +8,7 @@ using BepuUtilities;
 using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.Entities.Turret;
+using GameServer.Enums;
 using GameServer.StaticDB;
 using GameServer.Systems.CharacterLifecycle;
 using GameServer.Systems.Combat;
@@ -1199,8 +1200,16 @@ public class AiEngine
         }
 
         var origin = entity.Position + MuzzleOffset(entity, profile);
-        var aimPoint = target.Position + new Vector3(0f, 0f, _eyeHeight);
-        var direction = aimPoint - origin;
+
+        // The middle of the model the shot will hit (the target's current collision volume),
+        // led for the target's movement, and launched on the drop-compensated parabola for
+        // the rows the sim actually drops. See NpcAttackAim for the rules and the fallbacks.
+        var aimPoint = NpcAttackAim.AimPoint(_shard.Physics, target);
+        float drop = profile.Ammo is { } ammo &&
+                     new AmmoFlags(ammo.Flags).Simulation == AmmoFlags.SimulationMode.Parabolic
+            ? ammo.Gravity
+            : 0f;
+        var direction = NpcAttackAim.ShotDirection(origin, aimPoint, target.Velocity, profile.ProjectileSpeed, drop, out _);
 
         if (direction.LengthSquared() <= 0.0001f)
         {
@@ -1324,15 +1333,24 @@ public class AiEngine
             {
                 entity.SetOrientation(AiVectors.OrientationFacing(facing));
 
-                // Only update the aim when the horizontal projection is
-                // non-degenerate. When the target is directly above or
-                // below the NPC the XY vector has near-zero length and
-                // Normalize would produce NaN, which later crashes the
+                // Point the weapon at the middle of the model, the same point the shot is fired
+                // at (NpcAttackAim.AimPoint), so the muzzle, the tracer and the impact agree.
+                // The flat line to the feet stays as the fallback when the model point is
+                // degenerate: when the target is directly above or below the NPC the XY vector
+                // has near-zero length and Normalize would produce NaN, which later crashes the
                 // pose serializer with ArithmeticException.
-                var aimFlat = new Vector3(facing.X, facing.Y, 0f);
-                if (aimFlat.LengthSquared() > 0.0001f)
+                var aimAtModel = NpcAttackAim.AimPoint(_shard.Physics, target) - entity.Position;
+                if (aimAtModel.LengthSquared() > 0.0001f)
                 {
-                    entity.AimDirection = Vector3.Normalize(aimFlat);
+                    entity.AimDirection = Vector3.Normalize(aimAtModel);
+                }
+                else
+                {
+                    var aimFlat = new Vector3(facing.X, facing.Y, 0f);
+                    if (aimFlat.LengthSquared() > 0.0001f)
+                    {
+                        entity.AimDirection = Vector3.Normalize(aimFlat);
+                    }
                 }
             }
         }

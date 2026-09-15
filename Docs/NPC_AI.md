@@ -243,6 +243,34 @@ inside the weapon's own first-shot cone (`NpcAttackSpreadMath`: template
 shotgun's pellets fan out instead of stacking on a single chest-aimed ray. A
 weapon the database gives no spread (every melee row, and the ranged rows whose
 min/max/starting are 0) fires along the aim, which is what those rows asked for.
+
+Where the round goes before the spread is applied is resolved by
+`NpcAttackAim`, and it is deliberately not "the eyes":
+
+* **The aim point is the middle of the model, not a fixed height above the feet.**
+  It is the centre of the target's *current* collision volume - the physics
+  engine caches the middle of each collision compound per asset
+  (`PhysicsEngine.TryGetCharacterAimPoint`), and the same pose resolution the
+  body uses picks the compound, so crouch, sprint, falling and prone are tracked.
+  When the shape does not resolve, half the pose's own `PhysicsHeight` (the
+  database's physics capsule) stands in, and when the row carries no height at
+  all, a mid-torso default does. Aiming at the volume the shot actually hits is
+  what makes the impact land in the model instead of the hitbox forgiving a ray
+  that visibly sailed over the head.
+* **The round is led for the target's movement.** The shot spends its flight
+  time in the air and the target keeps moving through it, so the aim leads the
+  target's velocity over that time (settled against the shot's own flight time,
+  clamped so a bad velocity aims wide rather than across the map). A standing
+  target takes no lead; the old straight shot is what a zero velocity gives.
+* **Parabolic rows are compensated for the drop.** For the ammo the simulation
+  actually drops, the initial direction is the closed-form parabola through the
+  (led) aim point - the exact curve `ProjectileSim` integrates - instead of
+  firing at the point the round would fall away from. An arc the speed cannot
+  reach falls back to the straight shot, which is the old behaviour.
+
+The weapon's visible aim agrees with the shot: while a brain faces its target
+it points at the same model-mid point, so the muzzle, the tracer (the
+`WeaponProjectileFired` direction) and the impact all go to the same place.
 Neither mode crits or counts as a headshot.
 
 Movement is applied by writing the entity position/orientation, pushing the new
