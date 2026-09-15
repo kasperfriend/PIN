@@ -1,9 +1,13 @@
+using System.Linq;
 using GameServer;
 using GameServer.Entities;
 using GameServer.Entities.Character;
+using GameServer.StaticDB.Records.aptfs;
 using GameServer.StaticDB.Records.customdata;
 using GameServer.Systems.Aptitude;
+using GameServer.Systems.Aptitude.Commands.Impact;
 using GameServer.Systems.Aptitude.Commands.Interaction;
+using GameServer.Systems.Aptitude.Commands.Requirement;
 using GameServer.Tests.Fakes;
 using Xunit;
 
@@ -126,6 +130,73 @@ public class InteractionCommandsTests
         Assert.Null(player.ActiveInteraction);
         networkPlayer.FlushAttachedChannels();
     }
+
+    [Fact]
+    public void VendorChannel_RunsThroughTheFullAbilityGraph_UntilTheCompletionTime()
+    {
+        // The prod-1962 vendor interaction graph the shard runs (MOBS_AND_NPCS.md 5.2), server
+        // side: the root "interacting" effect 269 and the per-type (vendor) effect 279 both live
+        // on the player, and both carry the interact target in their context target lists
+        // (ImpactApplyEffect PassTargets=1). 279's duration chain holds the channel open while
+        // the recorded completion time has not passed and the owner still carries 269; 279's
+        // remove chain clears 269 (the CallCommand -> ability 181 step), and 269's remove chain
+        // ends the interaction. The duration requirement must ask about the effect's OWNER -
+        // the NPC target never carries effect 269, so a target-based check expires the vendor
+        // effect on its first duration tick and the interaction dies "cancelled - no content".
+        var shard = new FakeShard { CurrentTimeLong = StartTime };
+        var factory = new FakeAptitudeFactory(shard);
+        shard.Abilities = new AbilitySystem(shard, factory);
+        var (player, networkPlayer) = CreatePlayer(shard);
+        var npc = CreateVendorNpc(shard, vendorId: 310, durationMs: 500);
+
+        factory.Effects[269] = MakeEffect(269, remove: Commands(new EndInteractionCommand(1154325)));
+        factory.Effects[279] = MakeEffect(279,
+            duration: Commands(
+                new InteractionInProgressCommand(new InteractionInProgressCommandDef { Id = 1135846 }),
+                new RequireHasEffectCommand(new RequireHasEffectCommandDef { Id = 1154324, EffectId = 269 })),
+            remove: Commands(new ImpactRemoveEffectCommand(new ImpactRemoveEffectCommandDef { EffectId = 269, RemoveFromSelf = true })));
+
+        var activation = new Context(shard, player) { Targets = new AptitudeTargets(npc) };
+        Assert.True(shard.Abilities.DoApplyEffect(269, player, activation));
+        Assert.True(shard.Abilities.DoApplyEffect(279, player, activation));
+        new InteractionCompletionTimeCommand(new InteractionCompletionTimeCommandDef { Id = 1135843 }).Execute(activation);
+
+        // One millisecond before the channel completes: the vendor effect must still be holding.
+        Tick(shard, player, StartTime + 499);
+        Assert.NotNull(GetActive(player, 279));
+        Assert.NotNull(player.ActiveInteraction);
+        Assert.Equal(0, player.AuthorizedTerminal.TerminalType);
+
+        // At the recorded completion time the vendor effect expires, its remove chain clears the
+        // root effect, and the end command fires the completed content: the vendor terminal.
+        Tick(shard, player, StartTime + 500);
+        Assert.Null(GetActive(player, 279));
+        Assert.Null(GetActive(player, 269));
+        Assert.Null(player.ActiveInteraction);
+        Assert.Equal(7, player.AuthorizedTerminal.TerminalType);
+        Assert.Equal(310u, player.AuthorizedTerminal.TerminalId);
+        networkPlayer.FlushAttachedChannels();
+    }
+
+    private static EffectState GetActive(CharacterEntity character, uint effectId)
+    {
+        return character.GetActiveEffects().FirstOrDefault(state => state?.Effect.Id == effectId);
+    }
+
+    private static void Tick(FakeShard shard, CharacterEntity character, ulong time)
+    {
+        shard.CurrentTimeLong = time;
+        shard.Abilities.ProcessTarget(character, time);
+    }
+
+    private static Chain Commands(params ICommand[] commands) => new() { Commands = [.. commands] };
+
+    private static Effect MakeEffect(uint id, Chain duration = null, Chain remove = null) => new()
+    {
+        Data = new StaticDB.Records.apt.StatusEffectData { Id = id, MaxStackCount = 1, UpdateFrequency = 20 },
+        DurationChain = duration,
+        RemoveChain = remove,
+    };
 
     private static (CharacterEntity Player, FakeNetworkPlayer Network) CreatePlayer(FakeShard shard)
     {
