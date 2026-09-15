@@ -979,7 +979,17 @@ Unmanned fire lives in `TurretAi` (ticked by `AiEngine` before the empty-brains
 return): a seated turret (`ControllingPlayer != null`) is left to the gunner's
 packets; an unmanned one picks the closest hostile player inside the lead
 weapon's `AttackRange` (not the NPC `AggroRadius`) and fires at
-`AttackIntervalMs`. The source is the parent `CharacterEntity`, else the parent
+`AttackIntervalMs`. **Aim:** the unmanned shot takes the same corrected aim as
+the NPC's ranged attack (above) - the middle of the target's model, led and
+drop-compensated - resolved through `NpcAttackAim`: `AimPoint` for the point
+(collision volume centre, else half the pose's `PhysicsHeight`, else the 0.9 m
+default), `ShotDirection` for the lead over the shot's own flight time (clamped
+at 3 m) and the closed-form parabola for the `Parabolic` ammo rows. The origin
+is the lead barrel's own muzzle, resolved by `TurretWeaponFire.LeadMuzzleOrigin`
+through the same `ResolveOrigin` the fire path uses per barrel, so the aim and
+the shot leave from the same point; `EyeHeight` (1.4 m) remains for the line of
+sight cast only. A seated gunner fires along their own aim packet; that path is
+unchanged. The source is the parent `CharacterEntity`, else the parent
 `BaseAptitudeEntity.Owner`. `dbcharacter::Turret.Behavior` is a numeric flag
 (`"1"` or `-`), not a CAIS behaviour string. A turret whose weapon overcharges
 runs that ability through the gunner's shard. The turret protocol has no

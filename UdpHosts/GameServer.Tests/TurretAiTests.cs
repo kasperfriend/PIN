@@ -41,7 +41,7 @@ public class TurretAiTests
         SlotIndex = 2,
     };
 
-    private static FakeNpcAttackDataSource Data()
+    private static FakeNpcAttackDataSource Data(bool parabolic = false)
     {
         var data = new FakeNpcAttackDataSource();
         data.WithWeapon(WeaponId, RangedTemplate());
@@ -51,7 +51,9 @@ public class TurretAiTests
             ProjectileSpeed = 40f,
             ImpactRadius = 0.5f,
             MaxRadius = 1.5f,
-            Flags = 1,
+            // 1 = SimulationMode.Linear, 2 = SimulationMode.Parabolic.
+            Flags = parabolic ? 2 : 1,
+            Gravity = parabolic ? 9.81f : 0f,
         };
         data.WithAttribute(WeaponId, 954, 50f);
         return data;
@@ -67,7 +69,7 @@ public class TurretAiTests
     }
 
     private static (FakeShard Shard, TurretAi Ai, RecordingAiProjectileLauncher Shots, TurretEntity Turret, CharacterEntity Owner, CharacterEntity Target)
-        Create(Vector3 targetPosition, IAiHostility hostility = null)
+        Create(Vector3 targetPosition, IAiHostility hostility = null, Vector3? muzzleOffset = null, bool parabolic = false)
     {
         var shard = new FakeShard();
         var owner = CreateLiving(shard, Vector3.Zero);
@@ -82,11 +84,22 @@ public class TurretAiTests
         var client = new FakeNetworkPlayer(shard) { CharacterEntity = target, SocketId = 1 };
         shard.Clients[client.SocketId] = client;
 
+        // The barrel's muzzle hardpoint: with an offset the shot leaves from turret base + the
+        // offset, like a real turret whose barrel sits metres above its base.
+        var weapon = new TurretWeapon
+        {
+            TurretTypeId = TurretTypeId,
+            WeaponId = WeaponId,
+            Id = 1,
+            MuzzleHardpoint = muzzleOffset.HasValue ? "Muzzle" : null,
+        };
+
         var shots = new RecordingAiProjectileLauncher();
         var fire = new TurretWeaponFire(
-            _ => [new TurretWeapon { TurretTypeId = TurretTypeId, WeaponId = WeaponId, Id = 1 }],
-            new NpcAttackResolver(Data()),
-            shots);
+            _ => [weapon],
+            new NpcAttackResolver(Data(parabolic)),
+            shots,
+            hardpointOffset: muzzleOffset.HasValue ? _ => muzzleOffset.Value : null);
         var ai = new TurretAi(shard, hostility ?? new AlwaysHostileAiHostility(), fire);
         Assert.True(ai.Register(turret));
         return (shard, ai, shots, turret, owner, target);
@@ -109,6 +122,76 @@ public class TurretAiTests
             turret.Turret_ObserverView.CurrentPoseProp.Rotation != Quaternion.Identity,
             "the turret should yaw toward the target");
         Assert.Equal(100_000, target.CurrentHealth);
+    }
+
+    [Fact]
+    public void UnmannedTurret_AimsAtTheMiddleOfTheTargetModel()
+    {
+        // The barrel sits 2 m above the base. The AI must aim from that muzzle at the middle
+        // of the target's model (0.9 m above its feet) - the old code aimed from the turret's
+        // feet at a fixed 1.4 m eye height, which for a high barrel shot that up and over the
+        // model.
+        var (_, ai, shots, _, _, _) = Create(
+            new Vector3(20f, 0f, 0f),
+            muzzleOffset: new Vector3(0f, 0f, 2f));
+
+        ai.Tick(FirstTick);
+
+        var shot = Assert.Single(shots.Shots);
+        Assert.Equal(new Vector3(0f, 0f, 2f), shot.Origin);
+
+        // Straight from (0, 0, 2) at (20, 0, 0.9). The old aim (from the feet at (20, 0, 1.4))
+        // ran at Z ≈ +0.070; this one runs below horizontal at Z ≈ −0.055.
+        Assert.Equal(0.9985f, shot.Direction.X, 4);
+        Assert.Equal(-0.0549f, shot.Direction.Z, 4);
+    }
+
+    [Fact]
+    public void UnmannedTurret_LeadsAMovingTarget()
+    {
+        // The target runs +Y at 10 m/s. At the ~0.5 s flight time it would move ~5 m, but the
+        // lead is clamped at 3 m, so the aim point settles at (15, 13) instead of (15, 10).
+        var (_, ai, shots, _, _, target) = Create(
+            new Vector3(15f, 10f, 0f),
+            muzzleOffset: new Vector3(0f, 0f, 2f));
+        target.Velocity = new Vector3(0f, 10f, 0f);
+
+        ai.Tick(FirstTick);
+
+        var shot = Assert.Single(shots.Shots);
+
+        // Aiming at (15, 13): the direction's Y/X ratio is 13/15 ≈ 0.867, whereas the unled
+        // aim at (15, 10) is 10/15 ≈ 0.667.
+        Assert.Equal(0.867f, shot.Direction.Y / shot.Direction.X, 3);
+    }
+
+    [Fact]
+    public void UnmannedTurret_CompensatesParabolicDrop()
+    {
+        // A parabolic row (SimulationMode.Parabolic) falls 0.5·g·t² over its flight, so the AI
+        // must launch on the arc that ends at the middle of the model, not along the straight
+        // line to it. Over 20 m the round is in the air ~0.5 s and drops ~1.2 m, so the shot
+        // has to go slightly up to land at 0.9 m from a 2 m muzzle.
+        var (_, ai, shots, _, _, _) = Create(
+            new Vector3(20f, 0f, 0f),
+            muzzleOffset: new Vector3(0f, 0f, 2f),
+            parabolic: true);
+
+        ai.Tick(FirstTick);
+
+        var shot = Assert.Single(shots.Shots);
+        Assert.True(
+            shot.Direction.Z > 0f,
+            "a straight line from (0, 0, 2) to (20, 0, 0.9) points down; the drop-compensated shot must point up");
+
+        // Re-run the shot through the same parabola ProjectileSim integrates and check where
+        // it is when its XY reaches the target: it must be the middle of the model.
+        Vector3 velocity = shot.Direction * shot.ProjectileSpeed;
+        float t = 20f / velocity.X;
+        Vector3 landed = shot.Origin + velocity * t + new Vector3(0f, 0f, -0.5f * 9.81f * t * t);
+        Assert.Equal(20f, landed.X, 3);
+        Assert.Equal(0f, landed.Y, 3);
+        Assert.Equal(0.9f, landed.Z, 3);
     }
 
     [Fact]

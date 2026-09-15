@@ -211,12 +211,35 @@ public sealed class TurretWeaponFire
     ///     the type has none. Unmanned AI uses this for range and cadence; seated fire still walks
     ///     every row.
     /// </summary>
-    public NpcAttackProfile ResolveLeadProfile(uint turretType)
+    public NpcAttackProfile ResolveLeadProfile(uint turretType) =>
+        FirstRanged(turretType)?.Profile ?? NpcAttackProfile.Unarmed;
+
+    /// <summary>
+    ///     The muzzle the first ranged row of the type (the same row <see cref="ResolveLeadProfile" />
+    ///     resolves) fires from: the shared per-barrel <see cref="ResolveOrigin" />, so the unmanned
+    ///     AI aims from the shot's true starting point (the hardpoint, often metres above the base)
+    ///     instead of the turret's feet. Null when the type has no ranged row to fire.
+    /// </summary>
+    public Vector3? LeadMuzzleOrigin(
+        TurretEntity turret,
+        CharacterEntity gunner,
+        uint time,
+        Vector3 aim,
+        Vector3? shooterVelocity)
+    {
+        var first = FirstRanged(turret.Type);
+        return first.HasValue
+            ? ResolveOrigin(turret, gunner, first.Value.Weapon, time, aim, shooterVelocity, _hardpointOffset)
+            : null;
+    }
+
+    /// <summary>The first ranged row of a turret type, resolved, or null when the type has none.</summary>
+    private (NpcAttackProfile Profile, TurretWeapon Weapon)? FirstRanged(uint turretType)
     {
         var weapons = _weapons(turretType);
         if (weapons == null)
         {
-            return NpcAttackProfile.Unarmed;
+            return null;
         }
 
         foreach (var weapon in weapons)
@@ -235,11 +258,11 @@ public sealed class TurretWeaponFire
 
             if (profile.IsRanged && profile.Ammo != null)
             {
-                return profile;
+                return (profile, weapon);
             }
         }
 
-        return NpcAttackProfile.Unarmed;
+        return null;
     }
 
     /// <summary>
