@@ -75,6 +75,10 @@ public class SDBInterface
     private static Dictionary<uint, VendorTokenMachine> _vendorTokenMachine;
     private static List<VendorTokenDisplayItems> _vendorTokenDisplayItems;
     private static List<VendorTokenKeyItems> _vendorTokenKeyItems;
+    private static List<VendorTokenLootTables> _vendorTokenLootTables;
+    private static Dictionary<uint, LootTable> _lootTable;
+    private static Dictionary<uint, List<LootTableItemDist>> _lootTableItemDist;
+    private static Dictionary<uint, List<LootTableSubTableDist>> _lootTableSubTableDist;
     private static Dictionary<uint, AbilityModule> _abilityModule;
     private static Dictionary<uint, Battleframe> _battleframe;
     private static Dictionary<uint, CarryableObject> _carryableObject;
@@ -357,6 +361,10 @@ public class SDBInterface
         _vendorTokenMachine = loader.LoadVendorTokenMachine();
         _vendorTokenDisplayItems = loader.LoadVendorTokenDisplayItems();
         _vendorTokenKeyItems = loader.LoadVendorTokenKeyItems();
+        _vendorTokenLootTables = loader.LoadVendorTokenLootTables();
+        _lootTable = loader.LoadLootTable();
+        _lootTableItemDist = loader.LoadLootTableItemDist();
+        _lootTableSubTableDist = loader.LoadLootTableSubTableDist();
         _abilityModule = loader.LoadAbilityModule();
         _battleframe = loader.LoadBattleframe();
         _carryableObject = loader.LoadCarryableObject();
@@ -640,7 +648,7 @@ public class SDBInterface
     public static Faction GetFaction(uint id) => _faction.GetValueOrDefault(id);
     public static List<Faction> GetFactions() => [.. _faction.Select(pair => pair.Value)];
     public static List<FactionRelations> GetFactionRelations() => _factionRelations;
-    public static List<FactionReputations> GetFactionReputations(uint id) => _factionReputations.GetValueOrDefault(id);
+    public static List<FactionReputations> GetFactionReputations(uint id) => _factionReputations?.GetValueOrDefault(id);
 
     public static Monster GetMonster(uint id) => _monster?.GetValueOrDefault(id);
     public static IReadOnlyDictionary<uint, Monster> GetMonsters() => _monster;
@@ -817,6 +825,22 @@ public class SDBInterface
     public static IReadOnlyList<VendorTokenDisplayItems> GetVendorTokenDisplayItems() => _vendorTokenDisplayItems ?? [];
 
     public static IReadOnlyList<VendorTokenKeyItems> GetVendorTokenKeyItems() => _vendorTokenKeyItems ?? [];
+
+    /// <summary>
+    ///     The prize pools a token vending machine rolls: one row per (machine, key item, loot
+    ///     table), with the scale that table's quantities are multiplied by.
+    /// </summary>
+    public static IReadOnlyList<VendorTokenLootTables> GetVendorTokenLootTables() => _vendorTokenLootTables ?? [];
+
+    public static LootTable GetLootTable(uint id) => _lootTable?.GetValueOrDefault(id);
+
+    /// <summary>The item rows of a loot table, in database order; empty when the table has none.</summary>
+    public static IReadOnlyList<LootTableItemDist> GetLootTableItemDists(uint lootTableId) =>
+        _lootTableItemDist?.GetValueOrDefault(lootTableId) ?? [];
+
+    /// <summary>The nested-table rows of a loot table, in database order; empty when it has none.</summary>
+    public static IReadOnlyList<LootTableSubTableDist> GetLootTableSubTableDists(uint lootTableId) =>
+        _lootTableSubTableDist?.GetValueOrDefault(lootTableId) ?? [];
     public static AbilityModule GetAbilityModule(uint id) => _abilityModule.GetValueOrDefault(id);
     public static Battleframe GetBattleframe(uint id) => _battleframe?.GetValueOrDefault(id);
     public static CarryableObject GetCarryableObject(uint id) => _carryableObject.GetValueOrDefault(id);

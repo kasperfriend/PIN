@@ -297,7 +297,21 @@ public class CharacterInventory
             return;
         }
 
-        var resource = _resources[sdbId];
+        // ConsumeResource drops a pool the moment it hits zero, but the client still has to hear
+        // that it is empty: indexing the dictionary here used to throw a KeyNotFoundException on
+        // exactly that case (spending the last of a currency, e.g. a vendor purchase), which left
+        // the caller without a response and the client's numbers stale.
+        var resource = _resources.TryGetValue(sdbId, out var existing)
+            ? existing
+            : new Resource
+            {
+                SdbId = sdbId,
+                TextKey = string.Empty,
+                Quantity = 0,
+                SubInventory = GetInventoryTypeByItemTypeId(sdbId),
+                Unk2 = 0,
+            };
+
         var update = new InventoryUpdate()
         {
             ClearExistingData = 0,

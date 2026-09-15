@@ -271,6 +271,34 @@ public class StaticDBLoader : ISDBLoader
             .ToList();
     }
 
+    public List<VendorTokenLootTables> LoadVendorTokenLootTables()
+    {
+        return LoadStaticDB<VendorTokenLootTables>("dbitems::VendorTokenLootTables")
+            .ToList();
+    }
+
+    public Dictionary<uint, LootTable> LoadLootTable()
+    {
+        return LoadStaticDB<LootTable>("dbitems::LootTable")
+            .ToDictionary(row => row.Id);
+    }
+
+    // The dist rows hang off their table by a ushort id; keyed by uint here so a LootTable.Id
+    // (uint) looks its rows up without a cast at every call site.
+    public Dictionary<uint, List<LootTableItemDist>> LoadLootTableItemDist()
+    {
+        return LoadStaticDB<LootTableItemDist>("dbitems::LootTableItemDist")
+            .GroupBy(row => (uint)row.LootTableId)
+            .ToDictionary(group => group.Key, group => group.ToList());
+    }
+
+    public Dictionary<uint, List<LootTableSubTableDist>> LoadLootTableSubTableDist()
+    {
+        return LoadStaticDB<LootTableSubTableDist>("dbitems::LootTableSubTableDist")
+            .GroupBy(row => (uint)row.LootTableId)
+            .ToDictionary(group => group.Key, group => group.ToList());
+    }
+
     public Dictionary<uint, Battleframe> LoadBattleframe()
     {
         return LoadStaticDB<Battleframe>("dbitems::Battleframe")

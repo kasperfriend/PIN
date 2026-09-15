@@ -166,6 +166,9 @@ public class GenericShard : Base
             return;
         }
 
-        client.NetChannels[ChannelType.ReliableGss].SendMessage(response, player.CharacterEntity.EntityId);
+        // Root-namespace (Generic) answers travel against the shard entity on live, not against the
+        // character the window belongs to - the same convention the chat service uses. The capture
+        // of a real vendor session shows both the request and this response carrying the shard's id.
+        client.NetChannels[ChannelType.ReliableGss].SendMessage(response, client.AssignedShard.InstanceId);
     }
 }
