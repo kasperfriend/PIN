@@ -257,7 +257,7 @@ public class VendorTokenRollTests
         ];
         var machines = new[] { new VendorTokenLootTables { MachineId = 7, KeyItemId = 1, LootTableId = 1, LootTableScale = 1f } };
 
-        Assert.Empty(Roll(7, new ScriptedRandom(0), machines, tables, [], subTables));
+        Assert.Empty(Roll(7, new ScriptedRandom(0), keyItemId: 1, machines: machines, tables: tables, items: [], subTables: subTables));
     }
 
     /// <summary>A dangling loot table id awards nothing rather than throwing.</summary>
@@ -266,7 +266,7 @@ public class VendorTokenRollTests
     {
         var machines = new[] { new VendorTokenLootTables { MachineId = 7, KeyItemId = 1, LootTableId = 4242, LootTableScale = 1f } };
 
-        Assert.Empty(Roll(7, new ScriptedRandom(0), machines, Tables, Slot1Items, Slot2Branches));
+        Assert.Empty(Roll(7, new ScriptedRandom(0), keyItemId: 1, machines: machines, tables: Tables, items: Slot1Items, subTables: Slot2Branches));
     }
 
     /// <summary>Every award is a row the tables actually author.</summary>
@@ -305,14 +305,13 @@ public class VendorTokenRollTests
         var itemsByTable = items.GroupBy(row => (uint)row.LootTableId).ToDictionary(group => group.Key, group => (IReadOnlyList<LootTableItemDist>)group.ToList());
         var subsByTable = subTables.GroupBy(row => (uint)row.LootTableId).ToDictionary(group => group.Key, group => (IReadOnlyList<LootTableSubTableDist>)group.ToList());
 
+        // A table with no rows of a kind hands back null, which the roll reads as "none".
         return VendorTokenRoll.Roll(
             machineId,
             keyItemId,
             random,
             machines,
             id => tableById.GetValueOrDefault(id),
-
-            // A table with no rows of a kind hands back null, which the roll reads as "none".
             id => itemsByTable.GetValueOrDefault(id),
             id => subsByTable.GetValueOrDefault(id));
     }
