@@ -317,17 +317,10 @@ public class GameServerModule : Module
     /// </summary>
     internal static void ApplyWorldPopulationSettings(NameValueCollection appSettings, GameServerSettings settings)
     {
-        if (appSettings["SpawnWorldPopulation"] != null)
-        {
-            if (bool.TryParse(appSettings["SpawnWorldPopulation"], out bool spawnWorldPopulation))
-            {
-                settings.SpawnWorldPopulation = spawnWorldPopulation;
-            }
-            else
-            {
-                Log.Error("Cannot parse SpawnWorldPopulation setting value");
-            }
-        }
+        ApplyWorldPopulationBoolSetting(appSettings, "SpawnWorldPopulation", value => settings.SpawnWorldPopulation = value);
+        ApplyWorldPopulationBoolSetting(appSettings, "WorldPopulationSpawnFullZone", value => settings.WorldPopulationSpawnFullZone = value);
+        ApplyWorldPopulationBoolSetting(appSettings, "WorldPopulationFullZone", value => settings.WorldPopulationSpawnFullZone = value);
+        ApplyWorldPopulationBoolSetting(appSettings, "SpawnFullWorldPopulation", value => settings.WorldPopulationSpawnFullZone = value);
 
         ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationMaxLiveNpcs", value => settings.WorldPopulationMaxLiveNpcs = value);
         ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationActivationRadius", value => settings.WorldPopulationActivationRadius = value);
@@ -379,6 +372,24 @@ public class GameServerModule : Module
                 key[SerilogPrefix.Length..],
                 Environment.ExpandEnvironmentVariables(value));
         }
+    }
+
+    /// <summary>Read a boolean population setting when it is present.</summary>
+    private static void ApplyWorldPopulationBoolSetting(NameValueCollection appSettings, string key, Action<bool> apply)
+    {
+        var rawValue = appSettings[key];
+        if (rawValue == null)
+        {
+            return;
+        }
+
+        if (bool.TryParse(rawValue, out bool value))
+        {
+            apply(value);
+            return;
+        }
+
+        Log.Error("Cannot parse {SettingName} setting value '{SettingValue}'", key, rawValue);
     }
 
     /// <summary>

@@ -398,6 +398,7 @@ values, not a comma.
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `SpawnWorldPopulation` | `true` | Master switch. Off means an empty zone (only the authored `character_spawn.json` entities remain) |
+| `WorldPopulationSpawnFullZone` | `false` | When true, spawns the full population across the entire zone instead of distance-based streaming around players, and keeps all NPCs spawned without despawning |
 | `WorldPopulationMaxLiveNpcs` | `150` | Hard ceiling on live population NPCs, whatever the plan could hold |
 | `WorldPopulationActivationRadius` | `150` | Metres from a player within which cells activate |
 | `WorldPopulationDeactivationRadius` | `225` | Metres from a player beyond which an active cell is removed; must be greater than activation radius |

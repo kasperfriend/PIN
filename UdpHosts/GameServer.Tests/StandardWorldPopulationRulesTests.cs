@@ -11,6 +11,7 @@ public class StandardWorldPopulationRulesTests
     {
         var rules = new StandardWorldPopulationRules();
 
+        Assert.False(rules.SpawnFullZone);
         Assert.Equal(150, rules.MaxLiveNpcs);
         Assert.Equal(150f, rules.ActivationRadius);
         Assert.Equal(225f, rules.DeactivationRadius);
@@ -79,6 +80,7 @@ public class StandardWorldPopulationRulesTests
         var rules = StandardWorldPopulationRules.FromSettings(new GameServerSettings
         {
             SpawnWorldPopulation = false,
+            WorldPopulationSpawnFullZone = true,
             WorldPopulationMaxLiveNpcs = 75,
             WorldPopulationActivationRadius = 80f,
             WorldPopulationDeactivationRadius = 135f,
@@ -105,6 +107,7 @@ public class StandardWorldPopulationRulesTests
         });
 
         Assert.False(rules.Enabled);
+        Assert.True(rules.SpawnFullZone);
         Assert.Equal(75, rules.MaxLiveNpcs);
         Assert.Equal(80f, rules.ActivationRadius);
         Assert.Equal(135f, rules.DeactivationRadius);
@@ -137,6 +140,7 @@ public class StandardWorldPopulationRulesTests
             """
             <configuration><appSettings>
                 <add key="SpawnWorldPopulation" value="false"/>
+                <add key="WorldPopulationSpawnFullZone" value="true"/>
                 <add key="WorldPopulationMaxLiveNpcs" value="75"/>
                 <add key="WorldPopulationActivationRadius" value="80"/>
                 <add key="WorldPopulationDeactivationRadius" value="135"/>
@@ -168,6 +172,7 @@ public class StandardWorldPopulationRulesTests
         GameServerModule.ApplyWorldPopulationSettings(appSettings, settings);
 
         Assert.False(settings.SpawnWorldPopulation);
+        Assert.True(settings.WorldPopulationSpawnFullZone);
         Assert.Equal(75, settings.WorldPopulationMaxLiveNpcs);
         Assert.Equal(80f, settings.WorldPopulationActivationRadius);
         Assert.Equal((float?)135f, settings.WorldPopulationDeactivationRadius);

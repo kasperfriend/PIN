@@ -275,7 +275,7 @@ public sealed class WorldPopulationService
 
         CollectPlayers();
 
-        if (_players.Count == 0)
+        if (!_rules.SpawnFullZone && _players.Count == 0)
         {
             if (PlayersElsewhereCount > 0)
             {
@@ -472,8 +472,9 @@ public sealed class WorldPopulationService
     public string DescribeStatus()
     {
         var text = new StringBuilder();
+        int maxLive = _rules.SpawnFullZone ? _planner.SlotCount : _rules.MaxLiveNpcs;
         _ = text.AppendLine(Enabled
-            ? $"World population: on (live {LiveCount}/{_rules.MaxLiveNpcs} NPCs of {_planner.RosterCount} monster rows, {CountDistinctLiveTypes()} kinds in the world)"
+            ? $"World population: on (live {LiveCount}/{maxLive} NPCs of {_planner.RosterCount} monster rows, {CountDistinctLiveTypes()} kinds in the world)"
             : "World population: off");
         _ = text.AppendLine(_planner.IsComplete
             ? $"Plan: {_planner.CellCount} cells, {_planner.SlotCount} slots, {_planner.PlacedRosterCount} rows placed" +
@@ -489,12 +490,13 @@ public sealed class WorldPopulationService
 
         _ = text.AppendLine(string.Format(
             CultureInfo.InvariantCulture,
-            "Streaming: {0} active cells, {1} slots queued, {2}, activate {3:0} m / deactivate {4:0} m",
+            "Streaming: {0} active cells, {1} slots queued, {2}, {3}",
             ActiveCellCount,
             PendingSlotCount,
             players,
-            _rules.ActivationRadius,
-            _rules.DeactivationRadius));
+            _rules.SpawnFullZone
+                ? "full zone (persistent)"
+                : string.Format(CultureInfo.InvariantCulture, "activate {0:0} m / deactivate {1:0} m", _rules.ActivationRadius, _rules.DeactivationRadius)));
         _ = text.AppendLine(string.Format(
             CultureInfo.InvariantCulture,
             "Lifetime: {0} spawned, {1} despawned, {2} lost, {3} placements refused, {4} slots parked, {5} bodies in the placement grid",
@@ -628,6 +630,21 @@ public sealed class WorldPopulationService
 
     private void UpdateActivation(ulong currentTime)
     {
+        if (_rules.SpawnFullZone)
+        {
+            foreach (var cell in _planner.Cells.Values)
+            {
+                if (_activeCells.ContainsKey(cell.Key) || cell.Slots.Count == 0)
+                {
+                    continue;
+                }
+
+                ActivateCell(cell, currentTime);
+            }
+
+            return;
+        }
+
         _wantedActivate.Clear();
         _wantedKeep.Clear();
 
@@ -749,7 +766,9 @@ public sealed class WorldPopulationService
             _spawnedThisWindow = 0;
         }
 
-        int budget = Math.Min(_rules.SpawnBudget - _spawnedThisWindow, _rules.MaxLiveNpcs - LiveCount);
+        int budget = _rules.SpawnFullZone
+            ? _rules.SpawnBudget - _spawnedThisWindow
+            : Math.Min(_rules.SpawnBudget - _spawnedThisWindow, _rules.MaxLiveNpcs - LiveCount);
         if (budget <= 0)
         {
             return;
