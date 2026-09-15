@@ -253,6 +253,38 @@ with — an older build's bug. Update PIN: the hosts now serve from the
 on first start (no certificate reinstall needed). See
 [`Docs/REMOTE_PLAY.md`](Docs/REMOTE_PLAY.md) §8.
 
+**`Hosting failed to start ... SocketException (10013): An attempt was made to access a socket in a way forbidden by its access permissions`**
+
+`WebHostManager` exits after one identical stack trace per host: Windows refused
+every port PIN listens on (4400-4411 and 44300-44311 by default, plus 4499/44399 for
+the catch-all and the GRPC port 5201). Nothing is wrong with the network — the
+machine itself refuses the listen, and it does so for three reasons worth checking
+in this order:
+
+1. **A reserved port range covers the ports.** Hyper-V, WSL2 and Docker Desktop
+   (through WinNAT) reserve chunks of the TCP port space at every boot, and every
+   bind that falls into a reserved range is refused — administrator or not. The
+   ranges move after a reboot, which is why a server that worked yesterday refuses
+   to start today. `netsh interface ipv4 show excludedportrange protocol=tcp` lists
+   them. For today: `net stop winnat`, start PIN, `net start winnat`. For good, run
+   once as administrator while the ports are free:
+   `netsh int ipv4 add excludedportrange protocol=tcp startport=4400 numberofports=16 store=persistent`
+   and the same for `startport=44300`.
+2. **A leftover elevated `WebHostManager.exe`.** A copy still running as
+   administrator keeps every port it holds away from a normal start — end it in
+   Task Manager and start again.
+3. **Antivirus or firewall.** Some only let signed executables open listening
+   sockets; add an exclusion for PIN.
+
+(`10048`, "address already in use", instead of 10013 means something specific is
+already listening: `netstat -ano | findstr :4400` for the process id,
+`tasklist /fi "PID eq <pid>"` for its name. If neither explains it,
+`netsh winsock reset` and a reboot clears the rarer Winsock corruption.)
+
+As a last resort the ports move too: every `urls` entry in `Firefall:WebHosts`
+(`config\appsettings.json`) — and the same numbers in `firefall.ini`, which the
+client dials directly.
+
 **`GameServer terminated: CodeBase is not supported on assemblies loaded from a single-file bundle`**
 
 An outdated release. GameServer used to read `App.config` through
