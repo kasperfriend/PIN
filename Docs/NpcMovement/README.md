@@ -5,7 +5,7 @@ Runtime behaviour and the original-game parity boundary: [NPC routines](../NPC_R
 
 - Source build: **prod-1962**, SHA-256 `de6858fd1e3028cc887a87d71d2315da4c74ed99faa11cec7ab09a7bba60ad47`.
 - **575 tables**, **1,523,277 rows** in the database; **0 unidentified tables**.
-- **257 tables** are referenced by PIN's loader; the other **318** named tables are also included in this census, not silently skipped.
+- **261 tables** are referenced by PIN's loader; the other **314** named tables are also included in this census, not silently skipped.
 - **3,109 monster templates**, all three behaviour columns and all three instance references included in `monsters.json`.
 - Nonzero base/offensive/defensive behaviour-instance references: **757 / 7 / 4** rows. No CAIS instance/tree-definition table was found in this client schema.
 - **0 Vector3Array columns** in the entire file. All spatial and blob columns, including those in unloaded tables, are listed in `tables.csv`.
