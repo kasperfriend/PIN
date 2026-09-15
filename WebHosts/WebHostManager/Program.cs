@@ -141,7 +141,7 @@ internal static class Program
     private static void LogBindAdvice(Exception exception)
     {
         var aggregate = exception as AggregateException;
-        IEnumerable<Exception> candidates = aggregate?.InnerExceptions ?? new[] { exception };
+        IEnumerable<Exception> candidates = aggregate == null ? new[] { exception } : aggregate.InnerExceptions;
         var socketErrors = candidates.OfType<SocketException>()
                                      .GroupBy(socket => socket.SocketErrorCode)
                                      .ToList();
