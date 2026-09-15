@@ -193,7 +193,9 @@ public class InteractionCommandsTests
 
     private static Effect MakeEffect(uint id, Chain duration = null, Chain remove = null) => new()
     {
-        Data = new StaticDB.Records.apt.StatusEffectData { Id = id, MaxStackCount = 1, UpdateFrequency = 20 },
+        // Frequency 0: the sweep re-evaluates the duration chain every tick, so the test watches
+        // the in-progress gate flip at exactly the recorded completion time.
+        Data = new StaticDB.Records.apt.StatusEffectData { Id = id, MaxStackCount = 1, UpdateFrequency = 0 },
         DurationChain = duration,
         RemoveChain = remove,
     };
