@@ -19,6 +19,14 @@ public class InteractionTypeCommand : Command, ICommand
         {
             var interactionEntity = context.Targets.Peek();
             var hack = interactionEntity as BaseEntity;
+
+            // Entities without an interaction component (players, plain mobs) can still ride the
+            // interact ability's targeting when a client looks their way; they simply match no type.
+            if (hack?.Interaction == null)
+            {
+                return false;
+            }
+
             var type = hack.Interaction.Type;
 
             Logger.Debug("{Command} {CommandId} Compared {type} with {ParamsType}", nameof(InteractionTypeCommand), Params.Id, type, Params.Type);

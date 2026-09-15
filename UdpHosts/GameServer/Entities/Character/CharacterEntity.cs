@@ -294,6 +294,24 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     /// </summary>
     public uint GliderProfileId { get; private set; }
     public AuthorizedTerminalData AuthorizedTerminal { get; set; } = new AuthorizedTerminalData { TerminalType = 0, TerminalId = 0, TerminalEntityId = 0 };
+
+    /// <summary>
+    ///     The interaction this player is channelling right now (E key on an interactable), or null
+    ///     between interactions. Written by <c>agsInteractionCompletionTimeCommandDef</c> inside the
+    ///     interaction effect's apply chain and read by <c>agsInteractionInProgressCommandDef</c> and
+    ///     <c>agsEndInteractionCommandDef</c> to tell a completed channel from a cancelled one.
+    /// </summary>
+    public InteractionState ActiveInteraction { get; set; }
+
+    /// <summary>
+    ///     The faction table the interactability check shares. Constructed once on first use - it reads
+    ///     the static database, which is loaded long before any entity exists.
+    /// </summary>
+    private static Systems.Combat.HostilityResolver _interactHostility;
+
+    private static Systems.Combat.HostilityResolver InteractHostility
+        => _interactHostility ??= new Systems.Combat.HostilityResolver();
+
     public AttachedToData? AttachedTo { get; set; }
     public IEntity AttachedToEntity { get; set; }
     public int SelectedLoadout { get; set; }
@@ -454,6 +472,37 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     };
 
     internal MovementStateContainer MovementStateContainer { get; set; } = new();
+
+    /// <summary>
+    ///     Whether this character answers the client's <c>ClientQueryInteractionStatus</c> with an E-key
+    ///     prompt. Players never do; an NPC does while it is alive and its monster row resolved to an
+    ///     interaction (see <see cref="Systems.Ai.NpcInteractionProfile" />).
+    /// </summary>
+    public override bool IsInteractable()
+    {
+        return !IsPlayerControlled && Interaction != null && Interaction.Type != 0 && IsAlive;
+    }
+
+    /// <summary>
+    ///     Whether <paramref name="other" /> may start the interaction on this character: only players
+    ///     interact, and never with an NPC whose faction is hostile to them (the prompt belongs to
+    ///     shopkeepers and town NPCs, not to things shooting at you).
+    /// </summary>
+    public override bool CanBeInteractedBy(IEntity other)
+    {
+        if (!IsInteractable())
+        {
+            return false;
+        }
+
+        if (other is not CharacterEntity { IsPlayerControlled: true } player)
+        {
+            return false;
+        }
+
+        var stance = InteractHostility.GetStance(player.HostilityInfo, HostilityInfo);
+        return stance != Systems.Combat.HostilityStance.Hostile;
+    }
 
     public override string ToString()
     {
@@ -634,6 +683,11 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
                 "LoadMonster: no dbcharacter::MonsterScaling row for level {MonsterLevel} (monster {MonsterId}); keeping the default max health",
                 MonsterLevel, typeId);
         }
+
+        // Player-facing interaction: shopkeepers, quartermasters, town chatter and ability-casting
+        // NPCs all get their E-key prompt from the monster row itself (behavior string + vendor_id).
+        // Monsters without a marker keep a null component and are not interactable.
+        Interaction = GameServer.Systems.Ai.NpcInteractionProfile.Resolve(monsterInfo);
     }
 
     /// <summary>

@@ -341,7 +341,7 @@ public class CombatController : Base
             }
 
             var targets = activateAbility.Targets
-            .Select(entityId => 
+            .Select(entityId =>
             {
                 shard.Entities.TryGetValue(entityId.Backing & 0xffffffffffffff00, out var target);
                 return target as IAptitudeTarget;
@@ -350,10 +350,66 @@ public class CombatController : Base
             .ToArray();
 
             bool success = shard.Abilities.HandleActivateAbility(shard, initiator, abilityId, activationTime, new AptitudeTargets(targets), abilityModuleId: moduleId);
+
+            // The client holds the button for channelled activations (the E-key interaction is the
+            // flagship case) and reports the release with DeactivateAbility. Register the held
+            // activation so ActivationDuration duration gates can fail it when the key goes up.
+            if (success)
+            {
+                shard.Abilities.BeginAbilityActivation(initiator, abilityId);
+            }
+
             if (character.IsPlayerControlled)
             {
                 SendAbilityActivationResponse(character, abilityId, activationTime, success);
             }
+        }
+    }
+
+    [MessageID(GssCharacterCommand.DeactivateAbility)]
+    public void DeactivateAbility(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
+    {
+        var deactivateAbility = packet.Unpack<DeactivateAbility>();
+        if (deactivateAbility == null)
+        {
+            return;
+        }
+
+        var character = player.CharacterEntity;
+        var shard = character.Shard;
+
+        // Resolve the slot the same way ActivateAbility does: a loadout module first, then the
+        // fixed default slots (E key -> interact ability 187, SIN -> 43).
+        uint abilityId = 0;
+        byte abilitySlot = deactivateAbility.AbilitySlotIndex;
+        if (character.CurrentLoadout != null)
+        {
+            uint moduleId = character.CurrentLoadout.GetAbilityModuleIdBySlotIndex(abilitySlot);
+            if (moduleId != 0)
+            {
+                var abilityModule = SDBInterface.GetAbilityModule(moduleId);
+                if (abilityModule != null)
+                {
+                    abilityId = abilityModule.AbilityChainId;
+                }
+            }
+        }
+
+        if (abilityId == 0)
+        {
+            if (abilitySlot == 4)
+            {
+                abilityId = 187; // Interact
+            }
+            else if (abilitySlot == 13)
+            {
+                abilityId = 43; // SIN Targetting
+            }
+        }
+
+        if (abilityId != 0)
+        {
+            shard.Abilities.HandleDeactivateAbility(character, abilityId);
         }
     }
 

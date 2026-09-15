@@ -281,6 +281,60 @@ public class BaseController : Base
         }
     }
 
+    [MessageID(GssCharacterCommand.VendorPurchaseRequest)]
+    public void VendorPurchaseRequest(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
+    {
+        var request = packet.Unpack<VendorPurchaseRequest>();
+        if (request == null)
+        {
+            return;
+        }
+
+        uint vendorId = request.HaveUnk3 == 1 ? request.VendorRemoteID : request.ScuffedVendorID;
+
+        _logger?.Information(
+            "VendorPurchaseRequest: {Player} tried to buy product {ProductId} (price {PriceId}) from vendor {VendorId} - declined, no stock data",
+            player.CharacterEntity,
+            request.ProductID,
+            request.PriceID,
+            vendorId);
+
+        // The client database carries no vendor stock lists, so nothing is for sale; the client
+        // still gets its answer instead of waiting on the window.
+        var response = new AeroMessages.GSS.Generic.VendorPurchaseResponse
+        {
+            Success = 0,
+            ProductId = request.ProductID,
+            PriceId = request.PriceID,
+            VendorId = vendorId,
+            Code = Systems.Vendor.NpcVendorService.PurchaseDeclinedCode,
+        };
+        client.NetChannels[ChannelType.ReliableGss].SendMessage(response, player.CharacterEntity.EntityId);
+    }
+
+    [MessageID(GssCharacterCommand.VendorTokenMachineRequest)]
+    public void VendorTokenMachineRequest(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
+    {
+        var request = packet.Unpack<VendorTokenMachineRequest>();
+        if (request == null)
+        {
+            return;
+        }
+
+        // The token machine window is a web store on live; answer with an empty, zeroed response
+        // so the request does not go unanswered.
+        var response = new VendorTokenMachineResponse
+        {
+            Unk1 = request.Unk1,
+            Unk2 = request.Unk2,
+            Unk3 = request.Unk3,
+            Unk4 = request.Unk4,
+            Unk5 = 0,
+            Unk6 = [],
+        };
+        client.NetChannels[ChannelType.ReliableGss].SendMessage(response, player.CharacterEntity.EntityId);
+    }
+
     [MessageID(GssCharacterCommand.ResourceLocationInfosRequest)]
     public void ResourceLocationInfosRequest(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {

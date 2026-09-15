@@ -1,3 +1,4 @@
+using AeroMessages.GSS.Character.Controller;
 using AeroMessages.GSS.Character.Event;
 using GameServer.Entities;
 using GameServer.Entities.Character;
@@ -9,12 +10,22 @@ namespace GameServer.Systems.Aptitude.Commands.Interaction;
 
 public class EndInteractionCommand : ICommand
 {
+    /// <summary>
+    ///     The terminal type the client opens a vendor window for (see the
+    ///     <c>aptgss::AuthorizeTerminalCommandDef</c> census: "Invite Luau Larry UI. Vendor id 10
+    ///     based on UI."). The terminal id carries the vendor terminal the NPC stocks
+    ///     (<c>dbcharacter::Monster.vendor_id</c>).
+    /// </summary>
+    private const byte VendorTerminalType = 7;
+
+    private static readonly Serilog.ILogger Logger = Serilog.Log.ForContext<EndInteractionCommand>();
+
     public EndInteractionCommand(uint id)
     {
         Id = id;
     }
 
-    public uint Id { get; set; } 
+    public uint Id { get; set; }
 
     public bool Execute(Context context)
     {
@@ -24,11 +35,33 @@ public class EndInteractionCommand : ICommand
         }
 
         var interactionEntity = (BaseEntity)context.Targets.Peek();
+        uint now = context.Shard.CurrentTime;
 
-        if (character is { IsPlayerControlled: true })
+        // Completion bookkeeping: the channel recorded by agsInteractionCompletionTimeCommandDef
+        // decides between a finished interaction (content fires) and an interrupted one (no
+        // content). Flows that never record a channel - vehicles, doctor pads and transports call
+        // ability 181 straight from their apply chain - count as completed, which keeps the
+        // vehicle-boarding flow intact.
+        var state = character.ActiveInteraction;
+        character.ActiveInteraction = null;
+
+        bool completed = state == null || state.IsCompleted(now);
+        byte percent = completed ? (byte)100 : state.PercentAt(now);
+
+        if (character.IsPlayerControlled)
         {
-            var message = new InteractionCompleted { Percent = 100 };
+            var message = new InteractionCompleted { Percent = percent };
             character.Player.NetChannels[ChannelType.ReliableGss].SendMessage(message, character.EntityId);
+        }
+
+        if (!completed)
+        {
+            Logger.Information(
+                "EndInteraction: {Player} cancelled the interaction on {Target} at {Percent}% - no content",
+                character,
+                interactionEntity,
+                percent);
+            return true;
         }
 
         if (interactionEntity.Encounter is { Instance: IInteractionHandler encounter })
@@ -48,9 +81,12 @@ public class EndInteractionCommand : ICommand
             DialogService.Production.TryPlayBehaviorDialog(npc, character, context.InitTime);
         }
 
-        var abilityId = interactionEntity.Interaction.CompletedAbilityId;
-        if (abilityId != 0)
+        var interaction = interactionEntity.Interaction;
+        if (interaction != null)
         {
+            uint abilityId = interaction.CompletedAbilityId;
+            if (abilityId != 0)
+            {
                 context.Shard.Abilities.HandleActivateAbility(
                     context.Shard,
                     (IAptitudeTarget)interactionEntity,
@@ -58,16 +94,38 @@ public class EndInteractionCommand : ICommand
                     context.Shard.CurrentTime,
                     new AptitudeTargets(character),
                     context.ExecutionId);
+            }
+
+            if (interaction.Type == InteractionType.Vendor && interaction.VendorId != 0 && character.IsPlayerControlled)
+            {
+                // Shopkeepers and quartermasters: completing the channel authorizes the vendor
+                // terminal, which makes the client open the vendor UI (and ask for the products
+                // with VendorProductRequest).
+                character.SetAuthorizedTerminal(new AuthorizedTerminalData
+                {
+                    TerminalType = VendorTerminalType,
+                    TerminalId = interaction.VendorId,
+                    TerminalEntityId = interactionEntity.AeroEntityId.Backing,
+                });
+            }
+
+            if (interaction.Type == InteractionType.Doctor && abilityId == 0)
+            {
+                // The doctor interaction has no authored content of its own (the one live
+                // deployable with the type carries no completed ability either), so the trauma
+                // docs simply patch the player back up.
+                character.SetCurrentHealth(character.MaxHealth.Value);
+            }
         }
 
-        var interactionType = interactionEntity.Interaction.Type;
+        var interactionType = interaction?.Type ?? 0;
 
-            // if (hack is DeployableEntity { Turret: not null } deployable)
-            // {
-            //     var character = initiator as CharacterEntity;
-            //
-            //     deployable.Turret.SetControllingPlayer(character.Player);
-            // }
+        // if (hack is DeployableEntity { Turret: not null } deployable)
+        // {
+        //     var character = initiator as CharacterEntity;
+        //
+        //     deployable.Turret.SetControllingPlayer(character.Player);
+        // }
         if (interactionType == InteractionType.Vehicle && interactionEntity is VehicleEntity vehicle)
         {
             vehicle.AddOccupant(character);

@@ -1023,9 +1023,45 @@ public class AbilitySystem
         throw new NotImplementedException();
     }
 
-    public void HandleDeactivateAbility()
+    /// <summary>
+    /// Registers a client-initiated ability activation as held active. The character combat
+    /// controller calls this after a successful activation; <c>ActivationDurationCommand</c> in
+    /// effect duration chains reads the registration to keep channelled effects alive.
+    /// </summary>
+    public void BeginAbilityActivation(IAptitudeTarget entity, uint abilityId)
     {
-        throw new NotImplementedException();
+        if (entity == null || abilityId == 0)
+        {
+            return;
+        }
+
+        GetOrAddState(entity).ActiveActivations.Add(abilityId);
+    }
+
+    /// <summary>
+    /// Ends a held activation: the client released the button (<c>DeactivateAbility</c>), or the
+    /// entity went away. Duration gates like <c>ActivationDuration(ability_id=187)</c> fail on
+    /// their next tick afterwards, which is how an interrupted interaction channel expires.
+    /// </summary>
+    public void HandleDeactivateAbility(IAptitudeTarget entity, uint abilityId)
+    {
+        if (entity == null || abilityId == 0)
+        {
+            return;
+        }
+
+        if (TryGetState(entity, out var state))
+        {
+            state.ActiveActivations.Remove(abilityId);
+        }
+    }
+
+    /// <summary>Whether the entity currently holds the given ability active.</summary>
+    public bool IsAbilityActivationActive(IAptitudeTarget entity, uint abilityId)
+    {
+        return entity != null
+            && TryGetState(entity, out var state)
+            && state.ActiveActivations.Contains(abilityId);
     }
 
     public void HandleActivateConsumable()
