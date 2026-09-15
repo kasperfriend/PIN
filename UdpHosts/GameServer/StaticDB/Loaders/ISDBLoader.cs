@@ -65,6 +65,10 @@ public interface ISDBLoader
     Dictionary<uint, VendorTokenMachine> LoadVendorTokenMachine();
     List<VendorTokenDisplayItems> LoadVendorTokenDisplayItems();
     List<VendorTokenKeyItems> LoadVendorTokenKeyItems();
+    List<VendorTokenLootTables> LoadVendorTokenLootTables();
+    Dictionary<uint, LootTable> LoadLootTable();
+    Dictionary<uint, List<LootTableItemDist>> LoadLootTableItemDist();
+    Dictionary<uint, List<LootTableSubTableDist>> LoadLootTableSubTableDist();
     Dictionary<uint, Battleframe> LoadBattleframe();
     Dictionary<uint, CarryableObject> LoadCarryableObject();
     Dictionary<uint, Weapons> LoadWeapons();
