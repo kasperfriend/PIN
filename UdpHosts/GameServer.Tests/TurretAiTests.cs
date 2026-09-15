@@ -53,7 +53,7 @@ public class TurretAiTests
             ImpactRadius = 0.5f,
             MaxRadius = 1.5f,
             // 1 = SimulationMode.Linear, 2 = SimulationMode.Parabolic.
-            Flags = parabolic ? 2 : 1,
+            Flags = parabolic ? 2u : 1u,
             Gravity = parabolic ? 9.81f : 0f,
         };
         data.WithAttribute(WeaponId, 954, 50f);
