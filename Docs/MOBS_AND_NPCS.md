@@ -2617,18 +2617,58 @@ Completing a vendor interaction authorizes terminal type 7 with the monster's
 the vendor UI); the client then asks for stock with `VendorProductRequest`
 and buys with `VendorPurchaseRequest`.
 
-Stock is built from the client database (`Systems/Vendor/VendorCatalog.cs`):
+Stock and window identity come from three kinds of data, in this order of trust
+(`Systems/Vendor/VendorCatalog.cs` and `Systems/Vendor/LiveVendorData.cs`).
+Every row records where its numbers came from (`VendorDataProvenance`), because
+"true to original" is only worth claiming where it can be checked:
 
+- **Captured stores** - a vendor a live server was recorded serving answers with
+  exactly what the recording shows. One exists today: terminal 60, Supply
+  Officer Cross in Copacabana, `"Copacabana ARES Supplies"`, store 2321 - 32
+  rows in window order with every price, both reputation gates, the title, the
+  store id and the three discount rungs. Nothing is derived for it and nothing is
+  added to it; a row the loaded database cannot resolve is skipped rather than
+  listed nameless.
 - **Token-machine vendors** - a `vendor_id` that is a
   `dbitems::VendorTokenMachine` id (monster rows with vendor_id 5 and 105).
   Their windows list the machine's `VendorTokenDisplayItems` prizes, priced at
-  one of the machine's `VendorTokenKeyItems` tokens each.
-- **Quartermaster vendors** - every other vendor id. The live store catalogs
-  behind those ids were server-only and did not survive, so these windows
-  stock a curated shelf of real `dbitems::RootItem` consumables (health and
-  stim packs, ammo packs, grenades, calldowns, flares, boosts) priced in
-  crystite (item 10). The prices are emulated - nothing in the client
-  database names a cost - and deliberately modest.
+  one of the machine's `VendorTokenKeyItems` tokens each, and buying a row rolls
+  the machine's real loot tables (below).
+- **Quartermaster vendors** - every other vendor id, some seventy of them in
+  prod-1962 (supply officers, the frame experts, the merit quartermaster, the
+  corporation reps). Their store catalogs were server-only and did not survive,
+  and nothing in the client database names a price: `dbitems::RootItem` has 27
+  columns and no cost among them, and a census of every column of all 575 tables
+  found no price for vendor goods anywhere (the cost-like columns that exist
+  belong to crafting, prestige and perk points). So the shelf is *the captured
+  store's field supplies* - the eleven rows live sold with no reputation gate,
+  every one of them at a real price: scan hammer 50 cy, health packs small /
+  medium / large 100 / 500 / 2500, ammo pack 100, concussion / flash freeze /
+  incendiary / toxic grenades 150 each, adrenaline injector 250, 1-use glider
+  pad calldown 150 - followed by six consumables PIN stocked before the capture
+  was decoded, whose prices are chosen to sit with the captured evidence beside
+  them and are marked `Emulated`.
+
+Seven of PIN's own prices were wrong against the capture and now carry the
+recorded number: health pack medium 250→500, health pack large 500→2500, the
+flash freeze / incendiary / toxic grenades 300→150, the concussion grenade
+350→150 and the 1-use glider pad calldown 1000→150. The scan hammer (50 cy) and
+the adrenaline injector (250 cy) are stocked at all now - live sold both, PIN
+did not.
+
+Two things left the shelf because a live quartermaster never sold them:
+
+- The captured store's **21 reputation-gated rows** (class-specific tier-8 gear
+  at 150 cy each, gated at 6000 Copacabana reputation) stay with vendor 60. They
+  are that POI's local issue, and their localized names are placeholders outside
+  it.
+- The **XP and crystite boosts** (77066 and 81362, 20 % for an hour) were
+  vending-machine prizes - loot table 5855, "Accord Reward Quartermaster - Slot 2
+  BOOSTS (rare)", rolls them at 3/48 and 21/48 - and cash-shop goods. PIN's
+  machines now roll them for real.
+
+A captured row keeps its captured gate wherever it is sold, so the glider pad
+calldown carries its 12000 rung on every shelf, not only on vendor 60's.
 
 Product/price guids deterministically encode `(vendor_id, stock index)`, so a
 purchase re-derives its entry from the catalog with no per-player shop state.
@@ -2638,6 +2678,117 @@ resource pool, everything else is created as a real inventory item. Insufficient
 funds, unknown guids and closed terminals all get decline responses with codes
 the client can show.
 
+#### The window's identity, gates and discounts
+
+`VendorCatalog.Describe` answers what a window is, apart from its stock:
+
+- **Store id** (`VendorProductsResponse.Id`) - a captured store replays the id it
+  was recorded with (2321), a token machine answers with the
+  `dbitems::VendorTokenMachine.web_vendor_id` the database gives it, and anything
+  else answers with its own vendor id. All three are small, stable across a
+  session and unique per vendor, which is all the client needs: it never resolves
+  the id, it echoes it back. `VendorCatalog.StoreId` is the same chain, and a
+  purchase answer carries it too - the capture's three
+  `VendorPurchaseResponse.VendorId` values are all 2321, on the sale that went
+  through as much as on the two that did not.
+- **Title** - a captured store titles itself after its POI ("Copacabana ARES
+  Supplies") even though the NPC standing at it is Supply Officer Cross; anything
+  else takes the NPC's localized name.
+- **Faction and discount ladder** - the captured store's POI faction (20,
+  internal name `copa`) and its recorded ladder; otherwise the NPC's own
+  `faction_id` with a ladder built from the database: one rung per *positive*
+  `dbcharacter::FactionReputations.min_reputation` of that faction, ascending,
+  carrying the fractions the capture shows live pairing with them (10 % / 20 % /
+  30 %). Faction 20's rungs are -16000, -8000, 0, 6000, 12000 and 24000, so its
+  ladder is exactly the captured one; 37 of the 38 factions with positive rungs
+  have those same three, and faction 8 (Bandits) has one and gets 10 %. Rungs
+  past the end of the captured ladder keep the deepest fraction - nothing says a
+  fourth rung existed, and no faction in prod-1962 has one.
+- **Restriction rows** - a gated row is sent the way the capture shows it: type
+  `MinReputationRestriction`, options `{"faction_id":"20","reputation":"6000"}`,
+  both values as JSON *strings*. PIN has no reputation system, so those rows are
+  locked for everybody; that is what live showed a player without the standing,
+  and it beats a window that advertises a price the server would then refuse.
+
+#### The token machine's real roll
+
+Buying a row of a machine spends the token and rolls the tables
+`dbitems::VendorTokenLootTables` authors for that (machine, key item) pair
+(`Systems/Vendor/VendorTokenRoll.cs`) - not the prize the cabinet advertised on
+the row that was clicked. One token pays out once per slot the machine has:
+machine 5 (key item 85771, the Accord token) has two, loot table 5853 "Accord
+Reward Quartermaster Vending - Slot 1 (Crystite)" and 5857 "Accord T1 Reward
+Quartermaster Vending - Slot 2 - "Rare Item" % check"; machines 105, 106 and
+107 roll the same two tables with `loot_table_scale` 1.3, 1.6 and 2.0 on slot 1
+- the same prize pool, better crystite.
+
+A table is rolled by taking one of its rows - `dbitems::LootTableItemDist` items
+and `dbitems::LootTableSubTableDist` sub-tables together - by `probability` out
+of the sum of *its own* rows, and a sub-table row recurses (slot 2 → the
+aesthetics check 5854 → the uncommon unlocks 5985 is the deepest path in the
+build). Normalizing by the table's own sum is what the data supports: slot 1's
+five crystite rows sum to exactly 1000 (598 / 250 / 100 / 50 / 2, the last being
+the 2000..3000 crystite jackpot), but the tables nested under slot 2 sum to 9,
+22, 32, 48 and 1000 and slot 2's own five branches to 850 - reading any of those
+against a fixed 1000 would mean a branch that was already won then hands out
+nothing between 15 % and 99 % of the time. Quantities are uniform across
+`min_quantity`..`max_quantity`, times `loot_table_scale` when the row's
+`allow_scaling` is set - in the vendor tables only the crystite rows carry it, so
+a scale changes the payout and never the number of cosmetics - and a row authored
+0..0, which is every unlock, cosmetic, boost and VIP membership, awards one.
+
+Not modelled, because the vendor tables author none of it: quality and level
+rolls (`roll_with_quality`, `level_range`, `LootTable.min_quality` /
+`max_quality` are zero in all twelve tables a machine can reach),
+`LootTableDistRequirements` (no row references any of their dists) and
+`roll_mode` (the slot tables are 0; the one table with mode 2 belongs to machine
+2, a web-store machine no NPC carries). A machine whose tables award nothing
+still takes the token - that is what putting it in the machine means - and logs a
+warning instead of inventing a prize.
+
+#### The wire, as a live session shows it
+
+`themeldingwars/Documentation`'s `Captures/2015-05-02 - 1869 - Gameplay.pcapng.gz`
+holds one complete live vendor session (build 1869, the "Copacabana ARES
+Supplies" window at terminal 60, player entity `9234ab64b83c7f`, shard entity
+`0008e4b344550b`): one `VendorProductRequest`, one `VendorProductsResponse`
+(3,006 payload bytes across three GSS fragments) and three purchases with their
+three responses. It is the ground truth PIN's vendor messages are written
+against - the 2016-11-15 gameplay capture contains no vendor traffic at all.
+
+| Message | Direction | What the bytes say |
+| --- | --- | --- |
+| `VendorProductRequest` | c2s, root namespace, to the shard entity | `uint TerminalId` (60) - nothing else |
+| `VendorProductsResponse` | s2c, root namespace, **from the shard entity** | `uint VendorId` (60), `ulong Id` (**2321** - a small store-table id, *not* an entity id), `uint RemoteId` (60), `AeroString Title`, `uint FactionId` (20), `FactionDiscount[]` (3 × {`uint MinRep`, `float Discount`}: 6000→0.1, 12000→0.2, 24000→0.3), `VendorProduct[]` (32) |
+| `VendorProduct` | | `ulong GUID` (**469931..603221**), `uint SdbId`, `uint Quantity` (1), `uint Duration` (0), `VendorProductPrice[]`, `VendorProductRestriction[]` - and in build 1869 *no* `Priority`; AeroMessages' `VendorProduct.Priority` is a later addition |
+| `VendorProductPrice` | | `ulong GUID` (**1229621..1334821**), `AeroString CurrencyType` (`"resource"`), `uint CurrencyRemoteId` (10 = crystite), `uint Amount` (50..2500) |
+| `VendorProductRestriction` | | `AeroString Type` (`"MinReputationRestriction"`), `AeroString OptionsJSON` (`{"faction_id":"20","reputation":"6000"}`) - 22 of the 32 rows carry one |
+| `VendorPurchaseRequest` | c2s, `Character::BaseController`, to the character | 36 bytes: `ulong` (0), `EntityId Buyer`, `ulong ProductID`, `ulong PriceID`, **`uint StoreId`** (2321 - the response's `Id`, truncated to 32 bits). AeroMessages models that tail as three optional fields (`HaveUnk2`/`ScuffedVendorID`, `HaveUnk3`/`VendorRemoteID`, `HaveUnk4`/`Unk4`), which reads these bytes as 0x11/0x09/0x00 with one byte left over; `NpcVendorService.ReadStoreId` takes the modelled fields when a client fills them and otherwise reads the uint32 the capture shows |
+| `VendorPurchaseResponse` | s2c, root namespace, from the shard entity | `byte Success` (1), `ulong ProductId`, `ulong PriceId`, `uint VendorId` (2321), `AeroString Code` - **empty on success** |
+
+Two properties of that session are load-bearing for the client's Buy button, and
+PIN now matches both:
+
+- **Every id is small.** The product and price guids are plain database ids
+  below 2^21 and the store id is 2321. The client carries those ids through its
+  scripted UI, where every number is an IEEE-754 double with a 53-bit mantissa,
+  and hands them back to the native layer when Buy is pressed. A guid above 2^53
+  does not survive that trip: at ≈6.2e18 - what the `0x56454E44_xxxxxxxx`
+  "VEND" guids this server used to mint weigh in at - the spacing between
+  representable doubles is 1024, so a whole vendor's stock collapses onto one
+  value and the id the UI returns no longer matches the entry it came from. The
+  symptom is precise: the window renders, a row highlights, Buy does nothing at
+  all, and the server logs nothing because no packet is ever sent.
+  `VendorCatalog` mints guids below 2^26 instead - 8 bits of stock index, 16
+  bits of vendor id, bit 24 flagging a price and bit 25 set so that none is ever
+  zero - and answers with a store id out of the chain above.
+- **Root-namespace answers come from the shard entity**, not from the character
+  the window belongs to - the same convention `ChatService` already used.
+
+The purchase is validated against the authorized terminal rather than against
+whatever the packet claims (`ResolvePurchaseVendorId`), and the guids still have
+to decode to that same vendor, so a purchase cannot escape its own shop.
+
 ### 5.4 Known gaps
 
 - `greetingSet=` (hundreds of rows) references server-only greeting tables
@@ -2646,6 +2797,29 @@ the client can show.
   are absent from the client DB.
 - Reviving incapacitated **players** is out of scope here: players carry no
   interaction component and `agsReviveCommandDef` is still a placeholder.
-- Quartermaster prices are emulated (no price data survives); the
-  `dbitems::VendorTokenMachine` gacha roll itself (a web-store flow) is not
-  reproduced - the machines' prizes are sold outright instead.
+- Only one vendor store was ever captured, so only terminal 60 replays a real
+  catalog; every other window is the database plus the captured prices. Another
+  capture is the single thing that would make more of them exact, which is why
+  `LiveVendorData.Stores` is a list and `TryGetCapturedPrice` searches all of it.
+- PIN has no faction reputation, so the authentic `MinReputationRestriction` rows
+  it now sends are unsatisfiable: 22 of the captured store's 32 rows, and the
+  glider pad calldown on every other shelf (its captured gate is 12000), are
+  locked for everybody, and no discount ladder ever applies. Sending them is
+  deliberate - the alternative is a window that lies about what live showed.
+  Implementing reputation would make both live.
+- Six shelf rows (`VendorCatalog.EmulatedShelf`) still carry prices PIN chose,
+  because nothing anywhere names one for them: stim pack small 100, energy pack
+  100, sonic detonator 150, red flare 50, 1-use jump pad calldown 150,
+  recharging ammo pack 500.
+- Goods are granted by sdb id, so the client resolves their stats from its own
+  database - but `CharacterInventory.CreateItem` makes a bare item (durability
+  1000, empty module slots, no rolled quality or attributes). That is right for
+  the consumables a vendor sells and wrong for the captured store's gear rows,
+  which live granted with a quality roll.
+- Selling to a vendor is impossible in build 1962's GSS protocol: it has six
+  vendor messages and none of them is a sell. Selling existed only in the 2015
+  web panel (the `Sell` tab of `panelmanager`'s HTML, backed by the web API), and
+  PIN's web host has no vendor endpoints.
+- `VendorTokenMachineRequest` (`Character/BaseController.cs`) still answers the
+  zeroed stub its unknown fields allow. The machine flow reproduced here is the
+  vendor-window one, which is the one an NPC carries.
