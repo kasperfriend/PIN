@@ -292,23 +292,7 @@ public class BaseController : Base
 
         uint vendorId = request.HaveUnk3 == 1 ? request.VendorRemoteID : request.ScuffedVendorID;
 
-        _logger?.Information(
-            "VendorPurchaseRequest: {Player} tried to buy product {ProductId} (price {PriceId}) from vendor {VendorId} - declined, no stock data",
-            player.CharacterEntity,
-            request.ProductID,
-            request.PriceID,
-            vendorId);
-
-        // The client database carries no vendor stock lists, so nothing is for sale; the client
-        // still gets its answer instead of waiting on the window.
-        var response = new AeroMessages.GSS.Generic.VendorPurchaseResponse
-        {
-            Success = 0,
-            ProductId = request.ProductID,
-            PriceId = request.PriceID,
-            VendorId = vendorId,
-            Code = Systems.Vendor.NpcVendorService.PurchaseDeclinedCode,
-        };
+        var response = Systems.Vendor.NpcVendorService.TryPurchase(player, vendorId, request.ProductID, request.PriceID);
         client.NetChannels[ChannelType.ReliableGss].SendMessage(response, player.CharacterEntity.EntityId);
     }
 

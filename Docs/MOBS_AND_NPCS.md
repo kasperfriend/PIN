@@ -2610,15 +2610,33 @@ Vehicles, doctor pads and transports skip the channel: their apply chains call
 ability 181 immediately, so `EndInteraction` treats "no recorded channel" as
 completed (this keeps vehicle boarding intact).
 
-### 5.3 Vendor windows
+### 5.3 Vendor windows and purchases
 
 Completing a vendor interaction authorizes terminal type 7 with the monster's
 `vendor_id` (per the `aptgss::AuthorizeTerminalCommandDef` census, type 7 is
-the vendor UI); the client then asks for stock with `VendorProductRequest`.
-The client database carries **no vendor stock lists** (only the
-`dbitems::VendorToken*` rows of the web token machines), so windows open empty
-and purchases are declined with a proper response instead of hanging. Shelving
-real goods is a content question for the web store host.
+the vendor UI); the client then asks for stock with `VendorProductRequest`
+and buys with `VendorPurchaseRequest`.
+
+Stock is built from the client database (`Systems/Vendor/VendorCatalog.cs`):
+
+- **Token-machine vendors** - a `vendor_id` that is a
+  `dbitems::VendorTokenMachine` id (monster rows with vendor_id 5 and 105).
+  Their windows list the machine's `VendorTokenDisplayItems` prizes, priced at
+  one of the machine's `VendorTokenKeyItems` tokens each.
+- **Quartermaster vendors** - every other vendor id. The live store catalogs
+  behind those ids were server-only and did not survive, so these windows
+  stock a curated shelf of real `dbitems::RootItem` consumables (health and
+  stim packs, ammo packs, grenades, calldowns, flares, boosts) priced in
+  crystite (item 10). The prices are emulated - nothing in the client
+  database names a cost - and deliberately modest.
+
+Product/price guids deterministically encode `(vendor_id, stock index)`, so a
+purchase re-derives its entry from the catalog with no per-player shop state.
+A purchase charges the currency via `CharacterInventory.ConsumeResource` and
+grants the goods - currency-style items (RootItem type Basic) top up the
+resource pool, everything else is created as a real inventory item. Insufficient
+funds, unknown guids and closed terminals all get decline responses with codes
+the client can show.
 
 ### 5.4 Known gaps
 
@@ -2628,3 +2646,6 @@ real goods is a content question for the web store host.
   are absent from the client DB.
 - Reviving incapacitated **players** is out of scope here: players carry no
   interaction component and `agsReviveCommandDef` is still a placeholder.
+- Quartermaster prices are emulated (no price data survives); the
+  `dbitems::VendorTokenMachine` gacha roll itself (a web-store flow) is not
+  reproduced - the machines' prizes are sold outright instead.

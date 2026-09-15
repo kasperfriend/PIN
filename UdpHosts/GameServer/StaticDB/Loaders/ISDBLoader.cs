@@ -62,6 +62,9 @@ public interface ISDBLoader
     Dictionary<KeyValuePair<uint, ushort>, ItemModuleScalars> LoadItemModuleScalars();
     Dictionary<KeyValuePair<uint, ushort>, ItemCharacterScalars> LoadItemCharacterScalars();
     Dictionary<uint, RootItem> LoadRootItem();
+    Dictionary<uint, VendorTokenMachine> LoadVendorTokenMachine();
+    List<VendorTokenDisplayItems> LoadVendorTokenDisplayItems();
+    List<VendorTokenKeyItems> LoadVendorTokenKeyItems();
     Dictionary<uint, Battleframe> LoadBattleframe();
     Dictionary<uint, CarryableObject> LoadCarryableObject();
     Dictionary<uint, Weapons> LoadWeapons();
