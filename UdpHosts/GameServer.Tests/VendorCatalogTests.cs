@@ -61,7 +61,7 @@ public class VendorCatalogTests
         RootItem lookup(uint id) => new() { SdbId = id, Type = 0 };
 
         var machine = new VendorTokenMachine { Id = 5 };
-        var displayItems =
+        VendorTokenDisplayItems[] displayItems =
         [
             new VendorTokenDisplayItems { MachineId = 5, KeyItemId = 85771, ItemId = 10 },
             new VendorTokenDisplayItems { MachineId = 5, KeyItemId = 85771, ItemId = 80404 },
