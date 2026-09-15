@@ -156,7 +156,9 @@ public class NpcAttackAimTests
         target.SetPosition(new Vector3(3f, 4f, 5f));
 
         var point = NpcAttackAim.AimPoint(null, target);
-        Assert.Equal(new Vector3(3f, 4f, 5f + NpcAttackAim.DefaultAimHeight), point, 4);
+        // 1.8 * 0.5 is not bit-exactly 0.9 in float, so compare by distance, not by value.
+        Assert.True(Vector3.Distance(point, new Vector3(3f, 4f, 5f + NpcAttackAim.DefaultAimHeight)) < 0.001f,
+            $"expected the mid-torso default at (3, 4, {5f + NpcAttackAim.DefaultAimHeight}), got {point}");
     }
 
     [Fact]
@@ -171,7 +173,9 @@ public class NpcAttackAimTests
         };
 
         // The middle of the 1.8 m physics capsule: half the database's own height, not a guess.
-        Assert.Equal(new Vector3(0f, 0f, 5f + 1.8f * 0.5f), NpcAttackAim.AimPoint(null, target), 4);
+        var point = NpcAttackAim.AimPoint(null, target);
+        Assert.True(Vector3.Distance(point, new Vector3(0f, 0f, 5f + 1.8f * 0.5f)) < 0.001f,
+            $"expected the capsule middle at (0, 0, {5f + 1.8f * 0.5f}), got {point}");
     }
 
     [Fact]
@@ -186,6 +190,8 @@ public class NpcAttackAimTests
             PoseTypeRecord = new PoseType { PhysicsHeight = -1f },
         };
 
-        Assert.Equal(new Vector3(0f, 0f, NpcAttackAim.DefaultAimHeight), NpcAttackAim.AimPoint(null, target), 4);
+        var point = NpcAttackAim.AimPoint(null, target);
+        Assert.True(Vector3.Distance(point, new Vector3(0f, 0f, NpcAttackAim.DefaultAimHeight)) < 0.001f,
+            $"expected the mid-torso default at (0, 0, {NpcAttackAim.DefaultAimHeight}), got {point}");
     }
 }

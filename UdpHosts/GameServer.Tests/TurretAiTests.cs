@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Numerics;
 using System.Threading;
@@ -138,10 +139,17 @@ public class TurretAiTests
         ai.Tick(FirstTick);
 
         var shot = Assert.Single(shots.Shots);
-        Assert.Equal(new Vector3(0f, 0f, 2f), shot.Origin);
 
-        // Straight from (0, 0, 2) at (20, 0, 0.9). The old aim (from the feet at (20, 0, 1.4))
-        // ran at Z ≈ +0.070; this one runs below horizontal at Z ≈ −0.055.
+        // The shot leaves from the muzzle, not from the base. The barrel's pose is written
+        // before the shot is handed out, so the origin the shot reports is the muzzle rotated
+        // by the new pose - a few centimetres off the pre-rotation point, but metres from
+        // the base the old code fired from.
+        Assert.True(Vector3.Distance(shot.Origin, new Vector3(0f, 0f, 2f)) < 0.2f,
+            $"the shot should leave from the 2 m muzzle, it left from {shot.Origin}");
+
+        // The aim itself was solved from the muzzle: straight from (0, 0, 2) at (20, 0, 0.9).
+        // The old aim (from the feet at (20, 0, 1.4)) ran at Z ≈ +0.070; this one runs below
+        // horizontal at Z ≈ −0.055.
         Assert.Equal(0.9985f, shot.Direction.X, 4);
         Assert.Equal(-0.0549f, shot.Direction.Z, 4);
     }
@@ -185,13 +193,15 @@ public class TurretAiTests
             "a straight line from (0, 0, 2) to (20, 0, 0.9) points down; the drop-compensated shot must point up");
 
         // Re-run the shot through the same parabola ProjectileSim integrates and check where
-        // it is when its XY reaches the target: it must be the middle of the model.
+        // it is when its XY reaches the target: it must be the middle of the model. The
+        // muzzle's pose rotation offsets the launch a few centimetres sideways, so the Y
+        // assertion allows for it while X and Z stay tight.
         Vector3 velocity = shot.Direction * shot.ProjectileSpeed;
         float t = 20f / velocity.X;
         Vector3 landed = shot.Origin + velocity * t + new Vector3(0f, 0f, -0.5f * 9.81f * t * t);
-        Assert.Equal(20f, landed.X, 3);
-        Assert.Equal(0f, landed.Y, 3);
-        Assert.Equal(0.9f, landed.Z, 3);
+        Assert.Equal(20f, landed.X, 2);
+        Assert.True(MathF.Abs(landed.Y) < 0.05f, $"the shot should stay on the target's line, it landed at {landed}");
+        Assert.Equal(0.9f, landed.Z, 2);
     }
 
     [Fact]

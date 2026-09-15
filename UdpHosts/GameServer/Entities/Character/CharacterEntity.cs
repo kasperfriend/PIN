@@ -2804,8 +2804,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         // cost: a new MovementData allocation plus a dirty mark, paid on every AI tick of
         // every NPC — most of a populated zone's NPCs standing still.
         var current = Character_MovementView.MovementProp;
-        if (current != null &&
-            current.Position == Position &&
+        if (current.Position == Position &&
             current.Rotation == Orientation &&
             current.Aim == AimDirection &&
             current.MovementState == (ushort)MovementState)
