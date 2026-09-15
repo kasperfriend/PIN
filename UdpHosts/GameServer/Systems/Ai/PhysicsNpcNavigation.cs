@@ -63,14 +63,28 @@ public sealed class PhysicsNpcNavigation : INpcNavigation
             return false;
         }
 
+        // The wall probe may have been skipped for this step (the caller probes every other
+        // step and spans the gap): the probe then measures from the last probed position, so
+        // the movement of the skipped ticks is what gets checked, not this segment alone.
+        bool Blocked(Vector3 sampleFrom, Vector3 sampleTo)
+        {
+            if (!agent.ProbeWalls)
+            {
+                return false;
+            }
+
+            Vector3 origin = agent.HasWallProbeOrigin ? agent.WallProbeOrigin : sampleFrom;
+            return IsBlocked(origin, sampleTo, agent);
+        }
+
         if (_shard.Physics?.HasZoneCollision != true)
         {
             position = desired;
-            return !IsBlocked(from, desired, agent);
+            return !Blocked(from, desired);
         }
 
         bool result = NpcGroundMovement.TryStep(from, desired, GroundAt,
-            (a, b) => IsBlocked(a, b, agent),
+            Blocked,
             _shard.Physics.IsNavigationExcluded, out var grounded);
         if (result)
         {

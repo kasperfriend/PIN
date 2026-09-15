@@ -137,6 +137,14 @@ Details worth knowing:
 * **Giving up is time based.** Losing line of sight does not drop the target
   immediately - the NPC keeps hunting for `TargetLostTimeoutMs` and only then
   forgets. Dying or despawning drops it at once.
+* **Line of sight is sampled, not polled.** The sight cast is a ray against the
+  zone's static geometry, and it is the most expensive thing a combat decision
+  can do, so it goes out on the perception cadence (`PerceptionIntervalMs`) and
+  on the first pass a brain reasons about a target - in between, the last
+  verdict stands. A mob that loses sight finds out a perception pass later,
+  not a movement tick later, and the six second give-up timer tolerates the
+  staleness with margin. This is what keeps a fight in a populated zone from
+  costing one ray cast per engaged NPC per 50 ms tick.
 * **Re-engaging needs a sighting.** Acquiring a target out of Idle requires line of
   sight, not merely a live target in range. Without that, the give-up path above
   would drop the target and the acquisition step would re-adopt it in the very same
@@ -976,6 +984,14 @@ probes (1.25 m up/down from the preceding surface), a walkable slope, exclusions
 and static body clearance. There is no 100 m post-movement drop or 10 km navigation
 probe. Missing collision chunks/holes are failures, not a fabricated flat plane.
 `SnapToGround=false` disables the final Z snap but not the ground-support check.
+
+The clearance part of that check (six ray casts of static geometry around the
+agent's body) runs on every *other* movement tick, not every tick: at the 50 ms
+movement cadence it was the bulk of what a walking NPC cost on a populated zone,
+and at chase speed one 100 ms gap is under a metre of movement, so a probe that
+spans from the position it last covered to the new one catches the same wall.
+The ground-support check still runs on every tick, so an NPC never leaves the
+terrain between wall checks.
 
 Combat retains the no-collision development mode. Ambient travel does not:
 without real ground it waits. Loaded disconnected mesh routes never authorize a

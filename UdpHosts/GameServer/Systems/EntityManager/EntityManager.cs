@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -45,7 +46,17 @@ public class EntityManager
 
     private readonly IShard _shard;
     private readonly ILogger _logger;
-    private readonly ulong _updateFlushIntervalMs = 5;
+
+    /// <summary>
+    ///     How often dirty views are flushed to the players scoped to them (50 Hz at 20 ms,
+    ///     down from 200 Hz at 5 ms). A health, ammo or effect delta reads no faster for a
+    ///     client, and at 200 Hz the flush walked every entity of a populated zone four times
+    ///     as often as it needed to, on the same loop that paces scope-ins and the pose
+    ///     traffic. The pose (which is the one update a player can see stutter) flows on its
+    ///     own CurrentPoseUpdate stream, not through this flush, so bounding it costs nothing
+    ///     the player can feel.
+    /// </summary>
+    private readonly ulong _updateFlushIntervalMs = 20;
     private readonly ulong _scopeInIntervalMs = 20;
     private readonly ulong _scopeCheckIntervalMs = 5000;
     private readonly ulong _lifetimeCheckIntervalMs = 1000;
@@ -327,11 +338,27 @@ public class EntityManager
 
         if (deployableInfo.ConstructedAbilityid != 0)
         {
+            // The callback runs on a thread pool thread, where an exception would not take
+            // down a shard tick, it would take down the whole process. And the deployable may
+            // be gone by the time its build time runs out - a destroyed object must not run
+            // the ability of an object it finished building.
             var timer = new Timer(state =>
                  {
-                     _shard.Abilities.HandleActivateAbility(_shard, deployableEntity, deployableInfo.ConstructedAbilityid);
-
-                     ((Timer)state)?.Dispose();
+                     try
+                     {
+                         if (_shard.Entities.ContainsKey(deployableEntity.EntityId))
+                         {
+                             _shard.Abilities.HandleActivateAbility(_shard, deployableEntity, deployableInfo.ConstructedAbilityid);
+                         }
+                     }
+                     catch (Exception ex)
+                     {
+                         _logger.Warning(ex, "Constructed ability {AbilityId} of deployable {EntityId} threw on its build timer; ignoring", deployableInfo.ConstructedAbilityid, deployableEntity.EntityId);
+                     }
+                     finally
+                     {
+                         ((Timer)state)?.Dispose();
+                     }
                  });
             timer.Change(deployableInfo.BuildTimeMs, Timeout.Infinite);
         }
@@ -355,12 +382,27 @@ public class EntityManager
                 }
             }
 
+            // Same contract as the constructed-ability timer above: the callback runs on a
+            // thread pool thread (an exception there takes the whole process down, not a
+            // shard tick), and a deployable destroyed before its build time must not power on.
             var timer = new Timer(state =>
                  {
-                     _logger.ForContext<AbilitySystem>().Information("Deployable: Executing powered on ability {PoweredOnAbility}", poweredOnAbility);
-                     _shard.Abilities.HandleActivateAbility(_shard, deployableEntity, poweredOnAbility);
-
-                     ((Timer)state)?.Dispose();
+                     try
+                     {
+                         if (_shard.Entities.ContainsKey(deployableEntity.EntityId))
+                         {
+                             _logger.ForContext<AbilitySystem>().Information("Deployable: Executing powered on ability {PoweredOnAbility}", poweredOnAbility);
+                             _shard.Abilities.HandleActivateAbility(_shard, deployableEntity, poweredOnAbility);
+                         }
+                     }
+                     catch (Exception ex)
+                     {
+                         _logger.Warning(ex, "Powered-on ability {AbilityId} of deployable {EntityId} threw on its build timer; ignoring", poweredOnAbility, deployableEntity.EntityId);
+                     }
+                     finally
+                     {
+                         ((Timer)state)?.Dispose();
+                     }
                  });
             timer.Change(deployableInfo.BuildTimeMs, Timeout.Infinite);
         }
