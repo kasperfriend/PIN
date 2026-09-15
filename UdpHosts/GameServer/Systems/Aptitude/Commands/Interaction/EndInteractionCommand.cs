@@ -45,7 +45,10 @@ public class EndInteractionCommand : ICommand
         var state = character.ActiveInteraction;
         character.ActiveInteraction = null;
 
-        bool completed = state == null || state.IsCompleted(now);
+        // A target that died during the channel cannot hand out its content.
+        bool targetAlive = interactionEntity is not CharacterEntity { IsAlive: false };
+
+        bool completed = (state == null || state.IsCompleted(now)) && targetAlive;
         byte percent = completed ? (byte)100 : state.PercentAt(now);
 
         if (character.IsPlayerControlled)

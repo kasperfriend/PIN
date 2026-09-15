@@ -636,7 +636,7 @@ public class SDBInterface
     public static List<FactionRelations> GetFactionRelations() => _factionRelations;
     public static List<FactionReputations> GetFactionReputations(uint id) => _factionReputations.GetValueOrDefault(id);
 
-    public static Monster GetMonster(uint id) => _monster.GetValueOrDefault(id);
+    public static Monster GetMonster(uint id) => _monster?.GetValueOrDefault(id);
     public static IReadOnlyDictionary<uint, Monster> GetMonsters() => _monster;
 
     /// <summary>
