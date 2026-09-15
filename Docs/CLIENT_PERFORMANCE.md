@@ -44,6 +44,22 @@ problem and you can stop here.
 NPCs per cell, activation radius, tick interval) if you want the world but not the
 cost.
 
+The **server-side** symptom of the same population is ping and connection
+problems rather than low framerate: the shard's tick is one thread, and a
+populated zone used to spend most of it in per-NPC physics ray casts. The AI
+now casts line of sight on the perception cadence instead of every 50 ms
+movement tick, the six-ray wall clearance probe runs every other movement tick
+(spanning the whole gap it covers), the view-change flush runs at 50 Hz instead of
+200 Hz, and a standing NPC no longer re-allocates and
+re-marks its movement view on every tick — so the same `WorldPopulationMaxLiveNpcs`
+now costs a fraction of what it used to on the server: line of sight is cast
+four times less often for an engaged NPC, a walking NPC probes its walls half
+as often, an idle NPC no longer allocates anything per tick, and every
+entity's view flush runs at a quarter of the old frequency. The per-NPC floor
+that the density knob could never remove is much thinner, so the knob scales
+cleanly instead of sitting on it. See [NPC_AI.md](NPC_AI.md) for the two
+ray-cast changes.
+
 ## 2. What the client controls
 
 These are all client-side, all from the 2014 community, and all still true

@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Numerics;
 using System.Threading;
@@ -26,6 +27,11 @@ public class TurretAiTests
 
     private static readonly CharacterStateData.CharacterStatus Living = CharacterStateData.CharacterStatus.Living;
 
+    // The fixture has no turret hardpoint data, so the shot leaves from the gunner's own
+    // projectile origin: the chest, plus 10 cm along the aim. The aim is solved from the
+    // chest alone (aim passed as zero), which is exactly the origin the assertions below use.
+    private static readonly Vector3 ChestOrigin = new(0.2f, 0f, 1.62f);
+
     private static WeaponTemplateResult RangedTemplate() => new()
     {
         DebugName = "Turret rifle",
@@ -41,7 +47,7 @@ public class TurretAiTests
         SlotIndex = 2,
     };
 
-    private static FakeNpcAttackDataSource Data()
+    private static FakeNpcAttackDataSource Data(bool parabolic = false)
     {
         var data = new FakeNpcAttackDataSource();
         data.WithWeapon(WeaponId, RangedTemplate());
@@ -51,7 +57,9 @@ public class TurretAiTests
             ProjectileSpeed = 40f,
             ImpactRadius = 0.5f,
             MaxRadius = 1.5f,
-            Flags = 1,
+            // 1 = SimulationMode.Linear, 2 = SimulationMode.Parabolic.
+            Flags = parabolic ? 2u : 1u,
+            Gravity = parabolic ? 9.81f : 0f,
         };
         data.WithAttribute(WeaponId, 954, 50f);
         return data;
@@ -67,7 +75,7 @@ public class TurretAiTests
     }
 
     private static (FakeShard Shard, TurretAi Ai, RecordingAiProjectileLauncher Shots, TurretEntity Turret, CharacterEntity Owner, CharacterEntity Target)
-        Create(Vector3 targetPosition, IAiHostility hostility = null)
+        Create(Vector3 targetPosition, IAiHostility hostility = null, bool parabolic = false)
     {
         var shard = new FakeShard();
         var owner = CreateLiving(shard, Vector3.Zero);
@@ -85,7 +93,7 @@ public class TurretAiTests
         var shots = new RecordingAiProjectileLauncher();
         var fire = new TurretWeaponFire(
             _ => [new TurretWeapon { TurretTypeId = TurretTypeId, WeaponId = WeaponId, Id = 1 }],
-            new NpcAttackResolver(Data()),
+            new NpcAttackResolver(Data(parabolic)),
             shots);
         var ai = new TurretAi(shard, hostility ?? new AlwaysHostileAiHostility(), fire);
         Assert.True(ai.Register(turret));
@@ -109,6 +117,75 @@ public class TurretAiTests
             turret.Turret_ObserverView.CurrentPoseProp.Rotation != Quaternion.Identity,
             "the turret should yaw toward the target");
         Assert.Equal(100_000, target.CurrentHealth);
+    }
+
+    [Fact]
+    public void UnmannedTurret_AimsAtTheMiddleOfTheTargetModel()
+    {
+        // The AI must aim at the middle of the target's model (0.9 m above its feet), not the
+        // fixed 1.4 m eye height the old code used - and from where the shot actually leaves,
+        // not from the turret's feet.
+        var (_, ai, shots, _, _, _) = Create(new Vector3(20f, 0f, 0f));
+
+        ai.Tick(FirstTick);
+
+        var shot = Assert.Single(shots.Shots);
+        Assert.True(
+            Vector3.Distance(shot.Origin, ChestOrigin + 0.1f * shot.Direction) < 0.001f,
+            $"the shot should leave from the gunner's chest origin, it left from {shot.Origin}");
+
+        // Straight from (0.2, 0, 1.62) at (20, 0, 0.9). The old aim (from the feet at
+        // (20, 0, 1.4)) ran above horizontal at Z ≈ +0.070; this one runs below horizontal
+        // at Z ≈ −0.036.
+        Assert.Equal(0.9993f, shot.Direction.X, 4);
+        Assert.Equal(-0.0363f, shot.Direction.Z, 4);
+    }
+
+    [Fact]
+    public void UnmannedTurret_LeadsAMovingTarget()
+    {
+        // The target runs +Y at 10 m/s. At the ~0.5 s flight time it would move ~5 m, but the
+        // lead is clamped at 3 m, so the aim point settles at (15, 13) instead of (15, 10).
+        var (_, ai, shots, _, _, target) = Create(new Vector3(15f, 10f, 0f));
+        target.Velocity = new Vector3(0f, 10f, 0f);
+
+        ai.Tick(FirstTick);
+
+        var shot = Assert.Single(shots.Shots);
+
+        // Aiming at (15, 13) from (0.2, 0, 1.62): the direction's Y/X ratio is 13/14.8
+        // ≈ 0.878, whereas the unled aim at (15, 10) is 10/14.8 ≈ 0.676.
+        Assert.Equal(0.878f, shot.Direction.Y / shot.Direction.X, 3);
+    }
+
+    [Fact]
+    public void UnmannedTurret_CompensatesParabolicDrop()
+    {
+        // A parabolic row (SimulationMode.Parabolic) falls 0.5·g·t² over its flight, so the AI
+        // must launch on the arc that ends at the middle of the model, not along the straight
+        // line to it. Over 20 m the round is in the air ~0.5 s and drops ~1.2 m, so the shot
+        // has to go up to land at 0.9 m from a 1.62 m chest.
+        var (_, ai, shots, _, _, _) = Create(new Vector3(20f, 0f, 0f), parabolic: true);
+
+        ai.Tick(FirstTick);
+
+        var shot = Assert.Single(shots.Shots);
+        Assert.True(
+            shot.Direction.Z > 0.02f,
+            $"a straight line from the chest to (20, 0, 0.9) points down; the drop-compensated shot must point up, it pointed at {shot.Direction}");
+
+        // Re-run the shot through the same parabola ProjectileSim integrates and check where
+        // it is when its XY reaches the target: it must be the middle of the model. The aim
+        // was solved from the chest while the shot leaves 10 cm further along the aim, so the
+        // landing is allowed a few centimetres; the old straight aim lands ~0.9 m high.
+        Vector3 velocity = shot.Direction * shot.ProjectileSpeed;
+        float t = (20f - shot.Origin.X) / velocity.X;
+        Vector3 landed = shot.Origin + velocity * t + new Vector3(0f, 0f, -0.5f * 9.81f * t * t);
+        Assert.Equal(20f, landed.X, 2);
+        Assert.True(MathF.Abs(landed.Y) < 0.001f, $"the shot should stay on the target's line, it landed at {landed}");
+        Assert.True(
+            MathF.Abs(landed.Z - 0.9f) < 0.05f,
+            $"the shot should land at the middle of the model (0.9 m), it landed at {landed}");
     }
 
     [Fact]

@@ -8,6 +8,7 @@ using BepuUtilities;
 using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.Entities.Turret;
+using GameServer.Enums;
 using GameServer.StaticDB;
 using GameServer.Systems.CharacterLifecycle;
 using GameServer.Systems.Combat;
@@ -59,6 +60,16 @@ public class AiEngine
 
     /// <summary>Replan when a moving target has made the current endpoint stale.</summary>
     private const float _navigationGoalRefreshDistance = 2.5f;
+
+    /// <summary>
+    ///     How often a moving NPC's wall clearance probe may run. The probe is six ray casts
+    ///     against the zone's static geometry; at the 50 ms movement cadence it was most of
+    ///     what a walking NPC cost on a populated zone. Probing every 100 ms and spanning the
+    ///     whole gap since the last probe (see <see cref="NpcNavigationAgent.WallProbeOrigin" />)
+    ///     catches the same wall, because at chase speed one 100 ms gap is under a metre of
+    ///     movement — shorter than the probe's own lateral offsets.
+    /// </summary>
+    private const ulong WallProbeIntervalMs = 100;
 
     private static readonly NpcPathfinder.Options _navigationOptions = new(
         CellSize: 2f,
@@ -340,10 +351,46 @@ public class AiEngine
             _lastPerceptionAt = currentTime;
         }
 
+        // The players an acquisition scan may consider are the same for every brain on one
+        // pass, so the client map is enumerated once per pass instead of once per brain: a
+        // zone of 150 NPCs used to re-walk the clients (and re-test every player's liveness
+        // and zone) 150 times on every perception tick.
+        List<CharacterEntity> acquisitionCandidates = perceive ? CollectAcquisitionCandidates() : null;
+
         foreach (var entry in _brains)
         {
-            UpdateBrain(entry.Value, elapsedMs, currentTime, perceive);
+            UpdateBrain(entry.Value, elapsedMs, currentTime, perceive, acquisitionCandidates);
         }
+    }
+
+    /// <summary>
+    ///     The players an acquisition scan may consider: live player characters in the shard's
+    ///     own zone. Hostility is not applied here — it depends on the NPC scanning — only the
+    ///     checks that are identical for every scanner.
+    /// </summary>
+    private List<CharacterEntity> CollectAcquisitionCandidates()
+    {
+        var candidates = new List<CharacterEntity>();
+
+        foreach (var client in _shard.Clients.Values)
+        {
+            if (client?.CharacterEntity is not { IsAlive: true } candidate)
+            {
+                continue;
+            }
+
+            // One shard simulates one zone: a player in another zone stands on ground this
+            // simulation knows nothing about, so their position can only coincide with an
+            // NPC's by accident. Never aggro across that boundary.
+            if (!ShardZone.IsPlayerInZone(_shard, client))
+            {
+                continue;
+            }
+
+            candidates.Add(candidate);
+        }
+
+        return candidates;
     }
 
     private void OnEntityDamaged(EntityDamagedEvent evt)
@@ -372,7 +419,7 @@ public class AiEngine
         }
     }
 
-    private void UpdateBrain(NpcBrain npc, ulong elapsedMs, ulong currentTime, bool perceive)
+    private void UpdateBrain(NpcBrain npc, ulong elapsedMs, ulong currentTime, bool perceive, List<CharacterEntity> acquisitionCandidates)
     {
         var entity = npc.Entity;
         if (entity == null || entity.IsPlayerControlled ||
@@ -407,7 +454,7 @@ public class AiEngine
 
         if (perceive)
         {
-            RefreshTarget(npc);
+            RefreshTarget(npc, acquisitionCandidates);
         }
 
         CharacterEntity target = null;
@@ -430,7 +477,14 @@ public class AiEngine
         // measured straight-line: a player on the rock above the mob is 3 m away, not 0.3 m.
         float attackDistance = target != null ? AiVectors.Distance(entity.Position, target.Position) : float.MaxValue;
         float heightDelta = target != null ? AiVectors.HeightDelta(entity.Position, target.Position) : 0f;
-        bool visible = targetAlive && HasLineOfSight(entity, target);
+        // Line of sight is the costliest question this loop can ask: a full ray cast against the
+        // zone's static geometry, and a populated zone made every engaged NPC ask it on every
+        // 50 ms movement tick. The answer only changes when something moves, so the ray goes
+        // out on the perception cadence (and on the first pass, before any verdict exists) and
+        // the last verdict stands in between. The six second target-lost timeout tolerates the
+        // staleness with margin, and a mob that loses sight of its target finds out a perception
+        // pass later, not a movement tick later.
+        bool visible = targetAlive && TargetVisibleNow(npc, target, perceive);
 
         var perception = new AiPerception(
             npc.TargetId,
@@ -739,7 +793,7 @@ public class AiEngine
         }
     }
 
-    private void RefreshTarget(NpcBrain npc)
+    private void RefreshTarget(NpcBrain npc, List<CharacterEntity> candidates)
     {
         if (npc.Brain.State == AiBrainState.Dead)
         {
@@ -770,22 +824,10 @@ public class AiEngine
         float bestDistance = float.MaxValue;
         float bestHeightDelta = 0f;
 
-        foreach (var client in _shard.Clients.Values)
+        // Liveness, zone and null checks are done once per pass in
+        // CollectAcquisitionCandidates; hostility is the per-NPC half and stays here.
+        foreach (var candidate in candidates)
         {
-            var candidate = client?.CharacterEntity;
-            if (candidate == null || !candidate.IsAlive)
-            {
-                continue;
-            }
-
-            // One shard simulates one zone: a player in another zone stands on ground this
-            // simulation knows nothing about, so their position can only coincide with an
-            // NPC's by accident. Never aggro across that boundary.
-            if (!ShardZone.IsPlayerInZone(_shard, client))
-            {
-                continue;
-            }
-
             if (!_hostility.IsHostile(npc.Entity, candidate))
             {
                 continue;
@@ -845,6 +887,26 @@ public class AiEngine
         var hit = physics.SegmentRayCast(from, to, source.EntityId);
 
         return !hit.Hit || hit.HitEntityId == target.EntityId;
+    }
+
+    /// <summary>
+    ///     The line of sight verdict the current decision uses. Cast on the perception cadence
+    ///     (or the first time a brain reasons about a target, or when the target changed since
+    ///     the last cast) and cached in between, so a combat tick costs a boolean instead of a
+    ///     ray cast. See the call site in <see cref="UpdateBrain" /> for why the staleness is
+    ///     safe.
+    /// </summary>
+    private bool TargetVisibleNow(NpcBrain npc, CharacterEntity target, bool perceive)
+    {
+        if (!perceive && npc.HasCheckedVisibility && npc.VisibilityCheckedFor == target.EntityId)
+        {
+            return npc.TargetVisible;
+        }
+
+        npc.TargetVisible = HasLineOfSight(npc.Entity, target);
+        npc.VisibilityCheckedFor = target.EntityId;
+        npc.HasCheckedVisibility = true;
+        return npc.TargetVisible;
     }
 
     /// <summary>
@@ -1138,8 +1200,16 @@ public class AiEngine
         }
 
         var origin = entity.Position + MuzzleOffset(entity, profile);
-        var aimPoint = target.Position + new Vector3(0f, 0f, _eyeHeight);
-        var direction = aimPoint - origin;
+
+        // The middle of the model the shot will hit (the target's current collision volume),
+        // led for the target's movement, and launched on the drop-compensated parabola for
+        // the rows the sim actually drops. See NpcAttackAim for the rules and the fallbacks.
+        var aimPoint = NpcAttackAim.AimPoint(_shard.Physics, target);
+        float drop = profile.Ammo is { } ammo &&
+                     new AmmoFlags(ammo.Flags).Simulation == AmmoFlags.SimulationMode.Parabolic
+            ? ammo.Gravity
+            : 0f;
+        var direction = NpcAttackAim.ShotDirection(origin, aimPoint, target.Velocity, profile.ProjectileSpeed, drop, out _);
 
         if (direction.LengthSquared() <= 0.0001f)
         {
@@ -1263,15 +1333,24 @@ public class AiEngine
             {
                 entity.SetOrientation(AiVectors.OrientationFacing(facing));
 
-                // Only update the aim when the horizontal projection is
-                // non-degenerate. When the target is directly above or
-                // below the NPC the XY vector has near-zero length and
-                // Normalize would produce NaN, which later crashes the
+                // Point the weapon at the middle of the model, the same point the shot is fired
+                // at (NpcAttackAim.AimPoint), so the muzzle, the tracer and the impact agree.
+                // The flat line to the feet stays as the fallback when the model point is
+                // degenerate: when the target is directly above or below the NPC the XY vector
+                // has near-zero length and Normalize would produce NaN, which later crashes the
                 // pose serializer with ArithmeticException.
-                var aimFlat = new Vector3(facing.X, facing.Y, 0f);
-                if (aimFlat.LengthSquared() > 0.0001f)
+                var aimAtModel = NpcAttackAim.AimPoint(_shard.Physics, target) - entity.Position;
+                if (aimAtModel.LengthSquared() > 0.0001f)
                 {
-                    entity.AimDirection = Vector3.Normalize(aimFlat);
+                    entity.AimDirection = Vector3.Normalize(aimAtModel);
+                }
+                else
+                {
+                    var aimFlat = new Vector3(facing.X, facing.Y, 0f);
+                    if (aimFlat.LengthSquared() > 0.0001f)
+                    {
+                        entity.AimDirection = Vector3.Normalize(aimFlat);
+                    }
                 }
             }
         }
@@ -1346,11 +1425,23 @@ public class AiEngine
         }
 
         var desired = entity.Position + (direction * step);
-        var agent = new NpcNavigationAgent(entity.EntityId, npc.NavigationRadius, npc.NavigationHeight);
+
+        // The wall clearance probe is six static ray casts; see WallProbeIntervalMs for why it
+        // runs on every other movement tick. The probe spans from the position it last covered,
+        // so the skipped tick's movement is checked by the next probe, not skipped.
+        bool probeWalls = !npc.Navigation.HasWallProbeOrigin || currentTime >= npc.Navigation.NextWallProbeAt;
+        var agent = new NpcNavigationAgent(entity.EntityId, npc.NavigationRadius, npc.NavigationHeight)
+        {
+            ProbeWalls = probeWalls,
+            HasWallProbeOrigin = npc.Navigation.HasWallProbeOrigin,
+            WallProbeOrigin = npc.Navigation.WallProbeOrigin,
+        };
         if (!_navigation.TryStep(entity.Position, desired, agent, out var candidate) || !NpcGroundMovement.Finite(candidate))
         {
             // A cached route can become obstructed. No direct-line or long downward fallback:
             // abandon ambient goals with backoff; combat retries on its normal replan cadence.
+            // The probe origin stays where it was: the span the unmade step covered has to be
+            // checked again, not skipped.
             npc.Navigation.Waypoints.Clear();
             npc.Navigation.WaypointIndex = 0;
             npc.Navigation.NextReplanAt = currentTime + _navigationReplanIntervalMs;
@@ -1366,6 +1457,13 @@ public class AiEngine
         entity.SetOrientation(AiVectors.OrientationFacing(direction));
         entity.AimDirection = direction;
         _shard.Physics?.UpdateEntity(entity);
+
+        npc.Navigation.WallProbeOrigin = candidate;
+        npc.Navigation.HasWallProbeOrigin = true;
+        if (probeWalls)
+        {
+            npc.Navigation.NextWallProbeAt = currentTime + WallProbeIntervalMs;
+        }
 
         return true;
     }
@@ -1586,6 +1684,15 @@ public class AiEngine
         /// <summary>Absolute shard time at which that request's <c>am*NavTimeout</c> expires.</summary>
         public ulong NavDeadline;
 
+        /// <summary>Shard time at which the wall clearance probe may next run (see <c>WallProbeIntervalMs</c>).</summary>
+        public ulong NextWallProbeAt;
+
+        /// <summary>The position the last wall probe covered up to; the next probe spans from here.</summary>
+        public Vector3 WallProbeOrigin;
+
+        /// <summary>Whether <see cref="WallProbeOrigin" /> is a position the agent has actually probed from.</summary>
+        public bool HasWallProbeOrigin;
+
         public bool HasGoal => Intent != AiMovementIntent.None;
 
         public void Advance()
@@ -1604,6 +1711,11 @@ public class AiEngine
             Goal = Vector3.Zero;
             NextReplanAt = 0;
             HasAttempted = false;
+            // A new route starts in a direction nothing was probed for, so the first step
+            // of it probes rather than trusting a stale origin.
+            NextWallProbeAt = 0;
+            WallProbeOrigin = Vector3.Zero;
+            HasWallProbeOrigin = false;
         }
     }
 
@@ -1674,5 +1786,14 @@ public class AiEngine
         ///     behaviour changes" - the only value the database ships.
         /// </summary>
         public int EmoteDurationSeconds = -1;
+
+        /// <summary>The target the last line of sight verdict was cast against.</summary>
+        public ulong VisibilityCheckedFor;
+
+        /// <summary>Whether <see cref="TargetVisible" /> is a cast result rather than the default.</summary>
+        public bool HasCheckedVisibility;
+
+        /// <summary>Line of sight to the target, from the last perception pass (see <see cref="TargetVisibleNow" />).</summary>
+        public bool TargetVisible;
     }
 }

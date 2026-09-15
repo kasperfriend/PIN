@@ -137,6 +137,14 @@ Details worth knowing:
 * **Giving up is time based.** Losing line of sight does not drop the target
   immediately - the NPC keeps hunting for `TargetLostTimeoutMs` and only then
   forgets. Dying or despawning drops it at once.
+* **Line of sight is sampled, not polled.** The sight cast is a ray against the
+  zone's static geometry, and it is the most expensive thing a combat decision
+  can do, so it goes out on the perception cadence (`PerceptionIntervalMs`) and
+  on the first pass a brain reasons about a target - in between, the last
+  verdict stands. A mob that loses sight finds out a perception pass later,
+  not a movement tick later, and the six second give-up timer tolerates the
+  staleness with margin. This is what keeps a fight in a populated zone from
+  costing one ray cast per engaged NPC per 50 ms tick.
 * **Re-engaging needs a sighting.** Acquiring a target out of Idle requires line of
   sight, not merely a live target in range. Without that, the give-up path above
   would drop the target and the acquisition step would re-adopt it in the very same
@@ -235,6 +243,34 @@ inside the weapon's own first-shot cone (`NpcAttackSpreadMath`: template
 shotgun's pellets fan out instead of stacking on a single chest-aimed ray. A
 weapon the database gives no spread (every melee row, and the ranged rows whose
 min/max/starting are 0) fires along the aim, which is what those rows asked for.
+
+Where the round goes before the spread is applied is resolved by
+`NpcAttackAim`, and it is deliberately not "the eyes":
+
+* **The aim point is the middle of the model, not a fixed height above the feet.**
+  It is the centre of the target's *current* collision volume - the physics
+  engine caches the middle of each collision compound per asset
+  (`PhysicsEngine.TryGetCharacterAimPoint`), and the same pose resolution the
+  body uses picks the compound, so crouch, sprint, falling and prone are tracked.
+  When the shape does not resolve, half the pose's own `PhysicsHeight` (the
+  database's physics capsule) stands in, and when the row carries no height at
+  all, a mid-torso default does. Aiming at the volume the shot actually hits is
+  what makes the impact land in the model instead of the hitbox forgiving a ray
+  that visibly sailed over the head.
+* **The round is led for the target's movement.** The shot spends its flight
+  time in the air and the target keeps moving through it, so the aim leads the
+  target's velocity over that time (settled against the shot's own flight time,
+  clamped so a bad velocity aims wide rather than across the map). A standing
+  target takes no lead; the old straight shot is what a zero velocity gives.
+* **Parabolic rows are compensated for the drop.** For the ammo the simulation
+  actually drops, the initial direction is the closed-form parabola through the
+  (led) aim point - the exact curve `ProjectileSim` integrates - instead of
+  firing at the point the round would fall away from. An arc the speed cannot
+  reach falls back to the straight shot, which is the old behaviour.
+
+The weapon's visible aim agrees with the shot: while a brain faces its target
+it points at the same model-mid point, so the muzzle, the tracer (the
+`WeaponProjectileFired` direction) and the impact all go to the same place.
 Neither mode crits or counts as a headshot.
 
 Movement is applied by writing the entity position/orientation, pushing the new
@@ -943,7 +979,17 @@ Unmanned fire lives in `TurretAi` (ticked by `AiEngine` before the empty-brains
 return): a seated turret (`ControllingPlayer != null`) is left to the gunner's
 packets; an unmanned one picks the closest hostile player inside the lead
 weapon's `AttackRange` (not the NPC `AggroRadius`) and fires at
-`AttackIntervalMs`. The source is the parent `CharacterEntity`, else the parent
+`AttackIntervalMs`. **Aim:** the unmanned shot takes the same corrected aim as
+the NPC's ranged attack (above) - the middle of the target's model, led and
+drop-compensated - resolved through `NpcAttackAim`: `AimPoint` for the point
+(collision volume centre, else half the pose's `PhysicsHeight`, else the 0.9 m
+default), `ShotDirection` for the lead over the shot's own flight time (clamped
+at 3 m) and the closed-form parabola for the `Parabolic` ammo rows. The origin
+is the lead barrel's own muzzle, resolved by `TurretWeaponFire.LeadMuzzleOrigin`
+through the same `ResolveOrigin` the fire path uses per barrel, so the aim and
+the shot leave from the same point; `EyeHeight` (1.4 m) remains for the line of
+sight cast only. A seated gunner fires along their own aim packet; that path is
+unchanged. The source is the parent `CharacterEntity`, else the parent
 `BaseAptitudeEntity.Owner`. `dbcharacter::Turret.Behavior` is a numeric flag
 (`"1"` or `-`), not a CAIS behaviour string. A turret whose weapon overcharges
 runs that ability through the gunner's shard. The turret protocol has no
@@ -976,6 +1022,14 @@ probes (1.25 m up/down from the preceding surface), a walkable slope, exclusions
 and static body clearance. There is no 100 m post-movement drop or 10 km navigation
 probe. Missing collision chunks/holes are failures, not a fabricated flat plane.
 `SnapToGround=false` disables the final Z snap but not the ground-support check.
+
+The clearance part of that check (six ray casts of static geometry around the
+agent's body) runs on every *other* movement tick, not every tick: at the 50 ms
+movement cadence it was the bulk of what a walking NPC cost on a populated zone,
+and at chase speed one 100 ms gap is under a metre of movement, so a probe that
+spans from the position it last covered to the new one catches the same wall.
+The ground-support check still runs on every tick, so an NPC never leaves the
+terrain between wall checks.
 
 Combat retains the no-collision development mode. Ambient travel does not:
 without real ground it waits. Loaded disconnected mesh routes never authorize a

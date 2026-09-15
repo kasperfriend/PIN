@@ -2798,6 +2798,20 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
     private void RefreshMovementView()
     {
+        // Position, orientation, aim and movement state are the fields a refresh changes; the
+        // Time stamp only ever feeds the keyframe path, which serializes the current values.
+        // When none of the four moved the view is already up to date and the refresh is pure
+        // cost: a new MovementData allocation plus a dirty mark, paid on every AI tick of
+        // every NPC — most of a populated zone's NPCs standing still.
+        var current = Character_MovementView.MovementProp;
+        if (current.Position == Position &&
+            current.Rotation == Orientation &&
+            current.Aim == AimDirection &&
+            current.MovementState == (ushort)MovementState)
+        {
+            return;
+        }
+
         Character_MovementView.MovementProp = new MovementData
         {
             Position = Position,

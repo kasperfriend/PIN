@@ -6,6 +6,7 @@ using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.Entities.Deployable;
 using GameServer.Entities.Turret;
+using GameServer.Enums;
 using GameServer.Systems.Combat;
 
 namespace GameServer.Systems.Ai;
@@ -31,7 +32,11 @@ namespace GameServer.Systems.Ai;
 /// </remarks>
 public sealed class TurretAi
 {
-    /// <summary>Chest height used for aim and line of sight, matching <c>AiEngine</c>.</summary>
+    /// <summary>
+    ///     Eye height the line of sight cast runs at, matching <c>AiEngine</c>. The shot itself
+    ///     does not use this: it aims at the middle of the target's model (see
+    ///     <see cref="NpcAttackAim" />).
+    /// </summary>
     public const float EyeHeight = 1.4f;
 
     /// <summary>
@@ -171,10 +176,22 @@ public sealed class TurretAi
             return;
         }
 
-        Vector3 aimPoint = target.Position + new Vector3(0f, 0f, EyeHeight);
-        Vector3 aim = aimPoint - turret.Position;
+        uint time = unchecked((uint)currentTime);
+
+        // The middle of the model the shot will hit (the target's current collision volume),
+        // led for the target's movement, and launched on the drop-compensated parabola for the
+        // rows the sim drops - from the lead barrel's own muzzle, not the turret's base. See
+        // NpcAttackAim; the line of sight cast above is the only part that still uses EyeHeight.
+        Vector3 aimPoint = NpcAttackAim.AimPoint(_shard.Physics, target);
+        Vector3 origin = _fire.LeadMuzzleOrigin(turret, source, time, Vector3.Zero, null) ?? turret.Position;
+        float drop = profile.Ammo is { } ammo &&
+                     new AmmoFlags(ammo.Flags).Simulation == AmmoFlags.SimulationMode.Parabolic
+            ? ammo.Gravity
+            : 0f;
+        Vector3 aim = NpcAttackAim.ShotDirection(origin, aimPoint, target.Velocity, profile.ProjectileSpeed, drop, out _);
         if (aim.LengthSquared() <= 0.0001f)
         {
+            brain.NextScanAt = currentTime + ScanIntervalMs;
             return;
         }
 
@@ -187,7 +204,6 @@ public sealed class TurretAi
             };
         }
 
-        uint time = unchecked((uint)currentTime);
         turret.SetFireBurst(time);
         _fire.Fire(turret, source, time, aim);
         brain.LastFireAt = currentTime;
