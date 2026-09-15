@@ -79,15 +79,19 @@ public class EndInteractionCommand : ICommand
 
         // Seven monster rows name a dialogScript= in their behaviour string; that line is the
         // conversation the interaction starts, not an animation the AI plays on register.
+        bool dialogPlayed = false;
         if (interactionEntity is CharacterEntity npc)
         {
-            DialogService.Production.TryPlayBehaviorDialog(npc, character, context.InitTime);
+            dialogPlayed = DialogService.Production.TryPlayBehaviorDialog(npc, character, context.InitTime);
         }
 
         var interaction = interactionEntity.Interaction;
+        bool vendorAuthorized = false;
+        uint completedAbilityId = 0;
         if (interaction != null)
         {
             uint abilityId = interaction.CompletedAbilityId;
+            completedAbilityId = abilityId;
             if (abilityId != 0)
             {
                 context.Shard.Abilities.HandleActivateAbility(
@@ -110,6 +114,19 @@ public class EndInteractionCommand : ICommand
                     TerminalId = interaction.VendorId,
                     TerminalEntityId = interactionEntity.AeroEntityId.Backing,
                 });
+                vendorAuthorized = true;
+
+                // The BaseController replication carries the authorized terminal; flush it now
+                // instead of waiting for the next 20 ms entity sweep so the shop UI opens
+                // on the same tick the channel completes.
+                character.Shard.EntityMan.FlushChanges(character);
+
+                Logger.Information(
+                    "EndInteraction: {Player} completed the vendor interaction on {Target} - authorized terminal type {TerminalType} id {VendorId}",
+                    character,
+                    interactionEntity,
+                    VendorTerminalType,
+                    interaction.VendorId);
             }
 
             if (interaction.Type == InteractionType.Doctor && abilityId == 0)
@@ -132,6 +149,20 @@ public class EndInteractionCommand : ICommand
         if (interactionType == InteractionType.Vehicle && interactionEntity is VehicleEntity vehicle)
         {
             vehicle.AddOccupant(character);
+        }
+
+        // A completed channel that fires no content is silent on purpose (a HolsterTalk town NPC
+        // with no dialogScript, no vendor stock and no completed ability has nothing to show),
+        // but it is indistinguishable from a broken interaction in the logs - say so explicitly.
+        // Vehicles (boarding) and doctors (the heal above) always fire their content.
+        if (!dialogPlayed && !vendorAuthorized && completedAbilityId == 0
+            && interactionType != InteractionType.Vehicle && interactionType != InteractionType.Doctor)
+        {
+            Logger.Information(
+                "EndInteraction: {Player} completed the {InteractionType} interaction on {Target} - no dialog, vendor or ability content fired",
+                character,
+                interactionType,
+                interactionEntity);
         }
 
         return true;

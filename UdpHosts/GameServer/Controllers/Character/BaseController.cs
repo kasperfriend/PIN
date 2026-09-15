@@ -287,10 +287,24 @@ public class BaseController : Base
         var request = packet.Unpack<VendorPurchaseRequest>();
         if (request == null)
         {
+            _logger.Warning("VendorPurchaseRequest from {Player}: could not unpack the request", player.CharacterEntity);
             return;
         }
 
-        uint vendorId = request.HaveUnk3 == 1 ? request.VendorRemoteID : request.ScuffedVendorID;
+        uint packetVendorId = request.HaveUnk3 == 1 ? request.VendorRemoteID : request.ScuffedVendorID;
+        uint vendorId = Systems.Vendor.NpcVendorService.ResolvePurchaseVendorId(player, packetVendorId);
+
+        _logger.Information(
+            "VendorPurchaseRequest from {Player}: packet vendor {PacketVendorId} (HaveUnk2={HaveUnk2} Scuffed={ScuffedVendorId} HaveUnk3={HaveUnk3} Remote={VendorRemoteId}) resolved to vendor {VendorId}, product {ProductId:X16} price {PriceId:X16}",
+            player.CharacterEntity,
+            packetVendorId,
+            request.HaveUnk2,
+            request.ScuffedVendorID,
+            request.HaveUnk3,
+            request.VendorRemoteID,
+            vendorId,
+            request.ProductID,
+            request.PriceID);
 
         var response = Systems.Vendor.NpcVendorService.TryPurchase(player, vendorId, request.ProductID, request.PriceID);
         client.NetChannels[ChannelType.ReliableGss].SendMessage(response, player.CharacterEntity.EntityId);

@@ -84,6 +84,15 @@ public static class NpcVendorService
         string title = vendorNpc?.StaticInfo.DisplayName;
         if (string.IsNullOrWhiteSpace(title) || title == "_noname")
         {
+            // NPC display names replicate as "_noname"; the row's localized name is what the
+            // client would show (e.g. Corporal Belle), so title the window with that.
+            title = vendorNpc != null
+                ? SDBInterface.GetLocalizedString(vendorNpc.StaticInfo.NameLocalizationId)
+                : null;
+        }
+
+        if (string.IsNullOrWhiteSpace(title))
+        {
             title = "Vendor";
         }
 
@@ -130,6 +139,28 @@ public static class NpcVendorService
             FactionDiscounts = [],
             Products = products,
         };
+    }
+
+    /// <summary>
+    ///     Which vendor a purchase belongs to: the player's authorized vendor terminal when one is
+    ///     open, otherwise whatever id the packet named (which then fails the terminal check in
+    ///     <see cref="TryPurchase" />). The client's vendor-id fields are unreliable (see the
+    ///     <c>ScuffedVendorID</c> FIXME in AeroMessages), while the authorized terminal is
+    ///     server-side truth about which shop the player has open - and the product/price guids
+    ///     still have to decode to that same vendor, so a purchase can never escape its own shop.
+    /// </summary>
+    /// <param name="player">The buying player.</param>
+    /// <param name="packetVendorId">The vendor id the client's request named, if any.</param>
+    /// <returns>The vendor id the purchase is validated against.</returns>
+    public static uint ResolvePurchaseVendorId(IPlayer player, uint packetVendorId)
+    {
+        var terminal = player.CharacterEntity.AuthorizedTerminal;
+        if (terminal.TerminalType == VendorTerminalType && terminal.TerminalId != 0)
+        {
+            return terminal.TerminalId;
+        }
+
+        return packetVendorId;
     }
 
     /// <summary>

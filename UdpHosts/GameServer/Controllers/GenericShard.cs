@@ -156,6 +156,7 @@ public class GenericShard : Base
         var request = packet.Unpack<VendorProductRequest>();
         if (request == null)
         {
+            Log.Warning("VendorProductRequest from {Player}: could not unpack the request", player.CharacterEntity);
             return;
         }
 

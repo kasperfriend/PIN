@@ -1,3 +1,4 @@
+using System;
 using AeroMessages.GSS.Character.Controller;
 using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.customdata;
@@ -34,15 +35,24 @@ public class AuthorizeTerminalCommand : Command, ICommand
                 return true;
             }
 
-            Logger.Information("{Command} {CommandId} Authorized terminal {TerminalType}, {terminal}", nameof(AuthorizeTerminalCommand), Params.Id, Params.TerminalType, terminal);
+            // The hand-authored table marks unidentified terminals with -1 (see
+            // aptgss_AuthorizeTerminalCommandDef.json): authorizing type/id 255 would hand the
+            // client a terminal that does not exist, so those rows stay silent.
+            if (Params.TerminalType < 0)
+            {
+                Logger.Debug("{Command} {CommandId} skips because terminal type is unidentified ({TerminalType})", nameof(AuthorizeTerminalCommand), Params.Id, Params.TerminalType);
+                return true;
+            }
+
+            Logger.Information("{Command} {CommandId} Authorized terminal {TerminalType} id {TerminalId} ({terminal})", nameof(AuthorizeTerminalCommand), Params.Id, Params.TerminalType, Params.TerminalId, terminal);
 
             character.SetAuthorizedTerminal(new AuthorizedTerminalData
             {
                 TerminalType = (byte)Params.TerminalType,
-                TerminalId = (byte)Params.TerminalId,
+                TerminalId = (uint)Math.Max(Params.TerminalId, 0),
                 TerminalEntityId = terminal.AeroEntityId.Backing
             });
-            
+
             return true;
         }
 

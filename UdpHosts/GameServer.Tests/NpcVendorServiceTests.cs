@@ -125,6 +125,25 @@ public class NpcVendorServiceTests : IDisposable
     }
 
     [Fact]
+    public void ResolvePurchaseVendorId_WithAuthorizedTerminal_ReturnsTheOpenShop()
+    {
+        var (_, player, _) = CreateVendorSession(authorizeTerminal: true);
+
+        // The client's vendor-id fields are unreliable (missing or scuffed): the open shop wins.
+        Assert.Equal(VendorId, NpcVendorService.ResolvePurchaseVendorId(player, 0));
+        Assert.Equal(VendorId, NpcVendorService.ResolvePurchaseVendorId(player, 999));
+        Assert.Equal(VendorId, NpcVendorService.ResolvePurchaseVendorId(player, VendorId));
+    }
+
+    [Fact]
+    public void ResolvePurchaseVendorId_WithoutAuthorizedTerminal_ReturnsThePacketId()
+    {
+        var (_, player, _) = CreateVendorSession(authorizeTerminal: false);
+
+        Assert.Equal(VendorId, NpcVendorService.ResolvePurchaseVendorId(player, VendorId));
+    }
+
+    [Fact]
     public void TryPurchase_WithoutAuthorizedTerminal_IsDeclined()
     {
         var (_, player, _) = CreateVendorSession(authorizeTerminal: false);
