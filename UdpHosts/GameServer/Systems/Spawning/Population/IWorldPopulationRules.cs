@@ -13,6 +13,12 @@ public interface IWorldPopulationRules
     bool Enabled { get; }
 
     /// <summary>
+    ///     Whether to spawn the full population across the entire zone at once rather than
+    ///     streaming cells based on player distance, keeping all NPCs spawned without despawning them.
+    /// </summary>
+    bool SpawnFullZone { get; }
+
+    /// <summary>
     ///     Hard ceiling on how many population NPCs may be alive at once, whatever the plan says.
     ///     This is the number that keeps the server's cost bounded: every live NPC is an entity, a
     ///     physics body, an AI brain and a stream of keyframes.

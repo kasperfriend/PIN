@@ -16,6 +16,13 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
     public bool Enabled { get; init; } = true;
 
     /// <summary>
+    ///     When true, spawns the full population across the entire zone rather than streaming
+    ///     cells near players, and keeps all spawned NPCs without despawning them when players
+    ///     move away or leave the zone.
+    /// </summary>
+    public bool SpawnFullZone { get; init; }
+
+    /// <summary>
     ///     150 live NPCs keeps a zone visibly populated while leaving enough CPU, physics and
     ///     reliable-channel headroom for actual combat. A shard with several players shares the
     ///     same cap, which is the point: the cost is bounded by this number, not by how many
@@ -99,6 +106,7 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
         return new StandardWorldPopulationRules
         {
             Enabled = settings.SpawnWorldPopulation,
+            SpawnFullZone = settings.WorldPopulationSpawnFullZone,
             MaxLiveNpcs = PositiveOrDefault(settings.WorldPopulationMaxLiveNpcs, 150),
             ActivationRadius = activationRadius,
             // Older App.config files did not have this key. Preserve their documented 1.5x

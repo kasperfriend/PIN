@@ -121,6 +121,13 @@ public class GameServerSettings
     /// </summary>
     public bool SpawnWorldPopulation { get; set; } = true;
 
+    /// <summary>
+    ///    Spawn the full population across the entire zone at once rather than streaming cells
+    ///    driven by player distance, and keep all spawned NPCs alive without despawning when
+    ///    players move away or leave the zone.
+    /// </summary>
+    public bool WorldPopulationSpawnFullZone { get; set; }
+
     /// <summary>Hard ceiling on simultaneously live world-population NPCs.</summary>
     public int WorldPopulationMaxLiveNpcs { get; set; } = 150;
 

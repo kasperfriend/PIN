@@ -729,4 +729,145 @@ public class WorldPopulationServiceTests
         Assert.Equal(0, logger.CountContaining("spawning nothing"));
         Assert.Equal(0, logger.CountContaining("still building the plan"));
     }
+
+    [Fact]
+    public void Tick_SpawnFullZone_SpawnsAllPlannedSlotsAcrossWholeZoneWithoutDistanceRestriction()
+    {
+        var rules = new StandardWorldPopulationRules
+        {
+            SpawnFullZone = true,
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            SpawnBudget = 12,
+        };
+        var world = CreateWorld(rules, playerAt: new Vector3(5_000f, 5_000f, 0f));
+        AddGroundAndRoster(world);
+
+        Tick(world, 10);
+
+        Assert.True(world.Service.Plan.IsComplete);
+        Assert.Equal(16, world.Service.ActiveCellCount);
+        Assert.Equal(64, world.Service.LiveCount);
+        Assert.Equal(64, world.Spawner.Spawned.Count);
+    }
+
+    [Fact]
+    public void Tick_SpawnFullZone_DoesNotDespawnWhenPlayerMovesAway()
+    {
+        var rules = new StandardWorldPopulationRules
+        {
+            SpawnFullZone = true,
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            SpawnBudget = 12,
+        };
+        var world = CreateWorld(rules);
+        AddGroundAndRoster(world);
+
+        Tick(world, 10);
+        Assert.Equal(64, world.Service.LiveCount);
+        Assert.Equal(16, world.Service.ActiveCellCount);
+
+        world.Player.SetPosition(new Vector3(5_000f, 5_000f, 0f));
+        Tick(world, 5);
+
+        Assert.Equal(64, world.Service.LiveCount);
+        Assert.Equal(16, world.Service.ActiveCellCount);
+        Assert.Empty(world.Spawner.Despawned);
+    }
+
+    [Fact]
+    public void Tick_SpawnFullZone_SpawnsAndKeepsPopulationEvenWithoutPlayers()
+    {
+        var rules = new StandardWorldPopulationRules
+        {
+            SpawnFullZone = true,
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            SpawnBudget = 12,
+        };
+        var world = CreateWorld(rules, withPlayer: false);
+        AddGroundAndRoster(world);
+
+        Tick(world, 10);
+
+        Assert.True(world.Service.Plan.IsComplete);
+        Assert.Equal(16, world.Service.ActiveCellCount);
+        Assert.Equal(64, world.Service.LiveCount);
+        Assert.Equal(64, world.Spawner.Spawned.Count);
+        Assert.Empty(world.Spawner.Despawned);
+    }
+
+    [Fact]
+    public void Tick_SpawnFullZone_DoesNotDespawnWhenLastPlayerLeaves()
+    {
+        var rules = new StandardWorldPopulationRules
+        {
+            SpawnFullZone = true,
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            SpawnBudget = 12,
+        };
+        var world = CreateWorld(rules);
+        AddGroundAndRoster(world);
+
+        Tick(world, 10);
+        Assert.Equal(64, world.Service.LiveCount);
+
+        world.Shard.Clients.Clear();
+        Tick(world, 5);
+
+        Assert.Equal(64, world.Service.LiveCount);
+        Assert.Equal(16, world.Service.ActiveCellCount);
+        Assert.Empty(world.Spawner.Despawned);
+    }
+
+    [Fact]
+    public void Tick_SpawnFullZone_KilledNpcRespawns()
+    {
+        var rules = new StandardWorldPopulationRules
+        {
+            SpawnFullZone = true,
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            SpawnBudget = 12,
+            RespawnDelayMs = 1_000,
+        };
+        var world = CreateWorld(rules);
+        AddGroundAndRoster(world);
+
+        Tick(world, 10);
+        Assert.Equal(64, world.Service.LiveCount);
+
+        ulong victim = world.Spawner.Alive.First();
+        world.Spawner.Kill(victim);
+        Tick(world);
+
+        Assert.Equal(63, world.Service.LiveCount);
+        Assert.Equal(1, world.Service.LostTotal);
+
+        Tick(world, 5);
+        Assert.Equal(64, world.Service.LiveCount);
+        Assert.Equal(65, world.Spawner.Spawned.Count);
+    }
+
+    [Fact]
+    public void Status_DescribesFullZoneStreamingMode()
+    {
+        var rules = new StandardWorldPopulationRules
+        {
+            SpawnFullZone = true,
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            SpawnBudget = 12,
+        };
+        var world = CreateWorld(rules);
+        AddGroundAndRoster(world);
+
+        Tick(world, 10);
+
+        var status = world.Service.DescribeStatus();
+        Assert.Contains("Streaming: 16 active cells", status);
+        Assert.Contains("full zone (persistent)", status);
+    }
 }
