@@ -72,6 +72,9 @@ public class SDBInterface
     private static Dictionary<KeyValuePair<uint, ushort>, ItemModuleScalars> _itemModuleScalars;
     private static Dictionary<KeyValuePair<uint, ushort>, ItemCharacterScalars> _itemCharacterScalars;
     private static Dictionary<uint, RootItem> _rootItem;
+    private static Dictionary<uint, VendorTokenMachine> _vendorTokenMachine;
+    private static List<VendorTokenDisplayItems> _vendorTokenDisplayItems;
+    private static List<VendorTokenKeyItems> _vendorTokenKeyItems;
     private static Dictionary<uint, AbilityModule> _abilityModule;
     private static Dictionary<uint, Battleframe> _battleframe;
     private static Dictionary<uint, CarryableObject> _carryableObject;
@@ -351,6 +354,9 @@ public class SDBInterface
         _itemModuleScalars = loader.LoadItemModuleScalars();
         _itemCharacterScalars = loader.LoadItemCharacterScalars();
         _rootItem = loader.LoadRootItem();
+        _vendorTokenMachine = loader.LoadVendorTokenMachine();
+        _vendorTokenDisplayItems = loader.LoadVendorTokenDisplayItems();
+        _vendorTokenKeyItems = loader.LoadVendorTokenKeyItems();
         _abilityModule = loader.LoadAbilityModule();
         _battleframe = loader.LoadBattleframe();
         _carryableObject = loader.LoadCarryableObject();
@@ -636,7 +642,7 @@ public class SDBInterface
     public static List<FactionRelations> GetFactionRelations() => _factionRelations;
     public static List<FactionReputations> GetFactionReputations(uint id) => _factionReputations.GetValueOrDefault(id);
 
-    public static Monster GetMonster(uint id) => _monster.GetValueOrDefault(id);
+    public static Monster GetMonster(uint id) => _monster?.GetValueOrDefault(id);
     public static IReadOnlyDictionary<uint, Monster> GetMonsters() => _monster;
 
     /// <summary>
@@ -804,7 +810,13 @@ public class SDBInterface
     }
 
     // dbitems
-    public static RootItem GetRootItem(uint id) => _rootItem.GetValueOrDefault(id);
+    public static RootItem GetRootItem(uint id) => _rootItem?.GetValueOrDefault(id);
+
+    public static VendorTokenMachine GetVendorTokenMachine(uint id) => _vendorTokenMachine?.GetValueOrDefault(id);
+
+    public static IReadOnlyList<VendorTokenDisplayItems> GetVendorTokenDisplayItems() => _vendorTokenDisplayItems ?? [];
+
+    public static IReadOnlyList<VendorTokenKeyItems> GetVendorTokenKeyItems() => _vendorTokenKeyItems ?? [];
     public static AbilityModule GetAbilityModule(uint id) => _abilityModule.GetValueOrDefault(id);
     public static Battleframe GetBattleframe(uint id) => _battleframe?.GetValueOrDefault(id);
     public static CarryableObject GetCarryableObject(uint id) => _carryableObject.GetValueOrDefault(id);

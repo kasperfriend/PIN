@@ -2556,3 +2556,96 @@ python3 Tools/SdbDump/sdb_dump.py info   /path/to/clientdb.sd2
 
 The tool never needs a Firefall installation, and the `.sd2` itself is game
 data that stays out of the repository.
+
+## 5. Player interactions (the E key) — audit and support
+
+The client asks the server whether the entity it is looking at can be used
+(`ClientQueryInteractionStatus`); the server answers from the entity's
+`InteractionComponent`. Until this audit no `dbcharacter::Monster` row ever
+produced one, so **no NPC in the game answered the E key** — the prompt the
+client draws for "Talk", "Vendor", "Use" simply never appeared.
+
+### 5.1 What the database marks interactive (prod-1962, 3,109 rows)
+
+Two columns carry the data; `terminal_type_name` does **not** (it defaults to
+`VENDOR` on 3,087 rows and discriminates nothing).
+
+| Marker | Rows | Meaning |
+| --- | --- | --- |
+| `behavior: interactionType="HolsterTalk"` / `"holsterTalk"` | 264 | town NPCs that turn and talk |
+| `behavior: interactionType="Generic"` / `"GENERIC"` | 76 | generic "use" interactions |
+| `behavior: interactionType="Vendor"` | 12 | shopkeepers with an authored vendor prompt |
+| `behavior: interactionType="none"` | 6 | explicitly **not** interactable |
+| interactive behaviour name without a type (`AlertAndInteractive(helloScript=…)`, `InteractiveWithEmote(emote=…)`) | 147 | greetings/posing NPCs — resolve to talk |
+| `behavior: UseAbilityOnInteract(_Dialog)(abilityId=N)` | 58 (73 ability ids) | the interaction casts an ability on completion |
+| `behavior: interactId=N` | 1 (monster 2147) | borrows deployable N's interaction profile (2619 = fixed-weapon tripod, a Grab interaction) |
+| `vendor_id != 0` | 102 | quartermasters, supply officers, ARC job board, booster vendors — vendor id wins over a talk marker |
+| `behavior: interact=1, interactAbility="…"` (engineer turrets 108/210) | 2 | dead data — the named upgrade abilities are not in the client DB, left out |
+| `DoorUpInteract` (275), `EventNpc_HeadlessHorseman` (2057) | 2 | alpha door / Halloween carryable event, no server content left, not interactable |
+
+Not interactable by design: every combat mob (the remaining ~2,600 rows),
+everything hostile to the player's faction, and dead NPCs.
+
+### 5.2 How the interaction runs
+
+```
+E key            -> ActivateAbility slot 4 -> ability 187 (Interact)
+chain 516325        ActiveInitiation / TimeCooldown / branch(targets && !effect 269)
+effect 269 apply -> agsBeginInteraction -> PushTargets -> type dispatch (or-chain 1154310)
+                    type 1->273 2->274 3->275 4->276 5->277 6/7->278 10->7226
+                    11->2211 13->7168 14->7227 15->7228; 8/9/12 -> 279
+per-type apply   -> agsInteractionCompletionTime  (records the channel on the player,
+                    duration from the NPC's InteractionComponent)
+per-type duration-> agsInteractionInProgress && RequireHasEffect(269)
+                    -> expires exactly at the recorded completion time
+effect 269 duration-> RequireCState(living) && ActivationDuration(187, activated)
+                    && HasTargets  -> releasing E (DeactivateAbility) cancels the channel
+any removal      -> Call ability 181 -> removes effect 269 -> agsEndInteraction
+agsEndInteraction -> completed: dialog (dialogScript=), vendor terminal authorization,
+                    CompletedAbilityId, vehicle boarding / doctor heal
+                    cancelled: InteractionCompleted with partial percent, no content
+```
+
+Vehicles, doctor pads and transports skip the channel: their apply chains call
+ability 181 immediately, so `EndInteraction` treats "no recorded channel" as
+completed (this keeps vehicle boarding intact).
+
+### 5.3 Vendor windows and purchases
+
+Completing a vendor interaction authorizes terminal type 7 with the monster's
+`vendor_id` (per the `aptgss::AuthorizeTerminalCommandDef` census, type 7 is
+the vendor UI); the client then asks for stock with `VendorProductRequest`
+and buys with `VendorPurchaseRequest`.
+
+Stock is built from the client database (`Systems/Vendor/VendorCatalog.cs`):
+
+- **Token-machine vendors** - a `vendor_id` that is a
+  `dbitems::VendorTokenMachine` id (monster rows with vendor_id 5 and 105).
+  Their windows list the machine's `VendorTokenDisplayItems` prizes, priced at
+  one of the machine's `VendorTokenKeyItems` tokens each.
+- **Quartermaster vendors** - every other vendor id. The live store catalogs
+  behind those ids were server-only and did not survive, so these windows
+  stock a curated shelf of real `dbitems::RootItem` consumables (health and
+  stim packs, ammo packs, grenades, calldowns, flares, boosts) priced in
+  crystite (item 10). The prices are emulated - nothing in the client
+  database names a cost - and deliberately modest.
+
+Product/price guids deterministically encode `(vendor_id, stock index)`, so a
+purchase re-derives its entry from the catalog with no per-player shop state.
+A purchase charges the currency via `CharacterInventory.ConsumeResource` and
+grants the goods - currency-style items (RootItem type Basic) top up the
+resource pool, everything else is created as a real inventory item. Insufficient
+funds, unknown guids and closed terminals all get decline responses with codes
+the client can show.
+
+### 5.4 Known gaps
+
+- `greetingSet=` (hundreds of rows) references server-only greeting tables
+  that did not survive; only the seven `dialogScript=` NPCs speak.
+- The two engineer-turret upgrade interactions (108/210) name abilities that
+  are absent from the client DB.
+- Reviving incapacitated **players** is out of scope here: players carry no
+  interaction component and `agsReviveCommandDef` is still a placeholder.
+- Quartermaster prices are emulated (no price data survives); the
+  `dbitems::VendorTokenMachine` gacha roll itself (a web-store flow) is not
+  reproduced - the machines' prizes are sold outright instead.

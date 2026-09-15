@@ -253,6 +253,24 @@ public class StaticDBLoader : ISDBLoader
         .ToDictionary(row => row.SdbId);
     }
 
+    public Dictionary<uint, VendorTokenMachine> LoadVendorTokenMachine()
+    {
+        return LoadStaticDB<VendorTokenMachine>("dbitems::VendorTokenMachine")
+        .ToDictionary(row => row.Id);
+    }
+
+    public List<VendorTokenDisplayItems> LoadVendorTokenDisplayItems()
+    {
+        return LoadStaticDB<VendorTokenDisplayItems>("dbitems::VendorTokenDisplayItems")
+            .ToList();
+    }
+
+    public List<VendorTokenKeyItems> LoadVendorTokenKeyItems()
+    {
+        return LoadStaticDB<VendorTokenKeyItems>("dbitems::VendorTokenKeyItems")
+            .ToList();
+    }
+
     public Dictionary<uint, Battleframe> LoadBattleframe()
     {
         return LoadStaticDB<Battleframe>("dbitems::Battleframe")

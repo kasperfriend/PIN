@@ -153,5 +153,18 @@ public class GenericShard : Base
     [MessageID(GssMessage.VendorProductRequest)]
     public void VendorProductRequest(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {
+        var request = packet.Unpack<VendorProductRequest>();
+        if (request == null)
+        {
+            return;
+        }
+
+        var response = Systems.Vendor.NpcVendorService.BuildProductsResponse(player, request.TerminalId);
+        if (response == null)
+        {
+            return;
+        }
+
+        client.NetChannels[ChannelType.ReliableGss].SendMessage(response, player.CharacterEntity.EntityId);
     }
 }

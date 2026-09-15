@@ -87,6 +87,15 @@ public class AbilityState
 {
     private readonly List<AbilityCooldownEntry> _cooldowns = new();
 
+    /// <summary>
+    /// Abilities currently held active on the entity. A client-initiated activation registers here
+    /// when its chain succeeds and leaves again on <c>DeactivateAbility</c> (key released); the
+    /// <c>aptfs::ActivationDurationCommandDef</c> duration gate reads the set to end channelled
+    /// effects - the interaction effect 269 lists the interact ability 187, so letting go of the E
+    /// key cancels the channel.
+    /// </summary>
+    public HashSet<uint> ActiveActivations { get; } = [];
+
     /// <summary>Current energy amount. Server-side approximation of the client-simulated pool.</summary>
     public float Energy { get; set; }
 

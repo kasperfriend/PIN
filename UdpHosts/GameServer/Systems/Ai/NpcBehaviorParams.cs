@@ -127,6 +127,44 @@ public sealed class NpcBehaviorParams
     /// <returns>Whether the behaviour carries an <c>emoteDuration</c>.</returns>
     public bool TryGetEmoteDurationSeconds(out int seconds) => TryGetInt("emoteDuration", out seconds);
 
+    /// <summary>
+    ///     The interaction kind the behaviour registers the NPC as (<c>interactionType="HolsterTalk"</c>,
+    ///     <c>interactionType="Vendor"</c>, ...), or an empty string when it does not say. The database
+    ///     spells it <c>HolsterTalk</c>/<c>holsterTalk</c>, <c>Generic</c>/<c>GENERIC</c>, <c>Vendor</c> and
+    ///     <c>none</c> (the last one explicitly disables the E-key prompt), so callers compare
+    ///     case-insensitively. 505 of the build's 3,109 monster rows carry one.
+    /// </summary>
+    public string InteractionTypeName => _values.TryGetValue("interactionType", out string value) ? value.Trim() : string.Empty;
+
+    /// <summary>
+    ///     The ability the behaviour has the NPC cast when a player finishes interacting with it
+    ///     (<c>abilityId=140662</c>, the database writes spaces around the <c>=</c>), or 0 when it names
+    ///     none. The <c>UseAbilityOnInteract</c> and <c>UseAbilityOnInteract_Dialog</c> behaviour sets use
+    ///     it; it becomes the NPC's <see cref="Entities.InteractionComponent.CompletedAbilityId" />.
+    /// </summary>
+    public uint InteractAbilityId => TryGetInt("abilityId", out int value) && value > 0 ? (uint)value : 0;
+
+    /// <summary>
+    ///     The <c>dbcharacter::Deployable</c> row whose interaction profile the behaviour borrows
+    ///     (<c>interactId=2619</c>), or 0 when it names none. One monster row in prod-1962 uses it: the
+    ///     <c>Arch_MedRangedHumanoid_Base</c> variant with <c>interactFunction="Fixed Weapon"</c> grabs
+    ///     the tripod weapon deployable 2619 (a Grab interaction) instead of talking.
+    /// </summary>
+    public uint InteractDeployableId => TryGetInt("interactId", out int value) && value > 0 ? (uint)value : 0;
+
+    /// <summary>
+    ///     Whether the behaviour set's name marks the NPC as player-interactable. Four names in prod-1962
+    ///     do: <c>AlertAndInteractive</c> (the generic town-NPC set), <c>InteractiveWithEmote</c> (a
+    ///     posing NPC), and <c>UseAbilityOnInteract</c>/<c>UseAbilityOnInteract_Dialog</c> (the interaction
+    ///     casts an ability). A monster can still be interactable without one of these names - a
+    ///     <c>vendor_id</c> makes shopkeepers and quartermasters vendors either way.
+    /// </summary>
+    public bool IsInteractiveBehaviorName =>
+        Name.Equals("AlertAndInteractive", StringComparison.OrdinalIgnoreCase)
+        || Name.Equals("InteractiveWithEmote", StringComparison.OrdinalIgnoreCase)
+        || Name.Equals("UseAbilityOnInteract", StringComparison.OrdinalIgnoreCase)
+        || Name.Equals("UseAbilityOnInteract_Dialog", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Parses a behaviour string. Never returns null; an empty input gives <see cref="Empty" />.</summary>
     public static NpcBehaviorParams Parse(string behavior)
     {

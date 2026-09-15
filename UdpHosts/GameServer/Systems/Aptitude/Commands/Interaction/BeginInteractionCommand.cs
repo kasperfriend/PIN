@@ -19,6 +19,13 @@ public class BeginInteractionCommand : ICommand
         }
 
         var interactionEntity = context.Targets.Peek();
+
+        // Targets without an interaction component have no start ability to cast.
+        if (((BaseEntity)interactionEntity).Interaction == null)
+        {
+            return true;
+        }
+
         var abilityId = ((BaseEntity)interactionEntity).Interaction.StartedAbilityId;
         if (abilityId != 0)
         {

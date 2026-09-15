@@ -281,6 +281,44 @@ public class BaseController : Base
         }
     }
 
+    [MessageID(GssCharacterCommand.VendorPurchaseRequest)]
+    public void VendorPurchaseRequest(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
+    {
+        var request = packet.Unpack<VendorPurchaseRequest>();
+        if (request == null)
+        {
+            return;
+        }
+
+        uint vendorId = request.HaveUnk3 == 1 ? request.VendorRemoteID : request.ScuffedVendorID;
+
+        var response = Systems.Vendor.NpcVendorService.TryPurchase(player, vendorId, request.ProductID, request.PriceID);
+        client.NetChannels[ChannelType.ReliableGss].SendMessage(response, player.CharacterEntity.EntityId);
+    }
+
+    [MessageID(GssCharacterCommand.VendorTokenMachineRequest)]
+    public void VendorTokenMachineRequest(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
+    {
+        var request = packet.Unpack<VendorTokenMachineRequest>();
+        if (request == null)
+        {
+            return;
+        }
+
+        // The token machine window is a web store on live; answer with an empty, zeroed response
+        // so the request does not go unanswered.
+        var response = new VendorTokenMachineResponse
+        {
+            Unk1 = request.Unk1,
+            Unk2 = request.Unk2,
+            Unk3 = request.Unk3,
+            Unk4 = request.Unk4,
+            Unk5 = 0,
+            Unk6 = [],
+        };
+        client.NetChannels[ChannelType.ReliableGss].SendMessage(response, player.CharacterEntity.EntityId);
+    }
+
     [MessageID(GssCharacterCommand.ResourceLocationInfosRequest)]
     public void ResourceLocationInfosRequest(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {
