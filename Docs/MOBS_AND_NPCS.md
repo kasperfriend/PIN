@@ -2638,6 +2638,49 @@ resource pool, everything else is created as a real inventory item. Insufficient
 funds, unknown guids and closed terminals all get decline responses with codes
 the client can show.
 
+#### The wire, as a live session shows it
+
+`themeldingwars/Documentation`'s `Captures/2015-05-02 - 1869 - Gameplay.pcapng.gz`
+holds one complete live vendor session (build 1869, the "Copacabana ARES
+Supplies" window at terminal 60, player entity `9234ab64b83c7f`, shard entity
+`0008e4b344550b`): one `VendorProductRequest`, one `VendorProductsResponse`
+(3,006 payload bytes across three GSS fragments) and three purchases with their
+three responses. It is the ground truth PIN's vendor messages are written
+against - the 2016-11-15 gameplay capture contains no vendor traffic at all.
+
+| Message | Direction | What the bytes say |
+| --- | --- | --- |
+| `VendorProductRequest` | c2s, root namespace, to the shard entity | `uint TerminalId` (60) - nothing else |
+| `VendorProductsResponse` | s2c, root namespace, **from the shard entity** | `uint VendorId` (60), `ulong Id` (**2321** - a small store-table id, *not* an entity id), `uint RemoteId` (60), `AeroString Title`, `uint FactionId` (20), `FactionDiscount[]` (3 × {`uint MinRep`, `float Discount`}: 6000→0.1, 12000→0.2, 24000→0.3), `VendorProduct[]` (32) |
+| `VendorProduct` | | `ulong GUID` (**469931..603221**), `uint SdbId`, `uint Quantity` (1), `uint Duration` (0), `VendorProductPrice[]`, `VendorProductRestriction[]` - and in build 1869 *no* `Priority`; AeroMessages' `VendorProduct.Priority` is a later addition |
+| `VendorProductPrice` | | `ulong GUID` (**1229621..1334821**), `AeroString CurrencyType` (`"resource"`), `uint CurrencyRemoteId` (10 = crystite), `uint Amount` (50..2500) |
+| `VendorProductRestriction` | | `AeroString Type` (`"MinReputationRestriction"`), `AeroString OptionsJSON` (`{"faction_id":"20","reputation":"6000"}`) - 22 of the 32 rows carry one |
+| `VendorPurchaseRequest` | c2s, `Character::BaseController`, to the character | 36 bytes: `ulong` (0), `EntityId Buyer`, `ulong ProductID`, `ulong PriceID`, **`uint StoreId`** (2321 - the response's `Id`, truncated to 32 bits). AeroMessages models that tail as three optional fields (`HaveUnk2`/`ScuffedVendorID`, `HaveUnk3`/`VendorRemoteID`, `HaveUnk4`/`Unk4`), which reads these bytes as 0x11/0x09/0x00 with one byte left over; `NpcVendorService.ReadStoreId` takes the modelled fields when a client fills them and otherwise reads the uint32 the capture shows |
+| `VendorPurchaseResponse` | s2c, root namespace, from the shard entity | `byte Success` (1), `ulong ProductId`, `ulong PriceId`, `uint VendorId` (2321), `AeroString Code` - **empty on success** |
+
+Two properties of that session are load-bearing for the client's Buy button, and
+PIN now matches both:
+
+- **Every id is small.** The product and price guids are plain database ids
+  below 2^21 and the store id is 2321. The client carries those ids through its
+  scripted UI, where every number is an IEEE-754 double with a 53-bit mantissa,
+  and hands them back to the native layer when Buy is pressed. A guid above 2^53
+  does not survive that trip: at ≈6.2e18 - what the `0x56454E44_xxxxxxxx`
+  "VEND" guids this server used to mint weigh in at - the spacing between
+  representable doubles is 1024, so a whole vendor's stock collapses onto one
+  value and the id the UI returns no longer matches the entry it came from. The
+  symptom is precise: the window renders, a row highlights, Buy does nothing at
+  all, and the server logs nothing because no packet is ever sent.
+  `VendorCatalog` mints guids below 2^26 instead - 8 bits of stock index, 16
+  bits of vendor id, bit 24 flagging a price and bit 25 set so that none is ever
+  zero - and answers with the vendor id as the store id.
+- **Root-namespace answers come from the shard entity**, not from the character
+  the window belongs to - the same convention `ChatService` already used.
+
+The purchase is validated against the authorized terminal rather than against
+whatever the packet claims (`ResolvePurchaseVendorId`), and the guids still have
+to decode to that same vendor, so a purchase cannot escape its own shop.
+
 ### 5.4 Known gaps
 
 - `greetingSet=` (hundreds of rows) references server-only greeting tables
@@ -2649,3 +2692,8 @@ the client can show.
 - Quartermaster prices are emulated (no price data survives); the
   `dbitems::VendorTokenMachine` gacha roll itself (a web-store flow) is not
   reproduced - the machines' prizes are sold outright instead.
+- Vendor stock is listed unrestricted. Live windows carried
+  `MinReputationRestriction` rows (22 of the 32 in the captured Copacabana
+  session, `{"faction_id":"20","reputation":"6000"}`) and faction discounts
+  (6000/12000/24000 reputation → 10/20/30 %); PIN has no faction reputation to
+  check either against, so it sends no restrictions and no discounts.

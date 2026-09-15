@@ -10,6 +10,7 @@ public class VendorCatalogTests
     [InlineData(1u, 0)]
     [InlineData(310u, 7)]
     [InlineData(10001u, 16)]
+    [InlineData(65535u, 255)]
     public void Guids_RoundTripThroughDecode(uint vendorId, int index)
     {
         Assert.True(VendorCatalog.TryDecodeGuid(VendorCatalog.ProductGuid(vendorId, index), out uint decodedVendor, out int decodedIndex, out bool isPrice));
@@ -31,6 +32,53 @@ public class VendorCatalogTests
 
         // A real inventory guid (random 64-bit space) must never decode as a product.
         Assert.False(VendorCatalog.TryDecodeGuid(0xdeadbeef_cafebabeul, out _, out _, out _));
+    }
+
+    /// <summary>
+    ///     A vendor window's ids have to survive the client's scripted UI, where every number is an
+    ///     IEEE-754 double with a 53-bit mantissa, and come back unchanged in the purchase request.
+    ///     Live minted plain database ids below 2^21; anything larger is why Buy used to do nothing.
+    /// </summary>
+    [Theory]
+    [InlineData(1u, 0)]
+    [InlineData(310u, 7)]
+    [InlineData(10001u, 16)]
+    [InlineData(65535u, 255)]
+    public void Guids_StaySmallEnoughForTheClientUi(uint vendorId, int index)
+    {
+        var guids = new[] { VendorCatalog.ProductGuid(vendorId, index), VendorCatalog.PriceGuid(vendorId, index) };
+
+        foreach (var guid in guids)
+        {
+            Assert.True(guid > 0, "a zero guid reads as \"nothing selected\"");
+            Assert.True(guid <= int.MaxValue, $"guid {guid} does not fit the 32 bits a scripted UI holds exactly");
+            Assert.Equal(guid, (ulong)(double)guid);
+        }
+
+        // A product and its price must not collide.
+        Assert.NotEqual(guids[0], guids[1]);
+    }
+
+    [Fact]
+    public void TryDecodeGuid_RejectsTheOversizedGuidsItUsedToMint()
+    {
+        // Vendor 100's first entry, before the ids were made small enough to round-trip.
+        Assert.False(VendorCatalog.TryDecodeGuid(0x56454E44_00640000ul, out _, out _, out _));
+        Assert.False(VendorCatalog.TryDecodeGuid(0x56454E44_80640000ul, out _, out _, out _));
+    }
+
+    /// <summary>
+    ///     The window id (<c>VendorProductsResponse.Id</c>) the client truncates to 32 bits and echoes
+    ///     back as the last field of a purchase. Live sent a small store-table id here, never the
+    ///     vendor NPC's 64-bit entity id.
+    /// </summary>
+    [Fact]
+    public void StoreId_IsSmallAndStablePerVendor()
+    {
+        Assert.Equal(310u, VendorCatalog.StoreId(310));
+        Assert.Equal(VendorCatalog.StoreId(310), VendorCatalog.StoreId(310));
+        Assert.NotEqual(VendorCatalog.StoreId(310), VendorCatalog.StoreId(60));
+        Assert.NotEqual(0u, VendorCatalog.StoreId(310));
     }
 
     [Fact]

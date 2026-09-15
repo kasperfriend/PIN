@@ -50,17 +50,44 @@ public sealed class VendorCatalogEntry
 ///     Product and price guids are deterministic encodings of (vendor id, index), so a purchase can
 ///     be validated and decoded without keeping any per-player shop state around.
 ///     </para>
+///     <para>
+///     <b>Every id this catalog mints is small</b>, and that is load-bearing rather than cosmetic. A
+///     live 2015 capture (build 1869, the "Copacabana ARES Supplies" window) shows the real server
+///     minting plain database ids - products 469931..603221, prices 1229621..1334821, all below
+///     2^21 - and the client echoing exactly those ids back in <c>VendorPurchaseRequest</c>. The
+///     client carries them through its scripted UI, where every number is an IEEE-754 double with a
+///     53-bit mantissa. A guid above 2^53 does not survive that round trip: at 6.2e18 (what the
+///     "VEND"-prefixed guids this catalog used to mint weigh in at) the spacing between
+///     representable doubles is 1024, so a whole vendor's stock collapses onto one value and the id
+///     the UI hands back to the native layer no longer matches the entry it came from. The window
+///     still renders and a row can still be highlighted, but Buy never reaches the wire. See
+///     <see cref="ProductGuid" /> and <see cref="StoreId" />.
+///     </para>
 /// </remarks>
 public static class VendorCatalog
 {
     /// <summary><c>dbitems::RootItem</c> 10 - crystite, the currency every quartermaster price uses.</summary>
     public const uint CrystiteSdbId = 10;
 
-    /// <summary>High dword of every vendor guid the server mints ("VEND").</summary>
-    private const ulong GuidBase = 0x56454E44_00000000ul;
+    /// <summary>
+    ///     Bit 25, set in every guid the catalog mints so that neither a product nor a price can ever
+    ///     be zero (the client reads zero as "nothing selected"). It sits above the fields rather
+    ///     than inside them: a base bit inside the vendor's range would decode as vendor + 256.
+    /// </summary>
+    private const ulong GuidBase = 1ul << 25;
 
-    /// <summary>Bit 31 marks a price guid; product guids leave it clear (vendor ids never reach it).</summary>
-    private const uint PriceFlag = 1u << 31;
+    /// <summary>
+    ///     Bit 24 marks a price guid; product guids leave it clear. Vendor ids occupy bits 8..23 and
+    ///     the stock index bits 0..7, so neither the flag nor <see cref="GuidBase" /> can collide
+    ///     with either field.
+    /// </summary>
+    private const ulong PriceFlag = 1ul << 24;
+
+    /// <summary>
+    ///     Every bit a minted guid may use: the 8-bit stock index, the 16-bit vendor id,
+    ///     <see cref="PriceFlag" /> and <see cref="GuidBase" />. Anything else is not one of ours.
+    /// </summary>
+    private const ulong GuidMask = 0x3FFFFFFul;
 
     /// <summary>
     ///     The quartermaster stock: real consumable <c>dbitems::RootItem</c> rows with emulated
@@ -174,16 +201,44 @@ public static class VendorCatalog
         return entries;
     }
 
-    /// <summary>The deterministic guid the client sees (and sends back) for a stock entry.</summary>
+    /// <summary>
+    ///     The deterministic guid the client sees (and sends back) for a stock entry: 8 bits of stock
+    ///     index, 16 bits of vendor id and <see cref="GuidBase" />, so it is never zero and never
+    ///     above 0x2FFFFFF - well inside the 32 bits (and the 53-bit double) the client's UI holds it
+    ///     in, and the same order of magnitude as the ids the live server minted.
+    /// </summary>
+    /// <remarks>
+    ///     The index is masked to a byte because the protocol counts a window's products with a
+    ///     single byte anyway - a vendor can never list more than 255 entries.
+    /// </remarks>
     public static ulong ProductGuid(uint vendorId, int index)
     {
-        return GuidBase | ((ulong)(vendorId & 0x3FFF) << 16) | (uint)(index & 0xFFFF);
+        return GuidBase | ((ulong)(vendorId & 0xFFFF) << 8) | (uint)(index & 0xFF);
     }
 
     /// <summary>The deterministic guid of the entry's single price line.</summary>
     public static ulong PriceGuid(uint vendorId, int index)
     {
         return ProductGuid(vendorId, index) | PriceFlag;
+    }
+
+    /// <summary>
+    ///     The store id a vendor window is opened with (<c>VendorProductsResponse.Id</c>), which the
+    ///     client truncates to 32 bits and echoes back as the last field of a purchase request.
+    /// </summary>
+    /// <remarks>
+    ///     On live this was an id out of the server-only store tables (terminal 60 answered with
+    ///     store 2321); those tables did not survive, so the terminal's vendor id stands in. It is
+    ///     small, stable across a session and unique per vendor, which is all the client needs: it
+    ///     never resolves the id itself, it just hands it back. Keeping it under 2^32 matters - a
+    ///     64-bit entity id (what this used to send) is both truncated by the client and mangled by
+    ///     its UI's double arithmetic.
+    /// </remarks>
+    /// <param name="vendorId">The NPC's <c>dbcharacter::Monster.vendor_id</c>.</param>
+    /// <returns>The store id to open the window with.</returns>
+    public static uint StoreId(uint vendorId)
+    {
+        return vendorId;
     }
 
     /// <summary>
@@ -200,17 +255,16 @@ public static class VendorCatalog
         index = 0;
         isPrice = false;
 
-        if ((guid & 0xFFFFFFFF_00000000ul) != GuidBase)
+        // Anything using bits outside the encoding, or missing the base bit, is not ours: an
+        // inventory item guid, a store id, or a value the client's UI rounded into nonsense.
+        if ((guid & ~GuidMask) != 0 || (guid & GuidBase) == 0)
         {
             return false;
         }
 
-        uint low = (uint)guid;
-        isPrice = (low & PriceFlag) != 0;
-        low &= ~PriceFlag;
-
-        vendorId = (low >> 16) & 0x3FFF;
-        index = (int)(low & 0xFFFF);
+        isPrice = (guid & PriceFlag) != 0;
+        vendorId = (uint)((guid >> 8) & 0xFFFF);
+        index = (int)(guid & 0xFF);
         return true;
     }
 

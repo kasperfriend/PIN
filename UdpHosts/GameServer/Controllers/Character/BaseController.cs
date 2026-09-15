@@ -291,23 +291,33 @@ public class BaseController : Base
             return;
         }
 
-        uint packetVendorId = request.HaveUnk3 == 1 ? request.VendorRemoteID : request.ScuffedVendorID;
-        uint vendorId = Systems.Vendor.NpcVendorService.ResolvePurchaseVendorId(player, packetVendorId);
+        var packetVendorId = Systems.Vendor.NpcVendorService.ReadStoreId(request, packet.Peek(packet.BytesRemaining).Span);
+        var vendorId = Systems.Vendor.NpcVendorService.ResolvePurchaseVendorId(player, packetVendorId);
+
+        if (packetVendorId != 0 && packetVendorId != vendorId)
+        {
+            // Not fatal - the guids still have to decode against the authorized terminal's vendor -
+            // but a client naming a different store than the one that is open is worth knowing about.
+            _logger.Warning(
+                "VendorPurchaseRequest from {Player} names store {PacketVendorId} while terminal vendor {VendorId} is open",
+                player.CharacterEntity,
+                packetVendorId,
+                vendorId);
+        }
 
         _logger.Information(
-            "VendorPurchaseRequest from {Player}: packet vendor {PacketVendorId} (HaveUnk2={HaveUnk2} Scuffed={ScuffedVendorId} HaveUnk3={HaveUnk3} Remote={VendorRemoteId}) resolved to vendor {VendorId}, product {ProductId:X16} price {PriceId:X16}",
+            "VendorPurchaseRequest from {Player}: store {PacketVendorId} resolved to vendor {VendorId}, product {ProductId} price {PriceId}",
             player.CharacterEntity,
             packetVendorId,
-            request.HaveUnk2,
-            request.ScuffedVendorID,
-            request.HaveUnk3,
-            request.VendorRemoteID,
             vendorId,
             request.ProductID,
             request.PriceID);
 
         var response = Systems.Vendor.NpcVendorService.TryPurchase(player, vendorId, request.ProductID, request.PriceID);
-        client.NetChannels[ChannelType.ReliableGss].SendMessage(response, player.CharacterEntity.EntityId);
+
+        // Root-namespace (Generic) answers travel against the shard entity on live; the purchase
+        // response is one of them.
+        client.NetChannels[ChannelType.ReliableGss].SendMessage(response, client.AssignedShard.InstanceId);
     }
 
     [MessageID(GssCharacterCommand.VendorTokenMachineRequest)]
