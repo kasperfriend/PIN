@@ -687,7 +687,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         // Player-facing interaction: shopkeepers, quartermasters, town chatter and ability-casting
         // NPCs all get their E-key prompt from the monster row itself (behavior string + vendor_id).
         // Monsters without a marker keep a null component and are not interactable.
-        Interaction = GameServer.Systems.Ai.NpcInteractionProfile.Resolve(monsterInfo);
+        Interaction = Systems.Ai.NpcInteractionProfile.Resolve(monsterInfo);
     }
 
     /// <summary>

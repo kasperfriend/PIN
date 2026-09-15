@@ -159,7 +159,7 @@ public class GenericShard : Base
             return;
         }
 
-        var response = GameServer.Systems.Vendor.NpcVendorService.BuildProductsResponse(player, request.TerminalId);
+        var response = Systems.Vendor.NpcVendorService.BuildProductsResponse(player, request.TerminalId);
         if (response == null)
         {
             return;

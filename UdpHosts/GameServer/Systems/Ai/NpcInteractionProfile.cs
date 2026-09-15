@@ -12,9 +12,10 @@ namespace GameServer.Systems.Ai;
 /// <remarks>
 ///     <para>
 ///     The decision is driven by two columns of the monster row. The <c>behavior</c> string names the
-///     interaction explicitly (<c>AlertAndInteractive(interactionType="HolsterTalk",...)</c>), and
-///     <c>vendor_id</c> marks the row as a vendor terminal. The audit of all 3,109 <c>dbcharacter::Monster</c>
-///     rows in build prod-1962 shows: 505 rows carry an interaction marker in <c>behavior</c>
+///     interaction explicitly (<c>AlertAndInteractive(interactionType="HolsterTalk",...)</c> or a
+///     borrowed deployable profile via <c>interactId</c>), and <c>vendor_id</c> marks the row as a
+///     vendor terminal. The audit of all 3,109 <c>dbcharacter::Monster</c>
+///     rows in build prod-1962 shows: 506 rows carry an interaction marker in <c>behavior</c>
 ///     (<c>HolsterTalk</c> 264, <c>Generic</c>/<c>GENERIC</c> 76, <c>Vendor</c> 12, <c>none</c> 6, a name
 ///     like <c>AlertAndInteractive</c> without a type 147), and 102 rows carry a non-zero
 ///     <c>vendor_id</c> - quartermasters, supply officers, the ARC job board and the like. Most of those
@@ -55,6 +56,25 @@ public static class NpcInteractionProfile
         if (behavior.InteractionTypeName.Equals("none", StringComparison.OrdinalIgnoreCase))
         {
             return null;
+        }
+
+        // The behaviour borrows a deployable's interaction profile (monster 2147, the fixed
+        // weapon tripod: interactId=2619, a Grab interaction).
+        if (behavior.InteractDeployableId != 0)
+        {
+            var deployable = StaticDB.SDBInterface.GetDeployable(behavior.InteractDeployableId);
+            if (deployable is { InteractionType: not 0 })
+            {
+                return new Entities.InteractionComponent
+                {
+                    Type = (InteractionType)deployable.InteractionType,
+                    DurationMs = deployable.InteractionDurationMs,
+                    StartedAbilityId = deployable.InteractAbilityid,
+                    CompletedAbilityId = deployable.InteractCompletedAbilityid,
+                    Radius = deployable.InteractRadius > 0 ? deployable.InteractRadius : 1.0f,
+                    Height = deployable.InteractHeight > 0 ? deployable.InteractHeight : 1.5f,
+                };
+            }
         }
 
         // Shopkeepers, quartermasters, the ARC job board: a vendor terminal id makes the row a

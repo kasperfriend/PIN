@@ -145,6 +145,14 @@ public sealed class NpcBehaviorParams
     public uint InteractAbilityId => TryGetInt("abilityId", out int value) && value > 0 ? (uint)value : 0;
 
     /// <summary>
+    ///     The <c>dbcharacter::Deployable</c> row whose interaction profile the behaviour borrows
+    ///     (<c>interactId=2619</c>), or 0 when it names none. One monster row in prod-1962 uses it: the
+    ///     <c>Arch_MedRangedHumanoid_Base</c> variant with <c>interactFunction="Fixed Weapon"</c> grabs
+    ///     the tripod weapon deployable 2619 (a Grab interaction) instead of talking.
+    /// </summary>
+    public uint InteractDeployableId => TryGetInt("interactId", out int value) && value > 0 ? (uint)value : 0;
+
+    /// <summary>
     ///     Whether the behaviour set's name marks the NPC as player-interactable. Four names in prod-1962
     ///     do: <c>AlertAndInteractive</c> (the generic town-NPC set), <c>InteractiveWithEmote</c> (a
     ///     posing NPC), and <c>UseAbilityOnInteract</c>/<c>UseAbilityOnInteract_Dialog</c> (the interaction

@@ -129,4 +129,14 @@ public class NpcInteractionProfileTests
         Assert.Null(NpcInteractionProfile.Resolve(new Monster()));
         Assert.Null(NpcInteractionProfile.Resolve(null));
     }
+
+    [Fact]
+    public void Parse_InteractDeployableId_ReadsTheBorrowedProfileMarker()
+    {
+        var parsed = NpcBehaviorParams.Parse(
+            "Arch_MedRangedHumanoid_Base(calmNearSpawn=true,interactOn=1,interactFunction=\"Fixed Weapon\",interactId=2619,interactFriendly=1)");
+
+        Assert.Equal(2619u, parsed.InteractDeployableId);
+        Assert.Equal(0u, parsed.InteractAbilityId);
+    }
 }
