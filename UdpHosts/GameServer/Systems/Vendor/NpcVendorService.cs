@@ -71,6 +71,13 @@ public static class NpcVendorService
     public const string VendorUnavailableCode = "VENDOR_UNAVAILABLE";
 
     /// <summary>
+    ///     Response code when the goods would not fit the player's bags. Charging without the
+    ///     grants ever fitting leaves the client (which enforces its own bag model) showing a red
+    ///     flash and nothing changing; declining with a code shows the reason instead.
+    /// </summary>
+    public const string InventoryFullCode = "INVENTORY_FULL";
+
+    /// <summary>
     ///     The restriction a reputation-gated row carries. A live 2015 capture shows 22 of the 32
     ///     rows of the "Copacabana ARES Supplies" window carrying one, as
     ///     <c>MinReputationRestriction</c> with the options <c>{"faction_id":"20","reputation":"6000"}</c>
@@ -98,6 +105,13 @@ public static class NpcVendorService
     ///     (<see cref="VendorTokenRoll.Roll(uint, uint)" />); tests swap in fixed awards.
     /// </summary>
     internal static Func<uint, uint, IReadOnlyList<TokenRollAward>> RollTokenMachine { get; set; } = VendorTokenRoll.Roll;
+
+    /// <summary>
+    ///     Item lookup; production reads the database, tests swap in a fixed shelf. Buying a
+    ///     consumable merges it into the stack consumables live in, which only the database's
+    ///     item type decides.
+    /// </summary>
+    internal static Func<uint, StaticDB.Records.dbitems.RootItem> LookupItem { get; set; } = SDBInterface.GetRootItem;
 
     /// <summary>
     ///     Builds the stock response for the vendor the player is authorized to use, or null when the
@@ -383,6 +397,18 @@ public static class NpcVendorService
             return Decline(0, VendorUnavailableCode);
         }
 
+        if (!FitsInInventory(inventory, entry))
+        {
+            Logger.Information(
+                "VendorPurchase of {Item} (x{Quantity}) declined: {Player} has only full bags ({Used}/{Capacity} slots)",
+                entry.Name,
+                entry.Quantity,
+                character,
+                inventory.BagSlotCount,
+                BagInventoryLayout.CapacityFor(BagInventoryLayout.BagLengthFor(inventory.BagSlotCount)));
+            return Decline(0, InventoryFullCode);
+        }
+
         if (!inventory.ConsumeResource(entry.CurrencySdbId, entry.Cost))
         {
             Logger.Information(
@@ -472,14 +498,15 @@ public static class NpcVendorService
     }
 
     /// <summary>
-    ///     Hands the purchase to the player: currency-style items (RootItem type Basic, like crystite
-    ///     itself or merit points) top up the matching resource pool, everything else lands in the
-    ///     inventory as a real item.
+    ///     Hands the purchase to the player: stackable goods (currency-style basics like crystite,
+    ///     consumables like health packs, raw materials) top up the matching resource pool - the
+    ///     guidless stack a live bag model carries them in - and equipment lands as real items,
+    ///     one per copy.
     /// </summary>
     private static void Grant(CharacterInventory inventory, VendorCatalogEntry entry)
     {
-        var item = SDBInterface.GetRootItem(entry.SdbId);
-        if (item != null && (ItemType)item.Type == ItemType.Basic)
+        var item = LookupItem(entry.SdbId);
+        if (item != null && ItemStacking.IsStackedAsResource(item.Type))
         {
             inventory.AddResource(entry.SdbId, entry.Quantity);
             return;
@@ -489,5 +516,30 @@ public static class NpcVendorService
         {
             inventory.CreateItem(entry.SdbId);
         }
+    }
+
+    /// <summary>
+    ///     Whether the goods would fit the player's bags, against the same model the client
+    ///     enforces locally (see <see cref="BagInventoryLayout" />): stackables fit when their
+    ///     pool already exists, everything new needs an open slot per unit. Token machine rows
+    ///     always answer true - what the machine dispenses is only known after the roll, and a
+    ///     paid token must not bounce off the cabinet.
+    /// </summary>
+    private static bool FitsInInventory(CharacterInventory inventory, VendorCatalogEntry entry)
+    {
+        if (entry.TokenMachineRoll)
+        {
+            return true;
+        }
+
+        var item = LookupItem(entry.SdbId);
+        if (item != null && ItemStacking.IsStackedAsResource(item.Type))
+        {
+            return inventory.GetResourceQuantity(entry.SdbId) > 0
+                || inventory.BagSlotCount < BagInventoryLayout.CapacityFor(BagInventoryLayout.BagLengthFor(inventory.BagSlotCount));
+        }
+
+        return inventory.BagSlotCount + entry.Quantity
+            <= BagInventoryLayout.CapacityFor(BagInventoryLayout.BagLengthFor(inventory.BagSlotCount));
     }
 }

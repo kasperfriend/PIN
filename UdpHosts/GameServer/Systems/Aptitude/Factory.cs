@@ -540,8 +540,8 @@ public class Factory
             //     return new CalculateTrajectoryCommand(CustomDBInterface.GetCalculateTrajectoryCommandDef(commandId));
             case CommandType.RegisterComparison:
                 return new RegisterComparisonCommand(SDBInterface.GetRegisterComparisonCommandDef(commandId));
-            // case CommandType.ConsumeItem:
-            //     return new ConsumeItemCommand(CustomDBInterface.GetConsumeItemCommandDef(commandId));
+            case CommandType.ConsumeItem:
+                return new ConsumeItemCommand(CustomDBInterface.GetConsumeItemCommandDef(commandId));
             case CommandType.RegisterRandom:
                 return new RegisterRandomCommand(SDBInterface.GetRegisterRandomCommandDef(commandId));
             case CommandType.SetGliderParametersDef:

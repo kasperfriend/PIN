@@ -210,6 +210,17 @@ public class CombatController : Base
             var character = player.CharacterEntity;
             var activationTime = query.Time;
             var shard = character.Shard;
+
+            // The activation costs one copy of the consumable (the aptitude chain's ConsumeItem
+            // command); refuse it up front when the player does not have any, so a spammed hot
+            // key cannot run free effects.
+            if (player.Inventory != null && !player.Inventory.HasItemOrResource(query.ItemSdbId))
+            {
+                _logger.Information("ActivateConsumable {ItemSdbId} from {Player} refused: the player does not have that consumable", query.ItemSdbId, character);
+                SendAbilityActivationResponse(character, abilityId, activationTime, activated: false);
+                return;
+            }
+
             var initiator = character as IAptitudeTarget;
             var targets = new AptitudeTargets();
 

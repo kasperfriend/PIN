@@ -79,6 +79,7 @@ public class SDBInterface
     private static Dictionary<uint, LootTable> _lootTable;
     private static Dictionary<uint, List<LootTableItemDist>> _lootTableItemDist;
     private static Dictionary<uint, List<LootTableSubTableDist>> _lootTableSubTableDist;
+    private static Dictionary<uint, SalvageRewards> _salvageRewards;
     private static Dictionary<uint, AbilityModule> _abilityModule;
     private static Dictionary<uint, Battleframe> _battleframe;
     private static Dictionary<uint, CarryableObject> _carryableObject;
@@ -365,6 +366,7 @@ public class SDBInterface
         _lootTable = loader.LoadLootTable();
         _lootTableItemDist = loader.LoadLootTableItemDist();
         _lootTableSubTableDist = loader.LoadLootTableSubTableDist();
+        _salvageRewards = loader.LoadSalvageRewards();
         _abilityModule = loader.LoadAbilityModule();
         _battleframe = loader.LoadBattleframe();
         _carryableObject = loader.LoadCarryableObject();
@@ -841,6 +843,13 @@ public class SDBInterface
     /// <summary>The nested-table rows of a loot table, in database order; empty when it has none.</summary>
     public static IReadOnlyList<LootTableSubTableDist> GetLootTableSubTableDists(uint lootTableId) =>
         _lootTableSubTableDist?.GetValueOrDefault(lootTableId) ?? [];
+
+    /// <summary>
+    ///     What an item breaks down into when salvaged: the <c>dbitems::SalvageRewards</c> row with
+    ///     the loot table to roll. <c>RootItem.SalvageRewards</c> names the row; 0 (or a dangling
+    ///     id) means the item cannot be salvaged.
+    /// </summary>
+    public static SalvageRewards GetSalvageRewards(uint id) => _salvageRewards?.GetValueOrDefault(id);
     public static AbilityModule GetAbilityModule(uint id) => _abilityModule.GetValueOrDefault(id);
     public static Battleframe GetBattleframe(uint id) => _battleframe?.GetValueOrDefault(id);
     public static CarryableObject GetCarryableObject(uint id) => _carryableObject.GetValueOrDefault(id);

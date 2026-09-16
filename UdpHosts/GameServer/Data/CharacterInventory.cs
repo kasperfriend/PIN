@@ -39,6 +39,16 @@ public class CharacterInventory
     {
         foreach (uint item in HardcodedCharacterData.FallbackInventoryItems)
         {
+            // Stackable goods (consumables, currency-style basics, raw materials) live in the
+            // resource pools like on live; only equipment keeps a guid per copy. When the static
+            // DB is not loaded the type is unknown and the item keeps the legacy guid form.
+            var info = SDBInterface.GetRootItem(item);
+            if (info != null && ItemStacking.IsStackedAsResource(info.Type))
+            {
+                AddResource(item, 1);
+                continue;
+            }
+
             CreateItem(item);
         }
 
@@ -112,6 +122,109 @@ public class CharacterInventory
     /// this is what aptitude's RequireHasItem quantity refers to.
     /// </summary>
     public int CountItemsBySdbId(uint sdbId) => _items.Values.Count(item => item.SdbId == sdbId);
+
+    /// <summary>Looks up a carried item by guid.</summary>
+    public bool TryGetItem(ulong guid, out Item item) => _items.TryGetValue(guid, out item);
+
+    /// <summary>Whether the item is currently equipped in a loadout; equipped gear cannot leave the inventory.</summary>
+    public bool IsItemEquipped(ulong guid) =>
+        _items.TryGetValue(guid, out var item) && (item.DynamicFlags & (byte)ItemDynamicFlags.IsEquipped) != 0;
+
+    /// <summary>
+    ///     Removes an item from the inventory. Equipped gear refuses to go (it is slotted in a
+    ///     loadout, which would be left pointing at a missing item).
+    /// </summary>
+    /// <param name="guid">The item to remove.</param>
+    /// <returns>False when no such item is carried or it is equipped.</returns>
+    public bool RemoveItem(ulong guid)
+    {
+        if (IsItemEquipped(guid))
+        {
+            return false;
+        }
+
+        return _items.Remove(guid);
+    }
+
+    /// <summary>Whether the given good is at hand: a resource pool of that sdb id with enough in it, or at least that many free (unequipped) copies as items.</summary>
+    public bool HasItemOrResource(uint sdbId, uint quantity = 1)
+    {
+        if (quantity == 0)
+        {
+            return true;
+        }
+
+        if (_resources.TryGetValue(sdbId, out var res) && res.Quantity >= quantity)
+        {
+            return true;
+        }
+
+        return CountUnequippedItems(sdbId) >= quantity;
+    }
+
+    /// <summary>
+    ///     Takes one or more copies of a good out of the inventory: out of the resource pool when
+    ///     it holds enough, otherwise that many unequipped items of the same sdb id. Pools are not
+    ///     mixed - the removal is all-or-nothing from whichever pool covers the whole amount.
+    /// </summary>
+    /// <returns>False when the inventory does not hold the full amount; nothing is removed then.</returns>
+    public bool ConsumeItemBySdbId(uint sdbId, uint quantity = 1)
+    {
+        if (quantity == 0)
+        {
+            return true;
+        }
+
+        if (_resources.TryGetValue(sdbId, out var res) && res.Quantity >= quantity)
+        {
+            return ConsumeResource(sdbId, quantity);
+        }
+
+        if (CountUnequippedItems(sdbId) < quantity)
+        {
+            return false;
+        }
+
+        var toRemove = _items.Values
+            .Where(item => item.SdbId == sdbId && (item.DynamicFlags & (byte)ItemDynamicFlags.IsEquipped) == 0)
+            .Select(item => item.GUID)
+            .Take((int)quantity)
+            .ToList();
+        foreach (var guid in toRemove)
+        {
+            _items.Remove(guid);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     How many slots the bags would show as occupied: one per carried item and one per
+    ///     stackable pool, mirroring a captured <c>BagInventoryUpdate</c>. The client enforces
+    ///     this against its bag model, so purchases into a full bag must be declined server-side
+    ///     with the same math (see <c>NpcVendorService</c>).
+    /// </summary>
+    public int BagSlotCount => _items.Count + _resources.Count;
+
+    /// <summary>The occupied bag slots, items first (with their guids), stackable pools after (guidless, with the stack size) - the order a capture shows.</summary>
+    public List<BagInventoryLayout.BagSlot> GetBagSlots()
+    {
+        var slots = new List<BagInventoryLayout.BagSlot>(BagSlotCount);
+        foreach (var item in _items.Values)
+        {
+            slots.Add(new BagInventoryLayout.BagSlot(item.GUID, item.SdbId, 1));
+        }
+
+        foreach (var resource in _resources.Values)
+        {
+            slots.Add(new BagInventoryLayout.BagSlot(0, resource.SdbId, resource.Quantity));
+        }
+
+        return slots;
+    }
+
+    private int CountUnequippedItems(uint sdbId) =>
+        _items.Values.Count(item => item.SdbId == sdbId && (item.DynamicFlags & (byte)ItemDynamicFlags.IsEquipped) == 0);
 
     public ulong CreateItem(uint sdbId)
     {
