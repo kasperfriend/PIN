@@ -1,10 +1,11 @@
 # NPC AI Dev Notes
 
-> **Ambient movement:** declared wanderers now walk/run, pause and visit compatible
-> live work/rest objects through the same navigation service. See
-> [NPC routines](NPC_ROUTINES.md) and the [full movement census](NpcMovement/README.md)
-> for the exact data coverage and missing original-route/CAIS content. This does not
-> turn every idle template into a patrol.
+> **Ambient movement:** declared wanderers — and rows with no CAIS string at all —
+> now walk/run, pause and visit compatible live work/rest objects through the same
+> navigation service. See [NPC routines](NPC_ROUTINES.md) and the
+> [full movement census](NpcMovement/README.md) for the exact data coverage and
+> missing original-route/CAIS content. Named unspecified trees (`Arch_*`, posing
+> civilians) still do not receive a guessed patrol.
 
 This document explains the server side NPC AI: what a spawned mob actually does,
 where the code lives, how to tune it and how to exercise it from the game client.

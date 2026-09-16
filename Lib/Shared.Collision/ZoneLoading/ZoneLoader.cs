@@ -187,9 +187,20 @@ public class ZoneLoader
 
         _logger.Information($"Zone {{ZoneId}} ({{ZoneName}}): References {{Count}} {(chunkRefs.Length == 1 ? "chunk" : "chunks")}", zoneId, zone.Name, chunkRefs.Length);
 
+        var loadedChunkNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var chunkRef in chunkRefs)
         {
-            _logger.Information("Loading chunk ({CurrentCount}/{TotalCount}) {ChunkName}", chunkRefs.IndexOf(chunkRef) + 1, chunkRefs.Length, chunkRef.Name);
+            if (!loadedChunkNames.Add(chunkRef.Name))
+            {
+                _logger.Warning(
+                    "Zone {ZoneId}: skipping duplicate chunk {ChunkName} at {Origin} - overlapping collision would put NPCs on trees and under rocks",
+                    zoneId,
+                    chunkRef.Name,
+                    chunkRef.Origin);
+                continue;
+            }
+
+            _logger.Information("Loading chunk ({CurrentCount}/{TotalCount}) {ChunkName}", loadedChunkNames.Count, chunkRefs.Length, chunkRef.Name);
             var chunkPath = Path.Combine(_mapsPath, "chunks", $"{chunkRef.Name}.gtchunk");
 
             var statics = ChunkProcessor.ProcessChunk(
@@ -203,6 +214,14 @@ public class ZoneLoader
                 {
                     foreach (var triangle in triangles)
                     {
+                        // Each chunk file carries a skirt that overlaps its neighbours. The
+                        // neighbour owns that ground; keeping both copies stacked walkable faces
+                        // at the seam (and NPCs on the extra copy).
+                        if (!ChunkOriginCalculator.IsInsideLocalBounds(triangle.Centroid))
+                        {
+                            continue;
+                        }
+
                         _navigationTriangles.Add(new NavigationTriangle(
                             triangle.A + chunkRef.Origin,
                             triangle.B + chunkRef.Origin,

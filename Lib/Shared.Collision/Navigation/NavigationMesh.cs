@@ -6,13 +6,37 @@ namespace Shared.Collision.Navigation;
 ///     A static, triangle-based navigation mesh built from the same zone collision surfaces that
 ///     are loaded into physics. It is intentionally small and data-driven: walkable faces,
 ///     adjacency, excluded areas and material costs are all derived from the original zone assets.
+///     Overlapping copies of the same surface (chunk skirts, a zone file listing the same tile
+///     twice) and small disconnected islands stacked over or under a larger surface (tree
+///     canopies, cavities under rocks) are dropped so they cannot become spawn points.
 /// </summary>
 public sealed class NavigationMesh
 {
     private const float SpatialCellSize = 16f;
     private const float VertexQuantization = 0.01f;
 
-    private readonly NavFace[] _faces;
+    /// <summary>
+    ///     Faces whose centroids sit within this vertical window of each other and whose XY
+    ///     projections overlap are the same surface recorded twice (chunk skirts, the zone file
+    ///     listing the same tile as both 0x10101 and 0x10100). Keep the larger copy.
+    /// </summary>
+    private const float DuplicateHeight = 0.5f;
+
+    /// <summary>
+    ///     A disconnected walkable patch smaller than this, stacked over or under a larger one, is
+    ///     a tree canopy or the cavity under a rock - not a balcony or a bridge. Dropped so NPCs
+    ///     are not planned onto it.
+    /// </summary>
+    private const float SmallIslandArea = 24f;
+
+    /// <summary>
+    ///     Relative form of <see cref="SmallIslandArea"/>: a floating patch that covers less than
+    ///     this fraction of the surface it overlaps is still a tree/cavity even when its absolute
+    ///     area is a few dozen square metres.
+    /// </summary>
+    private const float SmallIslandRatio = 0.12f;
+
+    private NavFace[] _faces;
     private readonly Dictionary<SpatialKey, List<int>> _spatial = [];
 
     public NavigationMesh(
@@ -55,7 +79,9 @@ public sealed class NavigationMesh
             faces.Add(new NavFace(triangle, centroid, MathF.Max(cost, 0.001f)));
         }
 
-        _faces = [.. faces];
+        _faces = DropDuplicateOverlaps([.. faces]);
+        BuildAdjacency();
+        _faces = DropStackedIslands(_faces);
         BuildAdjacency();
         BuildSpatialIndex();
     }
@@ -208,7 +234,18 @@ public sealed class NavigationMesh
         return Simplify(startPoint, raw, blocked, maxStepHeight);
     }
 
-    private int FindFace(Vector3 point)
+    private int FindFace(Vector3 point, float snapRadius, float maxStepHeight)
+    {
+        int containing = FindContainingFace(point);
+        if (containing >= 0)
+        {
+            return containing;
+        }
+
+        return snapRadius > 0f ? FindNearestFace(point, snapRadius, maxStepHeight) : -1;
+    }
+
+    private int FindContainingFace(Vector3 point)
     {
         var key = ToSpatialKey(point);
         int best = -1;
@@ -244,6 +281,324 @@ public sealed class NavigationMesh
         }
 
         return best;
+    }
+
+    /// <summary>
+    ///     Nearest walkable face whose centroid is within <paramref name="snapRadius"/> horizontally
+    ///     and <paramref name="maxStepHeight"/> vertically. Ambient wander picks a random XY that
+    ///     often lands just off the mesh (a building footprint, a 20 cm gap); snapping that onto
+    ///     the nearby ground is how a generated destination becomes a real walk, not a 2 s stall.
+    ///     A roof or cave floor stays unreachable because of the height gate.
+    /// </summary>
+    private int FindNearestFace(Vector3 point, float snapRadius, float maxStepHeight)
+    {
+        var key = ToSpatialKey(point);
+        int span = Math.Max(1, (int)MathF.Ceiling(snapRadius / SpatialCellSize) + 1);
+        int best = -1;
+        float bestDistanceSq = snapRadius * snapRadius;
+
+        for (int x = key.X - span; x <= key.X + span; x++)
+        {
+            for (int y = key.Y - span; y <= key.Y + span; y++)
+            {
+                if (!_spatial.TryGetValue(new SpatialKey(x, y), out var candidates))
+                {
+                    continue;
+                }
+
+                foreach (int index in candidates)
+                {
+                    var centroid = _faces[index].Centroid;
+                    if (MathF.Abs(centroid.Z - point.Z) > maxStepHeight)
+                    {
+                        continue;
+                    }
+
+                    float dx = centroid.X - point.X;
+                    float dy = centroid.Y - point.Y;
+                    float distanceSq = (dx * dx) + (dy * dy);
+                    if (distanceSq < bestDistanceSq)
+                    {
+                        best = index;
+                        bestDistanceSq = distanceSq;
+                    }
+                }
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    ///     Drops faces that occupy the same XY at nearly the same height: overlapping zone/chunk
+    ///     collision recorded twice. The larger face is the one that stays.
+    /// </summary>
+    private static NavFace[] DropDuplicateOverlaps(NavFace[] faces)
+    {
+        if (faces.Length < 2)
+        {
+            return faces;
+        }
+
+        var spatial = IndexFaces(faces);
+        var drop = new bool[faces.Length];
+
+        for (int i = 0; i < faces.Length; i++)
+        {
+            if (drop[i])
+            {
+                continue;
+            }
+
+            var centroid = faces[i].Centroid;
+            var key = ToSpatialKey(centroid);
+            float areaI = TriangleArea(faces[i].Triangle);
+
+            for (int x = key.X - 1; x <= key.X + 1; x++)
+            {
+                for (int y = key.Y - 1; y <= key.Y + 1; y++)
+                {
+                    if (!spatial.TryGetValue(new SpatialKey(x, y), out var candidates))
+                    {
+                        continue;
+                    }
+
+                    foreach (int j in candidates)
+                    {
+                        if (j <= i || drop[j])
+                        {
+                            continue;
+                        }
+
+                        if (MathF.Abs(faces[j].Centroid.Z - centroid.Z) >= DuplicateHeight)
+                        {
+                            continue;
+                        }
+
+                        if (!ContainsHorizontal(centroid, faces[j].Triangle) &&
+                            !ContainsHorizontal(faces[j].Centroid, faces[i].Triangle))
+                        {
+                            continue;
+                        }
+
+                        float areaJ = TriangleArea(faces[j].Triangle);
+                        int loser = areaJ > areaI ? i : j;
+                        drop[loser] = true;
+                        if (drop[i])
+                        {
+                            break;
+                        }
+                    }
+
+                    if (drop[i])
+                    {
+                        break;
+                    }
+                }
+
+                if (drop[i])
+                {
+                    break;
+                }
+            }
+        }
+
+        return Compact(faces, drop);
+    }
+
+    /// <summary>
+    ///     Drops disconnected walkable islands that sit over or under a larger surface. Those are
+    ///     the tree canopies and under-rock cavities that would otherwise become spawn points;
+    ///     bridges and balconies stay because they are either connected to the ground or large
+    ///     enough to be their own layer.
+    /// </summary>
+    private static NavFace[] DropStackedIslands(NavFace[] faces)
+    {
+        if (faces.Length < 2)
+        {
+            return faces;
+        }
+
+        int[] parent = new int[faces.Length];
+        for (int i = 0; i < parent.Length; i++)
+        {
+            parent[i] = i;
+        }
+
+        for (int i = 0; i < faces.Length; i++)
+        {
+            foreach (int neighbor in faces[i].Neighbors)
+            {
+                Union(parent, i, neighbor);
+            }
+        }
+
+        var area = new float[faces.Length];
+        for (int i = 0; i < faces.Length; i++)
+        {
+            area[Find(parent, i)] += TriangleArea(faces[i].Triangle);
+        }
+
+        var spatial = IndexFaces(faces);
+        var dropComponent = new bool[faces.Length];
+
+        for (int i = 0; i < faces.Length; i++)
+        {
+            int rootI = Find(parent, i);
+            if (dropComponent[rootI])
+            {
+                continue;
+            }
+
+            var centroid = faces[i].Centroid;
+            var key = ToSpatialKey(centroid);
+
+            for (int x = key.X - 1; x <= key.X + 1; x++)
+            {
+                for (int y = key.Y - 1; y <= key.Y + 1; y++)
+                {
+                    if (!spatial.TryGetValue(new SpatialKey(x, y), out var candidates))
+                    {
+                        continue;
+                    }
+
+                    foreach (int j in candidates)
+                    {
+                        int rootJ = Find(parent, j);
+                        if (rootJ == rootI || dropComponent[rootJ])
+                        {
+                            continue;
+                        }
+
+                        if (MathF.Abs(faces[j].Centroid.Z - centroid.Z) < DuplicateHeight)
+                        {
+                            continue;
+                        }
+
+                        if (!ContainsHorizontal(centroid, faces[j].Triangle))
+                        {
+                            continue;
+                        }
+
+                        if (IsSmallStackedIsland(area[rootI], area[rootJ]))
+                        {
+                            dropComponent[rootI] = true;
+                        }
+                        else if (IsSmallStackedIsland(area[rootJ], area[rootI]))
+                        {
+                            dropComponent[rootJ] = true;
+                        }
+                    }
+
+                    if (dropComponent[rootI])
+                    {
+                        break;
+                    }
+                }
+
+                if (dropComponent[rootI])
+                {
+                    break;
+                }
+            }
+        }
+
+        var drop = new bool[faces.Length];
+        bool any = false;
+        for (int i = 0; i < faces.Length; i++)
+        {
+            if (dropComponent[Find(parent, i)])
+            {
+                drop[i] = true;
+                any = true;
+            }
+        }
+
+        return any ? Compact(faces, drop) : faces;
+    }
+
+    private static bool IsSmallStackedIsland(float islandArea, float supportArea) =>
+        islandArea < supportArea &&
+        (islandArea < SmallIslandArea || islandArea < supportArea * SmallIslandRatio);
+
+    private static Dictionary<SpatialKey, List<int>> IndexFaces(NavFace[] faces)
+    {
+        var spatial = new Dictionary<SpatialKey, List<int>>();
+        for (int index = 0; index < faces.Length; index++)
+        {
+            var triangle = faces[index].Triangle;
+            int minX = FloorCell(MathF.Min(triangle.A.X, MathF.Min(triangle.B.X, triangle.C.X)));
+            int maxX = FloorCell(MathF.Max(triangle.A.X, MathF.Max(triangle.B.X, triangle.C.X)));
+            int minY = FloorCell(MathF.Min(triangle.A.Y, MathF.Min(triangle.B.Y, triangle.C.Y)));
+            int maxY = FloorCell(MathF.Max(triangle.A.Y, MathF.Max(triangle.B.Y, triangle.C.Y)));
+
+            for (int x = minX; x <= maxX; x++)
+            {
+                for (int y = minY; y <= maxY; y++)
+                {
+                    var key = new SpatialKey(x, y);
+                    if (!spatial.TryGetValue(key, out var list))
+                    {
+                        list = [];
+                        spatial[key] = list;
+                    }
+
+                    list.Add(index);
+                }
+            }
+        }
+
+        return spatial;
+    }
+
+    private static NavFace[] Compact(NavFace[] faces, bool[] drop)
+    {
+        int kept = 0;
+        for (int i = 0; i < drop.Length; i++)
+        {
+            if (!drop[i])
+            {
+                kept++;
+            }
+        }
+
+        if (kept == faces.Length)
+        {
+            return faces;
+        }
+
+        var result = new NavFace[kept];
+        int write = 0;
+        for (int i = 0; i < faces.Length; i++)
+        {
+            if (!drop[i])
+            {
+                result[write++] = faces[i];
+            }
+        }
+
+        return result;
+    }
+
+    private static int Find(int[] parent, int index)
+    {
+        while (parent[index] != index)
+        {
+            parent[index] = parent[parent[index]];
+            index = parent[index];
+        }
+
+        return index;
+    }
+
+    private static void Union(int[] parent, int a, int b)
+    {
+        int rootA = Find(parent, a);
+        int rootB = Find(parent, b);
+        if (rootA != rootB)
+        {
+            parent[rootB] = rootA;
+        }
     }
 
     private void BuildAdjacency()

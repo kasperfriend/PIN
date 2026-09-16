@@ -86,6 +86,15 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
 
     public float DeployableInfluenceRadius { get; init; } = 25f;
 
+    /// <summary>
+    ///     80 m is a camp-sized core (about two and a half 32 m cells): large enough for the
+    ///     buildings and civilians of an outpost, small enough that the 150 m activation radius
+    ///     around a player standing there still covers a ring of wilderness. The authored
+    ///     capture radius is not used as habitat; see
+    ///     <see cref="IWorldPopulationRules.OutpostSettlementRadius"/>.
+    /// </summary>
+    public float OutpostSettlementRadius { get; init; } = 80f;
+
     public float MeldingInfluenceRadius { get; init; } = 120f;
 
     /// <summary>
@@ -133,6 +142,7 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
             DefaultBodyRadius = PositiveOrDefault(settings.WorldPopulationDefaultBodyRadius, 0.7f),
             DefaultBodyHeight = PositiveOrDefault(settings.WorldPopulationDefaultBodyHeight, 1.8f),
             DeployableInfluenceRadius = NonNegativeOrDefault(settings.WorldPopulationDeployableInfluenceRadius, 25f),
+            OutpostSettlementRadius = NonNegativeOrDefault(settings.WorldPopulationOutpostSettlementRadius, 80f),
             MeldingInfluenceRadius = NonNegativeOrDefault(settings.WorldPopulationMeldingInfluenceRadius, 120f),
         };
     }

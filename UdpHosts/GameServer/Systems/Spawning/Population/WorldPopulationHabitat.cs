@@ -24,7 +24,11 @@ public enum WorldPopulationHabitat
     /// <summary>Open field: wildlife, wanderers, minibosses, roaming military.</summary>
     Wilderness = 1 << 0,
 
-    /// <summary>Inside an outpost's radius, or at one of the zone's authored deployables.</summary>
+    /// <summary>
+    ///     Inside an outpost's inhabited camp (see
+    ///     <see cref="IWorldPopulationRules.OutpostSettlementRadius"/>), or at one of the zone's
+    ///     authored deployables. Not the outpost's capture/control circle.
+    /// </summary>
     Settlement = 1 << 1,
 
     /// <summary>At the Melding: its creatures, and the Chosen who come through it.</summary>

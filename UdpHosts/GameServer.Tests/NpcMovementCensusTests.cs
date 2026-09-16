@@ -69,9 +69,11 @@ public class NpcMovementCensusTests
             }
         }
 
-        // 510 declared wanderer rows, minus the two city_prefix requests with missing named points.
-        // One of the remaining rows (700) explicitly says wanderDistance=0 and must not move.
-        Assert.Equal(508, wanderers);
+        // 510 declared wanderer rows, minus the two city_prefix requests with missing named points,
+        // plus the 1,068 rows that ship with an empty CAIS string and now mill with the same
+        // bounded roam. One of the declared rows (700) explicitly says wanderDistance=0 and must
+        // not move.
+        Assert.Equal(1576, wanderers);
         Assert.Equal(1, disabledDistance);
     }
 }

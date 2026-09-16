@@ -84,9 +84,10 @@ public sealed class SdbWorldPopulationDataSource : IWorldPopulationDataSource
         int deployables = 0;
         int meldingPoints = 0;
 
-        // Outposts carry both: their own authored radius (150-550 m in Coral Forest) and the level
-        // band of the area around them (1-5 at the starter outpost up to 29-30 in the far corners
-        // of the same zone), which is the level gradient the game gave the zone.
+        // Outposts carry both: their own authored capture radius (150-550 m in Coral Forest; the
+        // planner uses OutpostSettlementRadius for habitat, not this circle) and the level band of
+        // the area around them (1-5 at the starter outpost up to 29-30 in the far corners of the
+        // same zone), which is the level gradient the game gave the zone.
         foreach (var outpost in CustomDBInterface.GetZoneOutposts(zoneId).Values)
         {
             anchors.Add(new WorldPopulationAnchor(

@@ -148,6 +148,16 @@ public interface IWorldPopulationRules
     float DeployableInfluenceRadius { get; }
 
     /// <summary>
+    ///     Metres around an outpost that count as settlement ground. Outposts carry an authored
+    ///     radius, but that figure is the capture/control circle (150-550 m in Coral Forest, up to
+    ///     1,000 m in other zones), not the size of the camp: using it as habitat paints most of
+    ///     the zone as civilian ground and leaves a player at any outpost with no field enemies
+    ///     inside their activation radius. The planner takes the smaller of this value and the
+    ///     authored radius. 0 disables the cap and uses the authored radius as-is.
+    /// </summary>
+    float OutpostSettlementRadius { get; }
+
+    /// <summary>
     ///     Metres around one Melding control point that count as Melding ground. The Melding's
     ///     perimeters in <c>StaticDB/CustomData/melding.json</c> are polylines of control points;
     ///     this is how far inland the Melding's own creatures are placed from one.

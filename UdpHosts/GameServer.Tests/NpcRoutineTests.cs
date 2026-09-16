@@ -94,9 +94,9 @@ public class NpcRoutineTests
         var oldGoal = routine.Goal;
         routine.Blocked(100);
         Assert.Null(routine.Goal);
-        routine.Update(2099, Vector3.Zero, true, true, true);
+        routine.Update(599, Vector3.Zero, true, true, true);
         Assert.Null(routine.Goal);
-        routine.Update(2100, Vector3.Zero, true, true, true);
+        routine.Update(600, Vector3.Zero, true, true, true);
         Assert.NotNull(routine.Goal);
         Assert.NotEqual(oldGoal, routine.Goal);
     }
@@ -124,12 +124,21 @@ public class NpcRoutineTests
         Assert.Null(routine.Goal); // truly stuck, eight seconds after the restriction ended
     }
 
+    [Fact]
+    public void AnEmptyBehaviorProducesABoundedWanderGoal()
+    {
+        var routine = Create("");
+        routine.Update(0, Vector3.Zero, true, true, true);
+        Assert.Equal(NpcRoutineState.Walking, routine.State);
+        Assert.NotNull(routine.Goal);
+        Assert.InRange(AiVectors.HorizontalDistance(Vector3.Zero, routine.Goal.Value), 0f, routine.Profile.HomeRadius + 0.001f);
+    }
+
     [Theory]
     [InlineData("Wander(distance=0)")]
     [InlineData("Wander(calmWanderChance=0)")]
     [InlineData("Stand")]
     [InlineData("OneOff_FollowRoute")]
-    [InlineData("")]
     public void ExplicitlyImmobileOrMissingDataNeverProducesAGoal(string behavior)
     {
         var routine = Create(behavior);

@@ -97,9 +97,17 @@ Supporting changes outside that folder:
   `PhysicsWorldPopulationTerrain.cs`, `WorldPopulationService.cs` — early-out
   players and cells outside `ZoneBoundsLayer` AABB (from actual client map file)
 * `Lib/Shared.Collision/Navigation/NavigationMesh.cs` — `TryGetFaceCentroid`, so
-  the plan can enumerate every walkable spot the mesh baked
+  the plan can enumerate every walkable spot the mesh baked. Overlapping faces at
+  the same height keep one copy; small disconnected islands stacked over or under
+  a larger surface (tree canopies, under-rock cavities) are dropped
 * `Lib/Shared.Collision/ZoneLoading/ZoneLoader.cs` — `ChunkRefs`, so a world
-  position can be answered with the chunk it falls in
+  position can be answered with the chunk it falls in. Duplicate chunk names are
+  skipped and navigation triangles whose centroid sits in a neighbour's tile
+  (the chunk skirt) are clipped, so overlapping zone data cannot become spawn
+  points on trees or under rocks
+* `Lib/Shared.Collision/ZoneLoading/ChunkOriginCalculator.cs` — `ZoneChunkRefLayer`
+  (0x10101) and `ZoneChunkRef2Layer` (0x10100) list the same tiles; the extractor
+  keeps one copy, preferring the identified ref
 * `Systems/EntityManager/EntityManager.cs` — `SpawnCharacter` gained
   `snapToGround` and `scopeToNearbyClientsOnly`; `Add`/`OnAddedEntity` gained the
   distance filter behind it
@@ -114,8 +122,9 @@ Supporting changes outside that folder:
 
 Tests: `UdpHosts/GameServer.Tests/MonsterHabitatClassifierTests.cs`,
 `SpawnOccupancyGridTests.cs`, `WorldPopulationPlannerTests.cs`,
-`WorldPopulationServiceTests.cs` and `Fakes/WorldPopulationFakes.cs` (see
-[Testing](#10-testing)).
+`WorldPopulationServiceTests.cs`, `NavigationMeshTests.cs`,
+`ChunkOriginCalculatorTests.cs` and `Fakes/WorldPopulationFakes.cs` (see
+[Testing](#11-testing)).
 
 ---
 
@@ -188,7 +197,14 @@ shard, spread over several ticks, and only starts when a player is in the zone.
 the zone's own collision) is enumerated face by face. A face exists only if the
 triangle was walkable (`normal.Z >= 0.35`) and not excluded from pathing by the
 chunk metadata, so every face centroid is a spot the zone itself says an NPC can
-stand on. Up to `PlanWorkPerTick` (20,000) faces are accumulated per update.
+stand on. Overlapping copies of the same surface are dropped before that: a zone
+file lists each tile as both `ZoneChunkRefLayer` (0x10101) and `ZoneChunkRef2Layer`
+(0x10100), and each chunk file carries a skirt that overlaps its neighbours, so
+loading both would stack walkable faces on tree canopies and in cavities under
+rocks. Duplicate faces at the same height keep one copy; a small disconnected
+island stacked over or under a larger surface (a canopy, an under-rock cavity) is
+removed, while a large disconnected layer (a balcony, a bridge) is kept. Up to
+`PlanWorkPerTick` (20,000) faces are accumulated per update.
 
 **Phase 2 - cells.** Centroids are accumulated into 32 m cells; a cell's centre is
 the average of the ground that landed in it, so a cell is not a flat square of the
@@ -204,16 +220,18 @@ every anchor near it, and on a real zone that is the expensive phase. Per cell:
   `ChunkRecord.remove_in_production != 0` (stripped from the shipped build). Coral
   Forest has 93 chunks of which 64 are server-side, so this is what keeps NPCs out
   of the client-only scenery.
-* **Habitat** — from the authored anchors around the cell: outposts (with their own
-  radius, 150-550 m in Coral Forest), the zone's deployables (469 of them: sized
-  by `DeployableInfluenceRadius`), and every Melding perimeter control point
-  (16 Meldings, 4-23 points each: sized by `MeldingInfluenceRadius`; the shipped
-  knots are the spline - the planner interpolates edges every 60 m so the
-  influence follows the wall instead of a dotted line, see `MAP_FILES_FINDINGS.md`).
-  A settlement wins over the Melding around it - an outpost inside a Melding
-  perimeter is still a place players respawn in. Anchors are bucketed into 1024 m
-  squares so classification is a 3×3 bucket scan rather than a scan of all 509
-  anchors.
+* **Habitat** — from the authored anchors around the cell: outposts (the inhabited
+  camp is `OutpostSettlementRadius`, default 80 m — their authored 150-550 m
+  radius in Coral Forest is the capture/control circle, not a wildlife-exclusion
+  zone), the zone's deployables (469 of them: sized by `DeployableInfluenceRadius`),
+  and every Melding perimeter control point (16 Meldings, 4-23 points each: sized
+  by `MeldingInfluenceRadius`; the shipped knots are the spline - the planner
+  interpolates edges every 60 m so the influence follows the wall instead of a
+  dotted line, see `MAP_FILES_FINDINGS.md`). A settlement wins over the Melding
+  around it - an outpost's camp inside a Melding perimeter is still a place
+  players respawn in, and the field around that camp is wilderness even when it
+  sits inside the capture circle. Anchors are bucketed into 1024 m squares so
+  classification is a 3×3 bucket scan rather than a scan of all 509 anchors.
 * **Level** — the `level_band_id` of the **nearest** banded anchor, however far
   away that anchor is, resolved through `SDBUtils.ResolveNpcLevel`; the zone's own
   band when no anchor carries one. This is what reproduces the original level
@@ -421,6 +439,7 @@ values, not a comma.
 | `WorldPopulationDefaultBodyRadius` | `0.7` | Body-radius fallback for a row whose `body_radius` is the `-1` sentinel |
 | `WorldPopulationDefaultBodyHeight` | `1.8` | Body-height fallback for a row whose `body_height` is the `-1` sentinel |
 | `WorldPopulationDeployableInfluenceRadius` | `25` | Metres around a deployable that count as settlement ground |
+| `WorldPopulationOutpostSettlementRadius` | `80` | Metres of inhabited camp around an outpost that count as settlement. The authored outpost radius is the capture/control circle (150-550 m in Coral Forest); using it as habitat painted ~69% of that zone as civilian ground and left the 150 m around any outpost with no wildlife. 0 uses the authored radius as-is |
 | `WorldPopulationMeldingInfluenceRadius` | `120` | Metres around a Melding control point that count as Melding ground |
 
 The service validates every value independently at startup. A non-finite, negative,
@@ -564,7 +583,7 @@ rules` for the client-only chunks.
 |------|--------|
 | `MonsterHabitatClassifierTests.cs` | the exclusion set, each habitat rule, behaviour arguments being stripped, an empty behaviour being eligible |
 | `SpawnOccupancyGridTests.cs` | radius + separation, a body bigger than a hash cell, the height window, remove/re-add/clear, negative coordinates |
-| `WorldPopulationPlannerTests.cs` | cells from ground, coverage and habitat fit, unplaceable rows, habitat/level from anchors, the level gradient, settlement over Melding, chunk refusals, the count/difficulty/slot caps, the budget-exempt expensive row, jitter bounds, the anchor fallback, work spreading, determinism |
+| `WorldPopulationPlannerTests.cs` | cells from ground, coverage and habitat fit, unplaceable rows, habitat/level from anchors, the level gradient, an outpost's capture radius is not settlement, settlement over Melding, chunk refusals, the count/difficulty/slot caps, the budget-exempt expensive row, jitter bounds, the anchor fallback, work spreading, determinism |
 | `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, body separation, the level of the area, `ListLiveNear`, `status`, the command |
 | `Fakes/WorldPopulationFakes.cs` | a fixed roster/anchor/level/chunk source, a plane of walkable ground with switches for refusing a placement, and a spawner that records spawns and can kill or despawn one |
 

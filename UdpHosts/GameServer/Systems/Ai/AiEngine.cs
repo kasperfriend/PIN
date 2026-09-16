@@ -108,7 +108,7 @@ public class AiEngine
     private readonly INpcActivityWorld _activities;
     private readonly NpcRoutineRules _routineRules;
     private int _routinePathQueriesLeft;
-    private const int RoutinePathQueriesPerTick = 4;
+    private const int RoutinePathQueriesPerTick = 16;
     private ulong _lastPerceptionAt;
     private ulong _lastMovementAt;
 
