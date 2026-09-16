@@ -162,6 +162,76 @@ public class WorldPopulationPlannerTests
     }
 
     [Fact]
+    public void Plan_DoesNotTreatAnOutpostsCaptureRadiusAsSettlement()
+    {
+        var (planner, data, terrain) = CreatePlanner();
+        AddGround(terrain);
+
+        // Coral Forest's starter outpost authors a 485 m capture circle. That is the area the
+        // outpost owns on the map, not a wildlife-exclusion zone: the inhabited camp is
+        // OutpostSettlementRadius (80 m). The far corner of this 128 m plane sits well inside
+        // the capture circle and well outside the camp.
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(16f, 16f, 0f), 485f, WorldPopulationHabitat.Settlement, 1001u));
+        data.LevelsByBand[1001u] = 5;
+        data.AddMonster(10, WorldPopulationHabitat.Wilderness);
+        data.AddMonster(11, WorldPopulationHabitat.Settlement);
+
+        Build(planner);
+
+        Assert.Contains(planner.Cells.Values, cell => cell.Habitat == WorldPopulationHabitat.Settlement);
+        Assert.Contains(planner.Cells.Values, cell => cell.Habitat == WorldPopulationHabitat.Wilderness);
+
+        var far = planner.Cells.Values.OrderByDescending(cell => cell.Center.X + cell.Center.Y).First();
+        Assert.Equal(WorldPopulationHabitat.Wilderness, far.Habitat);
+        Assert.Equal(5, far.Level);
+
+        var near = planner.Cells.Values.OrderBy(cell => MathF.Abs(cell.Center.X - 16f) + MathF.Abs(cell.Center.Y - 16f)).First();
+        Assert.Equal(WorldPopulationHabitat.Settlement, near.Habitat);
+    }
+
+    [Fact]
+    public void Plan_UsesTheAuthoredOutpostRadiusWhenTheSettlementCapIsDisabled()
+    {
+        var rules = new StandardWorldPopulationRules { OutpostSettlementRadius = 0f };
+        var (planner, data, terrain) = CreatePlanner(rules);
+        AddGround(terrain);
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(16f, 16f, 0f), 485f, WorldPopulationHabitat.Settlement, 1001u));
+        data.AddMonster(10, WorldPopulationHabitat.Wilderness);
+        data.AddMonster(11, WorldPopulationHabitat.Settlement);
+
+        Build(planner);
+
+        Assert.All(planner.Cells.Values, cell => Assert.Equal(WorldPopulationHabitat.Settlement, cell.Habitat));
+    }
+
+    [Fact]
+    public void Plan_FillsTheFieldWithWildernessOnlyRowsNotTheMeldingsArmy()
+    {
+        var (planner, data, terrain) = CreatePlanner();
+        AddGround(terrain);
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(16f, 16f, 0f), 40f, WorldPopulationHabitat.Settlement, 1001u));
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(112f, 112f, 0f), 40f, WorldPopulationHabitat.Melding, 0u));
+        data.AddMonster(10, WorldPopulationHabitat.Wilderness, difficultyCost: 0);
+        data.AddMonster(11, WorldPopulationHabitat.Settlement);
+        data.AddMonster(12, WorldPopulationHabitat.Melding | WorldPopulationHabitat.Wilderness, difficultyCost: 0);
+
+        Build(planner);
+
+        var field = planner.Cells.Values
+            .Where(cell => cell.Habitat == WorldPopulationHabitat.Wilderness)
+            .SelectMany(cell => cell.Slots)
+            .ToList();
+        Assert.NotEmpty(field);
+        Assert.All(field, slot => Assert.Equal(10u, slot.Candidate.MonsterId));
+
+        var melding = planner.Cells.Values
+            .Where(cell => cell.Habitat == WorldPopulationHabitat.Melding)
+            .SelectMany(cell => cell.Slots)
+            .ToList();
+        Assert.Contains(melding, slot => slot.Candidate.MonsterId == 12);
+    }
+
+    [Fact]
     public void Plan_PrefersASettlementOverTheMeldingAroundIt()
     {
         var (planner, data, terrain) = CreatePlanner();

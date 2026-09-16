@@ -19,13 +19,17 @@ What now runs:
 
 - **Declared wanderers** choose bounded ground destinations, follow the existing
   collision/navigation service, pause, then choose another destination.
-  **508 templates** resolve to this routine; one of them (700) explicitly specifies
-  `wanderDistance=0`, so it remains still. This is **507 potentially mobile template
-  types**, not 507 simultaneously spawned NPCs. Spawn admission and streaming caps
-  still belong to world population.
+  **508 templates** resolve to this routine by name; one of them (700) explicitly
+  specifies `wanderDistance=0`, so it remains still. The **1,068 rows that ship
+  with an empty CAIS string** use the same bounded roam: an empty invocation is
+  not `StandStill` (`Null` / `Stand` / `StayAtSpawn` are the explicit still
+  requests). This is **1,575 potentially mobile template types**, not 1,575
+  simultaneously spawned NPCs. Spawn admission and streaming caps still belong
+  to world population.
 - **Explicit stationary bodies** stay put even when the combat brain would like
-  to chase. `Null` requests no AI and is not registered at all. Unspecified trees,
-  vendors/posing NPCs and named-route requests do **not** receive generic patrols.
+  to chase. `Null` requests no AI and is not registered at all. Named unspecified
+  trees (`Arch_*`, `AlertAndInteractive`, vendors/posing NPCs) and named-route
+  requests do **not** receive generic patrols.
 - **Home radius jitter and envelopes** — `maxDistJitter` gives each NPC a
   deterministic home radius variation, `despawnDistance` is an outer envelope
   beyond which the routine stops, `despawnWhenStuck` parks blocked NPCs as
@@ -71,6 +75,7 @@ parameter cannot leak into its parent's movement settings.
 | Input | Runtime use |
 |---|---|
 | Declared wanderer names | `Wander`, `FastWander`, `FastWanderCore`, `WanderWithEmoteVocalized`, the aggressive/elite/swarm/grunt/passive/heavy/medic/suicide wanderers, city/guard wanderers, `BasicCivilian` |
+| Empty / missing CAIS string | Same bounded roam as a declared wanderer. 1,068 rows. Not a guessed tree: there is no tree to guess. |
 | `EliteStationary(wanderDistance=10,...)` | Only its **explicit** local wander request; not a substring-based classification of every stationary tree |
 | `wanderDistance`, then `distance` | Maximum generated leg distance; explicit zero prevents wandering |
 | `maxDistFromSpawn` | Home envelope, also bounded by the AI leash safety limit |
@@ -96,14 +101,15 @@ compatibility choices explicit and injectable:
 
 | Missing setting / runtime guard | PIN value |
 |---|---:|
-| Wander leg distance | 10 m |
+| Wander leg distance | 20 m |
 | Home radius | 30 m (expanded to fit an explicit leg distance, never past the leash safety limit) |
-| Rest interval | 3–7 seconds |
+| Rest interval | 2–4 seconds |
 | Work duration when the deployable does not specify one | 15 seconds |
-| Failed destination retry | 2 seconds |
+| Failed destination retry | 0.5 seconds |
 | No-progress timeout | 8 seconds |
 | Arrival tolerance | 0.4 m horizontal and vertical |
-| New ambient route searches | At most 4 per AI movement tick |
+| New ambient route searches | At most 16 per AI movement tick |
+| Off-mesh destination snap | 8 m horizontally, one step-height vertically (a random XY that lands in a building footprint or a mesh gap is pulled onto the nearest walkable face rather than stalling) |
 | Catch-up displacement after a stalled/disabled shard | At most 250 ms of motion in one update |
 
 Destination randomness is deterministic per full entity id and monster id.
@@ -129,7 +135,10 @@ existing no-map combat development mode remains available, but is not treated as
 world geometry for ambient movement.
 
 - Use the loaded navigation mesh when available. A disconnected corridor is a
-  failure, never a reason to fall back to direct movement through the map.
+  failure, never a reason to fall back to direct movement through the map. A
+  generated destination that lands just off a walkable face (a building
+  footprint, a mesh gap) is snapped onto the nearest face within 8 m and one
+  step-height; a roof or a cave floor stays unreachable.
 - Retain a successful static ambient corridor until arrival or obstruction;
   combat targets retain their moving-target replan cadence.
 - Check the **whole movement step** at intervals no larger than 0.5 m. Every sample

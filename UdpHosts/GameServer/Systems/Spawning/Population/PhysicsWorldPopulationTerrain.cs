@@ -161,7 +161,15 @@ public sealed class PhysicsWorldPopulationTerrain : IWorldPopulationTerrain
         var map = new Dictionary<(int X, int Y), uint>(chunks.Count);
         foreach (var chunk in chunks)
         {
-            map[ChunkIndex(chunk.Origin)] = chunk.ChunkRecordId;
+            var index = ChunkIndex(chunk.Origin);
+            if (map.TryGetValue(index, out var existing) && existing != 0)
+            {
+                // Two zone refs landed on the same tile. Keep the copy that knows its ChunkRecord
+                // id; the overlapping one is the undeduped 0x10100/0x10101 pair.
+                continue;
+            }
+
+            map[index] = chunk.ChunkRecordId;
         }
 
         _chunkByIndex = map;

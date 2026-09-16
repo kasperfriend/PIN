@@ -79,17 +79,21 @@ public sealed class WorldPopulationCandidate
 
 /// <summary>
 ///     A place in the loaded zone that gives the ground around it a habitat and a level: an outpost
-///     (with its authored <c>radius</c> and <c>level_band_id</c>), one of the zone's deployables, or
-///     one of the Melding's control points. Read from the same custom data
+///     (with its authored capture <c>radius</c> and <c>level_band_id</c>), one of the zone's
+///     deployables, or one of the Melding's control points. Read from the same custom data
 ///     <see cref="Systems.EntityManager.EntityManager.SpawnZoneEntities"/> spawns the zone's own
 ///     entities from, so the plan's idea of "where the settlement is" is the server's idea of it.
+///     An outpost's authored radius is the capture/control circle; settlement habitat uses
+///     <see cref="IWorldPopulationRules.OutpostSettlementRadius"/> instead.
 /// </summary>
 /// <param name="Position">World position of the anchor.</param>
 /// <param name="Radius">
-///     Metres around <paramref name="Position"/> that count as this anchor's ground, or 0 when the
-///     data carries none (deployables and Melding control points do not) and the planner should use
+///     Metres around <paramref name="Position"/> that the data authored for this anchor, or 0 when
+///     it carries none (deployables and Melding control points do not) and the planner should use
 ///     <see cref="IWorldPopulationRules.DeployableInfluenceRadius"/> or
-///     <see cref="IWorldPopulationRules.MeldingInfluenceRadius"/>.
+///     <see cref="IWorldPopulationRules.MeldingInfluenceRadius"/>. For an outpost this is the
+///     capture/control circle, not the inhabited camp; the planner caps it with
+///     <see cref="IWorldPopulationRules.OutpostSettlementRadius"/> when classifying habitat.
 /// </param>
 /// <param name="Habitat">The habitat the anchor gives the ground around it.</param>
 /// <param name="LevelBandId">

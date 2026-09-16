@@ -286,11 +286,22 @@ public sealed class NpcRoutine
         StartGoal(goal, position, now);
     }
 
-    /// <summary>Accept the navigation mesh's ground height for a generated destination, not for a workstation.</summary>
+    /// <summary>
+    ///     Accept the navigation mesh's endpoint for a generated destination, not for a workstation.
+    ///     The pathfinder may snap a random XY onto the nearest walkable face (a building footprint,
+    ///     a gap in the mesh); that snapped point is the place the NPC can actually stand, so it
+    ///     becomes the goal when it still sits inside the home envelope.
+    /// </summary>
     public void ProjectGoal(Vector3 projected)
     {
-        if (Goal.HasValue && !_spot.HasValue && Finite(projected) &&
-            AiVectors.HorizontalDistance(Goal.Value, projected) <= ArrivalRadius)
+        if (!Goal.HasValue || _spot.HasValue || !Finite(projected))
+        {
+            return;
+        }
+
+        float snap = MathF.Max(ArrivalRadius, Profile.WanderDistance);
+        if (AiVectors.HorizontalDistance(Goal.Value, projected) <= snap &&
+            AiVectors.HorizontalDistance(Home, projected) <= EffectiveHomeRadius + ArrivalRadius)
         {
             Goal = projected;
         }

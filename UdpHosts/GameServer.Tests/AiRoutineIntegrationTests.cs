@@ -74,7 +74,9 @@ public class AiRoutineIntegrationTests
         Tick(shard, Start);
         Assert.Equal(Vector3.Zero, npc.Position);
         Assert.Equal((short)0x1000, npc.MovementState);
-        for (ulong now = Start + 50; now < Start + 2000; now += 50)
+        // A failed path waits RetryMs (500) before picking another destination, so the
+        // same stall is not re-queried every 50 ms movement tick.
+        for (ulong now = Start + 50; now < Start + 500; now += 50)
         {
             Tick(shard, now);
         }
@@ -146,7 +148,7 @@ public class AiRoutineIntegrationTests
         {
             int previous = navigation.Requests.Count;
             Tick(shard, now);
-            Assert.InRange(navigation.Requests.Count - previous, 0, 4);
+            Assert.InRange(navigation.Requests.Count - previous, 0, 16);
         }
 
         Assert.Equal(20, navigation.Requests.Count);

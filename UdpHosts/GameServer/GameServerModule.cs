@@ -344,6 +344,7 @@ public class GameServerModule : Module
         ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationDefaultBodyRadius", value => settings.WorldPopulationDefaultBodyRadius = value);
         ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationDefaultBodyHeight", value => settings.WorldPopulationDefaultBodyHeight = value);
         ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationDeployableInfluenceRadius", value => settings.WorldPopulationDeployableInfluenceRadius = value);
+        ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationOutpostSettlementRadius", value => settings.WorldPopulationOutpostSettlementRadius = value);
         ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationMeldingInfluenceRadius", value => settings.WorldPopulationMeldingInfluenceRadius = value);
     }
 

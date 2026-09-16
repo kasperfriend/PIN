@@ -20,12 +20,23 @@ public class NpcRoutineProfileTests
         Assert.Equal(NpcRoutineKind.Wander, profile.Kind);
         Assert.True(profile.HasRoutine);
         Assert.True(profile.Walk);
-        Assert.Equal(10f, profile.WanderDistance);
+        Assert.Equal(20f, profile.WanderDistance);
     }
 
     [Theory]
-    [InlineData(null, NpcRoutineKind.Unspecified)]
-    [InlineData("", NpcRoutineKind.Unspecified)]
+    [InlineData(null)]
+    [InlineData("")]
+    public void AnEmptyBehaviorIsBoundedRoamingNotAStatue(string text)
+    {
+        // 1,068 rows ship with no CAIS string. That is not StandStill: Null/Stand/StayAtSpawn
+        // are the explicit still requests. Wildlife with nothing to run still mills about.
+        var profile = Resolve(text);
+        Assert.Equal(NpcRoutineKind.Wander, profile.Kind);
+        Assert.True(profile.HasRoutine);
+        Assert.Equal(20f, profile.WanderDistance);
+    }
+
+    [Theory]
     [InlineData("SomeFutureWanderer", NpcRoutineKind.Unspecified)]
     [InlineData("Arch_MedRangedHumanoid_Base", NpcRoutineKind.Unspecified)]
     [InlineData("AlertAndInteractive(emote=\"typing01\")", NpcRoutineKind.Unspecified)]
@@ -166,7 +177,7 @@ public class NpcRoutineProfileTests
     public void AllNumericInputsAreFiniteBoundedAndOrdered()
     {
         var profile = Resolve("Wander(distance=NaN,maxDistFromSpawn=Infinity,restDurationMin=9000,restDurationMax=1,calmWanderChance=Infinity)");
-        Assert.Equal(10f, profile.WanderDistance);
+        Assert.Equal(20f, profile.WanderDistance);
         Assert.Equal(30f, profile.HomeRadius);
         Assert.Equal(9000, profile.RestMaxMs);
         Assert.Equal(1f, profile.WanderChance);

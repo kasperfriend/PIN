@@ -17,6 +17,7 @@ public class StandardWorldPopulationRulesTests
         Assert.Equal(225f, rules.DeactivationRadius);
         Assert.Equal(4, rules.SpawnBudget);
         Assert.Equal(100, rules.SpawnBudgetWindowMs);
+        Assert.Equal(80f, rules.OutpostSettlementRadius);
     }
 
     [Fact]
@@ -46,6 +47,7 @@ public class StandardWorldPopulationRulesTests
             WorldPopulationDefaultBodyRadius = 0f,
             WorldPopulationDefaultBodyHeight = 0f,
             WorldPopulationDeployableInfluenceRadius = -1f,
+            WorldPopulationOutpostSettlementRadius = -1f,
             WorldPopulationMeldingInfluenceRadius = -1f,
         });
 
@@ -71,6 +73,7 @@ public class StandardWorldPopulationRulesTests
         Assert.Equal(0.7f, rules.DefaultBodyRadius);
         Assert.Equal(1.8f, rules.DefaultBodyHeight);
         Assert.Equal(25f, rules.DeployableInfluenceRadius);
+        Assert.Equal(80f, rules.OutpostSettlementRadius);
         Assert.Equal(120f, rules.MeldingInfluenceRadius);
     }
 
@@ -103,6 +106,7 @@ public class StandardWorldPopulationRulesTests
             WorldPopulationDefaultBodyRadius = 0.8f,
             WorldPopulationDefaultBodyHeight = 2f,
             WorldPopulationDeployableInfluenceRadius = 0f,
+            WorldPopulationOutpostSettlementRadius = 0f,
             WorldPopulationMeldingInfluenceRadius = 55f,
         });
 
@@ -130,6 +134,7 @@ public class StandardWorldPopulationRulesTests
         Assert.Equal(0.8f, rules.DefaultBodyRadius);
         Assert.Equal(2f, rules.DefaultBodyHeight);
         Assert.Equal(0f, rules.DeployableInfluenceRadius);
+        Assert.Equal(0f, rules.OutpostSettlementRadius);
         Assert.Equal(55f, rules.MeldingInfluenceRadius);
     }
 
@@ -163,6 +168,7 @@ public class StandardWorldPopulationRulesTests
                 <add key="WorldPopulationDefaultBodyRadius" value="0.8"/>
                 <add key="WorldPopulationDefaultBodyHeight" value="2"/>
                 <add key="WorldPopulationDeployableInfluenceRadius" value="0"/>
+                <add key="WorldPopulationOutpostSettlementRadius" value="0"/>
                 <add key="WorldPopulationMeldingInfluenceRadius" value="55"/>
             </appSettings></configuration>
             """,
@@ -195,6 +201,7 @@ public class StandardWorldPopulationRulesTests
         Assert.Equal(0.8f, settings.WorldPopulationDefaultBodyRadius);
         Assert.Equal(2f, settings.WorldPopulationDefaultBodyHeight);
         Assert.Equal(0f, settings.WorldPopulationDeployableInfluenceRadius);
+        Assert.Equal(0f, settings.WorldPopulationOutpostSettlementRadius);
         Assert.Equal(55f, settings.WorldPopulationMeldingInfluenceRadius);
     }
 

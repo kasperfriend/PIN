@@ -20,9 +20,11 @@ namespace GameServer.Systems.Spawning.Population;
 ///         of the navigation mesh's walkable faces, which are baked from the zone's own collision with
 ///         the slope cutoff and the chunk metadata's pathing exclusions already applied. Which kinds
 ///         of ground a cell is, and what level it carries, come from the authored data the server
-///         already spawns the zone from (outposts with their radius and level band, deployables,
-///         Melding perimeters). A zone without collision falls back to those authored positions,
-///         which is the only ground left whose height the data vouches for.
+///         already spawns the zone from (outpost camps sized by
+///         <see cref="IWorldPopulationRules.OutpostSettlementRadius"/> rather than the capture
+///         circle, deployables, Melding perimeters; level still follows the nearest outpost's
+///         band). A zone without collision falls back to those authored positions, which is the
+///         only ground left whose height the data vouches for.
 ///     </para>
 ///     <para>
 ///         <b>Which monsters go where.</b> Two passes. The first gives every admitted monster row one
@@ -43,9 +45,11 @@ namespace GameServer.Systems.Spawning.Population;
 public sealed class WorldPopulationPlanner
 {
     /// <summary>
-    ///     Side length of the anchor buckets in metres. Larger than the biggest influence radius the
-    ///     data carries (an outpost's authored radius reaches 550 m in Coral Forest), so scanning a
-    ///     bucket and its eight neighbours always finds every anchor that can reach the cell.
+    ///     Side length of the anchor buckets in metres. Larger than the biggest habitat influence
+    ///     the planner actually applies (Melding 120 m, outpost camp 80 m, deployable 25 m; an
+    ///     outpost's authored capture radius reaches 550 m but is not used as habitat), so scanning
+    ///     a bucket and its eight neighbours always finds every anchor that can reach the cell.
+    ///     Level still reads the nearest banded anchor in the same neighbourhood.
     /// </summary>
     private const float AnchorBucketSize = 1024f;
 
@@ -409,8 +413,10 @@ public sealed class WorldPopulationPlanner
             }
         }
 
-        // A settlement wins over the Melding around it: an outpost inside a Melding perimeter is
-        // still a place players respawn in, and its inhabitants are not Melding creatures.
+        // A settlement wins over the Melding around it: an outpost's camp inside a Melding
+        // perimeter is still a place players respawn in, and its inhabitants are not Melding
+        // creatures. The field around that camp is wilderness even when it sits inside the
+        // outpost's capture circle.
         if (settlementDistance < float.MaxValue)
         {
             cell.Habitat = WorldPopulationHabitat.Settlement;
@@ -443,11 +449,30 @@ public sealed class WorldPopulationPlanner
         return new Vector3(MathF.Cos(yaw), MathF.Sin(yaw), 0f);
     }
 
-    private float AnchorRadius(WorldPopulationAnchor anchor) => anchor.Radius > 0f
-        ? anchor.Radius
-        : anchor.Habitat == WorldPopulationHabitat.Melding
-            ? _rules.MeldingInfluenceRadius
-            : _rules.DeployableInfluenceRadius;
+    private float AnchorRadius(WorldPopulationAnchor anchor)
+    {
+        if (anchor.Radius <= 0f)
+        {
+            return anchor.Habitat == WorldPopulationHabitat.Melding
+                ? _rules.MeldingInfluenceRadius
+                : _rules.DeployableInfluenceRadius;
+        }
+
+        // Outposts carry their capture/control radius (150-550 m in Coral Forest). That
+        // circle is the area the outpost owns on the map, not a wildlife-exclusion zone:
+        // treating it as settlement habitat paints most of the zone as civilian ground
+        // (~69% of Coral Forest) and leaves a player standing at any outpost with no
+        // field enemies in their activation radius. The inhabited camp is the configured
+        // core, or the authored radius when it is smaller; 0 disables the cap.
+        if (anchor.Habitat == WorldPopulationHabitat.Settlement &&
+            _rules.OutpostSettlementRadius > 0f &&
+            _rules.OutpostSettlementRadius < anchor.Radius)
+        {
+            return _rules.OutpostSettlementRadius;
+        }
+
+        return anchor.Radius;
+    }
 
     private IEnumerable<WorldPopulationAnchor> NearbyAnchors(Vector3 position)
     {
@@ -478,7 +503,12 @@ public sealed class WorldPopulationPlanner
     {
         foreach (var candidate in _roster)
         {
-            if (candidate.Habitat.Accepts(WorldPopulationHabitat.Wilderness))
+            // Density in the open field is the rows that are field content and nothing else:
+            // animals, wanderers, minibosses. Chosen (Melding|Wilderness) still get their one
+            // coverage slot at the Melding, and only spill into the field when that ground is
+            // full; putting them in the wilderness density pool is how a player standing at an
+            // outpost sees troopers instead of fauna.
+            if (candidate.Habitat == WorldPopulationHabitat.Wilderness)
             {
                 AddWeighted(_wildernessPool, candidate);
             }

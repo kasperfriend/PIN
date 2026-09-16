@@ -20,19 +20,20 @@ public enum NpcRoutineKind
 /// </summary>
 public sealed record NpcRoutineRules
 {
-    public float WanderDistance { get; init; } = 10f;
+    public float WanderDistance { get; init; } = 20f;
     public float HomeRadius { get; init; } = 30f;
-    public int RestMinMs { get; init; } = 3000;
-    public int RestMaxMs { get; init; } = 7000;
+    public int RestMinMs { get; init; } = 2000;
+    public int RestMaxMs { get; init; } = 4000;
     public int WorkDurationMs { get; init; } = 15000;
-    public int RetryMs { get; init; } = 2000;
+    public int RetryMs { get; init; } = 500;
     public int StuckTimeoutMs { get; init; } = 8000;
 }
 
 /// <summary>
 ///     Ambient movement resolved from a monster's base behaviour, not from its faction, display name
-///     or a mission waypoint. Unknown trees and route requests without route data do not get made-up
-///     patrols. See Docs/NPC_ROUTINES.md and the complete prod-1962 movement census.
+///     or a mission waypoint. An empty CAIS string is bounded roaming (there is no tree to guess);
+///     named unknown trees and route requests without route data do not get made-up patrols. See
+///     Docs/NPC_ROUTINES.md and the complete prod-1962 movement census.
 /// </summary>
 public sealed record NpcRoutineProfile
 {
@@ -105,7 +106,7 @@ public sealed record NpcRoutineProfile
 
         float distance = NonNegative(behavior, "wanderDistance")
             ?? NonNegative(behavior, "distance")
-            ?? Positive(rules.WanderDistance, 10f);
+            ?? Positive(rules.WanderDistance, 20f);
         bool nearSpawn = Bool(behavior, "nearSpawn") == true || Bool(behavior, "calmNearSpawn") == true;
         float baseHome = NonNegative(behavior, "maxDistFromSpawn") ?? (nearSpawn ? distance : MathF.Max(distance, Positive(rules.HomeRadius, 30f)));
         float maxDistJitter = NonNegative(behavior, "maxDistJitter") ?? 0f;
@@ -126,8 +127,12 @@ public sealed record NpcRoutineProfile
             function = Text(behavior, "function");
         }
 
+        // An empty CAIS string is not StandStill: Null/Stand/StayAtSpawn are the explicit still
+        // requests. 1,068 monster rows ship with no behaviour at all (wildlife the live game
+        // still placed), and leaving them as statues is how a populated zone looks idle.
+        bool unnamed = string.IsNullOrEmpty(name);
         var kind = fixedBody ? NpcRoutineKind.Stationary
-            : Wanderers.Contains(name) || (name.Equals("EliteStationary", StringComparison.OrdinalIgnoreCase) &&
+            : unnamed || Wanderers.Contains(name) || (name.Equals("EliteStationary", StringComparison.OrdinalIgnoreCase) &&
                 NonNegative(behavior, "wanderDistance").HasValue) ? NpcRoutineKind.Wander
             : name.Equals("UseWorkDeployables", StringComparison.OrdinalIgnoreCase) ? NpcRoutineKind.Work
             : NpcRoutineKind.Unspecified;

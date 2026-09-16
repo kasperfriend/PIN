@@ -197,6 +197,13 @@ public class GameServerSettings
     /// <summary>Settlement influence radius in metres around an authored deployable.</summary>
     public float WorldPopulationDeployableInfluenceRadius { get; set; } = 25f;
 
+    /// <summary>
+    ///    Metres of inhabited camp around an outpost that count as settlement. The outpost's
+    ///    authored radius is the capture/control circle, not this value; 0 uses the authored
+    ///    radius as-is.
+    /// </summary>
+    public float WorldPopulationOutpostSettlementRadius { get; set; } = 80f;
+
     /// <summary>Melding influence radius in metres around a Melding control point.</summary>
     public float WorldPopulationMeldingInfluenceRadius { get; set; } = 120f;
 
