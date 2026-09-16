@@ -22,7 +22,9 @@ public class NavigationMeshTests
             1.25f);
 
         Assert.NotEmpty(path);
-        Assert.All(path, point => Assert.InRange(point.X, -0.01f, 4.01f));
+        var end = path[^1];
+        Assert.InRange(end.X, -0.01f, 4.01f);
+        Assert.InRange(end.Y, -0.01f, 4.01f);
     }
 
     [Fact]

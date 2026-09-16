@@ -139,8 +139,8 @@ public sealed class NavigationMesh
             return Array.Empty<Vector3>();
         }
 
-        var startPoint = ProjectToFace(start, _faces[startFace].Triangle);
-        var goalPoint = ProjectToFace(goal, _faces[goalFace].Triangle);
+        var startPoint = ClosestPointOnFace(start, _faces[startFace].Triangle);
+        var goalPoint = ClosestPointOnFace(goal, _faces[goalFace].Triangle);
         if (startFace == goalFace)
         {
             return CanTraverse(startPoint, goalPoint, blocked, maxStepHeight)
@@ -775,6 +775,68 @@ public sealed class NavigationMesh
         float v = (((c.Y - a.Y) * (p.X - c.X)) + ((a.X - c.X) * (p.Y - c.Y))) / denominator;
         float w = 1f - u - v;
         return (triangle.A * u) + (triangle.B * v) + (triangle.C * w);
+    }
+
+    /// <summary>
+    ///     Closest point on the triangle, not the unconstrained planar projection.
+    ///     <see cref="ProjectToFace"/> can land outside the face when the query is off-mesh;
+    ///     a wander goal that snapped onto a nearby triangle still has to stand on it.
+    /// </summary>
+    private static Vector3 ClosestPointOnFace(Vector3 point, NavigationTriangle triangle)
+    {
+        var a = triangle.A;
+        var b = triangle.B;
+        var c = triangle.C;
+        var ab = b - a;
+        var ac = c - a;
+        var ap = point - a;
+
+        float d1 = Vector3.Dot(ab, ap);
+        float d2 = Vector3.Dot(ac, ap);
+        if (d1 <= 0f && d2 <= 0f)
+        {
+            return a;
+        }
+
+        var bp = point - b;
+        float d3 = Vector3.Dot(ab, bp);
+        float d4 = Vector3.Dot(ac, bp);
+        if (d3 >= 0f && d4 <= d3)
+        {
+            return b;
+        }
+
+        float vc = (d1 * d4) - (d3 * d2);
+        if (vc <= 0f && d1 >= 0f && d3 <= 0f)
+        {
+            float v = d1 / (d1 - d3);
+            return a + (ab * v);
+        }
+
+        var cp = point - c;
+        float d5 = Vector3.Dot(ab, cp);
+        float d6 = Vector3.Dot(ac, cp);
+        if (d6 >= 0f && d5 <= d6)
+        {
+            return c;
+        }
+
+        float vb = (d5 * d2) - (d1 * d6);
+        if (vb <= 0f && d2 >= 0f && d6 <= 0f)
+        {
+            float w = d2 / (d2 - d6);
+            return a + (ac * w);
+        }
+
+        float va = (d3 * d6) - (d5 * d4);
+        if (va <= 0f && (d4 - d3) >= 0f && (d5 - d6) >= 0f)
+        {
+            float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+            return b + ((c - b) * w);
+        }
+
+        float denom = 1f / (va + vb + vc);
+        return a + (ab * (vb * denom)) + (ac * (vc * denom));
     }
 
     private static float TriangleArea(NavigationTriangle triangle)
