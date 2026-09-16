@@ -206,6 +206,18 @@ island stacked over or under a larger surface (a canopy, an under-rock cavity) i
 removed, while a large disconnected layer (a balcony, a bridge) is kept. Up to
 `PlanWorkPerTick` (20,000) faces are accumulated per update.
 
+That filtering is bounded, and it has to be: the bake is a step of loading the zone, on the
+thread that decides when the server stops refusing clients, and it runs over every walkable
+triangle of the zone - millions on a prod one. Duplicate faces are therefore matched through a
+bucket of the face's own quantised centroid rather than by spatial overlap (two copies of a
+triangle have the same centroid; "everything whose bounds reach this cell" is a neighbourhood
+scan per face, which is a bake that never returns), only patches small enough to be a canopy at
+all - under 64 m on a side - are judged as islands, and the pass spends at most
+`IslandSupportCandidateBudget` (32 M) candidate comparisons over the whole zone, keeping
+whatever it did not reach and logging that it did. A zone that stops after
+`Zone 448: Loaded successfully …` with no `navigation mesh has …` line after it is a zone still
+baking, and the two lines around the bake say how long it is taking.
+
 **Phase 2 - cells.** Centroids are accumulated into 32 m cells; a cell's centre is
 the average of the ground that landed in it, so a cell is not a flat square of the
 world but the ground the zone actually has inside that square (its Z is a height a

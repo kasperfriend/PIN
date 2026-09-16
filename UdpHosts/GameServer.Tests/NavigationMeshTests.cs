@@ -129,6 +129,69 @@ public class NavigationMeshTests
         Assert.Contains(Centroids(mesh), centroid => centroid.Z < 1f);
     }
 
+    [Fact]
+    public void ADisconnectedLayerTooBigToBeACanopyIsKeptWhateverSitsUnderIt()
+    {
+        // 6 400 m² of deck over 250 000 m² of ground: by the area ratio alone the deck is a small
+        // floating patch, but a patch 80 m across is a level of its own - a bridge, a plateau - and
+        // treating it as foliage is how a zone loses the ground on that bridge. The size the island
+        // test declines to judge is also what keeps it from walking the ground under every face of a
+        // zone whose canopy is a hundred thousand separate patches.
+        var mesh = new NavigationMesh(
+            Ground(size: 500f).Concat(Quad(20f, 20f, 100f, 100f, z: 10f)).ToArray(),
+            _ => 1f);
+
+        Assert.Equal(4, mesh.FaceCount);
+        Assert.Contains(Centroids(mesh), centroid => centroid.Z > 9f);
+    }
+
+    [Fact]
+    public void CopiesOfOneSurfaceFarApartInXYAreLeftAlone()
+    {
+        // The dedupe that drops the second copy of a surface works on faces at the same place: it is
+        // a bucket lookup per face. Matching faces by "overlaps it somewhere" instead costs a scan of
+        // everything in the neighbourhood per face, which on a zone's worth of ground is a bake that
+        // runs for hours - and a whole tile's worth of copies is prevented where the zone is read,
+        // by the chunk references being deduplicated there.
+        var mesh = new NavigationMesh(
+            Quad(0f, 0f, 4f, 4f, z: 0f).Concat(Quad(200f, 0f, 204f, 4f, z: 0f)).ToArray(),
+            _ => 1f);
+
+        Assert.Equal(4, mesh.FaceCount);
+    }
+
+    [Fact]
+    public void AFaceWhoseBoundsAreAbsurdIsStillBakedInConstantTime()
+    {
+        // A face is entered in the runtime index in every cell its horizontal bounds cover, so that a
+        // query for a point inside a large floor finds the floor however big it is. One triangle with
+        // absurd coordinates (a merged mesh gone wrong; a non-finite vertex, whose cast to int lands
+        // on int.MinValue and turns the loop into a walk over four billion cells per axis) used to
+        // make filling that index the thing that never finished - after the chunks had all logged,
+        // with nothing in the console to say what the process was doing. The span is capped now, and
+        // such a face is indexed at its centroid alone. The assertion is that the mesh is built.
+        Vector3[] corners =
+        [
+            new(-100_000f, -100_000f, 0f),
+            new(100_000f, -100_000f, 0f),
+            new(100_000f, 100_000f, 0f),
+            new(-100_000f, 100_000f, 0f),
+        ];
+
+        var giant = new[]
+        {
+            new NavigationTriangle(corners[0], corners[1], corners[3], 1),
+            new NavigationTriangle(corners[1], corners[2], corners[3], 1),
+        };
+
+        var mesh = new NavigationMesh(Ground(size: 10f).Concat(giant).ToArray(), _ => 1f);
+
+        Assert.Equal(4, mesh.FaceCount);
+
+        // And the ground next to that triangle is still walkable on its own faces.
+        Assert.NotEmpty(mesh.FindPath(new Vector3(1f, 1f, 0f), new Vector3(4f, 4f, 0f), (_, _) => false, 1.25f));
+    }
+
     private static NavigationTriangle[] Ground(float size = 10f) => Quad(0f, 0f, size, size, z: 0f);
 
     private static NavigationTriangle[] Island(float x, float y, float z, float size) =>

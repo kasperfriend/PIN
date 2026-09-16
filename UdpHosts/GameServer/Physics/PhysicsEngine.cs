@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -162,6 +163,20 @@ public partial class PhysicsEngine
         if (ts.HasValue)
         {
             ZoneFileTimestamp = ts.Value;
+
+            // Said before it starts, because the bake is the one step of loading a zone that is pure
+            // CPU over everything the zone has - every walkable collision triangle of all its chunks,
+            // which is millions of them on a prod zone - and it runs on the thread that decides when
+            // the server stops refusing clients: the GameServer calls itself ready only once the shard
+            // (and so this constructor) has returned. A console that stops after "Loaded successfully"
+            // and says nothing else looks exactly like a server that is still loading chunks, and the
+            // operator reading it is waiting for the wrong thing.
+            var bakeStarted = Stopwatch.StartNew();
+            _logger.Information(
+                "Zone {ZoneId}: baking the navigation mesh from {TriangleCount} collision triangles",
+                zoneId,
+                _zoneLoader.NavigationTriangles.Count);
+
             _navigationMesh = _zoneLoader.NavigationTriangles.Count > 0
                 ? new NavigationMesh(
                     _zoneLoader.NavigationTriangles,
@@ -169,10 +184,11 @@ public partial class PhysicsEngine
                     _zoneLoader.IsNavigationExcluded)
                 : null;
             _logger.Information(
-                "Zone {ZoneId}: navigation mesh has {TriangleCount} source triangles and {FaceCount} walkable faces",
+                "Zone {ZoneId}: navigation mesh has {TriangleCount} source triangles and {FaceCount} walkable faces after {Elapsed}",
                 zoneId,
                 _zoneLoader.NavigationTriangles.Count,
-                _navigationMesh?.FaceCount ?? 0);
+                _navigationMesh?.FaceCount ?? 0,
+                bakeStarted.Elapsed);
         }
         else
         {
