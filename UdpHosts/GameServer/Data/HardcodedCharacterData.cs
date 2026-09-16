@@ -898,6 +898,16 @@ public static class HardcodedCharacterData
     {
         foreach (uint item in FallbackInventoryItems)
         {
+            // Stackable goods (consumables, currency-style basics, raw materials) live in the
+            // resource pools like on live; only equipment keeps a guid per copy. When the static
+            // DB is not loaded the type is unknown and the item keeps the legacy guid form.
+            var info = SDBInterface.GetRootItem(item);
+            if (info != null && ItemStacking.IsStackedAsResource(info.Type))
+            {
+                inventory.AddResource(item, 1);
+                continue;
+            }
+
             inventory.CreateItem(item);
         }
 

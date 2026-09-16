@@ -410,7 +410,7 @@ hash,table,rows,columns,runtime_loaded,spatial_fields,blob_fields
 0x3E4D63F0,dbitems::Resource_Types,3576,7,False,,
 0xD8DE53EF,dbitems::RootItem,60126,27,True,,
 0x0A73B340,dbitems::SalvageDisplayItems,168,3,False,,
-0x7ED89AA8,dbitems::SalvageRewards,167,2,False,,
+0x7ED89AA8,dbitems::SalvageRewards,167,2,True,,
 0x05D3A7F8,dbitems::SharedPoolSize,1,1,False,,
 0xE2344EE6,dbitems::SkinOverride,2,5,False,,
 0x32DDA085,dbitems::Tier,23,6,False,,

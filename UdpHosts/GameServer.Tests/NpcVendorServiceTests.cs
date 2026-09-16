@@ -7,7 +7,10 @@ using AeroMessages.GSS.Character.Command;
 using AeroMessages.GSS.Character.Controller;
 using GameServer.Data;
 using GameServer.Entities.Character;
+using GameServer.Enums;
+using GameServer.StaticDB;
 using GameServer.StaticDB.Records.dbcharacter;
+using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Vendor;
 using GameServer.Tests.Fakes;
 using Xunit;
@@ -54,6 +57,7 @@ public class NpcVendorServiceTests : IDisposable
         NpcVendorService.BuildCatalog = VendorCatalog.Build;
         NpcVendorService.DescribeStore = VendorCatalog.Describe;
         NpcVendorService.RollTokenMachine = VendorTokenRoll.Roll;
+        NpcVendorService.LookupItem = SDBInterface.GetRootItem;
     }
 
     [Fact]
@@ -176,6 +180,84 @@ public class NpcVendorServiceTests : IDisposable
     ///     Spending the last of a currency drops the pool from the inventory; the client still has to
     ///     be told it is empty instead of the purchase blowing up on the removed dictionary key.
     /// </summary>
+    /// <summary>
+    ///     Consumables stack: buying another health pack tops the pool up instead of spawning yet
+    ///     another guid copy - the shape a live bag model carries them in.
+    /// </summary>
+    [Fact]
+    public void TryPurchase_StackableGoods_TopUpTheResourcePool()
+    {
+        var (_, player, _) = CreateVendorSession(authorizeTerminal: true);
+        NpcVendorService.LookupItem = sdbId => new RootItem { SdbId = sdbId, Type = (byte)ItemType.Consumable };
+        player.Inventory.AddResource(Crystite, 500);
+        player.Inventory.AddResource(30287, 2);
+
+        var response = NpcVendorService.TryPurchase(
+            player,
+            VendorId,
+            VendorCatalog.ProductGuid(VendorId, 0),
+            VendorCatalog.PriceGuid(VendorId, 0));
+
+        Assert.Equal(1, response.Success);
+        Assert.Equal(400u, player.Inventory.GetResourceQuantity(Crystite));
+        Assert.Equal(3u, player.Inventory.GetResourceQuantity(30287));
+        Assert.Equal(0, player.Inventory.CountItemsBySdbId(30287));
+    }
+
+    /// <summary>
+    ///     A purchase that cannot fit the buyer's bags must be declined before the currency moves:
+    ///     the client enforces its own bag model and only flashes red while nothing changes, so
+    ///     the server answers with a code and keeps the wallet (and the stock record) untouched.
+    /// </summary>
+    [Fact]
+    public void TryPurchase_FullBags_DeclineWithoutCharging()
+    {
+        var (_, player, _) = CreateVendorSession(authorizeTerminal: true);
+        NpcVendorService.LookupItem = sdbId => new RootItem { SdbId = sdbId, Type = (byte)ItemType.Weapon };
+
+        // Exactly full: one resource pool plus 314 items is 315 slots = the 9x35 model's capacity.
+        player.Inventory.AddResource(Crystite, 500);
+        for (var i = 0; i < 314; i++)
+        {
+            player.Inventory.CreateItem(999);
+        }
+
+        var response = NpcVendorService.TryPurchase(
+            player,
+            VendorId,
+            VendorCatalog.ProductGuid(VendorId, 0),
+            VendorCatalog.PriceGuid(VendorId, 0));
+
+        Assert.Equal(0, response.Success);
+        Assert.Equal(NpcVendorService.InventoryFullCode, response.Code);
+        Assert.Equal(500u, player.Inventory.GetResourceQuantity(Crystite));
+        Assert.Equal(0, player.Inventory.CountItemsBySdbId(30287));
+    }
+
+    /// <summary>One free slot is enough for one guid item; the decline is the border, not a trend.</summary>
+    [Fact]
+    public void TryPurchase_OneFreeSlot_FitsAgain()
+    {
+        var (_, player, _) = CreateVendorSession(authorizeTerminal: true);
+        NpcVendorService.LookupItem = sdbId => new RootItem { SdbId = sdbId, Type = (byte)ItemType.Weapon };
+
+        player.Inventory.AddResource(Crystite, 500);
+        for (var i = 0; i < 313; i++)
+        {
+            player.Inventory.CreateItem(999);
+        }
+
+        var response = NpcVendorService.TryPurchase(
+            player,
+            VendorId,
+            VendorCatalog.ProductGuid(VendorId, 0),
+            VendorCatalog.PriceGuid(VendorId, 0));
+
+        Assert.Equal(1, response.Success);
+        Assert.Equal(400u, player.Inventory.GetResourceQuantity(Crystite));
+        Assert.Equal(1, player.Inventory.CountItemsBySdbId(30287));
+    }
+
     [Fact]
     public void TryPurchase_SpendingTheLastOfTheCurrency_StillAnswersAndReplicatesTheEmptyPool()
     {

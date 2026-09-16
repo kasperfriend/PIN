@@ -299,6 +299,12 @@ public class StaticDBLoader : ISDBLoader
             .ToDictionary(group => group.Key, group => group.ToList());
     }
 
+    public Dictionary<uint, SalvageRewards> LoadSalvageRewards()
+    {
+        return LoadStaticDB<SalvageRewards>("dbitems::SalvageRewards")
+            .ToDictionary(row => row.Id);
+    }
+
     public Dictionary<uint, Battleframe> LoadBattleframe()
     {
         return LoadStaticDB<Battleframe>("dbitems::Battleframe")
