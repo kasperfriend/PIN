@@ -79,6 +79,32 @@ reference. The CSVs additionally contain every raw column of each SDB record.
 Run it after changing `SDBCatalog.cs` / the spawn commands, or when pointing
 PIN at a different Firefall build, and commit the result.
 
+## Precomputed tables the web hosts use
+
+The web hosts have no static database at runtime, so what they answer about a
+character comes from tables generated here and committed — the same way
+`chassis_warpaints.py` precomputes the stock armor colors:
+
+```sh
+# Lib/Shared.Common/Characters/ChassisStockLoadouts.cs: the loadout each
+# battleframe ships with for a player (~10 s)
+python3 chassis_loadouts.py /path/to/clientdb.sd2
+```
+
+It joins `dbcharacter::CharCreateLoadout` with `CharCreateLoadoutSlots` (and
+`dbitems::RootItem`, for the required level that decides the tier) and picks one
+loadout per chassis: the lowest tier that still gears a player — the
+`is_starting_loadout` row, else the kit whose PvE modules ask for the lowest
+required level, then the fuller kit, then a `- Player` name, then the lowest id.
+Loadouts whose PvE modules fill none of the slots a character wears are skipped,
+which is what keeps the advanced frames' PvP kits (PvP modules in the weapon
+slots, PvE gear in slots 140-156) and the dev rows out of the table.
+
+`UdpHosts/GameServer` applies the same rule to the SDB at runtime
+(`SDBUtils.GetStockCharCreateLoadout` → `CharCreateLoadoutPicker`), so the gear
+the selection screen shows and the gear the GameServer equips are the same gear.
+Run it when the SDB build changes, and commit the result.
+
 ## Verification
 
 `selftest.py` builds a synthetic `.sd2` from scratch (header, obfuscation,

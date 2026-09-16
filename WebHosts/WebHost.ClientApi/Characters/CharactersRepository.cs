@@ -113,18 +113,11 @@ public class CharactersRepository : ICharactersRepository
                                  WarpaintPatterns = new List<WarpaintPattern>(),
                                  VisualOverrides = new List<long>()
                              },
-                   Gear = new List<Gear>
-                          {
-                              new() { SlotTypeId = 1, SdbId = 86969, ItemGuid = 5068916056568384765 },
-                              new() { SlotTypeId = 2, SdbId = 87918, ItemGuid = 5068916056568385021 },
-                              new() { SlotTypeId = 6, SdbId = 91770, ItemGuid = 5068923373180718589 },
-                              new() { SlotTypeId = 116, SdbId = 126000, ItemGuid = 5068916056568385277 },
-                              new() { SlotTypeId = 122, SdbId = 129359, ItemGuid = 5068916056568385533 },
-                              new() { SlotTypeId = 126, SdbId = 127501, ItemGuid = 5068916056568385789 },
-                              new() { SlotTypeId = 127, SdbId = 128271, ItemGuid = 5068916056568386045 },
-                              new() { SlotTypeId = 128, SdbId = 126731, ItemGuid = 5068916056568386301 },
-                              new() { SlotTypeId = 129, SdbId = 129067, ItemGuid = 5068916056568386557 }
-                          },
+                   // What the character wears: the stock gear of the
+                   // battleframe its record carries — the same modules the
+                   // GameServer equips it with in game — instead of one fixed
+                   // loadout hardcoded for every character.
+                   Gear = CharacterGear.Gear(record),
                    ExpiresIn = 0,
                    Race = "chosen",
                    Migrations = new List<int>()

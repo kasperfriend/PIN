@@ -6,6 +6,7 @@ using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using GrpcGameServerAPIClient;
 using Microsoft.Extensions.Logging;
+using Shared.Common.Accounts;
 using Shared.Common.Characters;
 
 namespace WebHost.GameServerApi.Services;
@@ -227,7 +228,13 @@ public class GameServerApiService : GameServerAPI.GameServerAPIBase
                 ArmyIsOfficer = character.ArmyIsOfficer,
                 LastZoneId = character.LastZoneId,
                 LastOutpostId = character.LastOutpostId,
-                TimePlayed = character.TimePlayed
+                TimePlayed = character.TimePlayed,
+
+                // Decides which inventory the GameServer equips the character
+                // with: the dev sandbox (every battleframe plus the item and
+                // resource dump) for admin accounts, the character's own single
+                // battleframe for everyone else.
+                IsAdmin = AccountStore.IsAdminAccount(AccountStore.Default.Get(character.AccountId))
             },
             CharacterVisuals = new CharacterVisuals
             {
