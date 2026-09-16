@@ -134,6 +134,16 @@ public class CharactersController : ControllerBase
         return data;
     }
 
+    /// <summary>
+    /// The character's bag (<c>api/v3/characters/{id}/inventories/bag</c>).
+    ///
+    /// A character owns its battleframe and the gear it wears, and nothing else:
+    /// PIN has no persisted inventory, so there is no bag to answer with and a
+    /// fresh account's bag is empty. It used to be answered with three items and
+    /// four resource stacks hardcoded for every character that asked — constants
+    /// captured from one session, which is how a new account appeared to own a
+    /// bag copied from the operator's.
+    /// </summary>
     [Route("api/v3/characters/{characterId:ulong}/inventories/bag")]
     [HttpGet]
     [Produces("application/json")]
@@ -144,61 +154,21 @@ public class CharactersController : ControllerBase
             return new { };
         }
 
-        var bag = new InventoriesBag
-                  {
-                      Items = new object[]
-                              {
-                                  new Items
-                                  {
-                                      ItemId = 1536337344062485245,
-                                      ItemSdbId = 84238,
-                                      OwnerGuid = ulong.Parse(characterId),
-                                      TypeCode = 248,
-                                      Quality = 0,
-                                      CharacterGuid = ulong.Parse(characterId),
-                                      BoundToOwner = false,
-                                      CreatedAt = "2013-09-07T05:10:11+00:00",
-                                      UpdatedAt = "2013-09-07T05:10:11+00:00"
-                                  },
-                                  new Items
-                                  {
-                                      ItemId = 2256965954967900669,
-                                      ItemSdbId = 79789,
-                                      OwnerGuid = ulong.Parse(characterId),
-                                      TypeCode = 248,
-                                      Quality = 0,
-                                      CharacterGuid = ulong.Parse(characterId),
-                                      BoundToOwner = false,
-                                      CreatedAt = "2013-09-07T05:10:11+00:00",
-                                      UpdatedAt = "2013-09-07T05:10:11+00:00",
-                                      CreatorGuid = ulong.Parse(characterId)
-                                  },
-                                  new Items
-                                  {
-                                      ItemId = 8885818829252295677,
-                                      ItemSdbId = 30346,
-                                      OwnerGuid = ulong.Parse(characterId),
-                                      TypeCode = 248,
-                                      Quality = 685,
-                                      CharacterGuid = ulong.Parse(characterId),
-                                      BoundToOwner = false,
-                                      CreatedAt = "2013-09-07T05:10:11+00:00",
-                                      UpdatedAt = "2013-09-07T05:10:11+00:00",
-                                      CreatorGuid = ulong.Parse(characterId)
-                                  }
-                              },
-                      Resources = new object[]
-                                  {
-                                      new Resources { ItemSdbId = 78007, OwnerGuid = ulong.Parse(characterId), ResourceType = "0", Quantity = 1 },
-                                      new Resources { ItemSdbId = 75269, OwnerGuid = ulong.Parse(characterId), ResourceType = "0", Quantity = 1 },
-                                      new Resources { ItemSdbId = 77343, OwnerGuid = ulong.Parse(characterId), ResourceType = "0", Quantity = 1 },
-                                      new Resources { ItemSdbId = 77344, OwnerGuid = ulong.Parse(characterId), ResourceType = "0", Quantity = 1 }
-                                  }
-                  };
-
-        return bag;
+        return new InventoriesBag
+               {
+                   Items = [],
+                   Resources = []
+               };
     }
 
+    /// <summary>
+    /// The character's worn gear
+    /// (<c>api/v3/characters/{id}/inventories/gear/items</c>): the equipped
+    /// modules of the stock loadout of the battleframe its record carries — the
+    /// same gear the character list shows on its card and the GameServer equips
+    /// in game. Two hardcoded items with 2013 timestamps used to be the answer
+    /// for every character.
+    /// </summary>
     [Route("api/v3/characters/{characterId:ulong}/inventories/gear/items")]
     [HttpGet]
     [Produces("application/json")]
@@ -209,46 +179,7 @@ public class CharactersController : ControllerBase
             return new { };
         }
 
-        var temp = new object[]
-                   {
-                       new Items
-                       {
-                           ItemId = 815797474160817405,
-                           ItemSdbId = 83945,
-                           OwnerGuid = ulong.Parse(characterId),
-                           TypeCode = 244,
-                           Quality = 885,
-                           CharacterGuid = ulong.Parse(characterId),
-                           BoundToOwner = false,
-                           CreatedAt = "2013-09-07T05:10:11+00:00",
-                           UpdatedAt = "2013-09-07T05:10:11+00:00",
-                           Durability = new Durability { Current = 1000, Pool = 0 },
-                           AttributeModifiers = new Dictionary<uint, double> { { 950, 0.0 }, { 951, -174.84620344827584 }, { 952, -42.6656 }, { 1072, 125.0 } }
-                       },
-                       new Items
-                       {
-                           ItemId = 815797474160966141,
-                           ItemSdbId = 82924,
-                           OwnerGuid = ulong.Parse(characterId),
-                           TypeCode = 244,
-                           Quality = 159,
-                           CharacterGuid = ulong.Parse(characterId),
-                           BoundToOwner = false,
-                           CreatedAt = "2013-09-07T05:10:11+00:00",
-                           UpdatedAt = "2013-09-07T05:10:11+00:00",
-                           Durability = new Durability { Current = 1000, Pool = 0 },
-                           AttributeModifiers = new Dictionary<uint, double>
-                                                {
-                                                    { 23, 2.4827167 },
-                                                    { 952, -42.45361210150184 },
-                                                    { 950, 0.0 },
-                                                    { 951, -63.9984 },
-                                                    { 956, 6.0 },
-                                                    { 954, 153.0 }
-                                                }
-                       }
-                   };
-        return temp;
+        return CharacterGear.InventoryItems(CharacterStore.Get(ulong.Parse(characterId)));
     }
 
     /// <summary>

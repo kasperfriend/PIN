@@ -115,6 +115,30 @@ public sealed class AccountStore
     public string StorePath => storePath;
 
     /// <summary>
+    /// Whether an account is an admin account: the one the dev sandbox belongs
+    /// to.
+    ///
+    /// Admin accounts are the only ones whose characters receive the whole
+    /// hardcoded dev inventory on login — every battleframe plus the captured
+    /// item and resource dump — because that sandbox is what the zone-picker
+    /// entries, the frame/level cheats and the operator's own testing are for.
+    /// Every other account starts with what its character was created with (see
+    /// <c>CharacterInventory.LoadStartingInventory</c>), so a new account no
+    /// longer inherits the admin's garage and bag.
+    ///
+    /// The flag lives on the account itself (<see cref="AccountRecord.IsAdmin"/>),
+    /// so granting it is a matter of setting <c>"IsAdmin": true</c> on the
+    /// account in <c>accounts.json</c> (and restarting WebHostManager): the
+    /// seeded <c>admin</c> account carries it, and the built-in admin id counts
+    /// as one even on a store written before the flag was honoured.
+    /// </summary>
+    /// <param name="account">The account to test, or null.</param>
+    public static bool IsAdminAccount(AccountRecord account)
+    {
+        return account != null && (account.IsAdmin || account.AccountId == AdminAccountId);
+    }
+
+    /// <summary>
     /// Initialize the process-wide store from a configured path. Safe to call
     /// repeatedly; only the first call has an effect, mirroring
     /// <see cref="Shared.Common.Characters.CharacterStore.Init"/>.
@@ -678,6 +702,21 @@ public sealed class AccountStore
         if (accounts.IsEmpty)
         {
             SeedDefault();
+        }
+
+        // Migration: a store written before IsAdmin decided who gets the dev
+        // sandbox still has the seeded admin account, just without the flag.
+        // Stamp it (the built-in admin id is an admin account by definition) so
+        // upgrading does not silently take the sandbox away from the operator.
+        if (accounts.TryGetValue(AdminAccountId, out var seededAdmin) && !seededAdmin.IsAdmin)
+        {
+            seededAdmin.IsAdmin = true;
+            Save();
+
+            Log.Information(
+                "Marked the built-in {Email} account (id {AccountId}) as an admin account: its characters keep the dev inventory (every battleframe plus the item and resource dump); every other account starts fresh",
+                seededAdmin.Email,
+                AdminAccountId);
         }
 
         // At Warning, the level the WebHostManager shows by default: when a

@@ -16,6 +16,18 @@ public class SDBUtils
     private static readonly ILogger _logger = Log.ForContext<SDBInterface>();
 
     /// <summary>
+    ///     The loadout slots a character wears, i.e. the ones the GameServer fills
+    ///     from a char-create loadout: the weapon, ability and chassis gear slots
+    ///     (the backpack is resolved from the chassis itself, and the legacy slot
+    ///     types the database still carries are not equipped at all).
+    /// </summary>
+    private static readonly HashSet<byte> EquippableSlotTypes = CharacterLoadout.LoadoutWeaponSlots
+                                                                                .Concat(CharacterLoadout.LoadoutAbilitySlots)
+                                                                                .Concat(CharacterLoadout.LoadoutChassisSlots)
+                                                                                .Select(slot => (byte)slot)
+                                                                                .ToHashSet();
+
+    /// <summary>
     ///     Highest level <c>dbcharacter::MonsterScaling</c> has a row for. Levels above it
     ///     (an open ended level band) are capped here because there is no data beyond it.
     /// </summary>
@@ -105,6 +117,70 @@ public class SDBUtils
         }
 
         return defaultLoadoutSlots;
+    }
+
+    /// <summary>
+    ///     The char-create loadout a battleframe ships with for a player: the one a
+    ///     character that starts fresh is equipped with (as opposed to the endgame
+    ///     "Elite ... Reward" loadout the dev sandbox hands out, see
+    ///     <see cref="HardcodedCharacterData.TempCharCreateLoadouts"/>).
+    /// </summary>
+    /// <param name="chassisId">The battleframe (chassis) SDB id.</param>
+    /// <returns>
+    ///     The picked <c>dbcharacter::CharCreateLoadout</c> row, or null when the
+    ///     chassis has no non-dev loadout carrying gear (the social and civilian
+    ///     frames, an id from a hand-edited record).
+    /// </returns>
+    /// <remarks>
+    ///     Applies the same rule the web hosts' precomputed
+    ///     <c>ChassisStockLoadouts</c> table was generated with
+    ///     (<c>Tools/SdbDump/chassis_loadouts.py</c>), so the gear the selection
+    ///     screen shows and the gear the GameServer equips are the same gear.
+    /// </remarks>
+    public static CharCreateLoadout GetStockCharCreateLoadout(uint chassisId)
+    {
+        var loadouts = SDBInterface.GetCharCreateLoadoutsByFrame(chassisId);
+        if (loadouts == null || loadouts.Length == 0)
+        {
+            return null;
+        }
+
+        return CharCreateLoadoutPicker.Pick(loadouts, DescribeStockKit);
+    }
+
+    /// <summary>
+    ///     What a char-create loadout carries in the slots a character wears: how
+    ///     many hold a default PvE module and the highest level those modules ask
+    ///     for — the tier the kit belongs to.
+    /// </summary>
+    private static StockLoadoutKit DescribeStockKit(CharCreateLoadout loadout)
+    {
+        var slots = SDBInterface.GetCharCreateLoadoutSlots(loadout.Id);
+        if (slots == null)
+        {
+            return default;
+        }
+
+        var count = 0;
+        var highestLevel = 0;
+
+        foreach (var (slotType, slot) in slots)
+        {
+            if (slot.DefaultPveModule == 0 || !EquippableSlotTypes.Contains(slotType))
+            {
+                continue;
+            }
+
+            count++;
+
+            var item = SDBInterface.GetRootItem(slot.DefaultPveModule);
+            if (item != null && item.RequiredLevel > highestLevel)
+            {
+                highestLevel = item.RequiredLevel;
+            }
+        }
+
+        return new StockLoadoutKit(count, highestLevel);
     }
 
     public static Dictionary<byte, CharCreateLoadoutSlots> GetChassisDefaultLoadoutSlots(uint chassisId)

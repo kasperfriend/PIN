@@ -398,32 +398,57 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
                   .Warning(ex, "Could not get character over GRPC, will use fallback. Is WebHostManager running?");
         }
 
-        // Load inventory so we get loadouts
-        Inventory = new CharacterInventory(AssignedShard, this, CharacterEntity);
-        Inventory.LoadHardcodedInventory();
-
         // Use remote data or fallback to setup character
         bool useRemoteData = true;
-        int loadoutId;
         if (remoteData != null && useRemoteData)
         {
             CharacterEntity.LoadRemote(remoteData);
-
-            // Todo: load inventory from db so we can use those loadouts
-            loadoutId = Inventory.GetLoadoutIdForChassis(remoteData.CharacterInfo.CurrentBattleframeSDBId);
-
-            if (loadoutId == 0)
-            {
-                Logger.Warning(
-                    "No loadout for battleframe {Battleframe}, falling back to {Fallback}",
-                    remoteData.CharacterInfo.CurrentBattleframeSDBId,
-                    HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
-                loadoutId = Inventory.GetLoadoutIdForChassis(HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
-            }
         }
         else
         {
             CharacterEntity.Load(HardcodedCharacterData.FallbackData);
+        }
+
+        // Load inventory so we get loadouts.
+        //
+        // The dev sandbox — a loadout for every battleframe, each in its endgame
+        // "Elite ... Reward" gear, plus the captured item and resource dump —
+        // belongs to admin accounts: it is the playground the zone-picker
+        // entries, the frame/level cheats and the operator's own testing are
+        // for. A character of any other account starts with what it was created
+        // with: the one battleframe the player picked on the creation screen,
+        // wearing that frame's own stock gear, and nothing else. Before this
+        // every character was handed the sandbox, which is why a new account
+        // opened the game owning the admin's garage and bag.
+        //
+        // A login whose character record could not be fetched over GRPC cannot
+        // tell an admin account from a normal one (no WebHostManager, no
+        // answer), so it keeps the sandbox — the behaviour every character had
+        // before the account system.
+        var chassisId = remoteData != null && useRemoteData
+                            ? remoteData.CharacterInfo.CurrentBattleframeSDBId
+                            : HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId;
+
+        Inventory = new CharacterInventory(AssignedShard, this, CharacterEntity);
+
+        if (remoteData == null || remoteData.CharacterInfo.IsAdmin)
+        {
+            Inventory.LoadHardcodedInventory();
+        }
+        else
+        {
+            Inventory.LoadStartingInventory(chassisId);
+        }
+
+        // Todo: load inventory from db so we can use those loadouts
+        int loadoutId = Inventory.GetLoadoutIdForChassis(chassisId);
+
+        if (loadoutId == 0)
+        {
+            Logger.Warning(
+                "No loadout for battleframe {Battleframe}, falling back to {Fallback}",
+                chassisId,
+                HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
             loadoutId = Inventory.GetLoadoutIdForChassis(HardcodedCharacterData.FallbackData.CharacterInfo.CurrentBattleframeSDBId);
         }
 

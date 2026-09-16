@@ -13,6 +13,7 @@
 * Both **WebHostManager** (REST `ClientApi` → character selection screen) and **GameServer** (via gRPC `GameServerAPI`) read from the **same file**, so the character you pick is the character you spawn as.
 * Every account owns its own entries: the selection screen shows only the logged-in account's characters. Accounts start fresh — no characters until one is created in-game (see [`ACCOUNTS.md`](ACCOUNTS.md) §6–§7).
 * On first run the store is **seeded** with 38 entries — one per zone — from `CharacterStore.SeedZones`, owned by the built-in admin account. That seed list is the **admin-only zone picker** (the operator's way to load into any zone from the selection screen); it is deliberately not given to other accounts, and untouched copies written by older builds are pruned on load.
+* What a character **owns** follows from its record too: it wears the battleframe in `CurrentBattleframeSDBId` and that frame's own stock loadout from the static database — the weapons, abilities and gear the build ships the frame with for a player (`ChassisStockLoadouts`). Nobody inherits another account's garage or bag any more (§5.6).
 * When you switch battleframes in-game (`SelectLoadout`), the GameServer calls `SaveCurrentBattleframeAsync` → gRPC `SaveCurrentBattleframe` → `CharacterStore.UpdateCurrentBattleframe`, which updates the JSON and the selection screen instantly.
 * When you log out / teleport, `SaveGameSessionData` persists `LastZoneId`, `LastOutpostId`, `TimePlayed`, `LastSeenAt`.
 
@@ -410,6 +411,53 @@ This affects:
 
 Rebuild after change.
 
+### 5.6 What a character starts with
+
+The inventory a character zones in with is decided by **whose account it belongs
+to**, not by one hardcoded set shared by everybody:
+
+| Account | Inventory on login |
+|---------|-------------------|
+| **Admin** (`"IsAdmin": true` in `accounts.json`) | The dev sandbox: a loadout for every battleframe in `HardcodedCharacterData.TempCharCreateLoadouts` (the endgame `Elite … Reward` kits) plus the captured item and resource dump (`FallbackInventoryItems` / `FallbackInventoryResources`) |
+| **Everybody else** | The one battleframe the character was created with — the chassis in `CurrentBattleframeSDBId` — wearing that frame's stock loadout from the static database, and nothing else |
+| **No character record over gRPC** (WebHostManager down) | The sandbox, as it always was: with no answer there is no way to tell whose character this is |
+
+`HardcodedCharacterData.GenerateStartingLoadout` is the "fresh character" path:
+it resolves the chassis' stock char-create loadout (`SDBUtils.GetStockCharCreateLoadout` → `CharCreateLoadoutPicker`) and equips only that. The admin flag itself
+travels over gRPC as `BasicCharacterInfo.IsAdmin`.
+
+The stock loadout is *not* "the frame's first loadout row". The static database
+carries several per frame and they are tiers, not variations:
+
+| Loadout (Firecat) | Required level | What it is |
+|-------------------|---------------|------------|
+| `Accord <frame> - Player` (the five Accord frames only, flagged `is_starting_loadout`) | 1 | the starter kit |
+| `<frame> Test Stage N Loadout` | 1 | the other complete level-1 kit — the only one the advanced frames have in the slots PIN equips |
+| `Elite <frame> Reward Loadout` | **20** | the endgame unlock kit — what the sandbox hands out, and why a new character used to look level-capped |
+| `Migration 40 <frame> Loadout` | 40 | the same, migrated |
+| `Astrek "<frame>" - Player` / `ODM "<frame>" - Player` | — | the advanced frames' **PvP** kit: PvP modules in the weapon and ability slots, and the frame's PvE gear in slots 140-156 (a per-frame-level ladder), none of which a PvE character wears |
+
+The rule (`CharCreateLoadoutPicker`, applied to the SDB at runtime and
+precomputed into `ChassisStockLoadouts` for the web hosts) is **the lowest tier
+that still gears a player**: skip every dev loadout and every loadout whose PvE
+modules fill none of the slots a character wears; the `is_starting_loadout` row
+wins; otherwise the kit whose modules ask for the lowest required level does
+(level 1 before level 20), then the fuller kit, then a `- Player` name, then the
+lowest id.
+
+Consequences worth knowing:
+
+* A fresh character owns **one** frame. `\setframe` to a frame it has not
+  unlocked says so, and the garage answers with the frame the record carries.
+* Its gear is level 1, so it hits and survives like a level-1 character — the
+  same start the original game gave, and the opposite of the level-20 kit the
+  sandbox is built from. `\setlevel` is there for operators who want the old
+  feel back.
+* The advanced frames' level-1 kits keep their armor in legacy slot types
+  (3/4/5/10) that PIN does not equip, so a fresh advanced frame wears weapons,
+  abilities and a backpack, and no armor modules — a character with less health,
+  not a broken one.
+
 ---
 
 ## 6. End-to-End Flow
@@ -423,7 +471,10 @@ Rebuild after change.
 [Client] → Enter World → MatrixServer → GameServer
 GameServer: GRPCService.GetCharacterAndBattleframeVisualsAsync(448)
          → WebHostManager:5201 gRPC → CharacterStore.Get(448) → returns record
+             (AccountStore.IsAdminAccount → BasicCharacterInfo.IsAdmin)
          → CharacterEntity.LoadRemote()
+         → admin? Inventory.LoadHardcodedInventory()   ← dev sandbox
+           else   Inventory.LoadStartingInventory(chassisId)   ← own frame, stock gear
          → Inventory.GetLoadoutIdForChassis(CurrentBattleframeSDBId)
          → Spawn
 
@@ -550,6 +601,12 @@ Delete `characters.json`, restart `WebHostManager`. 38 entries regenerated from 
 * `CharacterStore` is static, thread-safe via `ConcurrentDictionary` + `SaveLock`.
 * `GetAll()` orders by `SortOrder` — selection screen order.
 * `DefaultCharacterTemplate` is single source of truth for visuals, gender, default frame.
+* A character's gear comes from the static database, never from `characters.json`:
+  `SDBUtils.GetStockCharCreateLoadout` → `CharCreateLoadoutPicker` (GameServer,
+  reads the SDB) and `ChassisStockLoadouts` + `CharacterGear` (web hosts, which
+  cannot read the SDB and so use the table `Tools/SdbDump/chassis_loadouts.py`
+  precomputes from it). Both sides apply the same rule, so the gear the
+  selection screen shows is the gear the GameServer equips.
 * `CharacterRecord.ZoneId` is computed, not serialized (getter only). To change zone a character loads into, set both `CharacterGuid` low bits AND `LastZoneId`.
 * Future: could replace file store with DB, but current design intentionally has zero external dependencies, matching rest of PIN.
 

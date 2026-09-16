@@ -35,37 +35,42 @@ public class CharacterInventory
 
     public bool EnablePartialUpdates { get; set; }
 
+    /// <summary>
+    /// Load the dev sandbox inventory: every battleframe plus the captured item
+    /// and resource dump. Admin accounts get this — it is the playground the
+    /// zone-picker entries, the frame and level cheats and the operator's own
+    /// testing are for — and so does a login whose character record could not be
+    /// fetched over GRPC, because that is the only state PIN can prove nothing
+    /// about. Every other character starts fresh (see
+    /// <see cref="LoadStartingInventory"/>).
+    /// </summary>
     public void LoadHardcodedInventory()
     {
-        foreach (uint item in HardcodedCharacterData.FallbackInventoryItems)
-        {
-            // Stackable goods (consumables, currency-style basics, raw materials) live in the
-            // resource pools like on live; only equipment keeps a guid per copy. When the static
-            // DB is not loaded the type is unknown and the item keeps the legacy guid form.
-            var info = SDBInterface.GetRootItem(item);
-            if (info != null && ItemStacking.IsStackedAsResource(info.Type))
-            {
-                AddResource(item, 1);
-                continue;
-            }
+        HardcodedCharacterData.LoadSandboxInventory(this);
+    }
 
-            CreateItem(item);
-        }
-
-        foreach ((uint resource, uint quantity) in HardcodedCharacterData.FallbackInventoryResources)
-        {
-            AddResource(resource, quantity);
-        }
-
-        foreach (var data in HardcodedCharacterData.TempHardcodedLoadouts)
-        {
-            HardcodedCharacterData.GenerateLoadoutAndItems(this, data);
-        }
-
-        foreach ((uint createId, uint chassisId) in HardcodedCharacterData.TempCharCreateLoadouts)
-        {
-            HardcodedCharacterData.GenerateCharCreateLoadoutAndItems(this, createId, chassisId);
-        }
+    /// <summary>
+    /// Load the inventory a freshly created character starts its life with: the
+    /// one battleframe the player picked on the character creation screen
+    /// (<paramref name="chassisId"/>), wearing the modules that frame ships with
+    /// for a player in the static database, and nothing else — no second frame,
+    /// no item dump, no resource pools.
+    /// </summary>
+    /// <remarks>
+    /// Before this existed every character was handed the dev sandbox on login,
+    /// because the inventory was one hardcoded set shared by everyone: a brand
+    /// new account opened the game owning all 17 frames (each in its endgame
+    /// "Elite ... Reward" loadout) and a bag and wallet copied from the
+    /// operator's. Character progression is not persisted yet, so this is also
+    /// what a returning character of a non-admin account is equipped with —
+    /// which is at least the frame its record says it wears.
+    /// </remarks>
+    /// <param name="chassisId">
+    /// The character's battleframe (chassis) SDB id, or 0 for the fallback frame.
+    /// </param>
+    public void LoadStartingInventory(uint chassisId)
+    {
+        HardcodedCharacterData.GenerateStartingLoadout(this, chassisId);
     }
 
     public int GetLoadoutIdForChassis(uint chassisId)
