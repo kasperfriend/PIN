@@ -56,6 +56,17 @@ internal class GameServer : PacketServer
         Factory.Init();
 
         var shardId = _serverId | (1u << 8) | (byte)GuidService.AdditionalTypes.Instance;
+
+        // Said out loud because it is the slow part of starting, and the part a client is waiting for:
+        // building the shard loads the zone's collision - one log line per chunk - and then bakes the
+        // navigation mesh from every walkable triangle that came with it, and connections are refused
+        // until both are done. A console that has stopped printing while players cannot connect is
+        // asking which of those two the process is inside, and this line is what puts the question to
+        // the lines below it rather than to guesswork.
+        Logger.Information(
+            "Starting shard for zone {ZoneId}: loading its collision and baking its navigation mesh; clients are refused until that finishes.",
+            _settings.ZoneId);
+
         var shard = new Shard(_gameTickRate, shardId, _settings, this, Logger);
 
         // Attach before the shard starts serving clients: a player that migrates out must also leave the
@@ -128,12 +139,16 @@ internal class GameServer : PacketServer
         {
             var rejected = new NetworkClient(packet.RemoteEndpoint, socketId, Logger);
             rejected.NetClientStatus = ClientStatus.Aborted;
+
             // The client keeps retrying until the shard is up, so this is expected while the zone
-            // loads. If it keeps printing in a process that already said it was ready, the client
-            // is talking to a different process than the one being read - the port belongs to
-            // whoever is still loading (or never finished loading), not to this one.
+            // loads and its navigation mesh is baked - and it says which of the two the process is
+            // busy with by pointing at the startup lines above it, because "still loading" used to
+            // cover a bake that had run for an hour as happily as a chunk file that was being read.
+            // If it keeps printing in a process that already said it was ready, the client is talking
+            // to a different process than the one being read: the port belongs to whoever is still
+            // starting, and only one process can hold it.
             Logger.Information(
-                "Rejected connection from {Endpoint} — server not ready (zone still loading).",
+                "Rejected connection from {Endpoint} — the server is still starting; the zone's collision and navigation mesh come before the first client is accepted (see its last startup log line).",
                 packet.RemoteEndpoint);
             return rejected;
         }
