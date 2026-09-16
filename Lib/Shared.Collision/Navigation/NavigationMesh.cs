@@ -36,6 +36,13 @@ public sealed class NavigationMesh
     /// </summary>
     private const float SmallIslandRatio = 0.12f;
 
+    /// <summary>
+    ///     How far <see cref="FindPath"/> will pull a start or goal that is not on a triangle onto
+    ///     the nearest walkable face. Ambient wander picks a random XY that often lands just off
+    ///     the mesh; without this snap that destination is an empty path.
+    /// </summary>
+    private const float PathSnapRadius = 8f;
+
     private NavFace[] _faces;
     private readonly Dictionary<SpatialKey, List<int>> _spatial = [];
 
@@ -125,8 +132,8 @@ public sealed class NavigationMesh
             return Array.Empty<Vector3>();
         }
 
-        int startFace = FindFace(start);
-        int goalFace = FindFace(goal);
+        int startFace = FindFace(start, PathSnapRadius, maxStepHeight);
+        int goalFace = FindFace(goal, PathSnapRadius, maxStepHeight);
         if (startFace < 0 || goalFace < 0)
         {
             return Array.Empty<Vector3>();

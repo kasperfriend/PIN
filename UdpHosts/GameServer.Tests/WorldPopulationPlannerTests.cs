@@ -205,6 +205,33 @@ public class WorldPopulationPlannerTests
     }
 
     [Fact]
+    public void Plan_FillsTheFieldWithWildernessOnlyRowsNotTheMeldingsArmy()
+    {
+        var (planner, data, terrain) = CreatePlanner();
+        AddGround(terrain);
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(16f, 16f, 0f), 40f, WorldPopulationHabitat.Settlement, 1001u));
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(112f, 112f, 0f), 40f, WorldPopulationHabitat.Melding, 0u));
+        data.AddMonster(10, WorldPopulationHabitat.Wilderness, difficultyCost: 0);
+        data.AddMonster(11, WorldPopulationHabitat.Settlement);
+        data.AddMonster(12, WorldPopulationHabitat.Melding | WorldPopulationHabitat.Wilderness, difficultyCost: 0);
+
+        Build(planner);
+
+        var field = planner.Cells.Values
+            .Where(cell => cell.Habitat == WorldPopulationHabitat.Wilderness)
+            .SelectMany(cell => cell.Slots)
+            .ToList();
+        Assert.NotEmpty(field);
+        Assert.All(field, slot => Assert.Equal(10u, slot.Candidate.MonsterId));
+
+        var melding = planner.Cells.Values
+            .Where(cell => cell.Habitat == WorldPopulationHabitat.Melding)
+            .SelectMany(cell => cell.Slots)
+            .ToList();
+        Assert.Contains(melding, slot => slot.Candidate.MonsterId == 12);
+    }
+
+    [Fact]
     public void Plan_PrefersASettlementOverTheMeldingAroundIt()
     {
         var (planner, data, terrain) = CreatePlanner();

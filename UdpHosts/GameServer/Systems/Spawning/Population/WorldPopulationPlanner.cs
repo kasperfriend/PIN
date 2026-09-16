@@ -503,7 +503,12 @@ public sealed class WorldPopulationPlanner
     {
         foreach (var candidate in _roster)
         {
-            if (candidate.Habitat.Accepts(WorldPopulationHabitat.Wilderness))
+            // Density in the open field is the rows that are field content and nothing else:
+            // animals, wanderers, minibosses. Chosen (Melding|Wilderness) still get their one
+            // coverage slot at the Melding, and only spill into the field when that ground is
+            // full; putting them in the wilderness density pool is how a player standing at an
+            // outpost sees troopers instead of fauna.
+            if (candidate.Habitat == WorldPopulationHabitat.Wilderness)
             {
                 AddWeighted(_wildernessPool, candidate);
             }
