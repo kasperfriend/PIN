@@ -169,7 +169,7 @@ A JSON list of accounts (written by `AccountStore`, sorted by id):
 | `Secret` | string | Red5 auth secret derived from email + password — verifies request signatures |
 | `PasswordHash` | string | `base64(16 salt bytes + 32 PBKDF2-HMACSHA256 bytes)` of the password, for direct verification |
 | `IsDev` | bool | Reports `is_dev` to the client |
-| `IsAdmin` | bool | Marks the built-in seeded account (also the fallback for unauthenticated API calls) |
+| `IsAdmin` | bool | Admin account: its characters are equipped with the whole dev sandbox inventory on login instead of just their own battleframe (see [Admin accounts](#admin-accounts)). Also the fallback for unauthenticated API calls |
 | `TicketAuth` | bool | The account was provisioned from an opaque client login ticket (a Steam session ticket) instead of email + password; its signatures are not verified (see §3) |
 | `CharacterLimit` | int | Character slots reported on login (40; the admin account's zone-picker entries count against it) |
 | `Language` | string | UI language chosen via `api/v2/accounts/change_language` |
@@ -191,6 +191,41 @@ Secret = 200-round SHA1 chain of "player@example.com-hunter2" + UserAuthSalt, he
 Simplest alternative: create a throwaway account through the form and rename
 its `Email`/`Uid`/`Secret` afterwards is *not* equivalent — the derived values
 change with the email, so just use the form.
+
+### Admin accounts
+
+Admin is the one flag that changes what a character **owns**, and it is what
+keeps the operator's playground out of everybody else's inventory:
+
+| | Admin account | Every other account |
+|-|---------------|---------------------|
+| Battleframes on login | every frame in `HardcodedCharacterData.TempCharCreateLoadouts`, each in its endgame `Elite … Reward` gear | the one frame the character was created with |
+| Items / resources | the captured `FallbackInventoryItems` and `FallbackInventoryResources` dump | none |
+| Gear on the frame | the kit above | the frame's own stock loadout from the static database (required level 1) |
+| Web API (`characters/list`, `…/gear/items`, `garage_slots`) | derived from the character's record for everybody | same — the endpoints stopped answering one hardcoded blob |
+
+It is the playground the zone-picker entries, the `\setframe` / `\setlevel`
+cheats and operator testing are for; a normal account used to receive it too,
+which is why a brand new account opened the game owning the admin's garage and
+bag.
+
+**Granting it** is one field in `accounts.json`:
+
+```json
+{ "AccountId": 26294423, "Email": "someone@example.com", "IsAdmin": true, … }
+```
+
+Restart `WebHostManager` afterwards — the flag is read by the GameServerApi host,
+which opens the same `accounts.json` (`Firefall:Accounts:AccountStorePath`) and
+carries it to the GameServer over gRPC as `BasicCharacterInfo.IsAdmin`. The
+check is `AccountStore.IsAdminAccount`: the flag **or** the built-in admin id
+(26294422), so the seeded `admin` account is an admin even on a store written
+before the flag was honoured — such a store is stamped on load (a
+`Marked the built-in … account as an admin account` Information line) and saved.
+
+A login whose character record cannot be fetched over gRPC at all still gets the
+sandbox: with no WebHostManager there is no answer to read the flag from, and
+that is the behaviour every character had before the account system.
 
 ---
 
@@ -340,6 +375,12 @@ posts to `POST api/v1/characters` with the name, starting battleframe
   characters get their own guids (`slot` bits 48..55), so an account can hold as
   many characters as its limit — not just one. Creating past the account's
   character limit fails with the original `ERR_DUPLICATE_CHARACTER` error,
+* **starts with the battleframe it picked and nothing else**: the GameServer
+  equips the chassis in `CurrentBattleframeSDBId` with that frame's own stock
+  loadout from the static database (`HardcodedCharacterData.GenerateStartingLoadout`)
+  — the weapons, abilities and gear the build ships the frame with for a player
+  — and no second frame, no item dump and no resource pools. Only admin accounts
+  get the dev sandbox (§4 *Admin accounts*),
 * **wears its chosen chassis' own stock armor colors**: the record's
   `Visuals.Warpaint` is stamped at creation with the 7 colors the chassis
   ships with in the static database (the same lookup the GameServer uses in

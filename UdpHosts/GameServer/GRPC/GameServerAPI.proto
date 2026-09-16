@@ -66,6 +66,11 @@ message BasicCharacterInfo {
    uint32 LastZoneId = 10;
    uint32 LastOutpostId = 11;
    uint32 TimePlayed = 12;
+   // Whether the account that owns this character is an admin account: only
+   // those characters are equipped with the dev sandbox inventory on login
+   // (every battleframe plus the captured item and resource dump). Everyone
+   // else starts with the single battleframe the character was created with.
+   bool IsAdmin = 13;
 }
 message CharacterAndBattleframeVisuals {
    BasicCharacterInfo CharacterInfo = 1;

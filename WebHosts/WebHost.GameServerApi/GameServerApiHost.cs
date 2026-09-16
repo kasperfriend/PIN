@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
+using Shared.Common.Accounts;
 using Shared.Common.Characters;
 using WebHost.GameServerApi.Services;
 
@@ -31,6 +32,13 @@ public static class GameServerApiHost
         // Treat an empty config value the same as "unset" so the store falls back
         // to its default location next to the binary.
         CharacterStore.Init(string.IsNullOrWhiteSpace(characterStorePath) ? null : characterStorePath);
+
+        // The account store answers whose character this is: an admin account's
+        // characters are equipped with the dev sandbox inventory in game, every
+        // other account's start with their own single battleframe. The other
+        // hosts open the same file, so the flag is read from the same accounts.
+        var accountStorePath = configuration.GetValue<string>("Firefall:Accounts:AccountStorePath");
+        AccountStore.Init(string.IsNullOrWhiteSpace(accountStorePath) ? null : accountStorePath);
 
         Log.Information("Starting GRPC GameServerAPI on port {Port}", port);
 

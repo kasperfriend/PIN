@@ -5,8 +5,10 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Shared.Common.Accounts;
+using Shared.Common.Characters;
 using Shared.Web;
 using WebHost.ClientApi.Accounts.Models;
+using WebHost.ClientApi.Characters;
 using WebHost.ClientApi.Characters.Models;
 
 namespace WebHost.ClientApi.Accounts;
@@ -175,6 +177,18 @@ public class AccountsController : ControllerBase
         return characterTitles;
     }
 
+    /// <summary>
+    /// The character's garage: the battleframes it owns.
+    ///
+    /// A character owns the battleframe it was created with — the one its record
+    /// carries, which is what the GameServer equips it with in game — plus the
+    /// crafting station every character has. This used to answer a hardcoded
+    /// Firecat for every character that asked, which is the same leak as the dev
+    /// inventory one level up: the operator's frame showing up in the garage of
+    /// an account that owns a different one, and a second frame a fresh
+    /// character has not unlocked. PIN has no unlock progression yet, so the one
+    /// frame the character actually has is the honest answer.
+    /// </summary>
     [Route("api/v3/characters/{characterId:ulong}/garage_slots")]
     [HttpGet]
     [Produces("application/json")]
@@ -185,13 +199,16 @@ public class AccountsController : ControllerBase
             return new { };
         }
 
+        var characterGuid = ulong.Parse(characterId);
+        var character = CharacterStore.Get(characterGuid);
+
         var garageSlots = new ConcurrentDictionary<uint, GarageSlots>();
 
         var craftingStation = new GarageSlots
                               {
                                   Id = 123987212,
                                   Name = "Crafting Station",
-                                  CharacterGuid = ulong.Parse(characterId),
+                                  CharacterGuid = characterGuid,
                                   GarageType = "crafting_station",
                                   ItemGuid = 9161555162510396669,
                                   EquippedSlots = Array.Empty<Array>(),
@@ -206,27 +223,28 @@ public class AccountsController : ControllerBase
                               };
         garageSlots.AddOrUpdate(craftingStation.Id, craftingStation, (k, nc) => nc);
 
-        var firecat = new GarageSlots
-                      {
-                          Id = 184534131,
-                          Name = "Astrek \"Firecat\"",
-                          CharacterGuid = ulong.Parse(characterId),
-                          GarageType = "battleframe",
-                          ItemGuid = 9215052991608503805,
-                          EquippedSlots = Array.Empty<Array>(),
-                          Limits = new ItemLimits { Abilities = 4 },
-                          Decals = new object[]
-                                   {
-                                       new Decals { SdbId = 10000, Color = 4294967295, Transform = new object[] { 0.05246, 0.019623, 0.0, 0.007484, -0.02002, -0.051758, 0.018127, -0.048492, 0.021362, 0.108154, -0.105469, 1.495117 } }
-                                   },
-                          VisualLoadoutId = 31240112,
-                          WarpaintId = 77307,
-                          Warpaintpatterns = new object[] { new Warpaintpatterns { SdbId = 10022, Transform = new object[] { 0.0, 16384.0, 418.0, 0.0 }, Usage = 0 } },
-                          VisualOverrides = Array.Empty<Array>(),
-                          Unlocked = true,
-                          ExpiresInSecs = 0
-                      };
-        garageSlots.AddOrUpdate(firecat.Id, firecat, (k, nc) => nc);
+        var chassisId = character?.CurrentBattleframeSDBId ?? 0;
+        if (chassisId != 0)
+        {
+            var frame = new GarageSlots
+                        {
+                            Id = chassisId,
+                            Name = ChassisStockLoadouts.TryGet(chassisId, out var stock) ? stock.DisplayName : string.Empty,
+                            CharacterGuid = characterGuid,
+                            GarageType = "battleframe",
+                            ItemGuid = CharacterGear.ChassisItemGuid(characterGuid, chassisId),
+                            EquippedSlots = Array.Empty<Array>(),
+                            Limits = new ItemLimits { Abilities = 4 },
+                            Decals = Array.Empty<Array>(),
+                            VisualLoadoutId = 0,
+                            WarpaintId = character?.Visuals is { } visuals && visuals.WarpaintId > 0 ? (uint)visuals.WarpaintId : 0u,
+                            Warpaintpatterns = Array.Empty<Array>(),
+                            VisualOverrides = Array.Empty<Array>(),
+                            Unlocked = true,
+                            ExpiresInSecs = 0
+                        };
+            garageSlots.AddOrUpdate(frame.Id, frame, (k, nc) => nc);
+        }
 
         return garageSlots.Values;
     }

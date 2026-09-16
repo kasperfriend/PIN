@@ -846,6 +846,77 @@ public static class HardcodedCharacterData
         (143677, 60),
     ];
 
+    /// <summary>
+    ///     Equip a character with the one battleframe it was created with and the
+    ///     modules that frame ships with for a player in the static database — the
+    ///     start a fresh account gets.
+    /// </summary>
+    /// <remarks>
+    ///     This is the counterpart of <see cref="LoadSandboxInventory"/>: where the
+    ///     dev sandbox hands out a loadout for every frame
+    ///     (<see cref="TempCharCreateLoadouts"/>, the endgame "Elite ... Reward"
+    ///     rows) plus the captured item and resource dump, a character that is not
+    ///     played by an admin account owns exactly one frame — the chassis its
+    ///     record carries, i.e. the one the player picked on the creation screen —
+    ///     wearing its own stock gear and nothing else. Without it every new
+    ///     character inherited the admin's garage and bag.
+    ///     <para>
+    ///     A chassis the static database gives no gear for (the social and civilian
+    ///     frames, an id from a hand-edited <c>characters.json</c>) still gets a
+    ///     loadout with its bare chassis, so the character spawns as the frame it
+    ///     selected instead of silently falling back to another one.
+    ///     </para>
+    /// </remarks>
+    /// <param name="inventory">The inventory to fill.</param>
+    /// <param name="chassisId">
+    ///     The battleframe (chassis) SDB id, or 0 to use the fallback frame.
+    /// </param>
+    public static void GenerateStartingLoadout(CharacterInventory inventory, uint chassisId)
+    {
+        var frame = chassisId != 0 ? chassisId : FallbackData.CharacterInfo.CurrentBattleframeSDBId;
+        var loadout = SDBUtils.GetStockCharCreateLoadout(frame);
+
+        if (loadout == null)
+        {
+            GenerateLoadoutAndItems(inventory, new LoadoutReferenceData { ChassisId = frame });
+            return;
+        }
+
+        GenerateCharCreateLoadoutAndItems(inventory, loadout.Id, frame);
+    }
+
+    /// <summary>
+    ///     Fill an inventory with the dev sandbox: a loadout for every battleframe in
+    ///     <see cref="TempCharCreateLoadouts"/>, the captured item list and the
+    ///     captured resource pools. This is what admin accounts get (see
+    ///     <see cref="GenerateStartingLoadout"/>) — it is the playground the
+    ///     zone-picker entries, the frame and level cheats and the operator's own
+    ///     testing are for, not the start of a normal character.
+    /// </summary>
+    /// <param name="inventory">The inventory to fill.</param>
+    public static void LoadSandboxInventory(CharacterInventory inventory)
+    {
+        foreach (uint item in FallbackInventoryItems)
+        {
+            inventory.CreateItem(item);
+        }
+
+        foreach ((uint resource, uint quantity) in FallbackInventoryResources)
+        {
+            inventory.AddResource(resource, quantity);
+        }
+
+        foreach (var data in TempHardcodedLoadouts)
+        {
+            GenerateLoadoutAndItems(inventory, data);
+        }
+
+        foreach ((uint createId, uint chassisId) in TempCharCreateLoadouts)
+        {
+            GenerateCharCreateLoadoutAndItems(inventory, createId, chassisId);
+        }
+    }
+
     public static void GenerateCharCreateLoadoutAndItems(CharacterInventory inventory, uint charCreateLoadoutId, uint chassisId)
     {
         LoadoutReferenceData refData = new()

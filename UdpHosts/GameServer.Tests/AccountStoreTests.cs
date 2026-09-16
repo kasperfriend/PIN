@@ -143,6 +143,46 @@ public class AccountStoreTests : IDisposable
         Assert.NotNull(persisted);
         Assert.Equal(account.AccountId, persisted.AccountId);
         Assert.Equal(account.Secret, persisted.Secret);
+
+        // A new account is not an admin: it starts with the battleframe it was
+        // created with, not with the whole sandbox.
+        Assert.False(AccountStore.IsAdminAccount(persisted));
+    }
+
+    [Fact]
+    public void IsAdminAccount_IsTrueForTheAdminAccountAndForFlaggedAccountsOnly()
+    {
+        var store = FreshStore();
+
+        Assert.True(AccountStore.IsAdminAccount(store.Get(AccountStore.AdminAccountId)));
+        Assert.False(AccountStore.IsAdminAccount(null));
+
+        // Any account can be made admin, which is what unlocks every battleframe
+        // and the full item and resource inventory at login.
+        var ok = store.TryCreate("player@example.com", "hunter2", null, null, false, null, out var player, out _, out _);
+        Assert.True(ok);
+        Assert.False(AccountStore.IsAdminAccount(player));
+
+        player.IsAdmin = true;
+        Assert.True(AccountStore.IsAdminAccount(player));
+    }
+
+    [Fact]
+    public void Load_StampsTheAdminFlagOnAnOlderStore()
+    {
+        // A store written before admin decided who gets the sandbox still holds
+        // the built-in admin account, without the flag on it.
+        var json = $"[{{\"AccountId\":{AccountStore.AdminAccountId},\"Email\":\"{AccountStore.AdminEmail}\","
+                 + $"\"Uid\":\"{Red5Auth.GenerateUserId(AccountStore.AdminEmail)}\","
+                 + "\"PasswordHash\":\"unused\",\"IsAdmin\":false}]";
+        File.WriteAllText(storePath, json);
+
+        var reloaded = FreshStore();
+
+        Assert.True(AccountStore.IsAdminAccount(reloaded.Get(AccountStore.AdminAccountId)));
+
+        // And it is persisted, so the stamp is not reapplied on every launch.
+        Assert.Contains("\"IsAdmin\": true", File.ReadAllText(storePath));
     }
 
     [Fact]
