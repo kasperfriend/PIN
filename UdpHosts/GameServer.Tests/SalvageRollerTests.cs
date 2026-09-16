@@ -83,7 +83,7 @@ public class SalvageRollerTests
         }
 
         // 200 seeded rolls across a 70/30 split: both rows show up.
-        Assert.True(counts.GetValueOrDefault(10) > 0, "the 70% row never landed");
+        Assert.True(counts.GetValueOrDefault(10u) > 0, "the 70% row never landed");
         Assert.True(counts.GetValueOrDefault(86154u) > 0, "the 30% row never landed");
     }
 
