@@ -8,7 +8,8 @@ inspect or turn it off at runtime.
 It is the answer to "the zone is empty except for the handful of entities
 `character_spawn.json` authors". The server now spawns **every
 `dbcharacter::Monster` row that belongs to the loaded zone**, on ground the zone
-itself says an NPC can stand on, around the players who are in it.
+itself says an NPC can stand on - and the sky reaches (no cave floors, tunnels,
+ground under roofs or rock overhangs) - around the players who are in it.
 
 > **Placement is a reconstruction from database/collision inputs, not recovered original spawn assignments.** The shipped `clientdb.sd2` has
 > no per-zone spawn table - that lived in the live server's spawn groups, which
@@ -81,6 +82,8 @@ Supporting changes outside that folder:
 
 * `Physics/PhysicsEngine.cs` — `TryGetGroundSurface` (ground probe **with the
   surface normal**), `IsStandingVolumeClear` (the body-volume check),
+  `IsExposedToSky` (the vertical cast to the zone's top: covered ground - caves,
+  tunnels, ground under roofs and rock overhangs - is not an NPC spot),
   `HasZoneCollision`, `WalkableFaceCount`, `TryGetWalkableFaceCentroid`,
   `ZoneChunks`, `ZoneBoundsMin/Max`, `ZonePaths` (vehicle/dropship, not NPC),
   `MeldingPerimeters`, `SubZoneRegionCount`, `EncounterNameCount`,
@@ -204,7 +207,10 @@ loading both would stack walkable faces on tree canopies and in cavities under
 rocks. Duplicate faces at the same height keep one copy; a small disconnected
 island stacked over or under a larger surface (a canopy, an under-rock cavity) is
 removed, while a large disconnected layer (a balcony, a bridge) is kept. Up to
-`PlanWorkPerTick` (20,000) faces are accumulated per update.
+`PlanWorkPerTick` (20,000) faces are accumulated per update. A face can still be a
+cave floor - the mesh has no way to know the sky - so the cells are checked
+against the cover of the zone's own collision when they are built (phase 2,
+**Cover**).
 
 That filtering is bounded, and it has to be: the bake is a step of loading the zone, on the
 thread that decides when the server stops refusing clients, and it runs over every walkable
@@ -232,6 +238,22 @@ every anchor near it, and on a real zone that is the expensive phase. Per cell:
   `ChunkRecord.remove_in_production != 0` (stripped from the shipped build). Coral
   Forest has 93 chunks of which 64 are server-side, so this is what keeps NPCs out
   of the client-only scenery.
+* **Cover** — the cell's centre is asked for the ground under it with the
+  placement probe's own short window (1.5 m up / 3 m down), and a vertical cast
+  from that ground out to the top of the zone's bounds is tested against the
+  zone's static geometry only. When the cast hits anything, the cell is covered -
+  a cave floor, a tunnel, ground under a roof or a rock overhang - and is
+  refused and counted (`cells under cover` in `population status`). The
+  navigation mesh cannot answer this: a cave floor is flat and walkable, and
+  nothing in the mesh knows the sky. This is what keeps a vendor's coverage slot
+  out of the cave under an outpost's camp: a cell refused here never gets slots,
+  so the row takes its one slot on the open ground of the camp instead. When the
+  probe finds no ground in its window (a cell whose ground is too broken to plan
+  on), the cell is kept and the placement probe refuses its slots one by one
+  instead. A cell that carries the check costs 64 plan work against
+  `WorldPopulationPlanWorkPerTick`, so the casts stay inside the per update
+  budget; a smaller budget still builds one cell an update, so the plan cannot
+  stall.
 * **Habitat** — from the authored anchors around the cell: outposts (the inhabited
   camp is `OutpostSettlementRadius`, default 80 m — their authored 150-550 m
   radius in Coral Forest is the capture/control circle, not a wildlife-exclusion
@@ -381,7 +403,13 @@ A planned position is checked twice, and both checks have to pass.
    mesh was baked with, so the system never calls ground what the mesh already
    refused. Absolute because a floor and a ceiling are equally unwalkable when they
    are this steep.
-5. `IsStandingVolumeClear` - horizontal static probes at ankle, waist and shoulder
+5. `IsExposedToSky` - a vertical cast from the ground the probe found, out to the
+   top of the zone's bounds, against the zone's static geometry only: a spot the
+   zone covers from above (a cave floor, a tunnel, ground under a roof or a rock
+   overhang) is refused. The headroom probe of the standing volume reaches only a
+   body's height, so cover metres up is the one it cannot see; the cast is statics
+   only, so a player standing over the spot cannot make it look covered.
+6. `IsStandingVolumeClear` - horizontal static probes at ankle, waist and shoulder
    height along both axes (plus 0.1 m of slack), one vertical probe for headroom
    (plus 0.2 m), and a broad phase query for the non-static bodies (players, mobs,
    vehicles, deployables) that already overlap the box.
@@ -576,7 +604,7 @@ cannot be faithful to a spawn table that was never shipped.
 | Live NPCs | `MaxLiveNpcs` (150). A 150 m activation radius covers roughly 70 cells of 32 m (the cell keys considered are the radius' bounding box, 11×11 = 121, of which only the ones with planned ground activate), i.e. ~280 slots at the 4-per-cell cap. The 150-NPC ceiling leaves headroom for combat and reliable entity state; several players still share that cap |
 | Spawn rate | 4 per 100 ms = 40/s worst case. This keeps the scope-in burst below the ordinary zone's traffic budget rather than relying on the scope queue's 800/s drain capacity |
 | Update cost | One update per 250 ms: a bounding-box scan of cell keys per player, one queue drain under budget, one pass over the live slots |
-| Planning cost | Spread over ticks: 20,000 mesh faces and 20,000 cells per update, so a large zone is planned in a couple of seconds of updates that each stay well under a millisecond of extra work. Planning does not start until a player is in the zone |
+| Planning cost | Spread over ticks: 20,000 plan work per update - one mesh face scanned per unit, a plain cell per unit, and a cell the terrain checks against the sky 64 units (a pair of ray casts over the zone's static geometry), so the casts stay inside the per update budget and a large zone is planned in a few seconds of updates. A smaller budget still builds one cell an update, so the plan cannot stall. Planning does not start until a player is in the zone |
 | Plan memory | `MaxPlannedSlots` (20,000) slots, tens of thousands of cells; the drafts are dropped as soon as the cells exist |
 | Placement queries | The occupancy grid hashes at 1/4 of the cell size (min 4 m) and scans a range derived from the largest registered radius, so a query is a handful of hash cells rather than a scan of the zone |
 | Idle zone | Zero. No players means no plan work, no cells, no NPCs |
@@ -595,8 +623,8 @@ rules` for the client-only chunks.
 |------|--------|
 | `MonsterHabitatClassifierTests.cs` | the exclusion set, each habitat rule, behaviour arguments being stripped, an empty behaviour being eligible |
 | `SpawnOccupancyGridTests.cs` | radius + separation, a body bigger than a hash cell, the height window, remove/re-add/clear, negative coordinates |
-| `WorldPopulationPlannerTests.cs` | cells from ground, coverage and habitat fit, unplaceable rows, habitat/level from anchors, the level gradient, an outpost's capture radius is not settlement, the field fills with wilderness-only rows rather than the Melding's army, settlement over Melding, chunk refusals, the count/difficulty/slot caps, the budget-exempt expensive row, jitter bounds, the anchor fallback, work spreading, determinism |
-| `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, body separation, the level of the area, `ListLiveNear`, `status`, the command |
+| `WorldPopulationPlannerTests.cs` | cells from ground, coverage and habitat fit, unplaceable rows, habitat/level from anchors, the level gradient, an outpost's capture radius is not settlement, the field fills with wilderness-only rows rather than the Melding's army, settlement over Melding, chunk refusals, covered-ground (cave) cells refused, a settlement row taking its slot on exposed ground when the cave takes the camp, the count/difficulty/slot caps, the budget-exempt expensive row, jitter bounds, the anchor fallback, work spreading, determinism |
+| `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, parking on covered (cave) ground, body separation, the level of the area, `ListLiveNear`, `status`, the command |
 | `Fakes/WorldPopulationFakes.cs` | a fixed roster/anchor/level/chunk source, a plane of walkable ground with switches for refusing a placement, and a spawner that records spawns and can kill or despawn one |
 
 The fakes are why the plan and the streaming can be asserted on without a loaded

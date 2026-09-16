@@ -24,7 +24,11 @@ namespace GameServer.Systems.Spawning.Population;
 ///         <see cref="IWorldPopulationRules.OutpostSettlementRadius"/> rather than the capture
 ///         circle, deployables, Melding perimeters; level still follows the nearest outpost's
 ///         band). A zone without collision falls back to those authored positions, which is the
-///         only ground left whose height the data vouches for.
+///         only ground left whose height the data vouches for. Walkable faces alone do not say
+///         where an NPC may actually stand - a cave floor is flat and walkable, and nothing in the
+///         mesh knows the sky - so a cell is refused when the zone's collision covers its ground
+///         from above (caves, tunnels, ground under roofs and rock overhangs), and a planned spot
+///         is checked the same way again when the placement probe validates it.
 ///     </para>
 ///     <para>
 ///         <b>Which monsters go where.</b> Two passes. The first gives every admitted monster row one
@@ -60,6 +64,16 @@ public sealed class WorldPopulationPlanner
     ///     cells), not the normal path.
     /// </summary>
     private const int CoverageProbeLimit = 64;
+
+    /// <summary>
+    ///     The plan work one cell costs while the terrain can cover ground. A plain cell is a
+    ///     neighbourhood scan of the anchors around it; the cell's sky check is a pair of ray casts
+    ///     over the zone's static geometry, so it is charged against the same budget at a multiple
+    ///     of that, which is what keeps the casts inside the per update work the plan is allowed.
+    ///     A budget smaller than the cost still builds one cell a call (see <see cref="BuildCells"/>),
+    ///     so the plan cannot stall however small <c>PlanWorkPerTick</c> is set.
+    /// </summary>
+    private const int CellWithSkyCheckWork = 64;
 
     /// <summary>
     ///     How far into its cell a slot's planned position may sit, as a fraction of the cell size.
@@ -167,6 +181,14 @@ public sealed class WorldPopulationPlanner
     /// <summary>How many cells were refused because the zone's chunk metadata says the server does not simulate them.</summary>
     public int RefusedChunkCells { get; private set; }
 
+    /// <summary>
+    ///     How many cells were refused because the zone's collision covers their ground from above:
+    ///     cave floors, tunnels, ground under roofs or rock overhangs. Reported next to the chunk
+    ///     refusals, so a zone whose ground is largely covered says why its plan is smaller than its
+    ///     mesh.
+    /// </summary>
+    public int RefusedCoveredCells { get; private set; }
+
     /// <summary>Whether the plan was built from authored anchor positions because the zone has no walkable surfaces.</summary>
     public bool UsedAnchorFallback { get; private set; }
 
@@ -177,12 +199,13 @@ public sealed class WorldPopulationPlanner
     public IReadOnlyDictionary<long, WorldPopulationCell> Cells => _cells;
 
     /// <summary>
-    ///     Advances the plan by at most <paramref name="budget"/> units of work - one navigation mesh
-    ///     face scanned or one cell built per unit, one step for the slot assignment - and returns how
-    ///     many it used. Called repeatedly until <see cref="IsComplete"/>, which is how a zone gets
-    ///     planned over several ticks instead of stalling one: a full zone's mesh has up to a few
-    ///     hundred thousand faces and becomes tens of thousands of cells, each of which is classified
-    ///     against the anchors around it.
+    ///     Advances the plan by at most <paramref name="budget"/> units of work - one navigation
+    ///     mesh face scanned per unit, a cell built per unit, or <see cref="CellWithSkyCheckWork"/>
+    ///     units for a cell the terrain checks against the sky, one step for the slot assignment -
+    ///     and returns how many it used. Called repeatedly until <see cref="IsComplete"/>, which is
+    ///     how a zone gets planned over several ticks instead of stalling one: a full zone's mesh
+    ///     has up to a few hundred thousand faces and becomes tens of thousands of cells, each of
+    ///     which is classified against the anchors around it and checked against the sky.
     /// </summary>
     public int Work(int budget)
     {
@@ -248,12 +271,27 @@ public sealed class WorldPopulationPlanner
             PrepareCells();
         }
 
+        // The terrain can cover ground - and the cell's sky check is a real pair of ray casts over
+        // the zone's static geometry - when it had walkable surfaces to give, i.e. when it is the
+        // physics engine's. A plan built from authored anchors alone has no ground the sky check
+        // could refuse, so its cells stay at plain cost.
+        int cellCost = _terrain.HasSurfaces ? CellWithSkyCheckWork : 1;
+
         int done = 0;
-        while (_nextDraft < _draftKeys.Count && done < budget)
+        while (_nextDraft < _draftKeys.Count && done + cellCost <= budget)
         {
             BuildCell(_draftKeys[_nextDraft]);
             _nextDraft++;
-            done++;
+            done += cellCost;
+        }
+
+        // A budget smaller than one checked cell would build nothing, and the plan would never
+        // finish: build one anyway. One pair of ray casts an update is nothing, and it keeps a
+        // misconfigured PlanWorkPerTick from stalling the plan.
+        if (done == 0 && _nextDraft < _draftKeys.Count && cellCost > 1)
+        {
+            BuildCell(_draftKeys[_nextDraft]);
+            _nextDraft++;
         }
 
         if (_nextDraft >= _draftKeys.Count)
@@ -309,6 +347,17 @@ public sealed class WorldPopulationPlanner
             return;
         }
 
+        // The zone's collision covers this ground from above - a cave floor, a tunnel, ground
+        // under a roof or a rock overhang. The navigation mesh calls all of it walkable, because a
+        // cave floor is flat and nothing in the mesh knows the sky; this is the check that does. A
+        // cell refused here never gets slots, so a row that belongs to the camp above - a vendor -
+        // takes its coverage slot on the open ground of the camp instead of one the cave holds.
+        if (!_terrain.IsExposedToSky(center))
+        {
+            RefusedCoveredCells++;
+            return;
+        }
+
         Classify(cell);
 
         _cells[key] = cell;
@@ -344,7 +393,8 @@ public sealed class WorldPopulationPlanner
 
         _logger.Information(
             "World population plan for zone {ZoneId}: {Surfaces} walkable surfaces became {Cells} cells " +
-            "({Wilderness} wilderness, {Settlement} settlement, {Melding} melding, {Refused} refused by chunk rules{Fallback})",
+            "({Wilderness} wilderness, {Settlement} settlement, {Melding} melding, {Refused} refused by chunk rules, " +
+            "{Covered} under cover{Fallback})",
             _zoneId,
             ScannedSurfaces,
             _cells.Count,
@@ -352,6 +402,7 @@ public sealed class WorldPopulationPlanner
             _settlementCells.Count,
             _meldingCells.Count,
             RefusedChunkCells,
+            RefusedCoveredCells,
             UsedAnchorFallback ? ", built from authored anchors" : string.Empty);
     }
 
