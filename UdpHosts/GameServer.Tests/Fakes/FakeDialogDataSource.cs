@@ -13,6 +13,12 @@ public sealed class FakeDialogDataSource : IDialogDataSource
 
     public Dictionary<uint, List<BattleChatterSetParams>> ChatterSets { get; } = [];
 
+    public Dictionary<uint, List<DialogScript>> CharacterScripts { get; } = [];
+
+    public Dictionary<uint, List<DialogScript>> VoiceSetScripts { get; } = [];
+
+    public List<DialogScript> GenericInteractionScripts { get; } = [];
+
     public Dictionary<uint, string> MonsterBehaviors { get; } = [];
 
     public DialogScript GetScript(uint dialogId) => Scripts.GetValueOrDefault(dialogId);
@@ -21,6 +27,14 @@ public sealed class FakeDialogDataSource : IDialogDataSource
 
     public IReadOnlyList<BattleChatterSetParams> GetChatterSet(uint setId) =>
         ChatterSets.TryGetValue(setId, out var rows) && rows != null ? rows : [];
+
+    public IReadOnlyList<DialogScript> GetCharacterScripts(uint monsterTypeId) =>
+        CharacterScripts.TryGetValue(monsterTypeId, out var rows) && rows != null ? rows : [];
+
+    public IReadOnlyList<DialogScript> GetVoiceSetScripts(uint voiceSetId) =>
+        VoiceSetScripts.TryGetValue(voiceSetId, out var rows) && rows != null ? rows : [];
+
+    public IReadOnlyList<DialogScript> GetGenericInteractionScripts() => GenericInteractionScripts;
 
     public string GetMonsterBehavior(uint monsterTypeId) => MonsterBehaviors.GetValueOrDefault(monsterTypeId) ?? string.Empty;
 }

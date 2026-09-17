@@ -8,9 +8,9 @@ using Xunit;
 namespace GameServer.Tests;
 
 /// <summary>
-///     Dialog lines come from <c>dbdialogdata::DialogScript</c>. Battle chatter is played only
-///     when a caller names a description: the tables do not map combat events onto the six rows.
-///     The seven <c>dialogScript=</c> monster rows are interaction, not an AI register pose.
+///     Dialog lines come from <c>dbdialogdata::DialogScript</c>. Interactions prefer an explicit
+///     behaviour line, then character, voice-set and neutral talk roots. Battle chatter is played
+///     only when a caller names a description: the tables do not map combat events onto the six rows.
 /// </summary>
 public class DialogServiceTests
 {
@@ -73,6 +73,79 @@ public class DialogServiceTests
         data.Scripts[10551] = new DialogScript { Id = 10551 };
 
         Assert.False(service.TryPlayBehaviorDialog(speaker, speaker, 1_000));
+    }
+
+    [Fact]
+    public void TryPlayInteractionDialog_RotatesCharacterSpecificOpenings()
+    {
+        var (npc, service, data) = Create();
+        npc.SetStaticInfo(new StaticInfoData { CharacterTypeId = 502, VoiceSet = 1123, DisplayName = "talker" });
+        var first = new DialogScript { Id = 100, CharacterType = 502 };
+        var second = new DialogScript { Id = 200, CharacterType = 502 };
+        data.Scripts[first.Id] = first;
+        data.Scripts[second.Id] = second;
+        data.CharacterScripts[502] = [first, second];
+        var listener = LivingCharacter((FakeShard)npc.Shard);
+
+        Assert.True(service.TryPlayInteractionDialog(npc, listener, 1_000));
+        Assert.Equal(100u, npc.CurrentDialogId);
+        Assert.True(service.TryPlayInteractionDialog(npc, listener, 2_000));
+        Assert.Equal(200u, npc.CurrentDialogId);
+        Assert.True(service.TryPlayInteractionDialog(npc, listener, 3_000));
+        Assert.Equal(100u, npc.CurrentDialogId);
+    }
+
+    [Fact]
+    public void TryPlayInteractionDialog_FallsBackFromMissingExplicitToVoiceSet()
+    {
+        var (npc, service, data) = Create();
+        npc.SetStaticInfo(new StaticInfoData { CharacterTypeId = 620, VoiceSet = 1039, DisplayName = "vendor" });
+        data.MonsterBehaviors[620] = "AlertAndInteractive(dialogScript=999999)";
+        var voiced = new DialogScript { Id = 300, VoiceSet = 1039 };
+        data.Scripts[voiced.Id] = voiced;
+        data.VoiceSetScripts[1039] = [voiced];
+
+        Assert.True(service.TryPlayInteractionDialog(npc, LivingCharacter((FakeShard)npc.Shard), 1_000));
+        Assert.Equal(300u, npc.CurrentDialogId);
+    }
+
+    [Fact]
+    public void TryPlayInteractionDialog_PrefersVoicedSetAndNeverRotatesOntoSilentSibling()
+    {
+        var (npc, service, data) = Create();
+        npc.SetStaticInfo(new StaticInfoData { CharacterTypeId = 620, VoiceSet = 1039, DisplayName = "vendor" });
+        var characterTextOnly = new DialogScript { Id = 100, CharacterType = 620, TextId = 1 };
+        var voiceTextOnly = new DialogScript { Id = 200, VoiceSet = 1039, TextId = 2 };
+        var voicedA = new DialogScript { Id = 300, VoiceSet = 1039, SoundEventId = 30 };
+        var voicedB = new DialogScript { Id = 400, VoiceSet = 1039, SoundEventId = 40 };
+        foreach (var line in new[] { characterTextOnly, voiceTextOnly, voicedA, voicedB })
+        {
+            data.Scripts[line.Id] = line;
+        }
+
+        data.CharacterScripts[620] = [characterTextOnly];
+        data.VoiceSetScripts[1039] = [voiceTextOnly, voicedA, voicedB];
+        var listener = LivingCharacter((FakeShard)npc.Shard);
+
+        Assert.True(service.TryPlayInteractionDialog(npc, listener, 1_000));
+        Assert.Equal(voicedA.Id, npc.CurrentDialogId);
+        Assert.True(service.TryPlayInteractionDialog(npc, listener, 2_000));
+        Assert.Equal(voicedB.Id, npc.CurrentDialogId);
+        Assert.True(service.TryPlayInteractionDialog(npc, listener, 3_000));
+        Assert.Equal(voicedA.Id, npc.CurrentDialogId);
+    }
+
+    [Fact]
+    public void TryPlayInteractionDialog_UnvoicedDecorativeNpcUsesShippedGenericTalk()
+    {
+        var (npc, service, data) = Create();
+        npc.SetStaticInfo(new StaticInfoData { CharacterTypeId = 742, VoiceSet = 0, DisplayName = "worker" });
+        var generic = new DialogScript { Id = 24759, CharacterType = 0, EmoteId = 1275, SoundEventId = 3_468_137_823 };
+        data.Scripts[generic.Id] = generic;
+        data.GenericInteractionScripts.Add(generic);
+
+        Assert.True(service.TryPlayInteractionDialog(npc, LivingCharacter((FakeShard)npc.Shard), 1_000));
+        Assert.Equal(24759u, npc.CurrentDialogId);
     }
 
     [Fact]

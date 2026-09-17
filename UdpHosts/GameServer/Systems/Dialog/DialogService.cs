@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using AeroMessages.Common;
 using AeroMessages.GSS.Character.Event;
 using AeroMessages.GSS.Generic;
 using GameServer.Entities.Character;
+using GameServer.StaticDB.Records.dbdialogdata;
 using GameServer.Systems.Ai;
 
 namespace GameServer.Systems.Dialog;
@@ -14,11 +16,14 @@ namespace GameServer.Systems.Dialog;
 ///     reports <c>NotifyDialogScriptComplete</c>.
 /// </summary>
 /// <remarks>
+///     Interaction dialog is resolved from the original data in descending order of specificity:
+///     an explicit behaviour <c>dialogScript=</c>, opening rows whose <c>character_type</c> is the
+///     NPC, rows recorded for its <c>voice_set</c>, then a character-neutral shipped talk line.
+///     This covers old greeting behaviours whose server-only greeting-set table did not survive
+///     without manufacturing text or audio: every line still comes from Firefall's DialogScript.
 ///     The six <c>BattleChatterDescriptions</c> rows describe probabilities and a default line,
-///     not which combat event plays which description, so chatter is played only when a caller
-///     names a description id. The seven monster rows that name a <c>dialogScript=</c> in their
-///     behaviour string are the only NPCs whose own data points at a line, and that parameter
-///     belongs to the interaction those behaviours advertise.
+///     not which combat event plays which description, so combat chatter still requires a caller
+///     to name a description id.
 /// </remarks>
 public sealed class DialogService
 {
@@ -74,29 +79,116 @@ public sealed class DialogService
     }
 
     /// <summary>
-    ///     Plays the <c>dialogScript=</c> the NPC's monster behaviour names, if any. The seven
-    ///     rows that carry one are interactive NPCs; the line is the conversation that
-    ///     interaction starts.
+    ///     Starts the NPC's original interaction conversation. Explicit <c>dialogScript=</c> rows
+    ///     retain their exact authored line. Every other talkable NPC walks its character-specific
+    ///     opening lines, then voice-set lines, then the shipped character-neutral talk lines.
+    ///     Repeated interactions rotate through the available openings instead of repeating one bark.
     /// </summary>
-    public bool TryPlayBehaviorDialog(CharacterEntity npc, CharacterEntity listener, uint time)
+    public bool TryPlayInteractionDialog(CharacterEntity npc, CharacterEntity listener, uint time)
     {
         if (npc == null || npc.IsPlayerControlled)
         {
             return false;
         }
 
-        uint dialogId = NpcBehaviorParams.Parse(_data?.GetMonsterBehavior(npc.StaticInfo.CharacterTypeId)).DialogScriptId;
-        if (dialogId == 0)
+        uint characterType = npc.StaticInfo.CharacterTypeId;
+        uint explicitId = NpcBehaviorParams.Parse(_data?.GetMonsterBehavior(characterType)).DialogScriptId;
+        if (explicitId != 0 && Play(npc, explicitId, time, listener))
+        {
+            RememberSpeaker(npc, listener);
+            return true;
+        }
+
+        IReadOnlyList<DialogScript> characterLines = _data?.GetCharacterScripts(characterType) ?? [];
+        IReadOnlyList<DialogScript> voiceLines = npc.StaticInfo.VoiceSet != 0
+            ? _data?.GetVoiceSetScripts(npc.StaticInfo.VoiceSet) ?? []
+            : [];
+        IReadOnlyList<DialogScript> genericLines = _data?.GetGenericInteractionScripts() ?? [];
+
+        // Speaking is preferable to a silent subtitle whenever the shipped client has a suitable
+        // sound event. Preserve specificity among voiced choices, but use the original neutral talk
+        // recording before falling back to character/voice rows which have text only.
+        IReadOnlyList<DialogScript> candidates = HasAudibleLine(characterLines)
+            ? characterLines
+            : HasAudibleLine(voiceLines)
+              ? voiceLines
+              : HasAudibleLine(genericLines)
+                ? genericLines
+                : characterLines.Count != 0
+                  ? characterLines
+                  : voiceLines.Count != 0
+                    ? voiceLines
+                    : genericLines;
+
+        var selected = SelectNextOpening(candidates, npc.LastInteractionDialogId);
+        if (selected == null || !Play(npc, selected.Id, time, listener))
         {
             return false;
         }
 
+        npc.LastInteractionDialogId = selected.Id;
+        RememberSpeaker(npc, listener);
+        return true;
+    }
+
+    /// <summary>Compatibility name for callers which only knew about explicit behaviour dialog.</summary>
+    public bool TryPlayBehaviorDialog(CharacterEntity npc, CharacterEntity listener, uint time) =>
+        TryPlayInteractionDialog(npc, listener, time);
+
+    private static bool HasAudibleLine(IReadOnlyList<DialogScript> candidates)
+    {
+        if (candidates == null)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < candidates.Count; index++)
+        {
+            if (candidates[index]?.SoundEventId != 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static DialogScript SelectNextOpening(IReadOnlyList<DialogScript> candidates, uint currentId)
+    {
+        if (candidates == null || candidates.Count == 0)
+        {
+            return null;
+        }
+
+        bool audibleOnly = HasAudibleLine(candidates);
+        int currentIndex = -1;
+        for (int index = 0; index < candidates.Count; index++)
+        {
+            if (candidates[index]?.Id == currentId)
+            {
+                currentIndex = index;
+                break;
+            }
+        }
+
+        for (int offset = 1; offset <= candidates.Count; offset++)
+        {
+            var candidate = candidates[(currentIndex + offset) % candidates.Count];
+            if (candidate != null && (!audibleOnly || candidate.SoundEventId != 0))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static void RememberSpeaker(CharacterEntity npc, CharacterEntity listener)
+    {
         if (listener != null)
         {
             listener.CurrentDialogSpeakerId = npc.EntityId;
         }
-
-        return Play(npc, dialogId, time, listener);
     }
 
     /// <summary>

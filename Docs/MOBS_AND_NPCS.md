@@ -2791,8 +2791,19 @@ to decode to that same vendor, so a purchase cannot escape its own shop.
 
 ### 5.4 Known gaps
 
-- `greetingSet=` (hundreds of rows) references server-only greeting tables
-  that did not survive; only the seven `dialogScript=` NPCs speak.
+- `greetingSet=` (hundreds of rows) references a server-only greeting-selection
+  table that did not survive, but those NPCs are no longer mute. Interaction
+  dialog now uses only shipped `dbdialogdata::DialogScript` content, in this
+  order: the seven exact `dialogScript=` parameters; conversation roots authored
+  for the NPC's `character_type`; roots recorded for its `voice_set`; and, for
+  decorative/unvoiced interactive rows, the two character-neutral roots that use
+  Firefall's own `talk` emote. On prod-1962's talkable rows, 242 character types
+  have a direct script set, 286 have a voice-set set (400 have one or both), and
+  the remaining 99 use the neutral original-game lines. Sound-bearing roots win
+  over subtitle-only siblings at every tier, and both neutral roots carry a
+  sound event, so all 499 profiles produce voice on every completed talk/vendor
+  interaction. Repeated interactions rotate through the voiced part of a set,
+  and `next_id` still walks the authored follow-up chain.
 - The two engineer-turret upgrade interactions (108/210) name abilities that
   are absent from the client DB.
 - Reviving incapacitated **players** is out of scope here: players carry no
