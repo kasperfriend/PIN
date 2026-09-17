@@ -1,5 +1,6 @@
 namespace GameServer.StaticDB;
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -40,6 +41,9 @@ public class SDBInterface
     private static Dictionary<uint, Stumble> _stumble;
     private static Dictionary<uint, List<StumbleDirection>> _stumbleDirectionByStumble;
     private static Dictionary<uint, DialogScript> _dialogScript;
+    private static Dictionary<uint, List<DialogScript>> _dialogScriptsByCharacter;
+    private static Dictionary<uint, List<DialogScript>> _dialogScriptsByVoiceSet;
+    private static IReadOnlyList<DialogScript> _genericInteractionScripts = [];
     private static Dictionary<uint, BattleChatterDescriptions> _battleChatterDescriptions;
     private static Dictionary<uint, List<BattleChatterSetParams>> _battleChatterSetParamsBySet;
     private static Dictionary<KeyValuePair<uint, ushort>, MonsterAttributeRange> _monsterAttributeRange;
@@ -327,6 +331,7 @@ public class SDBInterface
         _stumble = loader.LoadStumble();
         _stumbleDirectionByStumble = loader.LoadStumbleDirection();
         _dialogScript = loader.LoadDialogScript();
+        BuildDialogEntryIndexes();
         _battleChatterDescriptions = loader.LoadBattleChatterDescriptions();
         _battleChatterSetParamsBySet = loader.LoadBattleChatterSetParams();
         _monsterAttributeRange = loader.LoadMonsterAttributeRange();
@@ -733,10 +738,77 @@ public class SDBInterface
     }
 
     /// <summary>
+    ///     Builds conversation-entry indexes once instead of scanning all 39,261 dialog rows every
+    ///     time a player presses E. A row which another row names as <c>next_id</c> is a continuation,
+    ///     not an opening line. A character/voice set made entirely of a cycle still keeps its rows so
+    ///     malformed legacy chains do not make that NPC mute.
+    /// </summary>
+    private static void BuildDialogEntryIndexes()
+    {
+        var loadedRows = _dialogScript != null ? _dialogScript.Values.AsEnumerable() : Enumerable.Empty<DialogScript>();
+        var usable = loadedRows
+            .Where(row => row != null && row.Id != 0 && (row.TextId != 0 || row.SoundEventId != 0))
+            .ToList();
+        var continuationIds = usable.Where(row => row.NextId != 0).Select(row => row.NextId).ToHashSet();
+
+        _dialogScriptsByCharacter = BuildEntryIndex(usable, continuationIds, row => row.CharacterType, includeZero: false);
+        _dialogScriptsByVoiceSet = BuildEntryIndex(usable, continuationIds, row => row.VoiceSet, includeZero: false);
+
+        // Emote 1275 is the shipped "talk" emote. Build prod-1962 has two character-neutral roots
+        // with that emote; unlike an arbitrary mission/radio line they are suitable as the last-resort
+        // response of decorative interactive rows which have no authored character or voice mapping.
+        _genericInteractionScripts = usable
+            .Where(row => row.CharacterType == 0 && row.EmoteId == 1275 && !continuationIds.Contains(row.Id))
+            .OrderBy(row => row.Id)
+            .ToList();
+    }
+
+    private static Dictionary<uint, List<DialogScript>> BuildEntryIndex(
+        IReadOnlyCollection<DialogScript> rows,
+        HashSet<uint> continuationIds,
+        Func<DialogScript, uint> keySelector,
+        bool includeZero)
+    {
+        var result = new Dictionary<uint, List<DialogScript>>();
+        foreach (var group in rows.GroupBy(keySelector))
+        {
+            if (!includeZero && group.Key == 0)
+            {
+                continue;
+            }
+
+            var all = group.OrderBy(row => row.Id).ToList();
+            var entries = all.Where(row => !continuationIds.Contains(row.Id)).ToList();
+            if (entries.Count == 0)
+            {
+                entries = all;
+            }
+
+            // If an opening has recorded audio, never rotate this NPC onto a subtitle-only sibling.
+            // Keep text-only rows only for sets for which the client database has no voiced opening.
+            var voicedEntries = entries.Where(row => row.SoundEventId != 0).ToList();
+            result[group.Key] = voicedEntries.Count != 0 ? voicedEntries : entries;
+        }
+
+        return result;
+    }
+
+    /// <summary>
     ///     One <c>dbdialogdata::DialogScript</c> row, or null when the id is unknown or the table
     ///     is not loaded.
     /// </summary>
     public static DialogScript GetDialogScript(uint id) => _dialogScript?.GetValueOrDefault(id);
+
+    /// <summary>Opening dialog lines authored for a particular monster character type.</summary>
+    public static IReadOnlyList<DialogScript> GetDialogScriptsForCharacter(uint characterType) =>
+        _dialogScriptsByCharacter != null && _dialogScriptsByCharacter.TryGetValue(characterType, out var rows) ? rows : [];
+
+    /// <summary>Opening dialog lines recorded for a particular voice set.</summary>
+    public static IReadOnlyList<DialogScript> GetDialogScriptsForVoiceSet(uint voiceSet) =>
+        _dialogScriptsByVoiceSet != null && _dialogScriptsByVoiceSet.TryGetValue(voiceSet, out var rows) ? rows : [];
+
+    /// <summary>Character-neutral opening lines which use Firefall's own talk emote.</summary>
+    public static IReadOnlyList<DialogScript> GetGenericInteractionScripts() => _genericInteractionScripts ?? [];
 
     /// <summary>
     ///     One <c>dbdialogdata::BattleChatterDescriptions</c> row, or null when the id is unknown

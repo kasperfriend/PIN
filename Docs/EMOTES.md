@@ -123,10 +123,16 @@ so the client resolves text, sound, emote and mouth movement itself). Encounters
 `DialogService` now plays a line: a public script is `PlayDialogScriptMessage` on ReliableGss to
 every client the speaker is scoped into; a private script is `PrivateDialog { Time, Entity, DialogId }`
 to the listener. `NotifyDialogScriptComplete { Unk1, Unk2 }` on Character BaseController walks
-`next_id` (the first non-zero of the two unnamed uints is the completed line). The seven monster
-rows that name `dialogScript=` in their behaviour string (10551 on 612/620/621/622, 39340 on vendors
-2118/3013/3096) play that line when a player finishes interacting with them
-(`EndInteractionCommand`) — they are not auto-played when the AI registers the NPC.
+`next_id` (the first non-zero of the two unnamed uints is the completed line). On a completed NPC
+interaction, `DialogService` first honours the seven exact `dialogScript=` behaviour parameters
+(10551 on 612/620/621/622, 39340 on vendors 2118/3013/3096), then chooses an opening row for the
+NPC's `character_type`, then its `voice_set`, and finally one of the two shipped character-neutral
+roots carrying emote 1275 (`talk`). At each tier, sound-bearing roots take precedence and a set's
+subtitle-only siblings are not selected while a voiced root exists. Both neutral roots have sound events,
+so every prod-1962 talk/vendor profile produces voice on every completed interaction while retaining
+original client text, audio, lip sync and emotes, even though the live server's `greetingSet` selection
+table did not ship. Repeated interactions rotate through voiced opening rows; they are not auto-played
+when the AI registers the NPC.
 
 **Battle chatter is loaded and resolved, but not mapped onto combat events:** which of the 6
 `dbdialogdata::BattleChatterDescriptions` rows applies to which event, and what `trigger` 1/2 mean,

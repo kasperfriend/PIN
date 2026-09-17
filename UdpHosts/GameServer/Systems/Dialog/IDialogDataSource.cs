@@ -19,10 +19,21 @@ public interface IDialogDataSource
     /// <summary>The <c>dbdialogdata::BattleChatterSetParams</c> rows of a chatter set, or empty.</summary>
     IReadOnlyList<BattleChatterSetParams> GetChatterSet(uint setId);
 
+    /// <summary>Conversation entry lines authored for a monster <c>character_type</c>.</summary>
+    IReadOnlyList<DialogScript> GetCharacterScripts(uint monsterTypeId);
+
+    /// <summary>Conversation entry lines recorded for a particular NPC voice set.</summary>
+    IReadOnlyList<DialogScript> GetVoiceSetScripts(uint voiceSetId);
+
+    /// <summary>
+    ///     Shipped character-neutral lines which use the original talk emote. These are the final
+    ///     fallback for an interactive decorative NPC which has neither a character nor voice entry.
+    /// </summary>
+    IReadOnlyList<DialogScript> GetGenericInteractionScripts();
+
     /// <summary>
     ///     The <c>dbcharacter::Monster.behavior</c> string of that monster type, or empty when the
-    ///     type is unknown. The seven rows that name a <c>dialogScript=</c> are the only NPCs whose
-    ///     own data points at a dialog line.
+    ///     type is unknown.
     /// </summary>
     string GetMonsterBehavior(uint monsterTypeId);
 }
@@ -35,6 +46,15 @@ public sealed class SdbDialogDataSource : IDialogDataSource
     public BattleChatterDescriptions GetChatter(uint chatterId) => SDBInterface.GetBattleChatter(chatterId);
 
     public IReadOnlyList<BattleChatterSetParams> GetChatterSet(uint setId) => SDBInterface.GetBattleChatterSet(setId);
+
+    public IReadOnlyList<DialogScript> GetCharacterScripts(uint monsterTypeId) =>
+        SDBInterface.GetDialogScriptsForCharacter(monsterTypeId);
+
+    public IReadOnlyList<DialogScript> GetVoiceSetScripts(uint voiceSetId) =>
+        SDBInterface.GetDialogScriptsForVoiceSet(voiceSetId);
+
+    public IReadOnlyList<DialogScript> GetGenericInteractionScripts() =>
+        SDBInterface.GetGenericInteractionScripts();
 
     public string GetMonsterBehavior(uint monsterTypeId) => SDBInterface.GetMonster(monsterTypeId)?.Behavior ?? string.Empty;
 }
