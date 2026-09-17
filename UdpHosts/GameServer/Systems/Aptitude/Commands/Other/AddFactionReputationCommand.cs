@@ -1,3 +1,4 @@
+using GameServer.Data;
 using GameServer.StaticDB.Records.customdata;
 using GameServer.Systems.Loot;
 
@@ -28,7 +29,7 @@ public class AddFactionReputationCommand : Command, ICommand
         }
 
         ulong now = PlayerRewards.UnixNow();
-        int amount = (int)(Params.Amount * (1f + character.Unlocks.BoostFraction(GameServer.Data.CharacterUnlocks.BoostReputation, now)));
+        int amount = (int)(Params.Amount * (1f + character.Unlocks.BoostFraction(CharacterUnlocks.BoostReputation, now)));
         character.Unlocks.AddReputation(Params.FactionId, amount);
         context.ActivationRollbacks.Add(() => character.Unlocks.AddReputation(Params.FactionId, -amount));
         context.DirtyUnlocks.Add(character);
