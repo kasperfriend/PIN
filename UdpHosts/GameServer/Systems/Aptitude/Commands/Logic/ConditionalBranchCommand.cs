@@ -19,6 +19,12 @@ public class ConditionalBranchCommand : Command, ICommand
 
         var conditionChain = context.Abilities.Factory.LoadChain(Params.IfChain);
         var conditionResult = conditionChain.Execute(context);
+        if (context.ReturnRequested)
+        {
+            context.ExecutionHint = prevExecutionHint;
+            return conditionResult;
+        }
+
         bool success = true;
         if (conditionResult && Params.ThenChain != 0)
         {

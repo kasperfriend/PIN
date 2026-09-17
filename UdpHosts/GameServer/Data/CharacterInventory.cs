@@ -148,7 +148,25 @@ public class CharacterInventory
             return false;
         }
 
-        return _items.Remove(guid);
+        if (!_items.Remove(guid))
+        {
+            return false;
+        }
+
+        SendItemsRemoved();
+        return true;
+    }
+
+    /// <summary>
+    ///     Puts an item that <see cref="RemoveItem" /> or <see cref="ConsumeItemBySdbId" /> took out back, with
+    ///     its old guid, so a rolled-back activation leaves the inventory as it found it (see
+    ///     <c>ConsumeItemCommand</c>).
+    /// </summary>
+    public void RestoreItem(Item item)
+    {
+        _items[item.GUID] = item;
+        SendItemUpdate(item.GUID);
+        SendBagUpdate();
     }
 
     /// <summary>Whether the given good is at hand: a resource pool of that sdb id with enough in it, or at least that many free (unequipped) copies as items.</summary>
@@ -173,8 +191,15 @@ public class CharacterInventory
     ///     mixed - the removal is all-or-nothing from whichever pool covers the whole amount.
     /// </summary>
     /// <returns>False when the inventory does not hold the full amount; nothing is removed then.</returns>
-    public bool ConsumeItemBySdbId(uint sdbId, uint quantity = 1)
+    public bool ConsumeItemBySdbId(uint sdbId, uint quantity = 1) => ConsumeItemBySdbId(sdbId, quantity, out _);
+
+    /// <summary>
+    ///     <see cref="ConsumeItemBySdbId(uint, uint)" />, also reporting which guid items went - empty when the
+    ///     amount came off the resource pool - so the caller can hand exactly those back on a rollback.
+    /// </summary>
+    public bool ConsumeItemBySdbId(uint sdbId, uint quantity, out List<Item> removedItems)
     {
+        removedItems = [];
         if (quantity == 0)
         {
             return true;
@@ -190,16 +215,16 @@ public class CharacterInventory
             return false;
         }
 
-        var toRemove = _items.Values
+        removedItems = _items.Values
             .Where(item => item.SdbId == sdbId && (item.DynamicFlags & (byte)ItemDynamicFlags.IsEquipped) == 0)
-            .Select(item => item.GUID)
             .Take((int)quantity)
             .ToList();
-        foreach (var guid in toRemove)
+        foreach (var item in removedItems)
         {
-            _items.Remove(guid);
+            _items.Remove(item.GUID);
         }
 
+        SendItemsRemoved();
         return true;
     }
 
@@ -273,9 +298,14 @@ public class CharacterInventory
         }
 
         var res = _resources[sdbId];
+        bool newSlot = res.Quantity == 0;
         res.Quantity += quantity;
         _resources[sdbId] = res;
         SendResourceUpdate(sdbId);
+        if (newSlot)
+        {
+            SendBagUpdate();
+        }
     }
 
     public bool ConsumeResource(uint sdbId, uint cost)
@@ -296,13 +326,17 @@ public class CharacterInventory
             if (res.Quantity > 0)
             {
                 _resources[sdbId] = res;
+                SendResourceUpdate(sdbId);
             }
             else
             {
                 _resources.Remove(sdbId);
+                SendResourceUpdate(sdbId);
+
+                // The stack's bag slot is gone; the client's bag model only learns that from a new layout.
+                SendBagUpdate();
             }
 
-            SendResourceUpdate(sdbId);
             return true;
         }
     }
@@ -376,6 +410,36 @@ public class CharacterInventory
         }
 
         _player.NetChannels[ChannelType.ReliableGss].SendMessage(update, _character.EntityId);
+    }
+
+    /// <summary>
+    ///     Tells the client an item left the inventory. <c>InventoryUpdate</c> has no per-item removal
+    ///     form we know of (a partial update only ever adds or replaces entries), so a removal is
+    ///     replicated as a full inventory (<c>ClearExistingData = 1</c>) plus a fresh bag layout. Without
+    ///     this a consumed or salvaged guid item stayed in the client's bag until relog, and clicking it
+    ///     produced activations the server then refused.
+    /// </summary>
+    public void SendItemsRemoved()
+    {
+        if (!EnablePartialUpdates)
+        {
+            return;
+        }
+
+        SendFullInventory();
+        SendBagUpdate();
+    }
+
+    /// <summary>Sends the client the bag layout for the slots actually carried (see <see cref="BagInventoryLayout" />).</summary>
+    public void SendBagUpdate()
+    {
+        if (!EnablePartialUpdates || _player == null)
+        {
+            return;
+        }
+
+        var bagUpdate = new BagInventoryUpdate { Data = BagInventoryLayout.BuildUpdateJson(GetBagSlots()) };
+        _player.NetChannels[ChannelType.ReliableGss].SendMessage(bagUpdate, _character.EntityId);
     }
 
     public void SendItemUpdate(ulong guid)

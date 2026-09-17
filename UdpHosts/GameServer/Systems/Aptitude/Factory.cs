@@ -290,8 +290,8 @@ public class Factory
             //     return new RequireWeaponTemplateCommand(SDBInterface.GetRequireWeaponTemplateCommandDef(commandId));
             case CommandType.SwitchWeapon:
                 return new SwitchWeaponCommand(SDBInterface.GetSwitchWeaponCommandDef(commandId));
-            // case CommandType.StatRequirement:
-            //     return new StatRequirementCommand(SDBInterface.GetStatRequirementCommandDef(commandId));
+            case CommandType.StatRequirement:
+                return new StatRequirementCommand(SDBInterface.GetStatRequirementCommandDef(commandId));
             case CommandType.ConsumeEnergy:
                 return new ConsumeEnergyCommand(SDBInterface.GetConsumeEnergyCommandDef(commandId));
             // case CommandType.TargetClassType:
@@ -304,8 +304,8 @@ public class Factory
                 return new LogicOrCommand(SDBInterface.GetLogicOrCommandDef(commandId));
             case CommandType.LogicNegate:
                 return new LogicNegateCommand(SDBInterface.GetLogicNegateCommandDef(commandId));
-            // case CommandType.Return:
-            //     return new ReturnCommand(SDBInterface.GetReturnCommandDef(commandId));
+            case CommandType.Return:
+                return new ReturnCommand(SDBInterface.GetReturnCommandDef(commandId));
             case CommandType.Call:
                 return new CallCommand(SDBInterface.GetCallCommandDef(commandId));
             case CommandType.PushTargets:

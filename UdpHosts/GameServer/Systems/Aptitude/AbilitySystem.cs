@@ -978,9 +978,29 @@ public class AbilitySystem
         if (isRootActivation)
         {
             CommitActivationCooldowns(context, success);
+            if (!success)
+            {
+                RunActivationRollbacks(context);
+            }
         }
 
         return success;
+    }
+
+    /// <summary>
+    ///     Undoes what a failed root activation already changed, newest first: a consumable a
+    ///     ConsumeItem node took before a later requirement (InstantActivation on cooldown, a nested
+    ///     chain) rejected the activation goes back to the player. Cooldowns need no undo - they are
+    ///     only committed on success.
+    /// </summary>
+    private static void RunActivationRollbacks(Context context)
+    {
+        for (int i = context.ActivationRollbacks.Count - 1; i >= 0; i--)
+        {
+            context.ActivationRollbacks[i]();
+        }
+
+        context.ActivationRollbacks.Clear();
     }
 
     public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId)

@@ -72,6 +72,26 @@ public class Context
     public Dictionary<ICommand, ICommandActiveContext> Actives { get; set; } = [];
 
     /// <summary>
+    ///     Set by <c>ReturnCommand</c>: every chain still running on this context stops after its current
+    ///     command, all the way up to the outermost one (a Return inside a ConditionalBranch's else chain
+    ///     ends the ability, not just the branch). <see cref="Chain" /> clears it when the outermost chain
+    ///     exits. Contexts copied for a called ability or an applied effect start with their own flag, so a
+    ///     Return there ends only that ability or effect chain.
+    /// </summary>
+    public bool ReturnRequested { get; set; }
+
+    /// <summary>How many <see cref="Chain.Execute" /> frames are running on this context right now.</summary>
+    public int ChainDepth { get; set; }
+
+    /// <summary>
+    ///     Undo steps for state a chain command already changed, run in reverse order when the root
+    ///     activation fails (see <c>AbilitySystem.ExecuteAbilityActivation</c>). ConsumeItem uses it to hand
+    ///     the consumable back when a later node of the chain - typically InstantActivation on a running
+    ///     cooldown - rejects the activation. Shared with called abilities like the pending cooldowns.
+    /// </summary>
+    public List<Action> ActivationRollbacks { get; set; } = [];
+
+    /// <summary>
     /// Cooldowns queued by activation commands while the chain runs. The
     /// AbilitySystem starts them once the whole chain has succeeded, so a
     /// chain that fails a later requirement (e.g. not enough energy) does not
@@ -122,6 +142,7 @@ public class Context
             ExecutionHint = original.ExecutionHint,
             ExecutionId = original.ExecutionId,
             PendingCooldowns = original.PendingCooldowns,
+            ActivationRollbacks = original.ActivationRollbacks,
             AppliedEffects = original.AppliedEffects,
             AppliedEffectDuration = original.AppliedEffectDuration,
         };

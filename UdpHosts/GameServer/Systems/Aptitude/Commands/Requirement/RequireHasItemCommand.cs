@@ -15,9 +15,11 @@ public class RequireHasItemCommand : Command, ICommand
 
     /// <summary>
     ///     Requirement ahead of the glider pad launch boosts (Lofty pads and the like) and other
-    ///     inventory gated perks. Every target has to hold at least Params.Quantity entries of the
-    ///     item; targets that cannot carry items at all cannot satisfy it. Params.Negate mirrors the
-    ///     requirement for the "does not have the item" chains.
+    ///     inventory gated perks. Every target has to hold at least Params.Quantity of the item -
+    ///     as guid copies or, for the 83 of 183 rows that name a consumable (glider pad tiers,
+    ///     rental contracts), in the stackable pool consumables live in; targets that cannot carry
+    ///     items at all cannot satisfy it. Params.Negate mirrors the requirement for the "does not
+    ///     have the item" chains.
     /// </summary>
     public bool Execute(Context context)
     {
@@ -30,7 +32,7 @@ public class RequireHasItemCommand : Command, ICommand
             {
                 bool targetResult = target is CharacterEntity character
                                     && character.Player?.Inventory != null
-                                    && character.Player.Inventory.CountItemsBySdbId(Params.ItemId) >= Params.Quantity;
+                                    && character.Player.Inventory.HasItemOrResource(Params.ItemId, Params.Quantity);
 
                 if (!targetResult)
                 {

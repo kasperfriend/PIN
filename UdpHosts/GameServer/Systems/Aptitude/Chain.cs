@@ -23,7 +23,30 @@ public class Chain
     public uint Id { get; set; }
     public List<ICommand> Commands { get; set; }
 
+    /// <summary>
+    ///     Runs the commands in order. A <c>ReturnCommand</c> anywhere below this frame (in a nested
+    ///     ConditionalBranch/LogicAndChain/LogicOrChain chain) ends this frame too, with the result the
+    ///     Return decided; the outermost frame clears the request once it has unwound.
+    /// </summary>
     public bool Execute(Context context, ExecutionMethod method = ExecutionMethod.AndChain)
+    {
+        context.ChainDepth++;
+        try
+        {
+            return ExecuteFrame(context, method);
+        }
+        finally
+        {
+            context.ChainDepth--;
+            if (context.ChainDepth <= 0)
+            {
+                context.ChainDepth = 0;
+                context.ReturnRequested = false;
+            }
+        }
+    }
+
+    private bool ExecuteFrame(Context context, ExecutionMethod method)
     {
         using var logContext = Serilog.Context.LogContext.PushProperty("ExecutionId", context.ExecutionId);
         bool debug = context.ExecutionHint is not (ExecutionHint.DurationEffect or ExecutionHint.UpdateEffect);
@@ -46,6 +69,13 @@ public class Chain
                 }
 
                 bool commandSuccess = command.Execute(context);
+                if (context.ReturnRequested)
+                {
+                    // The command (or a chain under it) hit a Return: its result is the chain's
+                    // result, whatever the execution method, and nothing after it runs.
+                    return commandSuccess;
+                }
+
                 if (!commandSuccess)
                 {
                     chainSuccess = false;
@@ -68,6 +98,11 @@ public class Chain
                 }
 
                 bool commandSuccess = command.Execute(context);
+                if (context.ReturnRequested)
+                {
+                    return commandSuccess;
+                }
+
                 if (commandSuccess)
                 {
                     chainSuccess = true;

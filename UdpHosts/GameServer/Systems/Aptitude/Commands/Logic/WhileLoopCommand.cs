@@ -31,12 +31,16 @@ public class WhileLoopCommand : Command, ICommand
         while (lap < MaximumLaps)
         {
             var conditionResult = conditionChain.Execute(context);
+            if (context.ReturnRequested)
+            {
+                break;
+            }
 
             if (Params.DoWhile != 0)
             {
                 bodyChain.Execute(context);
 
-                if (!conditionResult)
+                if (!conditionResult || context.ReturnRequested)
                 {
                     break;
                 }
@@ -49,6 +53,10 @@ public class WhileLoopCommand : Command, ICommand
                 }
 
                 bodyChain.Execute(context);
+                if (context.ReturnRequested)
+                {
+                    break;
+                }
             }
 
             lap++;
