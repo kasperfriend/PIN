@@ -125,18 +125,6 @@ public sealed class PhysicsWorldPopulationTerrain : IWorldPopulationTerrain
             return false;
         }
 
-        // The zone's collision covers this spot from above: a cave floor, a tunnel, ground under a
-        // roof or a rock overhang. The standing volume's headroom probe reaches only a body's
-        // height, so a spot metres under a rock passes it; the cast to the zone's top is the one
-        // that sees the cover. Refused as ground, so the slot retries at a spot that is not - and
-        // parks when none is. Skipped when the plan found the zone's sky check untrustworthy (it
-        // refused every cell of the zone), because then this half of the check refuses everything
-        // too, and a check that refuses everything is a check that populates nothing.
-        if (CoverRefusalsEnabled && !_physics.IsExposedToSky(ground))
-        {
-            return false;
-        }
-
         if (!_physics.IsStandingVolumeClear(ground, bodyRadius, bodyHeight))
         {
             return false;
@@ -144,40 +132,6 @@ public sealed class PhysicsWorldPopulationTerrain : IWorldPopulationTerrain
 
         position = ground;
         return true;
-    }
-
-    /// <summary>
-    ///     Whether the placement probe refuses covered ground. The service turns this off when the
-    ///     plan found the zone's sky check untrustworthy (it refused every cell of the zone): a check
-    ///     that refuses everything populates nothing, and an empty world is the worse failure.
-    /// </summary>
-    public bool CoverRefusalsEnabled { get; set; } = true;
-
-    public bool IsExposedToSky(Vector3 position)
-    {
-        if (_physics == null)
-        {
-            // No engine to ask. Nothing can cover a spot.
-            return true;
-        }
-
-        if (!_physics.HasZoneCollision)
-        {
-            // No static geometry: nothing can cover a spot.
-            return true;
-        }
-
-        // The planned point sits on the ground the mesh baked, or within a step of it. Find that
-        // ground with the same short window placement uses, and ask about the surface it finds: a
-        // cave floor under the point is a surface the window reaches. When the window finds no
-        // ground at all (a point too broken to plan on), there is nothing to judge here, and the
-        // placement probe refuses such a spot one by one instead.
-        if (!_physics.TryGetGroundSurface(position, out var ground, out _, GroundProbeUp, GroundProbeDown))
-        {
-            return true;
-        }
-
-        return _physics.IsExposedToSky(ground);
     }
 
     private static bool IsFinite(Vector3 value) =>
