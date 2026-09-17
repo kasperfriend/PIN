@@ -21,6 +21,8 @@ namespace GameServer;
 
 public class NetworkPlayer : NetworkClient, INetworkPlayer
 {
+    private ulong _lastUnlockSweep;
+
     public NetworkPlayer(IPEndPoint endPoint, uint socketId, ILogger logger)
         : base(endPoint, socketId, logger)
     {
@@ -162,6 +164,13 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         Inventory.SendFullInventory();
         Inventory.EnablePartialUpdates = true;
 
+        // What the character owns besides items: the unlock groups the client filters its
+        // cosmetics/titles/recipes by, and the boost modifiers the character sheet shows.
+        ulong nowUnix = (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        CharacterEntity.Unlocks.Expire(nowUnix);
+        NetChannels[ChannelType.ReliableGss].SendMessage(CharacterEntity.Unlocks.BuildFullUpdate(), CharacterEntity.EntityId);
+        Systems.Loot.PlayerRewards.SyncBoosts(CharacterEntity, nowUnix);
+
         AssignedShard.Physics.UpdateEntity(CharacterEntity);
         CharacterEntity.Alive = true; // Accept MovementInputs only after Respawn
         AssignedShard.CharacterLifecycle.OnCharacterCreated(CharacterEntity);
@@ -200,6 +209,18 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
                 break;
             case IPlayer.PlayerStatus.Playing:
                 {
+                    // Timed boosts and rentals run on wall-clock time; sweep them once a minute so an
+                    // expired boost drops off the character sheet without a relog.
+                    if (currentTime > _lastUnlockSweep + 60_000 && CharacterEntity != null)
+                    {
+                        _lastUnlockSweep = currentTime;
+                        ulong nowUnix = (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                        if (CharacterEntity.Unlocks.Expire(nowUnix))
+                        {
+                            Systems.Loot.PlayerRewards.SyncBoosts(CharacterEntity, nowUnix);
+                        }
+                    }
+
                     break;
                 }
         }

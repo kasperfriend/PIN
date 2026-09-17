@@ -90,7 +90,7 @@ public class CustomDBLoader
 
     public Dictionary<uint, AddAccountGroupCommandDef> LoadAddAccountGroupCommandDef()
     {
-        return LoadJSON<AddAccountGroupCommandDef>("./StaticDB/CustomData/Todo/aptgss_AddAccountGroupCommandDef.json")
+        return LoadJSON<AddAccountGroupCommandDef>("./StaticDB/CustomData/aptgss_AddAccountGroupCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
@@ -372,13 +372,13 @@ public class CustomDBLoader
 
     public Dictionary<uint, ApplyPermanentEffectCommandDef> LoadApplyPermanentEffectCommandDef()
     {
-        return LoadJSON<ApplyPermanentEffectCommandDef>("./StaticDB/CustomData/Todo/aptgss_ApplyPermanentEffectCommandDef.json")
+        return LoadJSON<ApplyPermanentEffectCommandDef>("./StaticDB/CustomData/aptgss_ApplyPermanentEffectCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
     public Dictionary<uint, ApplyUnlockCommandDef> LoadApplyUnlockCommandDef()
     {
-        return LoadJSON<ApplyUnlockCommandDef>("./StaticDB/CustomData/Todo/aptgss_ApplyUnlockCommandDef.json")
+        return LoadJSON<ApplyUnlockCommandDef>("./StaticDB/CustomData/aptgss_ApplyUnlockCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
@@ -462,7 +462,7 @@ public class CustomDBLoader
 
     public Dictionary<uint, GrantOwnerItemCommandDef> LoadGrantOwnerItemCommandDef()
     {
-        return LoadJSON<GrantOwnerItemCommandDef>("./StaticDB/CustomData/Todo/aptgss_GrantOwnerItemCommandDef.json")
+        return LoadJSON<GrantOwnerItemCommandDef>("./StaticDB/CustomData/aptgss_GrantOwnerItemCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
@@ -558,7 +558,7 @@ public class CustomDBLoader
 
     public Dictionary<uint, ModifyOwnerResourcesCommandDef> LoadModifyOwnerResourcesCommandDef()
     {
-        return LoadJSON<ModifyOwnerResourcesCommandDef>("./StaticDB/CustomData/Todo/aptgss_ModifyOwnerResourcesCommandDef.json")
+        return LoadJSON<ModifyOwnerResourcesCommandDef>("./StaticDB/CustomData/aptgss_ModifyOwnerResourcesCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
@@ -612,7 +612,7 @@ public class CustomDBLoader
 
     public Dictionary<uint, RemovePermanentEffectCommandDef> LoadRemovePermanentEffectCommandDef()
     {
-        return LoadJSON<RemovePermanentEffectCommandDef>("./StaticDB/CustomData/Todo/aptgss_RemovePermanentEffectCommandDef.json")
+        return LoadJSON<RemovePermanentEffectCommandDef>("./StaticDB/CustomData/aptgss_RemovePermanentEffectCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
@@ -654,7 +654,7 @@ public class CustomDBLoader
 
     public Dictionary<uint, RequireAppliedUnlockCommandDef> LoadRequireAppliedUnlockCommandDef()
     {
-        return LoadJSON<RequireAppliedUnlockCommandDef>("./StaticDB/CustomData/Todo/aptgss_RequireAppliedUnlockCommandDef.json")
+        return LoadJSON<RequireAppliedUnlockCommandDef>("./StaticDB/CustomData/aptgss_RequireAppliedUnlockCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
@@ -738,7 +738,7 @@ public class CustomDBLoader
 
     public Dictionary<uint, ShowRewardScreenCommandDef> LoadShowRewardScreenCommandDef()
     {
-        return LoadJSON<ShowRewardScreenCommandDef>("./StaticDB/CustomData/Todo/aptgss_ShowRewardScreenCommandDef.json")
+        return LoadJSON<ShowRewardScreenCommandDef>("./StaticDB/CustomData/aptgss_ShowRewardScreenCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
@@ -750,7 +750,7 @@ public class CustomDBLoader
 
     public Dictionary<uint, SpawnLootCommandDef> LoadSpawnLootCommandDef()
     {
-        return LoadJSON<SpawnLootCommandDef>("./StaticDB/CustomData/Todo/aptgss_SpawnLootCommandDef.json")
+        return LoadJSON<SpawnLootCommandDef>("./StaticDB/CustomData/aptgss_SpawnLootCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
@@ -816,37 +816,37 @@ public class CustomDBLoader
 
     public Dictionary<uint, UnlockCertsCommandDef> LoadUnlockCertsCommandDef()
     {
-        return LoadJSON<UnlockCertsCommandDef>("./StaticDB/CustomData/Todo/aptgss_UnlockCertsCommandDef.json")
+        return LoadJSON<UnlockCertsCommandDef>("./StaticDB/CustomData/aptgss_UnlockCertsCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
     public Dictionary<uint, UnlockContentCommandDef> LoadUnlockContentCommandDef()
     {
-        return LoadJSON<UnlockContentCommandDef>("./StaticDB/CustomData/Todo/aptgss_UnlockContentCommandDef.json")
+        return LoadJSON<UnlockContentCommandDef>("./StaticDB/CustomData/aptgss_UnlockContentCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
     public Dictionary<uint, UnlockDecalsCommandDef> LoadUnlockDecalsCommandDef()
     {
-        return LoadJSON<UnlockDecalsCommandDef>("./StaticDB/CustomData/Todo/aptgss_UnlockDecalsCommandDef.json")
+        return LoadJSON<UnlockDecalsCommandDef>("./StaticDB/CustomData/aptgss_UnlockDecalsCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
     public Dictionary<uint, UnlockHeadAccessoriesCommandDef> LoadUnlockHeadAccessoriesCommandDef()
     {
-        return LoadJSON<UnlockHeadAccessoriesCommandDef>("./StaticDB/CustomData/Todo/aptgss_UnlockHeadAccessoriesCommandDef.json")
+        return LoadJSON<UnlockHeadAccessoriesCommandDef>("./StaticDB/CustomData/aptgss_UnlockHeadAccessoriesCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
     public Dictionary<uint, UnlockOrnamentsCommandDef> LoadUnlockOrnamentsCommandDef()
     {
-        return LoadJSON<UnlockOrnamentsCommandDef>("./StaticDB/CustomData/Todo/aptgss_UnlockOrnamentsCommandDef.json")
+        return LoadJSON<UnlockOrnamentsCommandDef>("./StaticDB/CustomData/aptgss_UnlockOrnamentsCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
     public Dictionary<uint, UnlockPatternsCommandDef> LoadUnlockPatternsCommandDef()
     {
-        return LoadJSON<UnlockPatternsCommandDef>("./StaticDB/CustomData/Todo/aptgss_UnlockPatternsCommandDef.json")
+        return LoadJSON<UnlockPatternsCommandDef>("./StaticDB/CustomData/aptgss_UnlockPatternsCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
@@ -858,13 +858,13 @@ public class CustomDBLoader
 
     public Dictionary<uint, UnlockVisualOverridesCommandDef> LoadUnlockVisualOverridesCommandDef()
     {
-        return LoadJSON<UnlockVisualOverridesCommandDef>("./StaticDB/CustomData/Todo/aptgss_UnlockVisualOverridesCommandDef.json")
+        return LoadJSON<UnlockVisualOverridesCommandDef>("./StaticDB/CustomData/aptgss_UnlockVisualOverridesCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 
     public Dictionary<uint, UnlockWarpaintsCommandDef> LoadUnlockWarpaintsCommandDef()
     {
-        return LoadJSON<UnlockWarpaintsCommandDef>("./StaticDB/CustomData/Todo/aptgss_UnlockWarpaintsCommandDef.json")
+        return LoadJSON<UnlockWarpaintsCommandDef>("./StaticDB/CustomData/aptgss_UnlockWarpaintsCommandDef.json")
             .ToDictionary(row => row.Id);
     }
 

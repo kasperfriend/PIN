@@ -42,7 +42,7 @@
   {
     "id": 564312,
     "comment": "Ability 36258, Title Unlock: Gamescom Title #2",
-    "title_id": 0
+    "title_id": 150
   },
   {
     "id": 564316,
@@ -132,12 +132,12 @@
   {
     "id": 652128,
     "comment": "Ability 37240. Unnamed, placeholder?",
-    "title_id": 0
+    "title_id": 87
   },
   {
     "id": 652143,
     "comment": "Ability 37241. Unnamed, placeholder?",
-    "title_id": 0
+    "title_id": 293
   },
   {
     "id": 740577,
@@ -167,7 +167,7 @@
   {
     "id": 793848,
     "comment": "Ability 37951. Title Unlock: Act 1 Chapter 1 Ability",
-    "title_id": 0
+    "title_id": 360
   },
   {
     "id": 810609,
@@ -212,7 +212,7 @@
   {
     "id": 888236,
     "comment": "Ability 36767. UNUSED",
-    "title_id": 0
+    "title_id": 290
   },
   {
     "id": 891996,
@@ -462,17 +462,17 @@
   {
     "id": 1564873,
     "comment": "Ability 41858",
-    "title_id": 0
+    "title_id": 519
   },
   {
     "id": 1564881,
     "comment": "Ability 41859",
-    "title_id": 0
+    "title_id": 520
   },
   {
     "id": 1595654,
     "comment": "Ability 41943",
-    "title_id": 0
+    "title_id": 517
   },
   {
     "id": 1609159,

@@ -1,0 +1,1431 @@
+[
+  {
+    "id": 512457,
+    "comment": ""
+  },
+  {
+    "id": 709157,
+    "comment": "37549. Blueprint Unlock: P-1 LGV"
+  },
+  {
+    "id": 709159,
+    "comment": "37550. P-39 LGV Recipe Unlocked"
+  },
+  {
+    "id": 728358,
+    "comment": ""
+  },
+  {
+    "id": 733356,
+    "comment": ""
+  },
+  {
+    "id": 734099,
+    "comment": ""
+  },
+  {
+    "id": 735528,
+    "comment": ""
+  },
+  {
+    "id": 738937,
+    "comment": ""
+  },
+  {
+    "id": 739384,
+    "comment": ""
+  },
+  {
+    "id": 745184,
+    "comment": "37799. Recipe Unlock: Melding Anomaly Neutralizer"
+  },
+  {
+    "id": 757272,
+    "comment": "37816. Recipe Unlock: Dark Crystite Core",
+    "certificate_id": 4467
+  },
+  {
+    "id": 757274,
+    "comment": "37817. Recipe Unlock: Infused Dark Crystite Core",
+    "certificate_id": 4468
+  },
+  {
+    "id": 757278,
+    "comment": "37818. Recipe Unlock: Powered Dark Crystite Core",
+    "certificate_id": 4469
+  },
+  {
+    "id": 789092,
+    "comment": ""
+  },
+  {
+    "id": 793953,
+    "comment": "37953. Blueprint: Cobra XLR / 37953. Blueprint Unlock: Cobra XLR LGV"
+  },
+  {
+    "id": 795220,
+    "comment": "37966. Kanaloa Boss Unlocked",
+    "certificate_id": 785
+  },
+  {
+    "id": 795222,
+    "comment": "37967. Baneclaw Boss Unlocked",
+    "certificate_id": 784
+  },
+  {
+    "id": 863407,
+    "comment": "38234. Recipe Unlock: L32 Bio Injector Rifle"
+  },
+  {
+    "id": 863408,
+    "comment": "38234. Recipe Unlock: L32 Bio Injector Rifle"
+  },
+  {
+    "id": 863409,
+    "comment": "38234. Recipe Unlock: L32 Bio Injector Rifle"
+  },
+  {
+    "id": 863415,
+    "comment": "38235. Recipe Unlock: L40 Bio Injector Rifle"
+  },
+  {
+    "id": 863416,
+    "comment": "38235. Recipe Unlock: L40 Bio Injector Rifle"
+  },
+  {
+    "id": 863417,
+    "comment": "38235. Recipe Unlock: L40 Bio Injector Rifle"
+  },
+  {
+    "id": 863419,
+    "comment": "38236. Recipe Unlock: L12 Flak Cannon"
+  },
+  {
+    "id": 863420,
+    "comment": "38236. Recipe Unlock: L12 Flak Cannon"
+  },
+  {
+    "id": 863422,
+    "comment": "38237. Recipe Unlock: L22 Flak Cannon"
+  },
+  {
+    "id": 863423,
+    "comment": "38237. Recipe Unlock: L22 Flak Cannon"
+  },
+  {
+    "id": 863581,
+    "comment": "38239. Recipe Unlock: L32 Flak Cannon"
+  },
+  {
+    "id": 863582,
+    "comment": "38239. Recipe Unlock: L32 Flak Cannon"
+  },
+  {
+    "id": 863583,
+    "comment": "38239. Recipe Unlock: L32 Flak Cannon"
+  },
+  {
+    "id": 863585,
+    "comment": "38240. Recipe Unlock: L40 Flak Cannon"
+  },
+  {
+    "id": 863586,
+    "comment": "38240. Recipe Unlock: L40 Flak Cannon"
+  },
+  {
+    "id": 863587,
+    "comment": "38240. Recipe Unlock: L40 Flak Cannon"
+  },
+  {
+    "id": 908503,
+    "comment": ""
+  },
+  {
+    "id": 908504,
+    "comment": ""
+  },
+  {
+    "id": 908506,
+    "comment": ""
+  },
+  {
+    "id": 908508,
+    "comment": ""
+  },
+  {
+    "id": 913312,
+    "comment": "37914. Recipe Unlock: L15 Advanced Decoy",
+    "certificate_id": 4579
+  },
+  {
+    "id": 913313,
+    "comment": "37914. Recipe Unlock: L15 Advanced Decoy",
+    "certificate_id": 4579
+  },
+  {
+    "id": 913560,
+    "comment": ""
+  },
+  {
+    "id": 913661,
+    "comment": ""
+  },
+  {
+    "id": 913666,
+    "comment": "37866. Recipe Unlock: L10 Dragonborn Plasma Cannon",
+    "certificate_id": 4457
+  },
+  {
+    "id": 913667,
+    "comment": "37866. Recipe Unlock: L10 Dragonborn Plasma Cannon",
+    "certificate_id": 4457
+  },
+  {
+    "id": 913670,
+    "comment": "37867. Recipe Unlock: L20 Dragonborn Plasma Cannon",
+    "certificate_id": 4459
+  },
+  {
+    "id": 913671,
+    "comment": "37867. Recipe Unlock: L20 Dragonborn Plasma Cannon",
+    "certificate_id": 4459
+  },
+  {
+    "id": 913677,
+    "comment": "37868. Recipe Unlock: L30 Dragonborn Plasma Cannon",
+    "certificate_id": 4461
+  },
+  {
+    "id": 913678,
+    "comment": "37868. Recipe Unlock: L30 Dragonborn Plasma Cannon",
+    "certificate_id": 4461
+  },
+  {
+    "id": 913679,
+    "comment": "37868. Recipe Unlock: L30 Dragonborn Plasma Cannon",
+    "certificate_id": 4461
+  },
+  {
+    "id": 913684,
+    "comment": "37869. Recipe Unlock: L40 Dragonborn Plasma Cannon",
+    "certificate_id": 4464
+  },
+  {
+    "id": 913685,
+    "comment": "37869. Recipe Unlock: L40 Dragonborn Plasma Cannon",
+    "certificate_id": 4464
+  },
+  {
+    "id": 913686,
+    "comment": "37869. Recipe Unlock: L40 Dragonborn Plasma Cannon",
+    "certificate_id": 4464
+  },
+  {
+    "id": 913689,
+    "comment": "37870. Recipe Unlock: L10 Noxious Needler",
+    "certificate_id": 4471
+  },
+  {
+    "id": 913690,
+    "comment": "37870. Recipe Unlock: L10 Noxious Needler",
+    "certificate_id": 4471
+  },
+  {
+    "id": 913693,
+    "comment": "37871. Recipe Unlock: L20 Noxious Needler",
+    "certificate_id": 4473
+  },
+  {
+    "id": 913694,
+    "comment": "37871. Recipe Unlock: L20 Noxious Needler",
+    "certificate_id": 4473
+  },
+  {
+    "id": 913697,
+    "comment": "37872. Recipe Unlock: L30 Noxious Needler",
+    "certificate_id": 4475
+  },
+  {
+    "id": 913698,
+    "comment": "37872. Recipe Unlock: L30 Noxious Needler",
+    "certificate_id": 4475
+  },
+  {
+    "id": 913699,
+    "comment": "37872. Recipe Unlock: L30 Noxious Needler",
+    "certificate_id": 4475
+  },
+  {
+    "id": 913702,
+    "comment": "37873. Recipe Unlock: L40 Noxious Needler",
+    "certificate_id": 4478
+  },
+  {
+    "id": 913703,
+    "comment": "37873. Recipe Unlock: L40 Noxious Needler",
+    "certificate_id": 4478
+  },
+  {
+    "id": 913704,
+    "comment": "37873. Recipe Unlock: L40 Noxious Needler",
+    "certificate_id": 4478
+  },
+  {
+    "id": 913707,
+    "comment": "37874. Recipe Unlock: L10 Barrier HMG",
+    "certificate_id": 4481
+  },
+  {
+    "id": 913708,
+    "comment": "37874. Recipe Unlock: L10 Barrier HMG",
+    "certificate_id": 4481
+  },
+  {
+    "id": 913711,
+    "comment": "37875. Recipe Unlock: L20 Barrier HMG",
+    "certificate_id": 4483
+  },
+  {
+    "id": 913712,
+    "comment": "37875. Recipe Unlock: L20 Barrier HMG",
+    "certificate_id": 4483
+  },
+  {
+    "id": 913715,
+    "comment": "37876. Recipe Unlock: L30 Barrier HMG",
+    "certificate_id": 4485
+  },
+  {
+    "id": 913716,
+    "comment": "37876. Recipe Unlock: L30 Barrier HMG",
+    "certificate_id": 4485
+  },
+  {
+    "id": 913717,
+    "comment": "37876. Recipe Unlock: L30 Barrier HMG",
+    "certificate_id": 4485
+  },
+  {
+    "id": 913720,
+    "comment": "37881. Recipe Unlock: L40 Barrier HMG",
+    "certificate_id": 4488
+  },
+  {
+    "id": 913721,
+    "comment": "37881. Recipe Unlock: L40 Barrier HMG",
+    "certificate_id": 4488
+  },
+  {
+    "id": 913722,
+    "comment": "37881. Recipe Unlock: L40 Barrier HMG",
+    "certificate_id": 4488
+  },
+  {
+    "id": 913725,
+    "comment": "37882. Recipe Unlock: L10 Burrowing Sticky Launcher",
+    "certificate_id": 4508
+  },
+  {
+    "id": 913726,
+    "comment": "37882. Recipe Unlock: L10 Burrowing Sticky Launcher",
+    "certificate_id": 4508
+  },
+  {
+    "id": 913729,
+    "comment": "37883. Recipe Unlock: L20 Burrowing Sticky Launcher",
+    "certificate_id": 4510
+  },
+  {
+    "id": 913730,
+    "comment": "37883. Recipe Unlock: L20 Burrowing Sticky Launcher",
+    "certificate_id": 4510
+  },
+  {
+    "id": 913735,
+    "comment": "37884. Recipe Unlock: L30 Burrowing Sticky Launcher",
+    "certificate_id": 4512
+  },
+  {
+    "id": 913736,
+    "comment": "37884. Recipe Unlock: L30 Burrowing Sticky Launcher",
+    "certificate_id": 4512
+  },
+  {
+    "id": 913737,
+    "comment": "37884. Recipe Unlock: L30 Burrowing Sticky Launcher",
+    "certificate_id": 4512
+  },
+  {
+    "id": 913740,
+    "comment": "37885. Recipe Unlock: L40 Burrowing Sticky Launcher",
+    "certificate_id": 4515
+  },
+  {
+    "id": 913741,
+    "comment": "37885. Recipe Unlock: L40 Burrowing Sticky Launcher",
+    "certificate_id": 4515
+  },
+  {
+    "id": 913742,
+    "comment": "37885. Recipe Unlock: L40 Burrowing Sticky Launcher",
+    "certificate_id": 4515
+  },
+  {
+    "id": 913750,
+    "comment": "37886. Recipe Unlock: L10 Sharpeyed R36",
+    "certificate_id": 4498
+  },
+  {
+    "id": 913751,
+    "comment": "37886. Recipe Unlock: L10 Sharpeyed R36",
+    "certificate_id": 4498
+  },
+  {
+    "id": 913754,
+    "comment": "37887. Recipe Unlock: L20 Sharpeyed R36",
+    "certificate_id": 4500
+  },
+  {
+    "id": 913755,
+    "comment": "37887. Recipe Unlock: L20 Sharpeyed R36",
+    "certificate_id": 4500
+  },
+  {
+    "id": 913758,
+    "comment": "37888. Recipe Unlock: L30 Sharpeyed R36",
+    "certificate_id": 4502
+  },
+  {
+    "id": 913759,
+    "comment": "37888. Recipe Unlock: L30 Sharpeyed R36",
+    "certificate_id": 4502
+  },
+  {
+    "id": 913760,
+    "comment": "37888. Recipe Unlock: L30 Sharpeyed R36",
+    "certificate_id": 4502
+  },
+  {
+    "id": 913763,
+    "comment": "37889. Recipe Unlock: L40 Sharpeyed R36",
+    "certificate_id": 4505
+  },
+  {
+    "id": 913764,
+    "comment": "37889. Recipe Unlock: L40 Sharpeyed R36",
+    "certificate_id": 4505
+  },
+  {
+    "id": 913765,
+    "comment": "37889. Recipe Unlock: L40 Sharpeyed R36",
+    "certificate_id": 4505
+  },
+  {
+    "id": 913768,
+    "comment": "37890. Recipe Unlock: L15 Shielded Crater",
+    "certificate_id": 4518
+  },
+  {
+    "id": 913769,
+    "comment": "37890. Recipe Unlock: L15 Shielded Crater",
+    "certificate_id": 4518
+  },
+  {
+    "id": 913772,
+    "comment": "37891. Recipe Unlock: L25 Shielded Crater",
+    "certificate_id": 4520
+  },
+  {
+    "id": 913773,
+    "comment": "37891. Recipe Unlock: L25 Shielded Crater",
+    "certificate_id": 4520
+  },
+  {
+    "id": 913776,
+    "comment": "37892. Recipe Unlock: L35 Shielded Crater",
+    "certificate_id": 4522
+  },
+  {
+    "id": 913777,
+    "comment": "37892. Recipe Unlock: L35 Shielded Crater",
+    "certificate_id": 4522
+  },
+  {
+    "id": 913778,
+    "comment": "37892. Recipe Unlock: L35 Shielded Crater",
+    "certificate_id": 4522
+  },
+  {
+    "id": 913781,
+    "comment": "37893. Recipe Unlock: L40 Shielded Crater",
+    "certificate_id": 4525
+  },
+  {
+    "id": 913782,
+    "comment": "37893. Recipe Unlock: L40 Shielded Crater",
+    "certificate_id": 4525
+  },
+  {
+    "id": 913783,
+    "comment": "37893. Recipe Unlock: L40 Shielded Crater",
+    "certificate_id": 4525
+  },
+  {
+    "id": 913786,
+    "comment": "37894. Recipe Unlock: L15 Blinding Poison Trail",
+    "certificate_id": 4528
+  },
+  {
+    "id": 913787,
+    "comment": "37894. Recipe Unlock: L15 Blinding Poison Trail",
+    "certificate_id": 4528
+  },
+  {
+    "id": 913790,
+    "comment": "37895. Recipe Unlock: L25 Blinding Poison Trail",
+    "certificate_id": 4530
+  },
+  {
+    "id": 913791,
+    "comment": "37895. Recipe Unlock: L25 Blinding Poison Trail",
+    "certificate_id": 4530
+  },
+  {
+    "id": 913794,
+    "comment": "37896. Recipe Unlock: L35 Blinding Poison Trail",
+    "certificate_id": 4532
+  },
+  {
+    "id": 913795,
+    "comment": "37896. Recipe Unlock: L35 Blinding Poison Trail",
+    "certificate_id": 4532
+  },
+  {
+    "id": 913796,
+    "comment": "37896. Recipe Unlock: L35 Blinding Poison Trail",
+    "certificate_id": 4532
+  },
+  {
+    "id": 913799,
+    "comment": "37897. Recipe Unlock: L40 Blinding Poison Trail",
+    "certificate_id": 4535
+  },
+  {
+    "id": 913800,
+    "comment": "37897. Recipe Unlock: L40 Blinding Poison Trail",
+    "certificate_id": 4535
+  },
+  {
+    "id": 913801,
+    "comment": "37897. Recipe Unlock: L40 Blinding Poison Trail",
+    "certificate_id": 4535
+  },
+  {
+    "id": 913804,
+    "comment": "37898. Recipe Unlock: L12 Ghostly Triage",
+    "certificate_id": 4538
+  },
+  {
+    "id": 913805,
+    "comment": "37898. Recipe Unlock: L12 Ghostly Triage",
+    "certificate_id": 4538
+  },
+  {
+    "id": 913808,
+    "comment": "37899. Recipe Unlock: L22 Ghostly Triage",
+    "certificate_id": 4540
+  },
+  {
+    "id": 913809,
+    "comment": "37899. Recipe Unlock: L22 Ghostly Triage",
+    "certificate_id": 4540
+  },
+  {
+    "id": 913812,
+    "comment": "37900. Recipe Unlock: L32 Ghostly Triage",
+    "certificate_id": 4542
+  },
+  {
+    "id": 913813,
+    "comment": "37900. Recipe Unlock: L32 Ghostly Triage",
+    "certificate_id": 4542
+  },
+  {
+    "id": 913814,
+    "comment": "37900. Recipe Unlock: L32 Ghostly Triage",
+    "certificate_id": 4542
+  },
+  {
+    "id": 913817,
+    "comment": "37901. Recipe Unlock: L40 Ghostly Triage",
+    "certificate_id": 4545
+  },
+  {
+    "id": 913818,
+    "comment": "37901. Recipe Unlock: L40 Ghostly Triage",
+    "certificate_id": 4545
+  },
+  {
+    "id": 913819,
+    "comment": "37901. Recipe Unlock: L40 Ghostly Triage",
+    "certificate_id": 4545
+  },
+  {
+    "id": 913824,
+    "comment": "37902. Recipe Unlock: L15 Reflective Armor",
+    "certificate_id": 4548
+  },
+  {
+    "id": 913825,
+    "comment": "37902. Recipe Unlock: L15 Reflective Armor",
+    "certificate_id": 4548
+  },
+  {
+    "id": 913828,
+    "comment": "37903. Recipe Unlock: L25 Reflective Armor",
+    "certificate_id": 4550
+  },
+  {
+    "id": 913829,
+    "comment": "37903. Recipe Unlock: L25 Reflective Armor",
+    "certificate_id": 4550
+  },
+  {
+    "id": 913832,
+    "comment": "37904. Recipe Unlock: L35 Reflective Armor",
+    "certificate_id": 4552
+  },
+  {
+    "id": 913833,
+    "comment": "37904. Recipe Unlock: L35 Reflective Armor",
+    "certificate_id": 4552
+  },
+  {
+    "id": 913834,
+    "comment": "37904. Recipe Unlock: L35 Reflective Armor",
+    "certificate_id": 4552
+  },
+  {
+    "id": 913837,
+    "comment": "37905. Recipe Unlock: L40 Reflective Armor",
+    "certificate_id": 4555
+  },
+  {
+    "id": 913838,
+    "comment": "37905. Recipe Unlock: L40 Reflective Armor",
+    "certificate_id": 4555
+  },
+  {
+    "id": 913839,
+    "comment": "37905. Recipe Unlock: L40 Reflective Armor",
+    "certificate_id": 4555
+  },
+  {
+    "id": 913842,
+    "comment": "37906. Recipe Unlock: L12 Graviton Blast",
+    "certificate_id": 4558
+  },
+  {
+    "id": 913843,
+    "comment": "37906. Recipe Unlock: L12 Graviton Blast",
+    "certificate_id": 4558
+  },
+  {
+    "id": 913846,
+    "comment": "37907. Recipe Unlock: L22 Graviton Blast",
+    "certificate_id": 4560
+  },
+  {
+    "id": 913847,
+    "comment": "37907. Recipe Unlock: L22 Graviton Blast",
+    "certificate_id": 4560
+  },
+  {
+    "id": 913850,
+    "comment": "37908. Recipe Unlock: L32 Graviton Blast",
+    "certificate_id": 4562
+  },
+  {
+    "id": 913851,
+    "comment": "37908. Recipe Unlock: L32 Graviton Blast",
+    "certificate_id": 4562
+  },
+  {
+    "id": 913852,
+    "comment": "37908. Recipe Unlock: L32 Graviton Blast",
+    "certificate_id": 4562
+  },
+  {
+    "id": 913855,
+    "comment": "37909. Recipe Unlock: L40 Graviton Blast",
+    "certificate_id": 4565
+  },
+  {
+    "id": 913856,
+    "comment": "37909. Recipe Unlock: L40 Graviton Blast",
+    "certificate_id": 4565
+  },
+  {
+    "id": 913857,
+    "comment": "37909. Recipe Unlock: L40 Graviton Blast",
+    "certificate_id": 4565
+  },
+  {
+    "id": 913860,
+    "comment": "37910. Recipe Unlock: L12 Rocket Turret",
+    "certificate_id": 4568
+  },
+  {
+    "id": 913861,
+    "comment": "37910. Recipe Unlock: L12 Rocket Turret",
+    "certificate_id": 4568
+  },
+  {
+    "id": 913864,
+    "comment": "37911. Recipe Unlock: L22 Rocket Turret",
+    "certificate_id": 4570
+  },
+  {
+    "id": 913865,
+    "comment": "37911. Recipe Unlock: L22 Rocket Turret",
+    "certificate_id": 4570
+  },
+  {
+    "id": 913868,
+    "comment": "37912. Recipe Unlock: L32 Rocket Turret",
+    "certificate_id": 4572
+  },
+  {
+    "id": 913869,
+    "comment": "37912. Recipe Unlock: L32 Rocket Turret",
+    "certificate_id": 4572
+  },
+  {
+    "id": 913870,
+    "comment": "37912. Recipe Unlock: L32 Rocket Turret",
+    "certificate_id": 4572
+  },
+  {
+    "id": 913873,
+    "comment": "37913. Recipe Unlock: L40 Rocket Turret",
+    "certificate_id": 4575
+  },
+  {
+    "id": 913874,
+    "comment": "37913. Recipe Unlock: L40 Rocket Turret",
+    "certificate_id": 4575
+  },
+  {
+    "id": 913875,
+    "comment": "37913. Recipe Unlock: L40 Rocket Turret",
+    "certificate_id": 4575
+  },
+  {
+    "id": 913878,
+    "comment": "37915. Recipe Unlock: L25 Advanced Decoy",
+    "certificate_id": 4580
+  },
+  {
+    "id": 913879,
+    "comment": "37915. Recipe Unlock: L25 Advanced Decoy",
+    "certificate_id": 4580
+  },
+  {
+    "id": 913882,
+    "comment": "37916. Recipe Unlock: L35 Advanced Decoy",
+    "certificate_id": 4584
+  },
+  {
+    "id": 913883,
+    "comment": "37916. Recipe Unlock: L35 Advanced Decoy",
+    "certificate_id": 4584
+  },
+  {
+    "id": 913884,
+    "comment": "37916. Recipe Unlock: L35 Advanced Decoy",
+    "certificate_id": 4584
+  },
+  {
+    "id": 913887,
+    "comment": "37917. Recipe Unlock: L40 Advanced Decoy",
+    "certificate_id": 4587
+  },
+  {
+    "id": 913888,
+    "comment": "37917. Recipe Unlock: L40 Advanced Decoy",
+    "certificate_id": 4587
+  },
+  {
+    "id": 913889,
+    "comment": "37917. Recipe Unlock: L40 Advanced Decoy",
+    "certificate_id": 4587
+  },
+  {
+    "id": 913892,
+    "comment": "37918. Powerup: Unlock Recipe L12 Burning Cryo Grenade",
+    "certificate_id": 4589
+  },
+  {
+    "id": 913893,
+    "comment": "37918. Powerup: Unlock Recipe L12 Burning Cryo Grenade, too",
+    "certificate_id": 4589
+  },
+  {
+    "id": 913898,
+    "comment": "37919. Recipe Unlock: L22 Burning Cryo Grenade",
+    "certificate_id": 4591
+  },
+  {
+    "id": 913899,
+    "comment": "37919. Recipe Unlock: L22 Burning Cryo Grenade",
+    "certificate_id": 4591
+  },
+  {
+    "id": 913902,
+    "comment": "37920. Recipe Unlock: L32 Burning Cryo Grenade",
+    "certificate_id": 4594
+  },
+  {
+    "id": 913903,
+    "comment": "37920. Recipe Unlock: L32 Burning Cryo Grenade",
+    "certificate_id": 4594
+  },
+  {
+    "id": 913904,
+    "comment": "37920. Recipe Unlock: L32 Burning Cryo Grenade",
+    "certificate_id": 4594
+  },
+  {
+    "id": 913907,
+    "comment": "37921. Recipe Unlock: L40 Burning Cryo Grenade",
+    "certificate_id": 4597
+  },
+  {
+    "id": 913908,
+    "comment": "37921. Recipe Unlock: L40 Burning Cryo Grenade",
+    "certificate_id": 4597
+  },
+  {
+    "id": 913909,
+    "comment": "37921. Recipe Unlock: L40 Burning Cryo Grenade",
+    "certificate_id": 4597
+  },
+  {
+    "id": 913912,
+    "comment": "38177. Recipe Unlock: L12 Cannonball Afterburner",
+    "certificate_id": 4917
+  },
+  {
+    "id": 913913,
+    "comment": "38177. Recipe Unlock: L12 Cannonball Afterburner",
+    "certificate_id": 4917
+  },
+  {
+    "id": 913916,
+    "comment": "38178. Recipe Unlock: L22 Cannonball Afterburner",
+    "certificate_id": 4919
+  },
+  {
+    "id": 913917,
+    "comment": "38178. Recipe Unlock: L22 Cannonball Afterburner",
+    "certificate_id": 4919
+  },
+  {
+    "id": 913920,
+    "comment": "38179. Recipe Unlock: L32 Cannonball Afterburner",
+    "certificate_id": 4922
+  },
+  {
+    "id": 913921,
+    "comment": "38179. Recipe Unlock: L32 Cannonball Afterburner",
+    "certificate_id": 4922
+  },
+  {
+    "id": 913922,
+    "comment": "38179. Recipe Unlock: L32 Cannonball Afterburner",
+    "certificate_id": 4922
+  },
+  {
+    "id": 913925,
+    "comment": "38180. Recipe Unlock: L40 Cannonball Afterburner",
+    "certificate_id": 4925
+  },
+  {
+    "id": 913926,
+    "comment": "38180. Recipe Unlock: L40 Cannonball Afterburner",
+    "certificate_id": 4925
+  },
+  {
+    "id": 913927,
+    "comment": "38180. Recipe Unlock: L40 Cannonball Afterburner",
+    "certificate_id": 4925
+  },
+  {
+    "id": 913930,
+    "comment": "38181. Recipe Unlock: L15 Armor Station",
+    "certificate_id": 4907
+  },
+  {
+    "id": 913931,
+    "comment": "38181. Recipe Unlock: L15 Armor Station",
+    "certificate_id": 4907
+  },
+  {
+    "id": 913934,
+    "comment": "38182. Recipe Unlock: L25 Armor Station",
+    "certificate_id": 4909
+  },
+  {
+    "id": 913935,
+    "comment": "38182. Recipe Unlock: L25 Armor Station",
+    "certificate_id": 4909
+  },
+  {
+    "id": 913938,
+    "comment": "38183. Recipe Unlock: L35 Armor Station",
+    "certificate_id": 4912
+  },
+  {
+    "id": 913939,
+    "comment": "38183. Recipe Unlock: L35 Armor Station",
+    "certificate_id": 4912
+  },
+  {
+    "id": 913940,
+    "comment": "38183. Recipe Unlock: L35 Armor Station",
+    "certificate_id": 4912
+  },
+  {
+    "id": 913943,
+    "comment": "38184. Recipe Unlock: L40 Armor Station",
+    "certificate_id": 4915
+  },
+  {
+    "id": 913944,
+    "comment": "38184. Recipe Unlock: L40 Armor Station",
+    "certificate_id": 4915
+  },
+  {
+    "id": 913945,
+    "comment": "38184. Recipe Unlock: L40 Armor Station",
+    "certificate_id": 4915
+  },
+  {
+    "id": 913954,
+    "comment": "38232. Recipe Unlock: L12 Bio Injector Rifle"
+  },
+  {
+    "id": 913955,
+    "comment": "38232. Recipe Unlock: L12 Bio Injector Rifle"
+  },
+  {
+    "id": 913957,
+    "comment": "38233. Recipe Unlock: L22 Bio Injector Rifle"
+  },
+  {
+    "id": 913958,
+    "comment": "38233. Recipe Unlock: L22 Bio Injector Rifle"
+  },
+  {
+    "id": 914264,
+    "comment": "38545. Recipe Unlock: Broken Peninsula Anti-Personnel Turret Upgrade Token"
+  },
+  {
+    "id": 935065,
+    "comment": "38680. Blueprint: Radiant Beam Component"
+  },
+  {
+    "id": 935069,
+    "comment": "38681. Blueprint: Ionized Microplasma Component"
+  },
+  {
+    "id": 935081,
+    "comment": "38682. Blueprint: Blazing Thermal Component"
+  },
+  {
+    "id": 935096,
+    "comment": "38683. Blueprint: Miasmic Bioactive Component"
+  },
+  {
+    "id": 935100,
+    "comment": "38684. Blueprint: Quint-Scatter Component"
+  },
+  {
+    "id": 935108,
+    "comment": "38685. Blueprint: Cluster Component"
+  },
+  {
+    "id": 935112,
+    "comment": "38686. Blueprint: Shocking Electrical Component"
+  },
+  {
+    "id": 935116,
+    "comment": "38687. Blueprint: Freezing Cryo Component"
+  },
+  {
+    "id": 935981,
+    "comment": ""
+  },
+  {
+    "id": 936607,
+    "comment": "37761. Research: Melding Chamber Recipes",
+    "certificate_id": 2701
+  },
+  {
+    "id": 953821,
+    "comment": "38825. Recipe Unlock: L17 Rapid Armor"
+  },
+  {
+    "id": 953822,
+    "comment": "38825. Recipe Unlock: L17 Rapid Armor"
+  },
+  {
+    "id": 953824,
+    "comment": "38826. Recipe Unlock: L27 Rapid Armor"
+  },
+  {
+    "id": 953825,
+    "comment": "38826. Recipe Unlock: L27 Rapid Armor"
+  },
+  {
+    "id": 953826,
+    "comment": "38826. Recipe Unlock: L27 Rapid Armor"
+  },
+  {
+    "id": 953828,
+    "comment": "38827. Recipe Unlock: L37 Rapid Armor"
+  },
+  {
+    "id": 953829,
+    "comment": "38827. Recipe Unlock: L37 Rapid Armor"
+  },
+  {
+    "id": 953830,
+    "comment": "38827. Recipe Unlock: L37 Rapid Armor"
+  },
+  {
+    "id": 954503,
+    "comment": "38835. item 121204"
+  },
+  {
+    "id": 954507,
+    "comment": "38818. item 121134"
+  },
+  {
+    "id": 954511,
+    "comment": "38836. item 121205"
+  },
+  {
+    "id": 954519,
+    "comment": "38837. item 121206"
+  },
+  {
+    "id": 954523,
+    "comment": "38838. item 121207"
+  },
+  {
+    "id": 954527,
+    "comment": "38839. item 121208"
+  },
+  {
+    "id": 954535,
+    "comment": "38840. item 121209"
+  },
+  {
+    "id": 954553,
+    "comment": "38841. item 121210"
+  },
+  {
+    "id": 954589,
+    "comment": "38842. item 121211"
+  },
+  {
+    "id": 954596,
+    "comment": "38843. item 121212"
+  },
+  {
+    "id": 954611,
+    "comment": "38844. item 121213"
+  },
+  {
+    "id": 954615,
+    "comment": "38845. item 121214"
+  },
+  {
+    "id": 954619,
+    "comment": "38846. item 121215"
+  },
+  {
+    "id": 954623,
+    "comment": "38847. item 121216"
+  },
+  {
+    "id": 954627,
+    "comment": "38848. item 121217"
+  },
+  {
+    "id": 954635,
+    "comment": "38849. item 121218"
+  },
+  {
+    "id": 954639,
+    "comment": "38850. item 121219"
+  },
+  {
+    "id": 954643,
+    "comment": "38851. item 121220"
+  },
+  {
+    "id": 954651,
+    "comment": "38852. item 121221"
+  },
+  {
+    "id": 954655,
+    "comment": "38853. item 121222"
+  },
+  {
+    "id": 954659,
+    "comment": "38854. item 121223"
+  },
+  {
+    "id": 954663,
+    "comment": "38855. item 121224"
+  },
+  {
+    "id": 954671,
+    "comment": "38856. item 121225"
+  },
+  {
+    "id": 954675,
+    "comment": "38857. item 121226"
+  },
+  {
+    "id": 954679,
+    "comment": "38858. item 121227"
+  },
+  {
+    "id": 954683,
+    "comment": "38859. item 121228"
+  },
+  {
+    "id": 954709,
+    "comment": "38860. item 121229"
+  },
+  {
+    "id": 954713,
+    "comment": "38861. item 121230"
+  },
+  {
+    "id": 954733,
+    "comment": "38862. item 121231"
+  },
+  {
+    "id": 954812,
+    "comment": "38865. item 121233"
+  },
+  {
+    "id": 954816,
+    "comment": "38864. item 121232"
+  },
+  {
+    "id": 954820,
+    "comment": "38866. item 121234"
+  },
+  {
+    "id": 954841,
+    "comment": "38867. item 121235"
+  },
+  {
+    "id": 954845,
+    "comment": "38868. item 121236"
+  },
+  {
+    "id": 954867,
+    "comment": "38869. item 121237"
+  },
+  {
+    "id": 958005,
+    "comment": "38892. Recipe Unlock: Broken Peninsula Anti-Vehicle Turret Upgrade Token"
+  },
+  {
+    "id": 958007,
+    "comment": "38893. Recipe Unlock: Broken Peninsula Anti-Air Turret Upgrade Token"
+  },
+  {
+    "id": 958009,
+    "comment": "38894. Recipe Unlock: Broken Peninsula Anti-Vehicle Barricade Upgrade Token"
+  },
+  {
+    "id": 958011,
+    "comment": "38895. Recipe Unlock: Broken Peninsula Remote Spawn Point Upgrade Token"
+  },
+  {
+    "id": 958019,
+    "comment": "38898. Recipe Unlock: Broken Peninsula Blitz Assault LGV Upgrade Token"
+  },
+  {
+    "id": 958021,
+    "comment": "38899. Recipe Unlock: Broken Peninsula RX1 Hauler Upgrade Token"
+  },
+  {
+    "id": 958037,
+    "comment": "38896. Recipe Unlock: Broken Peninsula Jaguar K-17 Upgrade Token"
+  },
+  {
+    "id": 958039,
+    "comment": "38897. Recipe Unlock: Broken Peninsula Intercepter Assault LGV Upgrade Token"
+  },
+  {
+    "id": 967072,
+    "comment": "39026. Warpaint Unlock: Honorary Crusader"
+  },
+  {
+    "id": 967091,
+    "comment": "39021. Title Unlock: Honorary Crusader"
+  },
+  {
+    "id": 968036,
+    "comment": ""
+  },
+  {
+    "id": 980860,
+    "comment": "39120. Proof of Completion: Lair Sweep"
+  },
+  {
+    "id": 980864,
+    "comment": "39121. Proof of Completion: Tunnel Defense"
+  },
+  {
+    "id": 980866,
+    "comment": "39119. Proof of Completion: Muck Raking"
+  },
+  {
+    "id": 1002491,
+    "comment": "38935. Warpaint Unlock: Wrapping Paper Red And Green"
+  },
+  {
+    "id": 1002503,
+    "comment": "38936. Warpaint Unlock: Blingin Blue Ice"
+  },
+  {
+    "id": 1006389,
+    "comment": "38821. Recipe Unlock: L12 & L17 Rapid Armor",
+    "certificate_id": 5313
+  },
+  {
+    "id": 1006390,
+    "comment": "38821. Recipe Unlock: L12 & L17 Rapid Armor",
+    "certificate_id": 5313
+  },
+  {
+    "id": 1006391,
+    "comment": "38821. Recipe Unlock: L12 & L17 Rapid Armor",
+    "certificate_id": 5313
+  },
+  {
+    "id": 1006392,
+    "comment": "38821. Recipe Unlock: L12 & L17 Rapid Armor",
+    "certificate_id": 5313
+  },
+  {
+    "id": 1006395,
+    "comment": "38822. Recipe Unlock: L22 & L27Rapid Armor",
+    "certificate_id": 5318
+  },
+  {
+    "id": 1006396,
+    "comment": "38822. Recipe Unlock: L22 & L27Rapid Armor",
+    "certificate_id": 5318
+  },
+  {
+    "id": 1006397,
+    "comment": "38822. Recipe Unlock: L22 & L27Rapid Armor",
+    "certificate_id": 5318
+  },
+  {
+    "id": 1006398,
+    "comment": "38822. Recipe Unlock: L22 & L27Rapid Armor",
+    "certificate_id": 5318
+  },
+  {
+    "id": 1006399,
+    "comment": "38822. Recipe Unlock: L22 & L27Rapid Armor",
+    "certificate_id": 5318
+  },
+  {
+    "id": 1006402,
+    "comment": "38823. Recipe Unlock: L32 & L37 Rapid Armor",
+    "certificate_id": 5324
+  },
+  {
+    "id": 1006403,
+    "comment": "38823. Recipe Unlock: L32 & L37 Rapid Armor",
+    "certificate_id": 5324
+  },
+  {
+    "id": 1006404,
+    "comment": "38823. Recipe Unlock: L32 & L37 Rapid Armor",
+    "certificate_id": 5324
+  },
+  {
+    "id": 1006405,
+    "comment": "38823. Recipe Unlock: L32 & L37 Rapid Armor",
+    "certificate_id": 5324
+  },
+  {
+    "id": 1006406,
+    "comment": "38823. Recipe Unlock: L32 & L37 Rapid Armor",
+    "certificate_id": 5324
+  },
+  {
+    "id": 1006407,
+    "comment": "38823. Recipe Unlock: L32 & L37 Rapid Armor",
+    "certificate_id": 5324
+  },
+  {
+    "id": 1006410,
+    "comment": "38824. Recipe Unlock: L40 Rapid Armor",
+    "certificate_id": 5327
+  },
+  {
+    "id": 1006411,
+    "comment": "38824. Recipe Unlock: L40 Rapid Armor",
+    "certificate_id": 5327
+  },
+  {
+    "id": 1006412,
+    "comment": "38824. Recipe Unlock: L40 Rapid Armor",
+    "certificate_id": 5327
+  },
+  {
+    "id": 1028977,
+    "comment": "38889. Warpaint Unlock: Jumpjet Force Gamma"
+  },
+  {
+    "id": 1062954,
+    "comment": "39540. item 123709"
+  },
+  {
+    "id": 1078894,
+    "comment": ""
+  },
+  {
+    "id": 1078896,
+    "comment": ""
+  },
+  {
+    "id": 1078898,
+    "comment": ""
+  },
+  {
+    "id": 1078900,
+    "comment": ""
+  },
+  {
+    "id": 1088349,
+    "comment": "39691. Perk Unlock: Energeticist",
+    "certificate_id": 5389
+  },
+  {
+    "id": 1088412,
+    "comment": "39692. Perk Unlock: Machinist",
+    "certificate_id": 5401
+  },
+  {
+    "id": 1089071,
+    "comment": "39697. Perk Unlock: Holmgang Power Amp",
+    "certificate_id": 5405
+  },
+  {
+    "id": 1089153,
+    "comment": "39698. Perk Unlock: Smart Shrapnel",
+    "certificate_id": 5406
+  },
+  {
+    "id": 1089155,
+    "comment": "39699. Perk Unlock: Magnetic Cooling Array",
+    "certificate_id": 5402
+  },
+  {
+    "id": 1089181,
+    "comment": "39701. Perk Unlock: Defensive OS Daemon",
+    "certificate_id": 5403
+  },
+  {
+    "id": 1089273,
+    "comment": "39702. Perk Unlock: Cryo-Cooled Magazine",
+    "certificate_id": 5408
+  },
+  {
+    "id": 1089296,
+    "comment": "39703. Perk Unlock: Electrolyte Supplements",
+    "certificate_id": 5404
+  },
+  {
+    "id": 1089377,
+    "comment": "39705. Perk Unlock: Cryo Transmission",
+    "certificate_id": 5415
+  },
+  {
+    "id": 1095278,
+    "comment": ""
+  },
+  {
+    "id": 1095279,
+    "comment": ""
+  },
+  {
+    "id": 1117161,
+    "comment": "Ability id 37691, see AwardRedBeansCommand id 1117160",
+    "certificate_id": 2168
+  },
+  {
+    "id": 1142733,
+    "comment": "36009. Tutorial Crafting Cert Powerup"
+  },
+  {
+    "id": 1201212,
+    "comment": "40146. Precision Upgrade 50"
+  },
+  {
+    "id": 1201269,
+    "comment": ""
+  },
+  {
+    "id": 1203463,
+    "comment": "40147. Precision Upgrade 25"
+  },
+  {
+    "id": 1205304,
+    "comment": "40176. Perk Unlock: Compact Munitions",
+    "certificate_id": 5479
+  },
+  {
+    "id": 1243625,
+    "comment": "39704. Perk Unlock: Faraday Shackles",
+    "certificate_id": 5410
+  },
+  {
+    "id": 1420836,
+    "comment": ""
+  },
+  {
+    "id": 1546550,
+    "comment": ""
+  },
+  {
+    "id": 1634421,
+    "comment": "42072. Perk Unlock: Preventive Medicine",
+    "certificate_id": 5541
+  },
+  {
+    "id": 1634423,
+    "comment": "42071. Perk Unlock: Scavenger's Aim",
+    "certificate_id": 5538
+  },
+  {
+    "id": 1634425,
+    "comment": "39700. Perk Unlock: Offensive OS Daemon",
+    "certificate_id": 5407
+  }
+]

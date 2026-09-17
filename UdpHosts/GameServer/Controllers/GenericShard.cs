@@ -118,6 +118,11 @@ public class GenericShard : Base
               zone.ID,
               closestOutpostId,
               (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds() - player.ConnectedAt);
+
+        if (player.CharacterEntity != null)
+        {
+            _ = GRPCService.SaveCharacterUnlocksAsync(player.CharacterId + 0xFE, zone.ID, player.CharacterEntity.Unlocks.ToRecords());
+        }
     }
 
     [MessageID(GssMessage.RequestEncounterInfo)]

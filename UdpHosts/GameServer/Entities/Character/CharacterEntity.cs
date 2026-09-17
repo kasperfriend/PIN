@@ -231,6 +231,14 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public ulong CurrentPermissionsValue => GetCurrentPermissionsValue();
 
     public StaticInfoData StaticInfo { get; set; }
+
+    /// <summary>
+    ///     The character's non-item possessions: cosmetic unlocks, certificates, unlocked battleframes,
+    ///     account groups and boosts. Written by the unlock/boost consumables, read by the RequireHas*
+    ///     chain nodes, replicated with <c>UnlocksUpdate</c>.
+    /// </summary>
+    public CharacterUnlocks Unlocks { get; } = new();
+
     public ulong ArmyGUID { get; set; }
     public sbyte ArmyIsOfficer { get; set; }
     public CharacterStateData CharacterState { get; set; }
@@ -719,6 +727,10 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
     public void LoadRemote(CharacterAndBattleframeVisuals remoteData)
     {
+        Unlocks.LoadRecords(
+            remoteData.Unlocks.Select(entry => new CharacterUnlockRecord(entry.Kind, entry.Group, entry.Id, entry.Value, entry.ExpiresAt)),
+            (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+
         Load(new BasicCharacterData()
         {
             CharacterInfo = new Data.BasicCharacterInfo()
@@ -1386,6 +1398,14 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         StaticInfo = value;
         Character_ObserverView.StaticInfoProp = StaticInfo;
         Character_BaseController?.StaticInfoProp = StaticInfo;
+    }
+
+    /// <summary>Changes the title shown next to the name (a <c>dbcharacter::MonsterTitle</c> id, 0 for none).</summary>
+    public void SetTitle(ushort titleId)
+    {
+        var info = StaticInfo;
+        info.TitleId = titleId;
+        SetStaticInfo(info);
     }
 
     public void SetTimePlayed(int value)

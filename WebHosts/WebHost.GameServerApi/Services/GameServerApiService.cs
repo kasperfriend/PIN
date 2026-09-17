@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
@@ -107,6 +108,25 @@ public class GameServerApiService : GameServerAPI.GameServerAPIBase
                             "Saved battleframe {Battleframe} for {CharacterId}",
                             frame.BattleframeSDBId,
                             frame.CharacterId);
+                        break;
+
+                    case Command.SubtypeOneofCase.SaveCharacterUnlocks:
+                        var unlocks = command.SaveCharacterUnlocks;
+                        CharacterStore.UpdateUnlocks(
+                            unlocks.CharacterId,
+                            unlocks.ZoneId,
+                            unlocks.Unlocks.Select(entry => new CharacterUnlockEntry
+                            {
+                                Kind = entry.Kind,
+                                Group = entry.Group,
+                                Id = entry.Id,
+                                Value = entry.Value,
+                                ExpiresAt = entry.ExpiresAt,
+                            }));
+                        _logger.LogInformation(
+                            "Saved {Count} unlock entries for {CharacterId}",
+                            unlocks.Unlocks.Count,
+                            unlocks.CharacterId);
                         break;
 
                     case Command.SubtypeOneofCase.SaveLgvRaceFinish:
@@ -235,6 +255,17 @@ public class GameServerApiService : GameServerAPI.GameServerAPIBase
                 // resource dump) for admin accounts, the character's own single
                 // battleframe for everyone else.
                 IsAdmin = AccountStore.IsAdminAccount(AccountStore.Default.Get(character.AccountId))
+            },
+            Unlocks =
+            {
+                character.Unlocks.Select(entry => new CharacterUnlock
+                {
+                    Kind = entry.Kind ?? string.Empty,
+                    Group = entry.Group ?? string.Empty,
+                    Id = entry.Id,
+                    Value = entry.Value,
+                    ExpiresAt = entry.ExpiresAt,
+                })
             },
             CharacterVisuals = new CharacterVisuals
             {

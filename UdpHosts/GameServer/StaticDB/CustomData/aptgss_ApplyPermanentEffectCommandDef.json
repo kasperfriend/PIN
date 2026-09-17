@@ -1,0 +1,634 @@
+[
+  {
+    "id": 267873,
+    "comment": "34573. Reputation Boost - 50% for 10 mins",
+    "boost_type": "reputation",
+    "percent": 50,
+    "duration_seconds": 600
+  },
+  {
+    "id": 267877,
+    "comment": "34574. Crystite Boost - 50% for 10 mins",
+    "boost_type": "crystite",
+    "percent": 50,
+    "duration_seconds": 600
+  },
+  {
+    "id": 346795,
+    "comment": "35085. Horn of Plenty / 35314. Wintertide Present / 37120. Valentine Candy"
+  },
+  {
+    "id": 360220,
+    "comment": ""
+  },
+  {
+    "id": 362132,
+    "comment": ""
+  },
+  {
+    "id": 403883,
+    "comment": "35722. item 81316"
+  },
+  {
+    "id": 403890,
+    "comment": "35723. item 81317"
+  },
+  {
+    "id": 403897,
+    "comment": "35724. item 81318"
+  },
+  {
+    "id": 409370,
+    "comment": "35746. Crystite Boost - 20% for 1 hour",
+    "boost_type": "crystite",
+    "percent": 20,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 409423,
+    "comment": "35750. Crystite Boost - 20% for 3 hours / 35750. item 86596",
+    "boost_type": "crystite",
+    "percent": 20,
+    "duration_seconds": 10800
+  },
+  {
+    "id": 409435,
+    "comment": "35751. Crystite Boost - 20% for 8 hours",
+    "boost_type": "crystite",
+    "percent": 20,
+    "duration_seconds": 28800
+  },
+  {
+    "id": 411284,
+    "comment": "35775. Reputation Boost - 50% for 60 mins",
+    "boost_type": "reputation",
+    "percent": 50,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 411286,
+    "comment": "35119. XP Boost - 10% for 60 mins",
+    "boost_type": "xp",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 419020,
+    "comment": "35781. Reputation Boost - 5% Permanently",
+    "boost_type": "reputation",
+    "percent": 5,
+    "permanent": 1
+  },
+  {
+    "id": 420745,
+    "comment": "35749. Reputation Boost - 20% for 1 hour",
+    "boost_type": "reputation",
+    "percent": 20,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 420752,
+    "comment": "35747. Reputation Boost - 20% for 3 hours",
+    "boost_type": "reputation",
+    "percent": 20,
+    "duration_seconds": 10800
+  },
+  {
+    "id": 420759,
+    "comment": "35745. Reputation Boost - 20% for 8 hours",
+    "boost_type": "reputation",
+    "percent": 20,
+    "duration_seconds": 28800
+  },
+  {
+    "id": 433123,
+    "comment": "34618. XP Boost: 5x for 1 min",
+    "boost_type": "xp",
+    "percent": 400,
+    "duration_seconds": 60
+  },
+  {
+    "id": 521445,
+    "comment": "36549. Crystite Boost - 10% for 1 hour",
+    "boost_type": "crystite",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 521459,
+    "comment": "36550. Reputation Boost - 10% for 1 hour",
+    "boost_type": "reputation",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 562547,
+    "comment": ""
+  },
+  {
+    "id": 629428,
+    "comment": ""
+  },
+  {
+    "id": 629435,
+    "comment": ""
+  },
+  {
+    "id": 673997,
+    "comment": "34901. XP Boost - 20% for 3 hours",
+    "boost_type": "xp",
+    "percent": 20,
+    "duration_seconds": 10800
+  },
+  {
+    "id": 674020,
+    "comment": "34572. XP Boost - 20% for 3 days",
+    "boost_type": "xp",
+    "percent": 20,
+    "duration_seconds": 259200
+  },
+  {
+    "id": 674026,
+    "comment": "34876. XP Boost - 20% for 1 day",
+    "boost_type": "xp",
+    "percent": 20,
+    "duration_seconds": 86400
+  },
+  {
+    "id": 674053,
+    "comment": "34878. XP Boost - 50% for 30 days",
+    "boost_type": "xp",
+    "percent": 50,
+    "duration_seconds": 2592000
+  },
+  {
+    "id": 674059,
+    "comment": "34886. XP Boost 50%, 5 days ; Player receives a passive xp bonus",
+    "effect_id": 3509,
+    "duration_seconds": 432000
+  },
+  {
+    "id": 674065,
+    "comment": ""
+  },
+  {
+    "id": 674069,
+    "comment": ""
+  },
+  {
+    "id": 674072,
+    "comment": "34889. XP Boost 10%, Permanent ; Player receives a passive 10% xp bonus permanently for buying Ensign Founder Pack, 5% for squadmates",
+    "permanent": 1,
+    "experience_boost": 10
+  },
+  {
+    "id": 674075,
+    "comment": ""
+  },
+  {
+    "id": 674080,
+    "comment": "34900. XP Boost - 20% for 1 hour",
+    "boost_type": "xp",
+    "percent": 20,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 674086,
+    "comment": "34902. XP Boost - 20% for 8 hours",
+    "boost_type": "xp",
+    "percent": 20,
+    "duration_seconds": 28800
+  },
+  {
+    "id": 674092,
+    "comment": "35497. XP Boost - 20% for 10 days",
+    "boost_type": "xp",
+    "percent": 20,
+    "duration_seconds": 864000
+  },
+  {
+    "id": 674098,
+    "comment": "36548. XP Boost - 10% for 1 hour",
+    "boost_type": "xp",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 674104,
+    "comment": ""
+  },
+  {
+    "id": 674110,
+    "comment": ""
+  },
+  {
+    "id": 674911,
+    "comment": "37416. +20% XP for the next 60 minutes",
+    "boost_type": "xp",
+    "percent": 20,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 674914,
+    "comment": "37417. +15% XP for the next 60 minutes",
+    "boost_type": "xp",
+    "percent": 15,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 674917,
+    "comment": "37418. +10% XP for the next 60 minutes",
+    "boost_type": "xp",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 674922,
+    "comment": "37419. +5% XP for the next 60 minutes",
+    "boost_type": "xp",
+    "percent": 5,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 674925,
+    "comment": "37420. +20% XP for the next 30 minutes",
+    "boost_type": "xp",
+    "percent": 20,
+    "duration_seconds": 1800
+  },
+  {
+    "id": 674928,
+    "comment": "37421. +15% XP for the next 30 minutes",
+    "boost_type": "xp",
+    "percent": 15,
+    "duration_seconds": 1800
+  },
+  {
+    "id": 674931,
+    "comment": "37422. +10% XP for the next 30 minutes",
+    "boost_type": "xp",
+    "percent": 10,
+    "duration_seconds": 1800
+  },
+  {
+    "id": 674934,
+    "comment": "37423. +5% XP for the next 30 minutes",
+    "boost_type": "xp",
+    "percent": 5,
+    "duration_seconds": 1800
+  },
+  {
+    "id": 674937,
+    "comment": "37424. +20% XP for the next 15 minutes",
+    "boost_type": "xp",
+    "percent": 20,
+    "duration_seconds": 900
+  },
+  {
+    "id": 674940,
+    "comment": "37425. +15% XP for the next 15 minutes",
+    "boost_type": "xp",
+    "percent": 15,
+    "duration_seconds": 900
+  },
+  {
+    "id": 674943,
+    "comment": "37426. +10% XP for the next 15 minutes",
+    "boost_type": "xp",
+    "percent": 10,
+    "duration_seconds": 900
+  },
+  {
+    "id": 674950,
+    "comment": "37427. +5% XP for the next 15 minutes",
+    "boost_type": "xp",
+    "percent": 5,
+    "duration_seconds": 900
+  },
+  {
+    "id": 712073,
+    "comment": "34877. XP Boost - 25% for 7 days",
+    "boost_type": "xp",
+    "percent": 25,
+    "duration_seconds": 604800
+  },
+  {
+    "id": 712266,
+    "comment": "37566. XP Boost - 100% for 1 hour",
+    "boost_type": "xp",
+    "percent": 100,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 712271,
+    "comment": "37567. Reputation Boost - 100% for 1 hour",
+    "boost_type": "reputation",
+    "percent": 100,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 724991,
+    "comment": "37616. +5% Reputation for the next 60 minutes",
+    "boost_type": "reputation",
+    "percent": 5,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725000,
+    "comment": "37617. +10% Reputation for the next 60 minutes",
+    "boost_type": "reputation",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725099,
+    "comment": "37614. +5% CY for the next 60 minutes",
+    "boost_type": "crystite",
+    "percent": 5,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725101,
+    "comment": "37615. +10% CY for the next 60 minutes",
+    "boost_type": "crystite",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725142,
+    "comment": "37619. +10% XP, CY, and Reputation for the next 60 minutes",
+    "boost_type": "reputation",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725143,
+    "comment": "37619. +10% XP, CY, and Reputation for the next 60 minutes",
+    "boost_type": "crystite",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725144,
+    "comment": "37619. +10% XP, CY, and Reputation for the next 60 minutes",
+    "boost_type": "xp",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725152,
+    "comment": "37621. +5% XP, CY, and Reputation for the next 60 minutes",
+    "boost_type": "reputation",
+    "percent": 5,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725153,
+    "comment": "37621. +5% XP, CY, and Reputation for the next 60 minutes",
+    "boost_type": "crystite",
+    "percent": 5,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725154,
+    "comment": "37621. +5% XP, CY, and Reputation for the next 60 minutes",
+    "boost_type": "xp",
+    "percent": 5,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725157,
+    "comment": "37620. +10% XP, +5% CY and Reputation for the next 60 minutes",
+    "boost_type": "reputation",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725158,
+    "comment": "37620. +10% XP, +5% CY and Reputation for the next 60 minutes",
+    "boost_type": "crystite",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725159,
+    "comment": "37620. +10% XP, +5% CY and Reputation for the next 60 minutes",
+    "boost_type": "xp",
+    "percent": 10,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725162,
+    "comment": "37622. +5% XP and CY for the next 60 minutes",
+    "boost_type": "crystite",
+    "percent": 5,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725163,
+    "comment": "37622. +5% XP and CY for the next 60 minutes",
+    "boost_type": "xp",
+    "percent": 5,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 725166,
+    "comment": ""
+  },
+  {
+    "id": 803406,
+    "comment": "35782. Reputation Boost +10%, 6 months / 35782. Reputation Boost - 10% Permanently",
+    "boost_type": "reputation",
+    "percent": 10,
+    "duration_seconds": 15552000
+  },
+  {
+    "id": 833553,
+    "comment": "38065. Experimental Stimulants"
+  },
+  {
+    "id": 963192,
+    "comment": ""
+  },
+  {
+    "id": 1000735,
+    "comment": "39174. XP Boost - 100% for 1 hour",
+    "boost_type": "xp",
+    "percent": 100,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 1102669,
+    "comment": "39754. +10% CY for the next 15 minutes",
+    "boost_type": "crystite",
+    "percent": 10,
+    "duration_seconds": 900
+  },
+  {
+    "id": 1109446,
+    "comment": ""
+  },
+  {
+    "id": 1141441,
+    "comment": ""
+  },
+  {
+    "id": 1197674,
+    "comment": "40122. XP Boost - 100% for 3 hour",
+    "boost_type": "xp",
+    "percent": 100,
+    "duration_seconds": 10800
+  },
+  {
+    "id": 1197680,
+    "comment": "40123. item 136915 / 40123. XP Boost - 50% for 3 hour"
+  },
+  {
+    "id": 1199598,
+    "comment": "40130. Reputation Boost - 50% for 1 hour",
+    "boost_type": "reputation",
+    "percent": 50,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 1199603,
+    "comment": "40131. Reputation Boost - 50% for 3 hours",
+    "boost_type": "reputation",
+    "percent": 50,
+    "duration_seconds": 10800
+  },
+  {
+    "id": 1199608,
+    "comment": "40132. Reputation Boost - 100% for 3 hours",
+    "boost_type": "reputation",
+    "percent": 100,
+    "duration_seconds": 10800
+  },
+  {
+    "id": 1229417,
+    "comment": "40341. XP Boost - 50% for 1 hour",
+    "boost_type": "xp",
+    "percent": 50,
+    "duration_seconds": 3600
+  },
+  {
+    "id": 1336389,
+    "comment": "40421. The Skylord"
+  },
+  {
+    "id": 1336402,
+    "comment": "40418. The Militant"
+  },
+  {
+    "id": 1336412,
+    "comment": "40414. The Wind Runner"
+  },
+  {
+    "id": 1369494,
+    "comment": "40929. item 140759"
+  },
+  {
+    "id": 1420005,
+    "comment": "41227. Spicy Candy"
+  },
+  {
+    "id": 1420010,
+    "comment": "41227. Spicy Candy"
+  },
+  {
+    "id": 1421055,
+    "comment": "41228. Honey Candy"
+  },
+  {
+    "id": 1421060,
+    "comment": "41228. Honey Candy"
+  },
+  {
+    "id": 1421285,
+    "comment": "41229. Tart Candy"
+  },
+  {
+    "id": 1421316,
+    "comment": "41229. Tart Candy"
+  },
+  {
+    "id": 1421568,
+    "comment": "41230. Sweet Candy"
+  },
+  {
+    "id": 1421573,
+    "comment": "41230. Sweet Candy"
+  },
+  {
+    "id": 1425006,
+    "comment": "41226. Friendship Boost"
+  },
+  {
+    "id": 1563620,
+    "comment": "41851. item 143119"
+  },
+  {
+    "id": 1564479,
+    "comment": "40411. Speed Enhancer"
+  },
+  {
+    "id": 1564482,
+    "comment": "40137. Combat Enhancer"
+  },
+  {
+    "id": 1564485,
+    "comment": "40412. HKM Enhancer"
+  },
+  {
+    "id": 1615246,
+    "comment": ""
+  },
+  {
+    "id": 1632447,
+    "comment": ""
+  },
+  {
+    "id": 1632455,
+    "comment": ""
+  },
+  {
+    "id": 1632463,
+    "comment": ""
+  },
+  {
+    "id": 1632471,
+    "comment": ""
+  },
+  {
+    "id": 1632479,
+    "comment": ""
+  },
+  {
+    "id": 1632487,
+    "comment": ""
+  },
+  {
+    "id": 1632495,
+    "comment": ""
+  },
+  {
+    "id": 1632503,
+    "comment": ""
+  },
+  {
+    "id": 1632511,
+    "comment": ""
+  },
+  {
+    "id": 1632519,
+    "comment": ""
+  },
+  {
+    "id": 1632527,
+    "comment": ""
+  },
+  {
+    "id": 1632535,
+    "comment": ""
+  }
+]

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
@@ -56,6 +57,28 @@ public static class GRPCService
            };
 
         await SendCommandAsync(new Command() { SaveCurrentBattleframe = data });
+    }
+
+    /// <summary>
+    /// Persist the character's unlock state (cosmetic unlocks, certificates, battleframes,
+    /// account groups, boosts, faction standings) so it survives a relog.
+    /// </summary>
+    public static async Task SaveCharacterUnlocksAsync(ulong characterId, uint zoneId, IEnumerable<Data.CharacterUnlockRecord> records)
+    {
+        var data = new SaveCharacterUnlocks { CharacterId = characterId, ZoneId = zoneId };
+        foreach (var record in records)
+        {
+            data.Unlocks.Add(new CharacterUnlock
+            {
+                Kind = record.Kind ?? string.Empty,
+                Group = record.Group ?? string.Empty,
+                Id = record.Id,
+                Value = record.Value,
+                ExpiresAt = record.ExpiresAt,
+            });
+        }
+
+        await SendCommandAsync(new Command() { SaveCharacterUnlocks = data });
     }
 
     public static async Task SendCommandAsync(Command command)

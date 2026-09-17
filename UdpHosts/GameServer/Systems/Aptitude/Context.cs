@@ -6,8 +6,16 @@ namespace GameServer.Systems.Aptitude;
 
 public class Context
 {
+    private readonly SharedActivationState _shared;
+
     public Context(IShard shard, IAptitudeTarget initiator)
+        : this(shard, initiator, new SharedActivationState())
     {
+    }
+
+    private Context(IShard shard, IAptitudeTarget initiator, SharedActivationState shared)
+    {
+        _shared = shared;
         Shard = shard;
         Initiator = initiator;
         ActivationInitiator = initiator;
@@ -116,9 +124,33 @@ public class Context
     /// </summary>
     public float AppliedEffectDuration { get; set; } = float.NaN;
 
+    /// <summary>
+    ///     What the activation has handed the player so far - the items a GrantOwnerItem/SpawnLoot/UnpackItem
+    ///     node granted - so a ShowRewardScreen node later in the same chain can list them. Shared with
+    ///     copied contexts like the rollbacks, so loot rolled inside an applied effect (the booster packs
+    ///     roll from their effect's apply chain) shows on the screen too.
+    /// </summary>
+    public List<AwardedItem> AwardedItems { get; set; } = [];
+
+    /// <summary>
+    ///     The characters whose <see cref="Entities.Character.CharacterEntity.Unlocks" /> a node of this
+    ///     activation changed (unlocks, boosts, account groups, reputation). The ability system persists
+    ///     their state through GRPC once the root activation has succeeded - not per node, since a later
+    ///     node may still fail the chain. Shared with copied contexts like the rollbacks.
+    /// </summary>
+    public HashSet<IAptitudeTarget> DirtyUnlocks { get; set; } = [];
+
+    /// <summary>
+    ///     Whether the consumable this activation came from (<see cref="AbilityModuleId" />) has been
+    ///     spent already - by a ConsumeItem node, or by a reward node that spends it itself because its
+    ///     chain has none (most unlock kits, boosts and rental contracts are authored that way). Keeps
+    ///     a chain with both from charging twice. Shared with copied contexts.
+    /// </summary>
+    public bool ActivatingItemConsumed { get => _shared.ActivatingItemConsumed; set => _shared.ActivatingItemConsumed = value; }
+
     public static Context CopyContext(Context original)
     {
-        return new Context(original.Shard, original.Initiator)
+        return new Context(original.Shard, original.Initiator, original._shared)
         {
             ChainId = original.ChainId,
             AbilityId = original.AbilityId,
@@ -145,6 +177,8 @@ public class Context
             ActivationRollbacks = original.ActivationRollbacks,
             AppliedEffects = original.AppliedEffects,
             AppliedEffectDuration = original.AppliedEffectDuration,
+            AwardedItems = original.AwardedItems,
+            DirtyUnlocks = original.DirtyUnlocks,
         };
     }
 
@@ -155,3 +189,12 @@ public class Context
     public uint SourceEffect;
     */
 }
+
+/// <summary>Flags one activation shares with every context copied from it.</summary>
+internal sealed class SharedActivationState
+{
+    public bool ActivatingItemConsumed;
+}
+
+/// <summary>An item an activation granted, for the reward screen.</summary>
+public sealed record AwardedItem(uint SdbId, uint Quantity);

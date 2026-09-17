@@ -76,6 +76,20 @@ message CharacterAndBattleframeVisuals {
    BasicCharacterInfo CharacterInfo = 1;
    CharacterVisuals CharacterVisuals = 2;
    PlayerBattleframeVisuals BattleframeVisuals = 3;
+   // What the character owns besides items: cosmetic unlocks, certificates,
+   // unlocked battleframes, account groups, boosts and faction standings.
+   repeated CharacterUnlock Unlocks = 4;
+}
+// One line of a character's unlock state (see CharacterUnlocks in the GameServer):
+// Kind "unlock" (Group + Id), "account_group" (Group + ExpiresAt), "boost"
+// (Group = type, Value = percent, Id = visual effect, ExpiresAt) or
+// "reputation" (Id = faction, Value = standing).
+message CharacterUnlock {
+   string Kind = 1;
+   string Group = 2;
+   uint32 Id = 3;
+   int32 Value = 4;
+   uint64 ExpiresAt = 5;
 }
 message CharacterID {
    int64 ID = 1;
@@ -108,6 +122,7 @@ message Command {
       SaveGameSessionData SaveGameSessionData = 1;
       SaveLgvRaceFinish SaveLgvRaceFinish = 2;
       SaveCurrentBattleframe SaveCurrentBattleframe = 3;
+      SaveCharacterUnlocks SaveCharacterUnlocks = 4;
    }
 }
 message Event {
@@ -152,6 +167,11 @@ message SaveGameSessionData {
    uint32 ZoneId = 2;
    uint32 OutpostId = 3;
    uint32 TimePlayed = 4;
+}
+message SaveCharacterUnlocks {
+   uint64 CharacterId = 1;
+   uint32 ZoneId = 2;
+   repeated CharacterUnlock Unlocks = 3;
 }
 message SaveLgvRaceFinish {
    uint64 CharacterGuid = 1;

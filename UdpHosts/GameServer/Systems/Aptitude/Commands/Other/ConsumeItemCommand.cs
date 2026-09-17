@@ -49,6 +49,12 @@ public class ConsumeItemCommand : Command, ICommand
             return true;
         }
 
+        if (context.ActivatingItemConsumed)
+        {
+            // A reward node earlier in this activation already spent the item (see PlayerRewards.ConsumeActivatingItem).
+            return true;
+        }
+
         uint itemSdbId = context.AbilityModuleId;
         if (!inventory.ConsumeItemBySdbId(itemSdbId, 1, out var removedItems))
         {
@@ -62,6 +68,7 @@ public class ConsumeItemCommand : Command, ICommand
             return false;
         }
 
+        context.ActivatingItemConsumed = true;
         context.ActivationRollbacks.Add(() =>
         {
             if (removedItems.Count == 0)

@@ -1,8 +1,9 @@
-﻿using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.customdata;
+using GameServer.Systems.Loot;
 
 namespace GameServer.Systems.Aptitude.Commands.Other;
 
+/// <summary>Adds or takes a resource (crystite, a gene sample) from the owner; a take the owner cannot cover fails.</summary>
 public class ModifyOwnerResourcesCommand : Command, ICommand
 {
     private ModifyOwnerResourcesCommandDef Params;
@@ -17,26 +18,21 @@ public class ModifyOwnerResourcesCommand : Command, ICommand
     {
         if (Params.ResourceSdbId == 0 || Params.Quantity == 0)
         {
+            Logger.Warning("{Command} {CommandId} has no resource authored yet (item {Item}); nothing changed", nameof(ModifyOwnerResourcesCommand), Params.Id, context.AbilityModuleId);
             return true;
         }
 
-        foreach (var target in context.Targets)
+        var character = PlayerRewards.OwnerOf(context);
+        if (character?.Player?.Inventory == null)
         {
-            if (target is not CharacterEntity { IsPlayerControlled: true } character)
-            {
-                continue;
-            }
-
-            if (Params.Quantity > 0)
-            {
-                character.Player.Inventory.AddResource(Params.ResourceSdbId, (uint)Params.Quantity);
-            }
-            else
-            {
-                character.Player.Inventory.ConsumeResource(Params.ResourceSdbId, (uint)(-Params.Quantity));
-            }
+            return false;
         }
 
-        return true;
+        if (Params.Quantity > 0)
+        {
+            return PlayerRewards.GrantItem(context, character, Params.ResourceSdbId, (uint)Params.Quantity);
+        }
+
+        return PlayerRewards.TakeItem(context, character, Params.ResourceSdbId, (uint)(-Params.Quantity));
     }
 }

@@ -24,6 +24,7 @@ using GameServer.Systems.Aptitude.Commands.Requirement;
 using GameServer.Systems.Aptitude.Commands.Self;
 using GameServer.Systems.Aptitude.Commands.SetFlags;
 using GameServer.Systems.Aptitude.Commands.Target;
+using GameServer.Systems.Aptitude.Commands.Unlock;
 using GameServer.Systems.Aptitude.Commands.Update;
 using Serilog;
 
@@ -378,8 +379,8 @@ public class Factory
                 return new TargetOwnerCommand(SDBInterface.GetTargetOwnerCommandDef(commandId));
             // case CommandType.RequireTookDamage:
             //     return new RequireTookDamageCommand(SDBInterface.GetRequireTookDamageCommandDef(commandId));
-            // case CommandType.ModifyOwnerResources:
-            //     return new ModifyOwnerResourcesCommand(CustomDBInterface.GetModifyOwnerResourcesCommandDef(commandId));
+            case CommandType.ModifyOwnerResources:
+                return new ModifyOwnerResourcesCommand(CustomDBInterface.GetModifyOwnerResourcesCommandDef(commandId) ?? new ModifyOwnerResourcesCommandDef { Id = commandId });
             case CommandType.ModifyPermission:
                 return new ModifyPermissionCommand(CustomDBInterface.GetModifyPermissionCommandDef(commandId));
             case CommandType.RequirePermission:
@@ -424,8 +425,8 @@ public class Factory
                 return new InflictCooldownCommand(SDBInterface.GetInflictCooldownCommandDef(commandId));
             case CommandType.RequireMovestate:
                 return new RequireMovestateCommand(SDBInterface.GetRequireMovestateCommandDef(commandId));
-            // case CommandType.GrantOwnerItem:
-            //     return new GrantOwnerItemCommand(CustomDBInterface.GetGrantOwnerItemCommandDef(commandId));
+            case CommandType.GrantOwnerItem:
+                return new GrantOwnerItemCommand(CustomDBInterface.GetGrantOwnerItemCommandDef(commandId) ?? new GrantOwnerItemCommandDef { Id = commandId });
             // case CommandType.ShoppingInvitation:
             //     return new ShoppingInvitationCommand(CustomDBInterface.GetShoppingInvitationCommandDef(commandId));
             // case CommandType.SetGuardian:
@@ -451,8 +452,8 @@ public class Factory
             // case CommandType.RequireResourceFromTarget:
             //     has environment `server` but is in SDB
             //     return new RequireResourceFromTargetCommand(SDBInterface.GetRequireResourceFromTargetCommandDef(commandId));
-            // case CommandType.SpawnLoot:
-            //     return new SpawnLootCommand(CustomDBInterface.GetSpawnLootCommandDef(commandId));
+            case CommandType.SpawnLoot:
+                return new SpawnLootCommand(CustomDBInterface.GetSpawnLootCommandDef(commandId) ?? new SpawnLootCommandDef { Id = commandId });
             // case CommandType.AbilitySlotted:
             //     return new AbilitySlottedCommand(CustomDBInterface.GetAbilitySlottedCommandDef(commandId));
             case CommandType.LoadRegisterFromResource:
@@ -574,8 +575,8 @@ public class Factory
             //     return new LoadRegisterFromDamageCommand(SDBInterface.GetLoadRegisterFromDamageCommandDef(commandId));
             case CommandType.TargetSwap:
                 return new TargetSwapCommand(SDBInterface.GetTargetSwapCommandDef(commandId));
-            // case CommandType.ApplyPermanentEffect:
-            //     return new ApplyPermanentEffectCommand(CustomDBInterface.GetApplyPermanentEffectCommandDef(commandId));
+            case CommandType.ApplyPermanentEffect:
+                return new ApplyPermanentEffectCommand(CustomDBInterface.GetApplyPermanentEffectCommandDef(commandId) ?? new ApplyPermanentEffectCommandDef { Id = commandId });
             // case CommandType.ModifyHostility:
             //     return new ModifyHostilityCommand(CustomDBInterface.GetModifyHostilityCommandDef(commandId));
             // case CommandType.RegisterAbilityTrigger:
@@ -600,8 +601,8 @@ public class Factory
             //     return new RegisterClientProximityCommand(SDBInterface.GetRegisterClientProximityCommandDef(commandId));
             case CommandType.ApplySinCard:
                 return new ApplySinCardCommand(CustomDBInterface.GetApplySinCardCommandDef(commandId));
-            // case CommandType.UnlockOrnaments:
-            //     return new UnlockOrnamentsCommand(CustomDBInterface.GetUnlockOrnamentsCommandDef(commandId));
+            case CommandType.UnlockOrnaments:
+                return new UnlockOrnamentsCommand(CustomDBInterface.GetUnlockOrnamentsCommandDef(commandId) ?? new UnlockOrnamentsCommandDef { Id = commandId });
             // case CommandType.DropCarryable:
             //     return new DropCarryableCommand(CustomDBInterface.GetDropCarryableCommandDef(commandId));
             // case CommandType.RequireSinAcquired:
@@ -670,16 +671,16 @@ public class Factory
 
                 return new LoadRegisterFromLevelCommand(levelDef);
             }
-            // case CommandType.UnlockCerts:
-            //     return new UnlockCertsCommand(CustomDBInterface.GetUnlockCertsCommandDef(commandId));
-            // case CommandType.UnlockPatterns:
-            //     return new UnlockPatternsCommand(CustomDBInterface.GetUnlockPatternsCommandDef(commandId));
-            // case CommandType.UnlockTitles:
-            //     return new UnlockTitlesCommand(CustomDBInterface.GetUnlockTitlesCommandDef(commandId));
-            // case CommandType.UnlockWarpaints:
-            //     return new UnlockWarpaintsCommand(CustomDBInterface.GetUnlockWarpaintsCommandDef(commandId));
-            // case CommandType.UnlockDecals:
-            //     return new UnlockDecalsCommand(CustomDBInterface.GetUnlockDecalsCommandDef(commandId));
+            case CommandType.UnlockCerts:
+                return new UnlockCertsCommand(CustomDBInterface.GetUnlockCertsCommandDef(commandId) ?? new UnlockCertsCommandDef { Id = commandId });
+            case CommandType.UnlockPatterns:
+                return new UnlockPatternsCommand(CustomDBInterface.GetUnlockPatternsCommandDef(commandId) ?? new UnlockPatternsCommandDef { Id = commandId });
+            case CommandType.UnlockTitles:
+                return new UnlockTitlesCommand(CustomDBInterface.GetUnlockTitlesCommandDef(commandId) ?? new UnlockTitlesCommandDef { Id = commandId });
+            case CommandType.UnlockWarpaints:
+                return new UnlockWarpaintsCommand(CustomDBInterface.GetUnlockWarpaintsCommandDef(commandId) ?? new UnlockWarpaintsCommandDef { Id = commandId });
+            case CommandType.UnlockDecals:
+                return new UnlockDecalsCommand(CustomDBInterface.GetUnlockDecalsCommandDef(commandId) ?? new UnlockDecalsCommandDef { Id = commandId });
             case CommandType.AwardRedBeans:
                 return new AwardRedBeansCommand(CustomDBInterface.GetAwardRedBeansCommandDef(commandId));
             // case CommandType.SetDefaultDamageBonus:
@@ -688,8 +689,8 @@ public class Factory
             //     return new RequireEquippedItemCommand(SDBInterface.GetRequireEquippedItemCommandDef(commandId));
             case CommandType.CarryableObjectSpawn:
                 return new CarryableObjectSpawnCommand(CustomDBInterface.GetCarryableObjectSpawnCommandDef(commandId));
-            // case CommandType.UnlockVisualOverrides:
-            //     return new UnlockVisualOverridesCommand(CustomDBInterface.GetUnlockVisualOverridesCommandDef(commandId));
+            case CommandType.UnlockVisualOverrides:
+                return new UnlockVisualOverridesCommand(CustomDBInterface.GetUnlockVisualOverridesCommandDef(commandId) ?? new UnlockVisualOverridesCommandDef { Id = commandId });
             // case CommandType.RequireItemAttribute:
             //     return new RequireItemAttributeCommand(SDBInterface.GetRequireItemAttributeCommandDef(commandId));
             // case CommandType.AddLootTable:
@@ -700,12 +701,12 @@ public class Factory
                 return new RequireZoneTypeCommand(SDBInterface.GetRequireZoneTypeCommandDef(commandId));
             // case CommandType.SetInteractionType:
             //     return new SetInteractionTypeCommand(CustomDBInterface.GetSetInteractionTypeCommandDef(commandId));
-            // case CommandType.UnpackItem:
-            //     return new UnpackItemCommand(CustomDBInterface.GetUnpackItemCommandDef(commandId));
+            case CommandType.UnpackItem:
+                return new UnpackItemCommand(CustomDBInterface.GetUnpackItemCommandDef(commandId) ?? new UnpackItemCommandDef { Id = commandId });
             case CommandType.TargetOwnedDeployables:
                 return new TargetOwnedDeployablesCommand(CustomDBInterface.GetTargetOwnedDeployablesCommandDef(commandId));
-            // case CommandType.RemovePermanentEffect:
-            //     return new RemovePermanentEffectCommand(CustomDBInterface.GetRemovePermanentEffectCommandDef(commandId));
+            case CommandType.RemovePermanentEffect:
+                return new RemovePermanentEffectCommand(CustomDBInterface.GetRemovePermanentEffectCommandDef(commandId) ?? new RemovePermanentEffectCommandDef { Id = commandId });
             // case CommandType.RequireLootStore:
             //     return new RequireLootStoreCommand(CustomDBInterface.GetRequireLootStoreCommandDef(commandId));
             // case CommandType.TargetBySinVulnerable:
@@ -716,8 +717,8 @@ public class Factory
             //     return new ModifyDamageByFactionCommand(CustomDBInterface.GetModifyDamageByFactionCommandDef(commandId));
             // case CommandType.ModifyDamageByHeadshot:
             //     return new ModifyDamageByHeadshotCommand(CustomDBInterface.GetModifyDamageByHeadshotCommandDef(commandId));
-            // case CommandType.UnlockHeadAccessories:
-            //     return new UnlockHeadAccessoriesCommand(CustomDBInterface.GetUnlockHeadAccessoriesCommandDef(commandId));
+            case CommandType.UnlockHeadAccessories:
+                return new UnlockHeadAccessoriesCommand(CustomDBInterface.GetUnlockHeadAccessoriesCommandDef(commandId) ?? new UnlockHeadAccessoriesCommandDef { Id = commandId });
             // case CommandType.RequireDamageType:
             //     return new RequireDamageTypeCommand(SDBInterface.GetRequireDamageTypeCommandDef(commandId));
             case CommandType.RequireWeaponArmed:
@@ -730,8 +731,8 @@ public class Factory
             //     return new ModifyDamageByTargetHealthCommand(CustomDBInterface.GetModifyDamageByTargetHealthCommandDef(commandId));
             // case CommandType.ModifyDamageByTargetDamageResponse:
             //     return new ModifyDamageByTargetDamageResponseCommand(CustomDBInterface.GetModifyDamageByTargetDamageResponseCommandDef(commandId));
-            // case CommandType.AddAccountGroup:
-            //     return new AddAccountGroupCommand(CustomDBInterface.GetAddAccountGroupCommandDef(commandId));
+            case CommandType.AddAccountGroup:
+                return new AddAccountGroupCommand(CustomDBInterface.GetAddAccountGroupCommandDef(commandId) ?? new AddAccountGroupCommandDef { Id = commandId });
             case CommandType.RequireInitiatorExists:
                 return new RequireInitiatorExistsCommand(CustomDBInterface.GetRequireInitiatorExistsCommandDef(commandId));
             // case CommandType.RegisterTimedTrigger:
@@ -742,14 +743,14 @@ public class Factory
             //     return new StartArcCommand(CustomDBInterface.GetStartArcCommandDef(commandId));
             // case CommandType.RequestArcJobs:
             //     return new RequestArcJobsCommand(CustomDBInterface.GetRequestArcJobsCommandDef(commandId));
-            // case CommandType.UnlockBattleframes:
-            //     return new UnlockBattleframesCommand(CustomDBInterface.GetUnlockBattleframesCommandDef(commandId));
+            case CommandType.UnlockBattleframes:
+                return new UnlockBattleframesCommand(CustomDBInterface.GetUnlockBattleframesCommandDef(commandId) ?? new UnlockBattleframesCommandDef { Id = commandId });
             // case CommandType.AddAppendageHealthPool:
             //     return new AddAppendageHealthPoolCommand(CustomDBInterface.GetAddAppendageHealthPoolCommandDef(commandId));
             // case CommandType.RequireSquadLeader:
             //     return new RequireSquadLeaderCommand(SDBInterface.GetRequireSquadLeaderCommandDef(commandId));
-            // case CommandType.RequireHasCertificate:
-            //     return new RequireHasCertificateCommand(SDBInterface.GetRequireHasCertificateCommandDef(commandId));
+            case CommandType.RequireHasCertificate:
+                return new RequireHasCertificateCommand(SDBInterface.GetRequireHasCertificateCommandDef(commandId));
             // case CommandType.DropAllCarryable:
             //     return new DropAllCarryableCommand(CustomDBInterface.GetDropAllCarryableCommandDef(commandId));
             // case CommandType.RemoteAbilityCall:
@@ -772,12 +773,12 @@ public class Factory
                 return new TargetFilterByRangeCommand(SDBInterface.GetTargetFilterByRangeCommandDef(commandId));
             // case CommandType.OverrideCollision:
             //     return new OverrideCollisionCommand(SDBInterface.GetOverrideCollisionCommandDef(commandId));
-            // case CommandType.RequireHasUnlock:
-            //     return new RequireHasUnlockCommand(SDBInterface.GetRequireHasUnlockCommandDef(commandId));
-            // case CommandType.UnlockContent:
-            //     return new UnlockContentCommand(CustomDBInterface.GetUnlockContentCommandDef(commandId));
-            // case CommandType.ShowRewardScreen:
-            //     return new ShowRewardScreenCommand(CustomDBInterface.GetShowRewardScreenCommandDef(commandId));
+            case CommandType.RequireHasUnlock:
+                return new RequireHasUnlockCommand(SDBInterface.GetRequireHasUnlockCommandDef(commandId));
+            case CommandType.UnlockContent:
+                return new UnlockContentCommand(CustomDBInterface.GetUnlockContentCommandDef(commandId) ?? new UnlockContentCommandDef { Id = commandId });
+            case CommandType.ShowRewardScreen:
+                return new ShowRewardScreenCommand(CustomDBInterface.GetShowRewardScreenCommandDef(commandId) ?? new ShowRewardScreenCommandDef { Id = commandId });
             case CommandType.RegisterLoadScale:
                 return new RegisterLoadScaleCommand(SDBInterface.GetRegisterLoadScaleCommandDef(commandId));
             // case CommandType.EnableInteraction:
@@ -786,8 +787,8 @@ public class Factory
             //     return new ReputationModifierCommand(CustomDBInterface.GetReputationModifierCommandDef(commandId));
             // case CommandType.HostilityOverride:
             //     return new HostilityOverrideCommand(CustomDBInterface.GetHostilityOverrideCommandDef(commandId));
-            // case CommandType.AddFactionReputation:
-            //     return new AddFactionReputationCommand(CustomDBInterface.GetAddFactionReputationCommandDef(commandId));
+            case CommandType.AddFactionReputation:
+                return new AddFactionReputationCommand(CustomDBInterface.GetAddFactionReputationCommandDef(commandId) ?? new AddFactionReputationCommandDef { Id = commandId });
             // case CommandType.MovementFacing:
             //     return new MovementFacingCommand(SDBInterface.GetMovementFacingCommandDef(commandId));
             case CommandType.RequireFriends:
@@ -820,10 +821,10 @@ public class Factory
             //     return new InflictHitFeedbackCommand(CustomDBInterface.GetInflictHitFeedbackCommandDef(commandId));
             // case CommandType.RepositionClones:
             //     return new RepositionClonesCommand(CustomDBInterface.GetRepositionClonesCommandDef(commandId));
-            // case CommandType.ApplyUnlock:
-            //     return new ApplyUnlockCommand(CustomDBInterface.GetApplyUnlockCommandDef(commandId));
-            // case CommandType.RequireAppliedUnlock:
-            //     return new RequireAppliedUnlockCommand(CustomDBInterface.GetRequireAppliedUnlockCommandDef(commandId));
+            case CommandType.ApplyUnlock:
+                return new ApplyUnlockCommand(CustomDBInterface.GetApplyUnlockCommandDef(commandId) ?? new ApplyUnlockCommandDef { Id = commandId });
+            case CommandType.RequireAppliedUnlock:
+                return new RequireAppliedUnlockCommand(CustomDBInterface.GetRequireAppliedUnlockCommandDef(commandId) ?? new RequireAppliedUnlockCommandDef { Id = commandId });
             // case CommandType.RequireHeadshot:
             //     return new RequireHeadshotCommand(SDBInterface.GetRequireHeadshotCommandDef(commandId));
             // case CommandType.DisableChatBubble:

@@ -96,42 +96,69 @@ meaning yet.
 
 102 items carry "Kit" in their name:
 
-- **Battleframe Visual Unlock Kits** (85452-85463, 85792-85793): `InstantActivation,
-  UnlockTitles / UnlockWarpaints / UnlockDecals, ImpactApplyEffect(400)`. Never consumed (no
-  `ConsumeItem` - the data treats them as account unlocks); the `Unlock*` commands are placeholders
-  (§5), so using one does nothing yet and keeps the kit.
+- **Battleframe Visual Unlock Kits** (85452-85463, 85792-85793) and the other unlock items: `InstantActivation,
+  UnlockTitles / UnlockWarpaints / UnlockDecals / ..., ImpactApplyEffect(400)`. Their chains carry no
+  `ConsumeItem`; the live server spent the kit inside the unlock command, and so does this one
+  (`PlayerRewards.ConsumeActivatingItem`, once per activation, only for type 7/9 items, undone with
+  the activation). Using one records the unlock in `CharacterUnlocks` (§7), sends `UnlocksUpdate`,
+  and the kit leaves the bag.
 - **Level 5 / 10 / 15 Upgrade Kits** (86412+, one per frame): `TimeCooldown, TargetSelf,
-  ConsumeItem, ImpactApplyEffect(400), SpawnLoot, InstantActivation`. **Consumed**, and `SpawnLoot`
-  is a placeholder, so the kit is spent for nothing. Until `SpawnLoot` has data behind it
-  (`CustomData` holds only the ids) the honest state is "do not use these".
+  ConsumeItem, ImpactApplyEffect(400), SpawnLoot, InstantActivation`. `SpawnLoot` now rolls a
+  `dbitems::LootTable` (`LootTableRoller`) into the bag. The client database never shipped the
+  server-side table ids for these rows, so `CustomData/aptgss_SpawnLootCommandDef.json` was
+  authored from the loot tables that *are* in the database: the kits use the "Level N Uncommon
+  <Slot>" gear tables (7129-7454), the booster packs their own tables (5474-5510), the Secure
+  Lockers / Caches their masters (6826-7564), PTS crates 6555-6568. Rows still without a table log
+  once and grant nothing (the kit is still spent by its own `ConsumeItem`, as on live).
 
-## 5. Boosts and other placeholders
+## 5. Boosts and the former placeholders
 
-42 boost items (XP Boost x18, Reputation Boost x12, Crystite Boost x5, ...) are all `TimeCooldown,
-ApplyPermanentEffect, ImpactApplyEffect(3509 | 4351 feedback), ConsumeItem`. They are **consumed**
-and `ApplyPermanentEffect` is a placeholder (21 of the 22 boost rows in
-`CustomData/ApplyPermanentEffectCommandDef` are empty), so the boost is spent and nothing is
-applied.
+42 boost items (XP Boost x18, Reputation Boost x12, Crystite Boost x5, ...) are `TimeCooldown,
+ApplyPermanentEffect, ImpactApplyEffect(3509 | 4351 feedback), ConsumeItem`. `ApplyPermanentEffect`
+now records a typed, timed boost (`xp` / `crystite` / `reputation`, percent, duration or permanent)
+on the character, pushes it to the client through the BaseController modifier props
+(`XpBoostModifierProp`, `PermanentStatusEffectsProp`, ...), and sweeps expiry every minute and at
+login. There is no XP system on the server yet, so the boost is *held* (visible, persisted,
+expiring) rather than multiplying anything; `CharacterUnlocks.BoostFraction(type, now)` is the hook
+for whoever awards XP/crystite/reputation. `RemovePermanentEffect` (Cleanse 143945, the polymorph
+removers) drops boosts by effect id / type.
 
-Placeholders that still return `true` without doing anything, and the consumables that reach them:
+Commands that used to return `true` doing nothing, and what they do now (rows = `CustomData`
+rows, data = rows with a payload authored; the rest log once):
 
-| Command | Consumables reaching it | Consequence |
+| Command | Rows / with data | Now |
 |---|---:|---|
-| `AddAccountGroup` | 137 | rentals / account flags never granted (item kept) |
-| `UnlockOrnaments` / `UnlockCerts` / `UnlockTitles` / `UnlockWarpaints` / `UnlockDecals` / ... | 118 / 43 / ... | nothing unlocked (item kept) |
-| `ShowRewardScreen` | 95 | no reward UI (Arsenal Package 143125 and the like) |
-| `SpawnLoot` | 66 | crates / upgrade kits spent, no loot |
-| `UnpackItem` | 44 | package kept, content not granted |
-| `GrantOwnerItem` | (in effect 11661 apply chains) | nothing granted |
-| `ApplyPermanentEffect` | 42 boosts | boost spent, no effect |
-| `ModifyOwnerResources` | few | resources unchanged |
+| `GrantOwnerItem` | 302 / 102 | grants `item_sdb_id` x `quantity` (or rolls `loot_table_id`); `cost_sdb_id` x `cost_quantity` pays first (50 fragments -> 1 component; the activating stack is the cost, not spent twice) |
+| `SpawnLoot` | 399 / 95 | rolls one or several loot tables into the bag, honouring `roll_mode` (0/1 weighted pick, 2 every row, 3/4 per-row chance) and `stack_duplicate_results` |
+| `UnpackItem` | 45 / 34 | takes the package, grants its content list |
+| `ShowRewardScreen` | 284 / 71 | `DisplayRewards` with every item the activation granted (`Context.AwardedItems`) |
+| `AddAccountGroup` | 179 / 127 | timed membership (LGV rentals 25/60 min, VIP flags); a second contract extends the remaining time |
+| `ApplyPermanentEffect` / `RemovePermanentEffect` | 112 / 62, 4 / 0 | boosts, above |
+| `UnlockTitles` | 101 / 89 | unlock + sets the title when the character has none |
+| `UnlockWarpaints` / `UnlockDecals` / `UnlockPatterns` / `UnlockOrnaments` / `UnlockHeadAccessories` / `UnlockVisualOverrides` | 92/64, 35/19, 26/17, 142/115, 25/24, 2/0 | cosmetic unlock groups |
+| `UnlockBattleframes` | 34 / 27 | frame chassis unlock (Holmgang Pilot Licenses 142187-142202) |
+| `UnlockCerts` | 310 / 189 | certificate unlock (recipes, campaign tokens) |
+| `UnlockContent` / `ApplyUnlock` | 35 / 0, 20 / 0 | wired; no ids identified in the database yet |
+| `ModifyOwnerResources` / `AddFactionReputation` / `AwardRedBeans` | 145/1, 4/3, 2/2 | resource pool delta, faction reputation ledger, red beans |
+| `RequireHasUnlock` / `RequireHasCertificate` / `RequireAppliedUnlock` | client `aptfs` tables | gate on the ledger (`negate` honoured); the 94 `negate=1` Campaign Token rows now block a double redeem |
 
-`CustomData/Todo/*.json` for `SpawnLoot`, `ShowRewardScreen`, `GrantOwnerItem`, `AddAccountGroup`
-contain only ids and comments - the loot tables / reward definitions those commands need were never
-in the client database, so there is nothing to implement them *from* without inventing data. The
-consistent choice was left as it is: the chain succeeds (the client's own feedback plays), the
-placeholder logs. Items whose only payload is a placeholder are listed above so nobody spends them
-expecting a result.
+The ids were matched by localized name (`Tools/SdbDump/author_item_command_defs.py`, re-runnable);
+a row whose name matched nothing keeps `0` and its `comment`, so the activation still succeeds
+(the client's own feedback plays) and the log says which row needs authoring. The remaining gaps are
+mostly `SpawnLoot` rows on comment-less delivery items and `UnlockCerts` rows whose certificate has
+no name in the client.
+
+`AddLootTable` and `RequireLootStore` (NPC drop plumbing, reached by no item) stay placeholders.
+
+## 7. The unlock ledger
+
+`CharacterUnlocks` (per `CharacterEntity`) holds unlock groups (titles, warpaints, decals,
+czi_patterns, ornaments, head_accessories, battleframes, certificate, visual_overrides, applied),
+account groups with expiry, boosts with expiry, and faction reputation. It is loaded with the
+character (`CharacterAndBattleframeVisuals.Unlocks`), sent as one `UnlocksUpdate` after the
+inventory at login, saved through `SaveCharacterUnlocks` (GameServerAPI) after every successful
+activation that touched it (`Context.DirtyUnlocks`) and when the player leaves the shard. Records
+are `(kind, group, id, value, expires_at)`; expired entries are dropped on load.
 
 ## 6. Powerups and non-consumable items with `ConsumeItem`
 

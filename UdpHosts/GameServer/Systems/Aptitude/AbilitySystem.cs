@@ -7,6 +7,7 @@ using AeroMessages.GSS.Character.Command;
 using GameServer.Entities.Character;
 using GameServer.Enums;
 using GameServer.Extensions;
+using GameServer.GRPC;
 using GameServer.StaticDB;
 using Serilog;
 
@@ -982,9 +983,36 @@ public class AbilitySystem
             {
                 RunActivationRollbacks(context);
             }
+            else
+            {
+                PersistUnlocks(context);
+            }
         }
 
         return success;
+    }
+
+    /// <summary>
+    ///     Saves the unlock state of every character a node of the (successful) activation changed, so an
+    ///     unlock kit, a boost or a rental survives a relog. Sent on a background task like the other
+    ///     session saves; dropped with a warning when the WebHost is not connected.
+    /// </summary>
+    private void PersistUnlocks(Context context)
+    {
+        if (context.DirtyUnlocks.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var target in context.DirtyUnlocks)
+        {
+            if (target is CharacterEntity { IsPlayerControlled: true } character && character.Player != null)
+            {
+                _ = GRPCService.SaveCharacterUnlocksAsync(character.Player.CharacterId + 0xFE, _shard.ZoneId, character.Unlocks.ToRecords());
+            }
+        }
+
+        context.DirtyUnlocks.Clear();
     }
 
     /// <summary>
