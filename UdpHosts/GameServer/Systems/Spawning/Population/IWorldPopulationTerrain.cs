@@ -38,10 +38,9 @@ public interface IWorldPopulationTerrain
 
     /// <summary>
     ///     Physically validates one candidate standing spot for a body of the given size: snaps it
-    ///     onto the surface it belongs to, refuses it when that surface is too steep to stand on,
-    ///     when the zone's collision covers it from above, or when the body would end up inside the
-    ///     world or inside another entity, and returns the spot the body should actually be placed
-    ///     at.
+    ///     onto the surface it belongs to, refuses it when that surface is too steep to stand on or
+    ///     the body would end up inside the world or inside another entity, and returns the spot the
+    ///     body should actually be placed at.
     /// </summary>
     /// <param name="candidate">The planned spot.</param>
     /// <param name="bodyRadius">Body radius in metres.</param>
@@ -49,26 +48,6 @@ public interface IWorldPopulationTerrain
     /// <param name="position">The validated spot; <paramref name="candidate"/> when nothing moved it.</param>
     /// <returns>Whether a body of that size can stand there.</returns>
     bool TryResolveStandingSpot(Vector3 candidate, float bodyRadius, float bodyHeight, out Vector3 position);
-
-    /// <summary>
-    ///     Whether a spot has an unobstructed vertical line to the sky. A false answer means the
-    ///     zone's collision covers the spot from above - a cave floor, an underground tunnel, ground
-    ///     under a roof or a rock overhang - and the spot is not one a population NPC belongs on.
-    ///     The navigation mesh cannot answer this: a cave floor is walkable, and nothing in the mesh
-    ///     knows the sky. True when the zone carries no geometry that could cover a spot.
-    /// </summary>
-    /// <param name="position">The spot, on or near the ground it stands on.</param>
-    /// <returns>True when nothing of the zone's own geometry sits above the spot.</returns>
-    bool IsExposedToSky(Vector3 position);
-
-    /// <summary>
-    ///     Whether the placement probe may refuse a spot for being covered from above. On by default;
-    ///     the service turns it off when the plan itself found the zone's sky check untrustworthy - the
-    ///     check contradicted every cell of the zone (a proxy dome, sentinel bounds, canopy cover over
-    ///     the whole map) - because a check that refuses everything populates nothing, and an empty
-    ///     world is a worse failure than an NPC in a cave.
-    /// </summary>
-    bool CoverRefusalsEnabled { get; set; }
 
     /// <summary>Zone bounds from ZoneBoundsLayer (0x21000) if present, from actual client map file.</summary>
     Vector3? ZoneBoundsMin { get; }

@@ -102,16 +102,6 @@ public sealed class FakeWorldPopulationTerrain : IWorldPopulationTerrain
     /// <summary>Answers which chunk a spot belongs to; 0 when unset.</summary>
     public Func<Vector3, uint> ChunkOf { get; set; }
 
-    /// <summary>
-    ///     Answers whether a spot has a clear vertical line to the sky; null means every spot does.
-    ///     A spot the answer denies is refused by <see cref="TryResolveStandingSpot" /> too, the way
-    ///     the real terrain refuses covered ground.
-    /// </summary>
-    public Func<Vector3, bool> ExposedToSky { get; set; }
-
-    /// <inheritdoc />
-    public bool CoverRefusalsEnabled { get; set; } = true;
-
     /// <summary>How many placements were asked for, successful or not.</summary>
     public int PlacementCalls { get; private set; }
 
@@ -162,8 +152,6 @@ public sealed class FakeWorldPopulationTerrain : IWorldPopulationTerrain
 
     public uint GetChunkRecordId(Vector3 position) => ChunkOf?.Invoke(position) ?? 0;
 
-    public bool IsExposedToSky(Vector3 position) => ExposedToSky?.Invoke(position) ?? true;
-
     public bool TryResolveStandingSpot(Vector3 candidate, float bodyRadius, float bodyHeight, out Vector3 position)
     {
         PlacementCalls++;
@@ -175,15 +163,6 @@ public sealed class FakeWorldPopulationTerrain : IWorldPopulationTerrain
         }
 
         if (!AcceptPlacements || (RefusePlacement != null && !RefusePlacement(candidate, bodyRadius, bodyHeight)))
-        {
-            return false;
-        }
-
-        // Covered from above - a cave floor, ground under a roof - is ground the plan's cells keep
-        // only because their centre is in the open, and the slots that dip into the cover have to
-        // be refused here, the way the real terrain refuses them - unless the plan found the sky
-        // check untrustworthy, in which case the real terrain stops refusing cover and so does this.
-        if (CoverRefusalsEnabled && !IsExposedToSky(candidate))
         {
             return false;
         }

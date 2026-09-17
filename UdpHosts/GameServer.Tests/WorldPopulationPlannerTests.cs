@@ -264,110 +264,6 @@ public class WorldPopulationPlannerTests
     }
 
     [Fact]
-    public void Plan_RefusesCellsTheZoneCoversFromAbove()
-    {
-        var (planner, data, terrain) = CreatePlanner();
-        AddGround(terrain);
-        // The middle of the plane is a cave: walkable by the mesh, because a cave floor is flat -
-        // and covered from above, which the mesh cannot know and the plan must check.
-        terrain.ExposedToSky = position =>
-            MathF.Abs(position.X - 56f) >= 20f || MathF.Abs(position.Y - 56f) >= 20f;
-        data.AddMonster(10);
-
-        Build(planner);
-
-        Assert.Equal(64, planner.ScannedSurfaces);
-        Assert.Equal(12, planner.CellCount);
-        Assert.Equal(4, planner.RefusedCoveredCells);
-        Assert.False(planner.CoverCheckSuspect);
-
-        // Nothing the plan keeps - a cell or a slot in one - sits on ground the sky does not reach.
-        Assert.All(planner.Cells.Values, cell => Assert.True(terrain.IsExposedToSky(cell.Center)));
-    }
-
-    [Fact]
-    public void Plan_KeepsTheWorldWhenTheCoverCheckRefusesEveryCell()
-    {
-        var (planner, data, terrain) = CreatePlanner();
-        AddGround(terrain);
-
-        // A zone whose collision contradicts the sky check everywhere: the check is what is broken
-        // (a proxy dome, sentinel bounds, canopy cover over the whole map), not the ground - and a
-        // plan that obeys it is a plan of nothing, which is the "world population stopped
-        // generating" report.
-        terrain.ExposedToSky = _ => false;
-        data.AddMonster(10);
-
-        Build(planner);
-
-        // The refused cells were given back: the zone populates, loudly marked as overridden.
-        Assert.Equal(16, planner.RefusedCoveredCells);
-        Assert.Equal(16, planner.CellCount);
-        Assert.True(planner.CoverCheckSuspect);
-        Assert.NotEmpty(planner.Cells.Values.SelectMany(cell => cell.Slots));
-        Assert.Equal(1, planner.PlacedRosterCount);
-    }
-
-    [Fact]
-    public void Plan_SalvagedCellsFitTheirHabitatsLikePlannedOnes()
-    {
-        var (planner, data, terrain) = CreatePlanner();
-        AddGround(terrain);
-        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(56f, 56f, 0f), 40f, WorldPopulationHabitat.Settlement, 1001u));
-        data.LevelsByBand[1001u] = 12;
-        data.AddMonster(11, WorldPopulationHabitat.Settlement);
-
-        // Every cell covered: the plan is salvaged out of the refusals, so a settlement row must
-        // still find settlement ground - the salvage classifies the cells it hands back.
-        terrain.ExposedToSky = _ => false;
-
-        Build(planner);
-
-        Assert.True(planner.CoverCheckSuspect);
-        var vendor = planner.Cells.Values
-            .SelectMany(cell => cell.Slots)
-            .FirstOrDefault(slot => slot.Candidate.MonsterId == 11);
-        Assert.NotNull(vendor);
-        Assert.Equal(WorldPopulationHabitat.Settlement, vendor.Cell.Habitat);
-        Assert.Equal(12, vendor.Cell.Level);
-    }
-
-    [Fact]
-    public void Plan_PutsASettlementRowOnExposedGroundWhenTheCaveTakesTheCamp()
-    {
-        var (planner, data, terrain) = CreatePlanner();
-        AddGround(terrain);
-        // One outpost in the middle of the plane: its camp is the four middle cells.
-        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(56f, 56f, 0f), 40f, WorldPopulationHabitat.Settlement, 1001u));
-        data.LevelsByBand[1001u] = 12;
-
-        // Half the camp is in a cave: the strip the camp's western cells sit in (32 <= X < 64)
-        // within the camp's Y band is covered, and everything else - the camp's eastern cells and
-        // all the open field - is exposed. The vendor row must take its coverage slot on the open
-        // half of the camp: the covered half has no cells at all, so it cannot take it there.
-        terrain.ExposedToSky = position =>
-            position.X < 32f || position.X >= 64f || MathF.Abs(position.Y - 56f) >= 20f;
-        data.AddMonster(10, WorldPopulationHabitat.Wilderness);
-        data.AddMonster(11, WorldPopulationHabitat.Settlement);
-
-        Build(planner);
-
-        Assert.Equal(2, planner.RefusedCoveredCells);
-        Assert.Equal(2, planner.PlacedRosterCount);
-        Assert.Equal(0, planner.UnplacedRosterCount);
-
-        var vendor = planner.Cells.Values
-            .SelectMany(cell => cell.Slots)
-            .FirstOrDefault(slot => slot.Candidate.MonsterId == 11);
-        Assert.NotNull(vendor);
-        Assert.Equal(WorldPopulationHabitat.Settlement, vendor.Cell.Habitat);
-        Assert.Equal(12, vendor.Cell.Level);
-        Assert.True(terrain.IsExposedToSky(vendor.Cell.Center));
-
-        Assert.All(planner.Cells.Values, cell => Assert.True(terrain.IsExposedToSky(cell.Center)));
-    }
-
-    [Fact]
     public void Plan_FillsACellNoFurtherThanItsCountCap()
     {
         var rules = new StandardWorldPopulationRules { MaxNpcsPerCell = 2 };
@@ -520,10 +416,8 @@ public class WorldPopulationPlannerTests
             Assert.True(++calls < 20, "the planner never finished");
         }
 
-        // Four updates of four surfaces each, then four of one cell each - a cell the terrain
-        // checks against the sky costs 64 work, so a budget of 4 builds one a call - and one for
-        // the slots.
-        Assert.Equal(9, calls);
+        // Four updates of four surfaces each, then one for the cells and one for the slots.
+        Assert.Equal(6, calls);
         Assert.Equal(16, planner.ScannedSurfaces);
     }
 
@@ -542,11 +436,10 @@ public class WorldPopulationPlannerTests
             Assert.True(++calls < 40, "the planner never finished");
         }
 
-        // Eight updates of two surfaces each, then four of one cell each - a cell the terrain
-        // checks against the sky costs 64 work, so a budget of 2 builds one a call - and one for
-        // the slots. On a real zone this phase is the expensive one, so it has to be spread the
-        // same way the surface scan is.
-        Assert.Equal(13, calls);
+        // Eight updates of two surfaces each, two of two cells each, one for the slots: a cell is
+        // classified against every anchor near it, so on a real zone this phase is the expensive one
+        // and it has to be spread the same way the surface scan is.
+        Assert.Equal(11, calls);
         Assert.Equal(4, planner.CellCount);
         Assert.Equal(16, planner.ScannedSurfaces);
     }

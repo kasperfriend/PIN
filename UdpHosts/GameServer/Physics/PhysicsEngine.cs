@@ -58,13 +58,6 @@ public partial class PhysicsEngine
     private const float HeadroomMargin = 0.2f;
 
     /// <summary>
-    ///     How far above a spot the sky exposure cast reaches when the zone's own bounds are unknown:
-    ///     half a chunk's worth of height, more than the cover any zone's collision can put over its
-    ///     own ground.
-    /// </summary>
-    private const float SkyReachFallback = 512f;
-
-    /// <summary>
     ///     Fractions of the body height the clearance probes are fired at: ankle, waist, shoulder.
     ///     Three heights catch both a low crate the body would stand inside and a barrier it would
     ///     poke its head through.
@@ -557,51 +550,6 @@ public partial class PhysicsEngine
         ground = new Vector3(position.X, position.Y, hit.HitPosition.Z);
         normal = hit.Normal;
         return true;
-    }
-
-    /// <summary>
-    ///     Whether a spot has an unobstructed vertical line to the sky: a straight up cast against
-    ///     the zone's static geometry only, out to the top of the zone's own bounds. A hit means the
-    ///     spot is covered - a cave floor, an underground tunnel, ground under a roof or a rock
-    ///     overhang - and a place world population must not put an NPC on, whatever the navigation
-    ///     mesh says of it: a cave floor is flat, and the mesh has no way to know the sky.
-    /// </summary>
-    /// <remarks>
-    ///     The cast is statics only, so a player or another body standing over the spot cannot make
-    ///     it look covered. It starts a hair above the spot, the same way the standing volume's
-    ///     headroom probe does, so the surface the spot stands on is not its own obstruction. A zone
-    ///     with no static geometry cannot cover a spot (the answer is true), and a non-finite spot
-    ///     cannot be cast from (the answer is false).
-    /// </remarks>
-    /// <param name="position">The spot, on or just above the ground it stands on.</param>
-    /// <returns>True when nothing of the zone's own geometry sits above the spot.</returns>
-    public bool IsExposedToSky(Vector3 position)
-    {
-        if (!HasZoneCollision)
-        {
-            return true;
-        }
-
-        if (!float.IsFinite(position.X) || !float.IsFinite(position.Y) || !float.IsFinite(position.Z))
-        {
-            return false;
-        }
-
-        float top = position.Z + SkyReachFallback;
-        var boundsMax = ZoneBoundsMax;
-        if (boundsMax.HasValue && float.IsFinite(boundsMax.Value.Z) && boundsMax.Value.Z > position.Z + 1f)
-        {
-            // The reach is clamped to the fallback: a zone without real bounds ships the ±float.MaxValue
-            // sentinel (zone 1100's map file carries it), which passes the IsFinite check, and a cast
-            // 3.4e38 up overflows the segment's length to +infinity - a zero direction with an infinite
-            // maximumT, a query about nothing. Real cover sits far below the fallback reach anyway; the
-            // clamp only ever shortens a cast that could not have meant anything.
-            top = MathF.Min(boundsMax.Value.Z, position.Z + SkyReachFallback);
-        }
-
-        var from = new Vector3(position.X, position.Y, position.Z + 0.05f);
-        var to = new Vector3(position.X, position.Y, top);
-        return !SegmentRayCast(from, to, 0, staticOnly: true).Hit;
     }
 
     /// <summary>
