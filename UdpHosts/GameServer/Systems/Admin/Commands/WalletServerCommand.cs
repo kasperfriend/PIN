@@ -7,7 +7,7 @@ using GameServer.Systems.Vendor;
 namespace GameServer.Systems.Admin.Commands;
 
 [ServerCommand(
-    "Fill your wallet for vendors: crystite + vending tokens. No grind — just buy. 'wallet' gives 500k cy + 100 tokens, 'wallet all' tops every fallback resource too.",
+    "Fill your wallet for vendors: crystite + vending tokens. No grind, just buy. 'wallet' gives 500k cy + 100 tokens, 'wallet all' tops every fallback resource too.",
     "wallet [all|amount]",
     "wallet",
     "fillwallet",

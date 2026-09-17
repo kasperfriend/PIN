@@ -6,7 +6,7 @@ using GameServer.Systems.Vendor;
 namespace GameServer.Systems.Admin.Commands;
 
 [ServerCommand(
-    "Add crystite (vendor currency) to your wallet — the one vendors charge. No amount = 100k, use e.g. 'crystite 500000' for more.",
+    "Add crystite (vendor currency) to your wallet - the one vendors charge. No amount = 100k, use e.g. 'crystite 500000' for more.",
     "crystite [amount]",
     "crystite",
     "cy",

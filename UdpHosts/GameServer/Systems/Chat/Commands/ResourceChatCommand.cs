@@ -15,7 +15,7 @@ public class ResourceChatCommand : ChatCommand
     {
         if (parameters.Length == 0)
         {
-            SourceFeedback("Usage: \\resource <sdbId> [amount]  e.g. \\resource 10 500000  (10 = crystite)  — or \\wallet, \\crystite", context);
+            SourceFeedback("Usage: \\resource <sdbId> [amount]  e.g. \\resource 10 500000  (10 = crystite)  or \\wallet, \\crystite", context);
             return;
         }
 

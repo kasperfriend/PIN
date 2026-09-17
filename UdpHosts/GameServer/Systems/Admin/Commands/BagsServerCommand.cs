@@ -33,10 +33,10 @@ public class BagsServerCommand : ServerCommand
         var bagUpdate = new BagInventoryUpdate { Data = BagInventoryLayout.BuildUpdateJson(slots) };
         context.SourcePlayer.NetChannels[ChannelType.ReliableGss].SendMessage(bagUpdate, context.SourcePlayer.CharacterEntity.EntityId);
 
-        SourceFeedback($"Bags: {count}/{capacity} slots used — 9 bags x {bagLength} ({BagInventoryLayout.NumberOfBags}*{bagLength})  —  model synced to client", context);
+        SourceFeedback($"Bags: {count}/{capacity} slots used - 9 bags x {bagLength} ({BagInventoryLayout.NumberOfBags}*{bagLength})  -  model synced to client", context);
         if (count >= capacity)
         {
-            SourceFeedback("Bags are FULL — salvage or 'clearbags' to free slots, then 'bags' again. Vendors will blink red while full.", context);
+            SourceFeedback("Bags are FULL - salvage or 'clearbags' to free slots, then 'bags' again. Vendors will blink red while full.", context);
         }
         else if (count >= capacity - 5)
         {
@@ -44,7 +44,7 @@ public class BagsServerCommand : ServerCommand
         }
         else
         {
-            SourceFeedback($"{capacity - count} free slots — vendors should work. If they still blink red, check 'balance' for crystite.", context);
+            SourceFeedback($"{capacity - count} free slots - vendors should work. If they still blink red, check 'balance' for crystite.", context);
         }
     }
 }

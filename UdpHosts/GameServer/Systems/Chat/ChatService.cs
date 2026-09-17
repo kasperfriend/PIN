@@ -6,6 +6,7 @@ using AeroMessages.GSS.Generic;
 using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.Enums;
+using GameServer.Extensions;
 using GameServer.Systems.SystemEvents;
 using Serilog;
 
@@ -96,6 +97,9 @@ public class ChatService
         var senderName = sender != null ? ((CharacterEntity)sender).StaticInfo.DisplayName : "Server";
         byte chatIconFlags = (byte)(sender != null ? 0 : 1);
 
+        // ChatMessageList's string fields are null-terminated [AeroString]s and can only carry ASCII:
+        // a multi-byte character anywhere (player chat text, SDB display names, command feedback) makes
+        // the packer write past the end of its buffer and take the sender's network tick down.
         var response = new ChatMessageList()
         {
             Messages =
@@ -103,8 +107,8 @@ public class ChatService
                 new()
                 {
                     SenderId = senderId,
-                    SenderName = senderName,
-                    Message = message,
+                    SenderName = senderName.AsAeroSafeText(),
+                    Message = message.AsAeroSafeText(),
                     Channel = (byte)channel,
                     ChatIconFlags = chatIconFlags,
                     AltData = new()
