@@ -77,12 +77,14 @@ public class EndInteractionCommand : ICommand
             context.Shard.EncounterMan.Factory.SpawnEncounter(spawnData, character);
         }
 
-        // Seven monster rows name a dialogScript= in their behaviour string; that line is the
-        // conversation the interaction starts, not an animation the AI plays on register.
+        // Start the original character/voice-set conversation for every NPC interaction. The
+        // explicit dialogScript= rows still win; older greetingSet=/helloScript behaviours fall
+        // through to the indexed DialogScript rows instead of completing silently.
         bool dialogPlayed = false;
-        if (interactionEntity is CharacterEntity npc)
+        if (interactionEntity is CharacterEntity npc
+            && npc.Interaction?.Type is InteractionType.Holstertalk or InteractionType.Generic or InteractionType.Vendor)
         {
-            dialogPlayed = DialogService.Production.TryPlayBehaviorDialog(npc, character, context.InitTime);
+            dialogPlayed = DialogService.Production.TryPlayInteractionDialog(npc, character, context.InitTime);
         }
 
         var interaction = interactionEntity.Interaction;
@@ -151,9 +153,9 @@ public class EndInteractionCommand : ICommand
             vehicle.AddOccupant(character);
         }
 
-        // A completed channel that fires no content is silent on purpose (a HolsterTalk town NPC
-        // with no dialogScript, no vendor stock and no completed ability has nothing to show),
-        // but it is indistinguishable from a broken interaction in the logs - say so explicitly.
+        // Non-character interactables can legitimately have no content. NPCs normally resolve an
+        // original character, voice-set or generic talk line now; if even that data is absent, this
+        // log makes the incomplete interaction distinguishable from a failed channel.
         // Vehicles (boarding) and doctors (the heal above) always fire their content.
         if (!dialogPlayed && !vendorAuthorized && completedAbilityId == 0
             && interactionType != InteractionType.Vehicle && interactionType != InteractionType.Doctor)

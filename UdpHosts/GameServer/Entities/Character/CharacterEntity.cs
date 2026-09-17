@@ -257,6 +257,13 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public uint CurrentDialogId { get; set; }
 
     /// <summary>
+    ///     The opening line chosen on this NPC's last interaction. Kept separately from
+    ///     <see cref="CurrentDialogId"/>, which advances through <c>next_id</c>, so the next E-key
+    ///     interaction rotates to another authored opening even after a multi-line conversation.
+    /// </summary>
+    public uint LastInteractionDialogId { get; set; }
+
+    /// <summary>
     ///     The NPC a player is in a dialog with (the speaker of a private line), or 0. Used to play
     ///     the follow-up line from the same speaker.
     /// </summary>

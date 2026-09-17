@@ -480,6 +480,7 @@ public sealed class WorldPopulationService
             ? $"Plan: {_planner.CellCount} cells, {_planner.SlotCount} slots, {_planner.PlacedRosterCount} rows placed" +
               (_planner.UnplacedRosterCount > 0 ? $", {_planner.UnplacedRosterCount} rows have no ground of their kind in this zone" : string.Empty) +
               (_planner.RefusedChunkCells > 0 ? $", {_planner.RefusedChunkCells} cells refused by chunk rules" : string.Empty) +
+              (_planner.RefusedCoveredCells > 0 ? $", {_planner.RefusedCoveredCells} cells under cover" : string.Empty) +
               (_planner.UsedAnchorFallback ? ", built from authored anchors (no walkable surfaces)" : string.Empty)
             : $"Plan: building ({_planner.ScannedSurfaces} surfaces scanned, {_planner.CellCount} cells so far)");
         string players = PlayerCount.ToString(CultureInfo.InvariantCulture) + " players";
