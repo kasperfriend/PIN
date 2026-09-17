@@ -254,6 +254,27 @@ every anchor near it, and on a real zone that is the expensive phase. Per cell:
   `WorldPopulationPlanWorkPerTick`, so the casts stay inside the per update
   budget; a smaller budget still builds one cell an update, so the plan cannot
   stall.
+
+  The reach of the cast is clamped to 512 m above the spot even when the zone's
+  bounds claim higher: a zone without real bounds ships the ±float.MaxValue
+  sentinel in its `ZoneBoundsLayer` (zone 1100's map file carries one), and a
+  cast that far overflows the segment's length to infinity - a degenerate query
+  about nothing. Real cover sits far below 512 m; the clamp only ever shortens a
+  cast that could not have meant anything.
+
+  A check that refuses **every** cell of the zone is not a check that found a
+  zone of caves - it is a check the zone's own ground contradicts (a proxy dome
+  or an underground mesh in the collision, sentinel bounds, canopy cover over the
+  whole map), and obeying it plans nothing: the zone goes empty with nothing but
+  a count to point at, which is the "world population stopped generating" report
+  in its purest form. When the Cells phase finishes with zero kept cells and at
+  least one covered refusal, the planner therefore overrides the check: the
+  refused cells are classified and kept after all (`CoverCheckSuspect`, the plan
+  summary and `population status` both say the check "was overridden", and a
+  warning names what it means), and the service stops refusing placements for
+  cover in that zone too - a check that refuses everything populates nothing, and
+  a populated world is the better failure. Partial refusals are the check working
+  and are kept refused.
 * **Habitat** — from the authored anchors around the cell: outposts (the inhabited
   camp is `OutpostSettlementRadius`, default 80 m — their authored 150-550 m
   radius in Coral Forest is the capture/control circle, not a wildlife-exclusion
@@ -404,11 +425,15 @@ A planned position is checked twice, and both checks have to pass.
    refused. Absolute because a floor and a ceiling are equally unwalkable when they
    are this steep.
 5. `IsExposedToSky` - a vertical cast from the ground the probe found, out to the
-   top of the zone's bounds, against the zone's static geometry only: a spot the
-   zone covers from above (a cave floor, a tunnel, ground under a roof or a rock
-   overhang) is refused. The headroom probe of the standing volume reaches only a
-   body's height, so cover metres up is the one it cannot see; the cast is statics
-   only, so a player standing over the spot cannot make it look covered.
+   top of the zone's bounds (clamped to 512 m above the spot; a zone without real
+   bounds ships the ±float.MaxValue sentinel, which no cast should chase), against
+   the zone's static geometry only: a spot the zone covers from above (a cave
+   floor, a tunnel, ground under a roof or a rock overhang) is refused. The
+   headroom probe of the standing volume reaches only a body's height, so cover
+   metres up is the one it cannot see; the cast is statics only, so a player
+   standing over the spot cannot make it look covered. Skipped when the plan
+   overrode the zone's cover check (`CoverCheckSuspect`), because then this half
+   refuses everything too and parks every slot.
 6. `IsStandingVolumeClear` - horizontal static probes at ankle, waist and shoulder
    height along both axes (plus 0.1 m of slack), one vertical probe for headroom
    (plus 0.2 m), and a broad phase query for the non-static bodies (players, mobs,
@@ -442,7 +467,12 @@ never fills). Then:
 | room (a player, another body) | transient | retried after `PlacementRetryDelayMs` (1 s), never parked |
 
 A parked slot is not retried and is counted in `population status`, so a zone whose
-plan does not fit its ground is visible instead of silently short.
+plan does not fit its ground is visible instead of silently short - and it is in
+the log now too: the first park names the slot, its spot and the reason the last
+refusal gave (`as ground the zone covers from above` / `as ground the body cannot
+stand on`), and the running total repeats one line every 50 more parks. A world
+that emptied itself into parked slots used to leave no trace of itself at all,
+which is how "population stopped generating" had nothing in the log to point at.
 
 ---
 
@@ -519,10 +549,15 @@ Example:
 ```
 \population
 World population: on (live 124/150 NPCs of 2853 monster rows, 82 kinds in the world)
-Plan: 9841 cells, 20000 slots, 2853 rows placed, 214 cells refused by chunk rules
+Plan: 9841 cells, 20000 slots, 2853 rows placed, 214 cells refused by chunk rules, 176 cells under cover
 Streaming: 68 active cells, 213 slots queued, 1 players, activate 150 m / deactivate 225 m
-Lifetime: 422 spawned, 298 despawned, 17 lost, 214 placements refused, 9 slots parked, 143 bodies in the placement grid
+Lifetime: 422 spawned, 298 despawned, 17 lost, 214 placements refused (31 of them under cover), 9 slots parked, 143 bodies in the placement grid
 ```
+
+A plan line that ends in `cells under cover (the cover check refused every cell and
+was overridden)` is the override at work: the zone's collision contradicts its own
+sky check, the covered cells were kept so the zone populates, and placement no
+longer refuses cover there. See the **Cover** phase above for what that means.
 
 ---
 
@@ -623,8 +658,8 @@ rules` for the client-only chunks.
 |------|--------|
 | `MonsterHabitatClassifierTests.cs` | the exclusion set, each habitat rule, behaviour arguments being stripped, an empty behaviour being eligible |
 | `SpawnOccupancyGridTests.cs` | radius + separation, a body bigger than a hash cell, the height window, remove/re-add/clear, negative coordinates |
-| `WorldPopulationPlannerTests.cs` | cells from ground, coverage and habitat fit, unplaceable rows, habitat/level from anchors, the level gradient, an outpost's capture radius is not settlement, the field fills with wilderness-only rows rather than the Melding's army, settlement over Melding, chunk refusals, covered-ground (cave) cells refused, a settlement row taking its slot on exposed ground when the cave takes the camp, the count/difficulty/slot caps, the budget-exempt expensive row, jitter bounds, the anchor fallback, work spreading, determinism |
-| `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, parking on covered (cave) ground, body separation, the level of the area, `ListLiveNear`, `status`, the command |
+| `WorldPopulationPlannerTests.cs` | cells from ground, coverage and habitat fit, unplaceable rows, habitat/level from anchors, the level gradient, an outpost's capture radius is not settlement, the field fills with wilderness-only rows rather than the Melding's army, settlement over Melding, chunk refusals, covered-ground (cave) cells refused, a settlement row taking its slot on exposed ground when the cave takes the camp, a cover check that refuses every cell overridden and its salvaged cells classified, the count/difficulty/slot caps, the budget-exempt expensive row, jitter bounds, the anchor fallback, work spreading, determinism |
+| `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, parking on covered (cave) ground and saying so in the log, a zone whose sky check keeps open ground stays trusted and its open half populates, a zone whose sky check refuses everything populating with the check overridden, body separation, the level of the area, `ListLiveNear`, `status`, the command |
 | `Fakes/WorldPopulationFakes.cs` | a fixed roster/anchor/level/chunk source, a plane of walkable ground with switches for refusing a placement, and a spawner that records spawns and can kill or despawn one |
 
 The fakes are why the plan and the streaming can be asserted on without a loaded

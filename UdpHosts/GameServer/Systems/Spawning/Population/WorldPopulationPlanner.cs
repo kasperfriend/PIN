@@ -118,6 +118,12 @@ public sealed class WorldPopulationPlanner
     private readonly List<WorldPopulationCell> _settlementCells = [];
     private readonly List<WorldPopulationCell> _meldingCells = [];
 
+    // Cells the sky check refused, kept until the phase finishes: if it refused every cell of the
+    // zone, the check is what is broken, not the ground, and these become the plan after all. The
+    // cap keeps a pathological zone (a million covered cells) from holding a million cell objects;
+    // a plan that large has bigger problems, and the salvage only needs enough cells to fill it.
+    private readonly List<WorldPopulationCell> _coverRefusedCells = [];
+
     private readonly List<WorldPopulationCandidate> _wildernessPool = [];
     private readonly List<WorldPopulationCandidate> _settlementPool = [];
     private readonly List<WorldPopulationCandidate> _meldingPool = [];
@@ -188,6 +194,17 @@ public sealed class WorldPopulationPlanner
     ///     mesh.
     /// </summary>
     public int RefusedCoveredCells { get; private set; }
+
+    /// <summary>
+    ///     Whether the zone's sky check proved untrustworthy: it refused <b>every</b> cell the plan
+    ///     scanned, so the check contradicts the zone's own walkable ground rather than picking out
+    ///     its caves - a proxy dome or underground mesh in the collision, sentinel zone bounds, or
+    ///     canopy cover over the whole map. The plan keeps the refused cells (see
+    ///     <see cref="FinishCells"/>) and says so; the service reads this to stop refusing placements
+    ///     for cover too, because a check that refuses everything populates nothing, and an empty
+    ///     world is a worse failure than an NPC in a cave.
+    /// </summary>
+    public bool CoverCheckSuspect { get; private set; }
 
     /// <summary>Whether the plan was built from authored anchor positions because the zone has no walkable surfaces.</summary>
     public bool UsedAnchorFallback { get; private set; }
@@ -352,9 +369,16 @@ public sealed class WorldPopulationPlanner
         // cave floor is flat and nothing in the mesh knows the sky; this is the check that does. A
         // cell refused here never gets slots, so a row that belongs to the camp above - a vendor -
         // takes its coverage slot on the open ground of the camp instead of one the cave holds.
+        // Kept until the phase finishes: if the check refuses every cell of the zone, it is the
+        // check that is broken, and FinishCells gives these back.
         if (!_terrain.IsExposedToSky(center))
         {
             RefusedCoveredCells++;
+            if (_coverRefusedCells.Count < _maxPlannedSlots)
+            {
+                _coverRefusedCells.Add(cell);
+            }
+
             return;
         }
 
@@ -382,6 +406,8 @@ public sealed class WorldPopulationPlanner
         _drafts.Clear();
         _draftKeys.Clear();
 
+        SalvageCoverRefusedCells();
+
         // Density is filled in a scattered but deterministic order: sweeping the grid in key order
         // would spend the whole slot budget on one corner of the zone before reaching the next.
         _keysInDensityOrder.Sort((a, b) =>
@@ -394,7 +420,7 @@ public sealed class WorldPopulationPlanner
         _logger.Information(
             "World population plan for zone {ZoneId}: {Surfaces} walkable surfaces became {Cells} cells " +
             "({Wilderness} wilderness, {Settlement} settlement, {Melding} melding, {Refused} refused by chunk rules, " +
-            "{Covered} under cover{Fallback})",
+            "{Covered} under cover{CoverOverridden}{Fallback})",
             _zoneId,
             ScannedSurfaces,
             _cells.Count,
@@ -403,7 +429,59 @@ public sealed class WorldPopulationPlanner
             _meldingCells.Count,
             RefusedChunkCells,
             RefusedCoveredCells,
+            CoverCheckSuspect ? " (the cover check refused every cell and was overridden)" : string.Empty,
             UsedAnchorFallback ? ", built from authored anchors" : string.Empty);
+    }
+
+    /// <summary>
+    ///     Gives the sky-check refusals back to the plan when the check refused <b>every</b> cell of
+    ///     the zone. A check that picks out a zone's caves agrees with the zone's ground; a check
+    ///     that refuses all of it contradicts the ground the zone itself says is walkable, and the
+    ///     check is the thing that is wrong - the collision carries something that is not cover (a
+    ///     proxy dome, an underground mesh, canopy over the whole map, sentinel bounds). The world
+    ///     this system exists to fill is better populated - caves and all - than empty, and the
+    ///     warning and <see cref="CoverCheckSuspect"/> say plainly what happened. Partial refusals
+    ///     are the check working and are kept refused.
+    /// </summary>
+    private void SalvageCoverRefusedCells()
+    {
+        if (_cells.Count > 0 || _coverRefusedCells.Count == 0)
+        {
+            return;
+        }
+
+        CoverCheckSuspect = true;
+
+        foreach (var cell in _coverRefusedCells)
+        {
+            Classify(cell);
+
+            _cells[cell.Key] = cell;
+            _keysInDensityOrder.Add(cell.Key);
+
+            switch (cell.Habitat)
+            {
+                case WorldPopulationHabitat.Settlement:
+                    _settlementCells.Add(cell);
+                    break;
+                case WorldPopulationHabitat.Melding:
+                    _meldingCells.Add(cell);
+                    break;
+                default:
+                    _wildernessCells.Add(cell);
+                    break;
+            }
+        }
+
+        _logger.Warning(
+            "World population cover check refused every cell of zone {ZoneId} ({Covered} under cover, none exposed) - " +
+            "the zone's collision contradicts the sky check (something covers all of its walkable ground that is not " +
+            "cover), so the covered cells are kept, the zone populates, and placement stops refusing ground for cover. " +
+            "Caves and tunnels in this zone will hold NPCs until the collision is fixed",
+            _zoneId,
+            _coverRefusedCells.Count);
+
+        _coverRefusedCells.Clear();
     }
 
     private void BucketAnchors()

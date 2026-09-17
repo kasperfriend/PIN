@@ -75,6 +75,13 @@ public sealed class WorldPopulationService
     private const int PlanningAnnouncementTicks = 40;
 
     /// <summary>
+    ///     Parked slots between two "slots have given up on their ground" lines: the first park is
+    ///     announced at once, then the count repeats at a stride, so a zone parking its whole plan
+    ///     is loud without a line per slot.
+    /// </summary>
+    private const int ParkedAnnouncementStride = 50;
+
+    /// <summary>
     ///     How many distinct other zones are named in the "players are elsewhere" announcement and
     ///     in <see cref="DescribeStatus"/>. The count is exact however many zones there are; only the
     ///     listing is capped, so a crowd spread over the whole zone picker does not produce a
@@ -179,6 +186,13 @@ public sealed class WorldPopulationService
 
     /// <summary>Total placement refusals, for telling a zone whose plan does not fit its ground.</summary>
     public int RefusedPlacements { get; private set; }
+
+    /// <summary>
+    ///     How many of the refused placements a slot's attempts included at least one spot the zone
+    ///     covers from above. The plan keeps cells out of caves; this is the placement half of the
+    ///     same check, and the number that says a slot is parking because of it.
+    /// </summary>
+    public int CoverRefusedPlacements { get; private set; }
 
     /// <summary>How many bodies the placement grid is holding.</summary>
     public int OccupancyCount => _occupancy.Count;
@@ -310,6 +324,11 @@ public sealed class WorldPopulationService
                 return;
             }
         }
+
+        // The finished plan is also the authority on whether the zone's sky check can be trusted at
+        // all: a check that refused every cell is overridden in the plan, and placement follows -
+        // letting placement keep refusing cover would park every slot and empty the zone anyway.
+        _terrain.CoverRefusalsEnabled = !_planner.CoverCheckSuspect;
 
         _announcedIdle = IdleReason.None;
         _ticksSincePlanningAnnouncement = 0;
@@ -480,7 +499,9 @@ public sealed class WorldPopulationService
             ? $"Plan: {_planner.CellCount} cells, {_planner.SlotCount} slots, {_planner.PlacedRosterCount} rows placed" +
               (_planner.UnplacedRosterCount > 0 ? $", {_planner.UnplacedRosterCount} rows have no ground of their kind in this zone" : string.Empty) +
               (_planner.RefusedChunkCells > 0 ? $", {_planner.RefusedChunkCells} cells refused by chunk rules" : string.Empty) +
-              (_planner.RefusedCoveredCells > 0 ? $", {_planner.RefusedCoveredCells} cells under cover" : string.Empty) +
+              (_planner.RefusedCoveredCells > 0
+                  ? $", {_planner.RefusedCoveredCells} cells under cover" + (_planner.CoverCheckSuspect ? " (the cover check refused every cell and was overridden)" : string.Empty)
+                  : string.Empty) +
               (_planner.UsedAnchorFallback ? ", built from authored anchors (no walkable surfaces)" : string.Empty)
             : $"Plan: building ({_planner.ScannedSurfaces} surfaces scanned, {_planner.CellCount} cells so far)");
         string players = PlayerCount.ToString(CultureInfo.InvariantCulture) + " players";
@@ -500,11 +521,12 @@ public sealed class WorldPopulationService
                 : string.Format(CultureInfo.InvariantCulture, "activate {0:0} m / deactivate {1:0} m", _rules.ActivationRadius, _rules.DeactivationRadius)));
         _ = text.AppendLine(string.Format(
             CultureInfo.InvariantCulture,
-            "Lifetime: {0} spawned, {1} despawned, {2} lost, {3} placements refused, {4} slots parked, {5} bodies in the placement grid",
+            "Lifetime: {0} spawned, {1} despawned, {2} lost, {3} placements refused ({4} of them under cover), {5} slots parked, {6} bodies in the placement grid",
             SpawnedTotal,
             DespawnedTotal,
             LostTotal,
             RefusedPlacements,
+            CoverRefusedPlacements,
             ParkedSlotCount,
             OccupancyCount));
 
@@ -822,6 +844,7 @@ public sealed class WorldPopulationService
 
         bool refusedByGround = false;
         bool refusedByOccupancy = false;
+        bool refusedByCover = false;
 
         for (int attempt = 0; attempt < attempts; attempt++)
         {
@@ -837,6 +860,16 @@ public sealed class WorldPopulationService
             if (!_terrain.TryResolveStandingSpot(position, radius, height, out var resolved))
             {
                 refusedByGround = true;
+
+                // What kind of ground said no - a covered spot is the sky check's doing, and the
+                // number that tells a zone whose cover check is over-refusing apart from one whose
+                // ground is genuinely too broken to stand on. Asked only on a failure, so the
+                // ordinary path pays nothing.
+                if (!_terrain.IsExposedToSky(position))
+                {
+                    refusedByCover = true;
+                }
+
                 continue;
             }
 
@@ -875,6 +908,13 @@ public sealed class WorldPopulationService
 
         RefusedPlacements++;
 
+        if (refusedByCover)
+        {
+            CoverRefusedPlacements++;
+        }
+
+        slot.LastRefusalWasCover = refusedByCover;
+
         // A slot only ever refused by the ground is a slot whose ground does not fit its body; a
         // slot that was also refused for room is worth another look later, when whatever was
         // standing there has moved.
@@ -893,14 +933,48 @@ public sealed class WorldPopulationService
 
             if (slot.Failures >= Math.Max(1, _rules.MaxPlacementFailures))
             {
-                // The ground it wants does not exist. Stop asking, and say so in the status.
+                // The ground it wants does not exist. Stop asking, and say so in the status - and
+                // in the log: a world that emptied itself into parked slots used to leave no trace
+                // of why, which is how "population stopped generating" had nothing to point at.
                 slot.Parked = true;
                 ParkedSlotCount++;
+                AnnounceParked(slot);
                 return;
             }
         }
 
         _pending.Enqueue(slot);
+    }
+
+    /// <summary>
+    ///     Says a slot gave up on its ground - the first one at once, then one line per
+    ///     <see cref="ParkedAnnouncementStride"/> more - with the reason the last refusal gave. A
+    ///     zone parking its whole plan around a player is the "world population stopped generating"
+    ///     report in the making, and it has to be in the log, not only in
+    ///     <see cref="DescribeStatus"/>.
+    /// </summary>
+    private void AnnounceParked(WorldPopulationSlot slot)
+    {
+        if (ParkedSlotCount == 1)
+        {
+            _logger.Information(
+                "World population: the first slot gave up on its ground - monster {MonsterId} at {Position}, " +
+                "refused {Reason}; its spot stays empty. Running totals: \\population status",
+                slot.Candidate.MonsterId,
+                slot.Anchor,
+                slot.LastRefusalWasCover ? "as ground the zone covers from above" : "as ground the body cannot stand on");
+            return;
+        }
+
+        if (ParkedSlotCount % ParkedAnnouncementStride == 0)
+        {
+            _logger.Information(
+                "World population: {Parked} slots have now given up on their ground, {Cover} of them refused as " +
+                "ground the zone covers from above - if the zone around you is empty, this is why. " +
+                "\\population status has the numbers",
+                ParkedSlotCount,
+                CoverRefusedPlacements);
+        }
     }
 
     private Vector3 RetryJitter(WorldPopulationSlot slot, int attempt)

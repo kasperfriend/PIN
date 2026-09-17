@@ -109,6 +109,9 @@ public sealed class FakeWorldPopulationTerrain : IWorldPopulationTerrain
     /// </summary>
     public Func<Vector3, bool> ExposedToSky { get; set; }
 
+    /// <inheritdoc />
+    public bool CoverRefusalsEnabled { get; set; } = true;
+
     /// <summary>How many placements were asked for, successful or not.</summary>
     public int PlacementCalls { get; private set; }
 
@@ -178,8 +181,9 @@ public sealed class FakeWorldPopulationTerrain : IWorldPopulationTerrain
 
         // Covered from above - a cave floor, ground under a roof - is ground the plan's cells keep
         // only because their centre is in the open, and the slots that dip into the cover have to
-        // be refused here, the way the real terrain refuses them.
-        if (!IsExposedToSky(candidate))
+        // be refused here, the way the real terrain refuses them - unless the plan found the sky
+        // check untrustworthy, in which case the real terrain stops refusing cover and so does this.
+        if (CoverRefusalsEnabled && !IsExposedToSky(candidate))
         {
             return false;
         }
