@@ -293,10 +293,12 @@ public class WorldPopulationPlannerTests
         data.Anchors.Add(new WorldPopulationAnchor(new Vector3(56f, 56f, 0f), 40f, WorldPopulationHabitat.Settlement, 1001u));
         data.LevelsByBand[1001u] = 12;
 
-        // Half the camp is in a cave. The vendor row must take its coverage slot on the open half
-        // of the camp - the covered half has no cells at all, so it cannot take it there.
+        // Half the camp is in a cave: the strip the camp's western cells sit in (32 <= X < 64)
+        // within the camp's Y band is covered, and everything else - the camp's eastern cells and
+        // all the open field - is exposed. The vendor row must take its coverage slot on the open
+        // half of the camp: the covered half has no cells at all, so it cannot take it there.
         terrain.ExposedToSky = position =>
-            position.X >= 56f || MathF.Abs(position.Y - 56f) >= 20f;
+            position.X < 32f || position.X >= 64f || MathF.Abs(position.Y - 56f) >= 20f;
         data.AddMonster(10, WorldPopulationHabitat.Wilderness);
         data.AddMonster(11, WorldPopulationHabitat.Settlement);
 
