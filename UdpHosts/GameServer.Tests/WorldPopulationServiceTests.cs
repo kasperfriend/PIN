@@ -390,6 +390,58 @@ public class WorldPopulationServiceTests
     }
 
     [Fact]
+    public void Tick_ParksASlotWhoseGroundIsCoveredFromAbove()
+    {
+        var rules = new StandardWorldPopulationRules
+        {
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            MaxPlacementFailures = 2,
+            PlacementRetryDelayMs = 0,
+        };
+        var world = CreateWorld(rules);
+        world.Terrain.AddPlane(Vector3.Zero, 2, 2, 16f); // one cell, four slots
+        world.Data.AddMonster(10);
+
+        // Only the cell's own centre is in the open: the mesh found ground there, so the plan keeps
+        // the cell - but every spot a body could actually stand, the centre plus any jitter, is
+        // covered from above. A cave the cell's ground dips into.
+        world.Terrain.ExposedToSky = position => position == new Vector3(8f, 8f, 0f);
+
+        Tick(world, 6);
+
+        // The covered ground is permanent, so the slots give up on it and are reported, not spun on.
+        Assert.Equal(0, world.Service.LiveCount);
+        Assert.Equal(4, world.Service.ParkedSlotCount);
+        Assert.True(world.Service.RefusedPlacements >= 4);
+
+        // Parked means parked: no spin, and no more ground to ask.
+        int parked = world.Service.ParkedSlotCount;
+        int placementCalls = world.Terrain.PlacementCalls;
+        Tick(world, 6);
+
+        Assert.Equal(parked, world.Service.ParkedSlotCount);
+        Assert.Equal(placementCalls, world.Terrain.PlacementCalls);
+    }
+
+    [Fact]
+    public void Status_SaysSoWhenCellsAreUnderCover()
+    {
+        var world = CreateWorld();
+        world.Terrain.AddPlane(Vector3.Zero, 8, 8, 16f); // 16 cells, the right half in a cave
+        world.Terrain.ExposedToSky = position => position.X < 64f;
+        world.Data.AddMonster(10);
+
+        Tick(world, 4);
+
+        Assert.True(world.Service.Plan.IsComplete);
+        Assert.Equal(8, world.Service.Plan.RefusedCoveredCells);
+
+        // A zone whose ground is largely covered says why its plan is smaller than its mesh.
+        Assert.Contains("8 cells under cover", world.Service.DescribeStatus());
+    }
+
+    [Fact]
     public void Tick_SurvivesAZoneWhoseDataBlowsUpAndTurnsItselfOff()
     {
         var world = CreateWorld();
