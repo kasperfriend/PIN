@@ -11,6 +11,14 @@ namespace GameServer.Systems.Aptitude.Commands.Other;
 ///     chain whose caster does not actually hold the item fails here, so the free use does not
 ///     even cost a cooldown; the controller already refuses such activations up front, this is
 ///     the backstop.
+///     <para>
+///         224 consumable chains spend the item before their <c>InstantActivation</c> gate runs
+///         (<c>TimeCooldown, ConsumeItem, ..., InstantActivation</c>), and 48 of them (Ammo Pack 30192,
+///         Arcfold Beacon 34132, the Pyrotechnics fuses) have no <c>TimeCooldown</c> check ahead of the
+///         spend, so a use inside the cooldown window used to fail the activation with the item already
+///         gone. The command therefore queues a rollback that hands the copy back when the root
+///         activation fails (<see cref="Context.ActivationRollbacks" />).
+///     </para>
 /// </summary>
 public class ConsumeItemCommand : Command, ICommand
 {
@@ -41,7 +49,16 @@ public class ConsumeItemCommand : Command, ICommand
             return true;
         }
 
-        if (!inventory.ConsumeItemBySdbId(context.AbilityModuleId))
+        if (context.ActivatingItemConsumedImplicitly)
+        {
+            // A reward node earlier in this activation already spent the item (see PlayerRewards.ConsumeActivatingItem);
+            // this node is the explicit spend it stood in for.
+            context.ActivatingItemConsumedImplicitly = false;
+            return true;
+        }
+
+        uint itemSdbId = context.AbilityModuleId;
+        if (!inventory.ConsumeItemBySdbId(itemSdbId, 1, out var removedItems))
         {
             Logger.Warning(
                 "{Command} {CommandId}: {Character} has no {ItemSdbId} left for ability {AbilityId}; failing the activation",
@@ -52,6 +69,30 @@ public class ConsumeItemCommand : Command, ICommand
                 context.AbilityId);
             return false;
         }
+
+        context.ActivatingItemConsumed = true;
+        context.ActivationRollbacks.Add(() =>
+        {
+            if (removedItems.Count == 0)
+            {
+                inventory.AddResource(itemSdbId, 1);
+            }
+            else
+            {
+                foreach (var item in removedItems)
+                {
+                    inventory.RestoreItem(item);
+                }
+            }
+
+            Logger.Information(
+                "{Command} {CommandId}: activation of ability {AbilityId} failed after the item was spent; returned {ItemSdbId} to {Character}",
+                nameof(ConsumeItemCommand),
+                Params.Id,
+                context.AbilityId,
+                itemSdbId,
+                character);
+        });
 
         return true;
     }

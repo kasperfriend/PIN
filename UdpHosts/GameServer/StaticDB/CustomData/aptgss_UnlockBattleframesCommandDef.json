@@ -85,66 +85,81 @@
   },
   {
     "id": 1492225,
-    "comment": "41596. Unlock Holmgang Battleframe: Assault"
+    "comment": "41596. Unlock Holmgang Battleframe: Assault",
+    "sdb_id": 76164
   },
   {
     "id": 1492465,
-    "comment": "41597. Unlock Holmgang Battleframe: Recon"
+    "comment": "41597. Unlock Holmgang Battleframe: Recon",
+    "sdb_id": 75773
   },
   {
     "id": 1492470,
-    "comment": "41598. Unlock Holmgang Battleframe: Engineer"
+    "comment": "41598. Unlock Holmgang Battleframe: Engineer",
+    "sdb_id": 75775
   },
   {
     "id": 1492475,
-    "comment": "41599. Unlock Holmgang Battleframe: Biotech"
+    "comment": "41599. Unlock Holmgang Battleframe: Biotech",
+    "sdb_id": 75774
   },
   {
     "id": 1492480,
-    "comment": "41600. Unlock Holmgang Battleframe: Dreadnaught"
+    "comment": "41600. Unlock Holmgang Battleframe: Dreadnaught",
+    "sdb_id": 75772
   },
   {
     "id": 1492485,
-    "comment": "41601. Unlock Holmgang Battleframe: Tigerclaw"
+    "comment": "41601. Unlock Holmgang Battleframe: Tigerclaw",
+    "sdb_id": 76132
   },
   {
     "id": 1492490,
-    "comment": "41602. Unlock Holmgang Battleframe: Firecat"
+    "comment": "41602. Unlock Holmgang Battleframe: Firecat",
+    "sdb_id": 76133
   },
   {
     "id": 1492495,
-    "comment": "41603. Unlock Holmgang Battleframe: Raptor"
+    "comment": "41603. Unlock Holmgang Battleframe: Raptor",
+    "sdb_id": 76334
   },
   {
     "id": 1492536,
-    "comment": "41604. Unlock Holmgang Battleframe: Nighthawk"
+    "comment": "41604. Unlock Holmgang Battleframe: Nighthawk",
+    "sdb_id": 76333
   },
   {
     "id": 1492541,
-    "comment": "41605. Unlock Holmgang Battleframe: Electron"
+    "comment": "41605. Unlock Holmgang Battleframe: Electron",
+    "sdb_id": 76337
   },
   {
     "id": 1492546,
-    "comment": "41606. Unlock Holmgang Battleframe: Bastion"
+    "comment": "41606. Unlock Holmgang Battleframe: Bastion",
+    "sdb_id": 76338
   },
   {
     "id": 1492557,
-    "comment": "41607. Unlock Holmgang Battleframe: Dragonfly"
+    "comment": "41607. Unlock Holmgang Battleframe: Dragonfly",
+    "sdb_id": 76335
   },
   {
     "id": 1492562,
-    "comment": "41608. Unlock Holmgang Battleframe: Recluse"
+    "comment": "41608. Unlock Holmgang Battleframe: Recluse",
+    "sdb_id": 76336
   },
   {
     "id": 1492567,
-    "comment": "41609. Unlock Holmgang Battleframe: Rhino"
+    "comment": "41609. Unlock Holmgang Battleframe: Rhino",
+    "sdb_id": 76332
   },
   {
     "id": 1492581,
-    "comment": "41610. Unlock Holmgang Battleframe: Mammoth"
+    "comment": "41610. Unlock Holmgang Battleframe: Mammoth",
+    "sdb_id": 76331
   },
   {
     "id": 1512447,
-    "comment": ""
+    "comment": "41703. item 142362"
   }
 ]

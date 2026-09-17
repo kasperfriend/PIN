@@ -69,6 +69,13 @@ public class CharacterRecord
     public DateTime LastSeenAt { get; set; } = DateTime.UtcNow;
 
     public CharacterVisualsRecord Visuals { get; set; } = new();
+
+    /// <summary>
+    /// What the character owns besides items: cosmetic unlocks, certificates,
+    /// unlocked battleframes, account groups, boosts and faction standings, as
+    /// the GameServer reports them (one line per entry; see its CharacterUnlocks).
+    /// </summary>
+    public List<CharacterUnlockEntry> Unlocks { get; set; } = [];
 }
 
 /// <summary>
@@ -125,4 +132,21 @@ public class CharacterVisualsRecord
     public int WarpaintId { get; set; } = DefaultCharacterTemplate.WarpaintId;
 
     public List<uint> Warpaint { get; set; } = [.. DefaultCharacterTemplate.Warpaint];
+}
+
+/// <summary>One persisted unlock line; the fields are read according to <see cref="Kind"/>.</summary>
+public class CharacterUnlockEntry
+{
+    /// <summary>"unlock", "account_group", "boost" or "reputation".</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>The unlock group / account group / boost type.</summary>
+    public string Group { get; set; } = string.Empty;
+
+    public uint Id { get; set; }
+
+    public int Value { get; set; }
+
+    /// <summary>Unix seconds; 0 = never.</summary>
+    public ulong ExpiresAt { get; set; }
 }

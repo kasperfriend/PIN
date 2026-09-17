@@ -6,8 +6,16 @@ namespace GameServer.Systems.Aptitude;
 
 public class Context
 {
+    private readonly SharedActivationState _shared;
+
     public Context(IShard shard, IAptitudeTarget initiator)
+        : this(shard, initiator, new SharedActivationState())
     {
+    }
+
+    private Context(IShard shard, IAptitudeTarget initiator, SharedActivationState shared)
+    {
+        _shared = shared;
         Shard = shard;
         Initiator = initiator;
         ActivationInitiator = initiator;
@@ -72,6 +80,26 @@ public class Context
     public Dictionary<ICommand, ICommandActiveContext> Actives { get; set; } = [];
 
     /// <summary>
+    ///     Set by <c>ReturnCommand</c>: every chain still running on this context stops after its current
+    ///     command, all the way up to the outermost one (a Return inside a ConditionalBranch's else chain
+    ///     ends the ability, not just the branch). <see cref="Chain" /> clears it when the outermost chain
+    ///     exits. Contexts copied for a called ability or an applied effect start with their own flag, so a
+    ///     Return there ends only that ability or effect chain.
+    /// </summary>
+    public bool ReturnRequested { get; set; }
+
+    /// <summary>How many <see cref="Chain.Execute" /> frames are running on this context right now.</summary>
+    public int ChainDepth { get; set; }
+
+    /// <summary>
+    ///     Undo steps for state a chain command already changed, run in reverse order when the root
+    ///     activation fails (see <c>AbilitySystem.ExecuteAbilityActivation</c>). ConsumeItem uses it to hand
+    ///     the consumable back when a later node of the chain - typically InstantActivation on a running
+    ///     cooldown - rejects the activation. Shared with called abilities like the pending cooldowns.
+    /// </summary>
+    public List<Action> ActivationRollbacks { get; set; } = [];
+
+    /// <summary>
     /// Cooldowns queued by activation commands while the chain runs. The
     /// AbilitySystem starts them once the whole chain has succeeded, so a
     /// chain that fails a later requirement (e.g. not enough energy) does not
@@ -96,9 +124,40 @@ public class Context
     /// </summary>
     public float AppliedEffectDuration { get; set; } = float.NaN;
 
+    /// <summary>
+    ///     What the activation has handed the player so far - the items a GrantOwnerItem/SpawnLoot/UnpackItem
+    ///     node granted - so a ShowRewardScreen node later in the same chain can list them. Shared with
+    ///     copied contexts like the rollbacks, so loot rolled inside an applied effect (the booster packs
+    ///     roll from their effect's apply chain) shows on the screen too.
+    /// </summary>
+    public List<AwardedItem> AwardedItems { get; set; } = [];
+
+    /// <summary>
+    ///     The characters whose <see cref="Entities.Character.CharacterEntity.Unlocks" /> a node of this
+    ///     activation changed (unlocks, boosts, account groups, reputation). The ability system persists
+    ///     their state through GRPC once the root activation has succeeded - not per node, since a later
+    ///     node may still fail the chain. Shared with copied contexts like the rollbacks.
+    /// </summary>
+    public HashSet<IAptitudeTarget> DirtyUnlocks { get; set; } = [];
+
+    /// <summary>
+    ///     Whether the consumable this activation came from (<see cref="AbilityModuleId" />) has been
+    ///     spent already - by a ConsumeItem node, or by a reward node that spends it itself because its
+    ///     chain has none (most unlock kits, boosts and rental contracts are authored that way). Keeps
+    ///     a chain with both from charging twice. Shared with copied contexts.
+    /// </summary>
+    public bool ActivatingItemConsumed { get => _shared.ActivatingItemConsumed; set => _shared.ActivatingItemConsumed = value; }
+
+    /// <summary>
+    ///     Whether that spend was done by a reward node rather than a <c>ConsumeItem</c>: a <c>ConsumeItem</c>
+    ///     that follows it (boost chains are <c>ApplyPermanentEffect, ..., ConsumeItem</c>) is then already
+    ///     paid for, while two explicit <c>ConsumeItem</c> nodes still take one each.
+    /// </summary>
+    public bool ActivatingItemConsumedImplicitly { get => _shared.ActivatingItemConsumedImplicitly; set => _shared.ActivatingItemConsumedImplicitly = value; }
+
     public static Context CopyContext(Context original)
     {
-        return new Context(original.Shard, original.Initiator)
+        return new Context(original.Shard, original.Initiator, original._shared)
         {
             ChainId = original.ChainId,
             AbilityId = original.AbilityId,
@@ -122,8 +181,11 @@ public class Context
             ExecutionHint = original.ExecutionHint,
             ExecutionId = original.ExecutionId,
             PendingCooldowns = original.PendingCooldowns,
+            ActivationRollbacks = original.ActivationRollbacks,
             AppliedEffects = original.AppliedEffects,
             AppliedEffectDuration = original.AppliedEffectDuration,
+            AwardedItems = original.AwardedItems,
+            DirtyUnlocks = original.DirtyUnlocks,
         };
     }
 
@@ -134,3 +196,13 @@ public class Context
     public uint SourceEffect;
     */
 }
+
+/// <summary>Flags one activation shares with every context copied from it.</summary>
+internal sealed class SharedActivationState
+{
+    public bool ActivatingItemConsumed;
+    public bool ActivatingItemConsumedImplicitly;
+}
+
+/// <summary>An item an activation granted, for the reward screen.</summary>
+public sealed record AwardedItem(uint SdbId, uint Quantity);

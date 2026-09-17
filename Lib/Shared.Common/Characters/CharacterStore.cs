@@ -642,6 +642,22 @@ public static class CharacterStore
         Save();
     }
 
+    /// <summary>Replace the character's unlock state with what the GameServer reports.</summary>
+    public static void UpdateUnlocks(ulong characterGuid, uint zoneId, IEnumerable<CharacterUnlockEntry> unlocks)
+    {
+        Init();
+
+        var character = CharacterResolver.Find(Characters.Values, characterGuid, zoneId);
+
+        if (character == null)
+        {
+            return;
+        }
+
+        character.Unlocks = unlocks?.ToList() ?? [];
+        Save();
+    }
+
     /// <summary>Persist where the player logged out and how long they played.</summary>
     /// <remarks>
     /// Same resolution strategy as <see cref="UpdateCurrentBattleframe"/>: the

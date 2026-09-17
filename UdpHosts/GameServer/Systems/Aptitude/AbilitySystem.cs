@@ -7,6 +7,7 @@ using AeroMessages.GSS.Character.Command;
 using GameServer.Entities.Character;
 using GameServer.Enums;
 using GameServer.Extensions;
+using GameServer.GRPC;
 using GameServer.StaticDB;
 using Serilog;
 
@@ -978,9 +979,56 @@ public class AbilitySystem
         if (isRootActivation)
         {
             CommitActivationCooldowns(context, success);
+            if (!success)
+            {
+                RunActivationRollbacks(context);
+            }
+            else
+            {
+                PersistUnlocks(context);
+            }
         }
 
         return success;
+    }
+
+    /// <summary>
+    ///     Saves the unlock state of every character a node of the (successful) activation changed, so an
+    ///     unlock kit, a boost or a rental survives a relog. Sent on a background task like the other
+    ///     session saves; dropped with a warning when the WebHost is not connected.
+    /// </summary>
+    private void PersistUnlocks(Context context)
+    {
+        if (context.DirtyUnlocks.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var target in context.DirtyUnlocks)
+        {
+            if (target is CharacterEntity { IsPlayerControlled: true } character && character.Player != null)
+            {
+                _ = GRPCService.SaveCharacterUnlocksAsync(character.Player.CharacterId + 0xFE, _shard.ZoneId, character.Unlocks.ToRecords());
+            }
+        }
+
+        context.DirtyUnlocks.Clear();
+    }
+
+    /// <summary>
+    ///     Undoes what a failed root activation already changed, newest first: a consumable a
+    ///     ConsumeItem node took before a later requirement (InstantActivation on cooldown, a nested
+    ///     chain) rejected the activation goes back to the player. Cooldowns need no undo - they are
+    ///     only committed on success.
+    /// </summary>
+    private static void RunActivationRollbacks(Context context)
+    {
+        for (int i = context.ActivationRollbacks.Count - 1; i >= 0; i--)
+        {
+            context.ActivationRollbacks[i]();
+        }
+
+        context.ActivationRollbacks.Clear();
     }
 
     public bool HandleActivateAbility(IShard shard, IAptitudeTarget initiator, uint abilityId)

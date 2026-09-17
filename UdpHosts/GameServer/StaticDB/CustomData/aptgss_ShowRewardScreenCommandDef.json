@@ -1,0 +1,1405 @@
+[
+  {
+    "id": 1051874,
+    "comment": ""
+  },
+  {
+    "id": 1051910,
+    "comment": ""
+  },
+  {
+    "id": 1051929,
+    "comment": ""
+  },
+  {
+    "id": 1055787,
+    "comment": ""
+  },
+  {
+    "id": 1097018,
+    "comment": "39726. Gift from Accord Command",
+    "screen_type": 0
+  },
+  {
+    "id": 1107325,
+    "comment": "39764. item 124643",
+    "screen_type": 0
+  },
+  {
+    "id": 1127324,
+    "comment": "39807. Friendship's Reward - Tier 1",
+    "screen_type": 0
+  },
+  {
+    "id": 1127340,
+    "comment": "39808. Friendship's Reward - Tier 2",
+    "screen_type": 0
+  },
+  {
+    "id": 1127356,
+    "comment": "39809. Friendship's Reward - Tier 3",
+    "screen_type": 0
+  },
+  {
+    "id": 1127372,
+    "comment": "39810. Friendship's Reward - Tier 4",
+    "screen_type": 0
+  },
+  {
+    "id": 1127395,
+    "comment": "39811. Army Reward",
+    "screen_type": 0
+  },
+  {
+    "id": 1127556,
+    "comment": ""
+  },
+  {
+    "id": 1127582,
+    "comment": ""
+  },
+  {
+    "id": 1128108,
+    "comment": ""
+  },
+  {
+    "id": 1128123,
+    "comment": ""
+  },
+  {
+    "id": 1128138,
+    "comment": ""
+  },
+  {
+    "id": 1129175,
+    "comment": "39828. Internal Testing Item - Epic Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1172065,
+    "comment": "39990. Friendship's Reward - Tier 5",
+    "screen_type": 0
+  },
+  {
+    "id": 1183990,
+    "comment": "40054. Internal Testing Item - Rare Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1185269,
+    "comment": "40059. Internal Testing Item - Uncommon+ Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1200311,
+    "comment": "40136. PvP Internal Testing Item - PvP Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1207518,
+    "comment": "39728. item 124582",
+    "screen_type": 0
+  },
+  {
+    "id": 1207838,
+    "comment": "40191. item 137036",
+    "screen_type": 0
+  },
+  {
+    "id": 1207853,
+    "comment": "40197. item 137049",
+    "screen_type": 0
+  },
+  {
+    "id": 1207877,
+    "comment": "40199. item 137052",
+    "screen_type": 0
+  },
+  {
+    "id": 1207968,
+    "comment": "40198. item 137050",
+    "screen_type": 0
+  },
+  {
+    "id": 1208174,
+    "comment": "40207. item 137067",
+    "screen_type": 0
+  },
+  {
+    "id": 1215321,
+    "comment": "40116. Ratchet’s Crate MK1",
+    "screen_type": 1
+  },
+  {
+    "id": 1215336,
+    "comment": "40217. Ratchet’s Crate MK2",
+    "screen_type": 1
+  },
+  {
+    "id": 1215351,
+    "comment": "40218. Ratchet’s Crate MK3",
+    "screen_type": 1
+  },
+  {
+    "id": 1215366,
+    "comment": "40219. Ratchet’s Crate MK4",
+    "screen_type": 1
+  },
+  {
+    "id": 1215381,
+    "comment": "40220. Ratchet’s Crate MK5",
+    "screen_type": 1
+  },
+  {
+    "id": 1215396,
+    "comment": "40221. Ratchet’s Crate MK6",
+    "screen_type": 1
+  },
+  {
+    "id": 1215411,
+    "comment": "40222. Ratchet’s Crate MK7",
+    "screen_type": 1
+  },
+  {
+    "id": 1215426,
+    "comment": "40223. Ratchet’s Crate MK8",
+    "screen_type": 1
+  },
+  {
+    "id": 1215441,
+    "comment": "40224. Allies Commander’s Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1215456,
+    "comment": "40225. Mercenary Commander’s Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1215471,
+    "comment": "40226. Ace Commander’s Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1215486,
+    "comment": "40227. Heroic Commander’s Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1215953,
+    "comment": "40235. item 137068",
+    "screen_type": 0
+  },
+  {
+    "id": 1216182,
+    "comment": "40243. item 137108",
+    "screen_type": 0
+  },
+  {
+    "id": 1216853,
+    "comment": "40247. item 137127",
+    "screen_type": 0
+  },
+  {
+    "id": 1217062,
+    "comment": "40253. item 137132",
+    "screen_type": 0
+  },
+  {
+    "id": 1217500,
+    "comment": "40257. item 137136",
+    "screen_type": 0
+  },
+  {
+    "id": 1217576,
+    "comment": "40259. item 137138",
+    "screen_type": 0
+  },
+  {
+    "id": 1221135,
+    "comment": "40291. item 137686",
+    "screen_type": 0
+  },
+  {
+    "id": 1221307,
+    "comment": "40293. item 137869",
+    "screen_type": 0
+  },
+  {
+    "id": 1229025,
+    "comment": "40327. Pandora’s Crate MK1",
+    "screen_type": 1
+  },
+  {
+    "id": 1229040,
+    "comment": "40328. Pandora’s Crate MK2",
+    "screen_type": 1
+  },
+  {
+    "id": 1229055,
+    "comment": "40329. Pandora’s Crate MK3",
+    "screen_type": 1
+  },
+  {
+    "id": 1229084,
+    "comment": "40330. Pandora’s Crate MK4",
+    "screen_type": 1
+  },
+  {
+    "id": 1229099,
+    "comment": "40331. Pandora’s Crate MK5",
+    "screen_type": 1
+  },
+  {
+    "id": 1229129,
+    "comment": "40332. Pandora’s Crate MK6",
+    "screen_type": 1
+  },
+  {
+    "id": 1229144,
+    "comment": "40333. Pandora’s Crate MK7",
+    "screen_type": 1
+  },
+  {
+    "id": 1229159,
+    "comment": "40334. Pandora’s Crate MK8",
+    "screen_type": 1
+  },
+  {
+    "id": 1229174,
+    "comment": "40335. Kratos ARES Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1229189,
+    "comment": "40336. Mercenary ARES Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1229264,
+    "comment": "40338. Ace ARES Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1229279,
+    "comment": "40339. Heroic ARES Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1229294,
+    "comment": "40340. Legendary ARES Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1229379,
+    "comment": ""
+  },
+  {
+    "id": 1236968,
+    "comment": "40229. Random Uncommon Medical System",
+    "screen_type": 0
+  },
+  {
+    "id": 1237036,
+    "comment": "40364. Random Uncommon Reactor",
+    "screen_type": 0
+  },
+  {
+    "id": 1238739,
+    "comment": "40387. item 138723",
+    "screen_type": 0
+  },
+  {
+    "id": 1238742,
+    "comment": "40386. item 138722",
+    "screen_type": 0
+  },
+  {
+    "id": 1238745,
+    "comment": "40385. item 138721",
+    "screen_type": 0
+  },
+  {
+    "id": 1238748,
+    "comment": "40384. item 138720",
+    "screen_type": 0
+  },
+  {
+    "id": 1238751,
+    "comment": "40383. item 138719",
+    "screen_type": 0
+  },
+  {
+    "id": 1238754,
+    "comment": "40382. item 138718",
+    "screen_type": 0
+  },
+  {
+    "id": 1238757,
+    "comment": "40381. item 138717",
+    "screen_type": 0
+  },
+  {
+    "id": 1238760,
+    "comment": "40380. item 138716",
+    "screen_type": 0
+  },
+  {
+    "id": 1238763,
+    "comment": "40379. item 138715",
+    "screen_type": 0
+  },
+  {
+    "id": 1238766,
+    "comment": "40378. item 138714",
+    "screen_type": 0
+  },
+  {
+    "id": 1238769,
+    "comment": "40377. item 138713",
+    "screen_type": 0
+  },
+  {
+    "id": 1238772,
+    "comment": "40376. item 138712",
+    "screen_type": 0
+  },
+  {
+    "id": 1242720,
+    "comment": "40372. Random Uncommon Arm Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1242753,
+    "comment": "40373. Random Uncommon Operating System",
+    "screen_type": 0
+  },
+  {
+    "id": 1243392,
+    "comment": "40374. Random Uncommon Medical System",
+    "screen_type": 0
+  },
+  {
+    "id": 1243395,
+    "comment": "40375. Random Uncommon Reactor",
+    "screen_type": 0
+  },
+  {
+    "id": 1243532,
+    "comment": ""
+  },
+  {
+    "id": 1277257,
+    "comment": "40569. SIN Uplink XP Reward",
+    "screen_type": 0
+  },
+  {
+    "id": 1279632,
+    "comment": "40574. Random Uncommon Chassis",
+    "screen_type": 0
+  },
+  {
+    "id": 1279635,
+    "comment": "40575. Random Uncommon Leg Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1279638,
+    "comment": "40576. Random Uncommon Chassis",
+    "screen_type": 0
+  },
+  {
+    "id": 1279641,
+    "comment": "40577. Random Uncommon Leg Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1279644,
+    "comment": "40578. Random Uncommon Reactor",
+    "screen_type": 0
+  },
+  {
+    "id": 1279647,
+    "comment": "40579. Random Uncommon Head Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1279660,
+    "comment": "40580. Random Uncommon Chassis",
+    "screen_type": 0
+  },
+  {
+    "id": 1279698,
+    "comment": "40581. Random Uncommon Arm Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1279701,
+    "comment": "40582. Random Uncommon Chassis",
+    "screen_type": 0
+  },
+  {
+    "id": 1279707,
+    "comment": "40583. Random Uncommon Head Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1279710,
+    "comment": "40584. Random Uncommon Chassis",
+    "screen_type": 0
+  },
+  {
+    "id": 1279716,
+    "comment": "40585. Random Uncommon Leg Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1279722,
+    "comment": "40587. Random Uncommon Arm Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1279725,
+    "comment": "40586. Random Uncommon Chassis",
+    "screen_type": 0
+  },
+  {
+    "id": 1279728,
+    "comment": "40588. Random Uncommon Medical System",
+    "screen_type": 0
+  },
+  {
+    "id": 1294324,
+    "comment": ""
+  },
+  {
+    "id": 1311903,
+    "comment": "39707. Gift from Accord Command / 39707. Heroes' Reward",
+    "screen_type": 0
+  },
+  {
+    "id": 1314446,
+    "comment": ""
+  },
+  {
+    "id": 1331454,
+    "comment": "40836. item 140371",
+    "screen_type": 0
+  },
+  {
+    "id": 1331588,
+    "comment": "40837. item 140373",
+    "screen_type": 0
+  },
+  {
+    "id": 1332391,
+    "comment": "40829. item 140324",
+    "screen_type": 0
+  },
+  {
+    "id": 1332486,
+    "comment": "40835. item 140369",
+    "screen_type": 0
+  },
+  {
+    "id": 1332502,
+    "comment": "40832. item 140364",
+    "screen_type": 0
+  },
+  {
+    "id": 1333232,
+    "comment": "40859. item 140631",
+    "screen_type": 0
+  },
+  {
+    "id": 1333456,
+    "comment": "40245. item 137115",
+    "screen_type": 0
+  },
+  {
+    "id": 1333553,
+    "comment": "40827. item 140321",
+    "screen_type": 0
+  },
+  {
+    "id": 1333569,
+    "comment": "40865. item 140635",
+    "screen_type": 0
+  },
+  {
+    "id": 1333605,
+    "comment": "40200. item 137055",
+    "screen_type": 0
+  },
+  {
+    "id": 1333640,
+    "comment": "40868. item 140641",
+    "screen_type": 0
+  },
+  {
+    "id": 1334343,
+    "comment": "40241. item 137106",
+    "screen_type": 0
+  },
+  {
+    "id": 1336453,
+    "comment": ""
+  },
+  {
+    "id": 1345070,
+    "comment": "40954. Chassis Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1345100,
+    "comment": "40951. Chassis Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1345120,
+    "comment": "40953. Chassis Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1345126,
+    "comment": "40952. Chassis Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1345146,
+    "comment": "40933. Headgear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1345222,
+    "comment": "40931. Chassis Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1345447,
+    "comment": "40934. Operating System Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1345453,
+    "comment": "40935. Grenade Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1345475,
+    "comment": "40936. Leg Gear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1345642,
+    "comment": "40958. Powered Servo Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1346030,
+    "comment": "40959. Arm Gear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1346293,
+    "comment": "40960. Reactor Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347085,
+    "comment": "40961. Medical System Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347151,
+    "comment": "40962. Operating System Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347206,
+    "comment": "40963. Energy Sword Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347238,
+    "comment": "40964. Headgear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347304,
+    "comment": "40965. Reactor Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347310,
+    "comment": "40966. Arm Gear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347376,
+    "comment": "40967. Grenade Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347701,
+    "comment": "40968. Leg Gear Case / 40968. Medical System Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347707,
+    "comment": ""
+  },
+  {
+    "id": 1347713,
+    "comment": "40970. Battle Hammer Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347719,
+    "comment": "40971. Reactor Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347725,
+    "comment": "40972. Operating System Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347739,
+    "comment": "40973. Headgear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347747,
+    "comment": "40974. Operating System Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347753,
+    "comment": "40975. Powered Servo Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1347759,
+    "comment": "40976. Arm Gear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1348402,
+    "comment": "40981. Uncommon Item Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1354422,
+    "comment": "41001. Assault Ability Case: Crater",
+    "screen_type": 1
+  },
+  {
+    "id": 1356899,
+    "comment": "41011. Biotech Ability Case: Triage",
+    "screen_type": 0
+  },
+  {
+    "id": 1356919,
+    "comment": "41012. Recon Ability Case: Resonating Bolts",
+    "screen_type": 0
+  },
+  {
+    "id": 1356925,
+    "comment": "41013. Dreadnaught Ability Case: Turret Mode",
+    "screen_type": 0
+  },
+  {
+    "id": 1356951,
+    "comment": "41014. Engineer Ability Case: Pulse Generator",
+    "screen_type": 0
+  },
+  {
+    "id": 1357245,
+    "comment": "41000. Medical System Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1357483,
+    "comment": "41016. Kisuton Armor Case: Chassis",
+    "screen_type": 0
+  },
+  {
+    "id": 1357513,
+    "comment": "41017. Kisuton Armor Case: Arm Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1357519,
+    "comment": "41018. Kisuton Armor Case: Leg Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1357525,
+    "comment": "41019. Kisuton Armor Case: Reactor",
+    "screen_type": 0
+  },
+  {
+    "id": 1357637,
+    "comment": "41021. Dragonfly Ability Case: Healing Pillar",
+    "screen_type": 0
+  },
+  {
+    "id": 1357689,
+    "comment": "41020. Bastion Ability Case: Multi Turret",
+    "screen_type": 0
+  },
+  {
+    "id": 1358758,
+    "comment": "41026. Nighthawk Ability Case: Execution",
+    "screen_type": 0
+  },
+  {
+    "id": 1358845,
+    "comment": "41027. Mammoth Ability Case: Forward Shield",
+    "screen_type": 0
+  },
+  {
+    "id": 1358872,
+    "comment": "41028. Tigerclaw Ability Case: Disruption",
+    "screen_type": 0
+  },
+  {
+    "id": 1358878,
+    "comment": "41029. Astrek Armor Case: Headgear",
+    "screen_type": 0
+  },
+  {
+    "id": 1358884,
+    "comment": "41015. Kisuton Armor Case: Headgear",
+    "screen_type": 0
+  },
+  {
+    "id": 1359005,
+    "comment": "41032. Astrek Armor Case: Arm Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1359015,
+    "comment": "41033. Astrek Armor Case: Leg Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1359023,
+    "comment": "41034. Bastion Ultimate Ability Case: Fortify",
+    "screen_type": 0
+  },
+  {
+    "id": 1359136,
+    "comment": "41043. Electron Ability Case: Bulwark",
+    "screen_type": 0
+  },
+  {
+    "id": 1359142,
+    "comment": "41041. Recluse Ability Case: Creeping Death",
+    "screen_type": 0
+  },
+  {
+    "id": 1359148,
+    "comment": "41035. Dragonfly Ultimate Ability Case: Rescue Drone",
+    "screen_type": 0
+  },
+  {
+    "id": 1359154,
+    "comment": "41036. Nighthawk Ultimate Ability Case: Eruption Rounds",
+    "screen_type": 0
+  },
+  {
+    "id": 1359160,
+    "comment": "41037. Mammoth Ultimate Ability Case: Tremors",
+    "screen_type": 0
+  },
+  {
+    "id": 1359171,
+    "comment": "41038. Tigerclaw Ultimate Ability Case: Tether Field",
+    "screen_type": 0
+  },
+  {
+    "id": 1359187,
+    "comment": "41047. Raptor Ability Case: SIN Scrambler",
+    "screen_type": 0
+  },
+  {
+    "id": 1359193,
+    "comment": "41048. Firecat Ability Case: Thermal Wave",
+    "screen_type": 0
+  },
+  {
+    "id": 1359265,
+    "comment": "41049. Rhino Ability Case: Charge",
+    "screen_type": 0
+  },
+  {
+    "id": 1359386,
+    "comment": "41052. Omnidyne Armor Case: Arm Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1359392,
+    "comment": "41051. Omnidyne Armor Case: Chassis",
+    "screen_type": 0
+  },
+  {
+    "id": 1359398,
+    "comment": "41050. Omnidyne Armor Case: Headgear",
+    "screen_type": 0
+  },
+  {
+    "id": 1359437,
+    "comment": "41053. Omnidyne Armor Case: Leg Gear",
+    "screen_type": 0
+  },
+  {
+    "id": 1359477,
+    "comment": "41054. Recluse Ultimate Ability Case: Desecrate",
+    "screen_type": 1
+  },
+  {
+    "id": 1359507,
+    "comment": "41055. Electron Ultimate Ability Case: Electrical Storm",
+    "screen_type": 0
+  },
+  {
+    "id": 1360014,
+    "comment": "41057. Raptor Ultimate Ability Case: Overload",
+    "screen_type": 0
+  },
+  {
+    "id": 1360026,
+    "comment": "41058. Firecat Ultimate Ability Case: Fuel Air Bomb",
+    "screen_type": 0
+  },
+  {
+    "id": 1360032,
+    "comment": "41059. Rhino Ultimate Ability Case: Dreadfield",
+    "screen_type": 0
+  },
+  {
+    "id": 1368105,
+    "comment": "40233. item 137093",
+    "screen_type": 0
+  },
+  {
+    "id": 1368120,
+    "comment": "40874. item 140644",
+    "screen_type": 0
+  },
+  {
+    "id": 1368135,
+    "comment": "40261. item 137140",
+    "screen_type": 0
+  },
+  {
+    "id": 1368150,
+    "comment": "40237. item 137100",
+    "screen_type": 0
+  },
+  {
+    "id": 1368165,
+    "comment": "40879. item 140649",
+    "screen_type": 0
+  },
+  {
+    "id": 1368186,
+    "comment": "40878. item 140648",
+    "screen_type": 0
+  },
+  {
+    "id": 1368201,
+    "comment": "40877. item 140647",
+    "screen_type": 0
+  },
+  {
+    "id": 1368216,
+    "comment": "40876. item 140646",
+    "screen_type": 0
+  },
+  {
+    "id": 1368234,
+    "comment": "40250. item 137129",
+    "screen_type": 0
+  },
+  {
+    "id": 1368249,
+    "comment": "40875. item 140645",
+    "screen_type": 0
+  },
+  {
+    "id": 1369290,
+    "comment": "41085. Chosen Relic Cluster",
+    "screen_type": 0
+  },
+  {
+    "id": 1381423,
+    "comment": "40544. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381427,
+    "comment": "40545. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381431,
+    "comment": "40546. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381439,
+    "comment": "40547. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381701,
+    "comment": "40548. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381705,
+    "comment": "40549. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381709,
+    "comment": "40550. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381713,
+    "comment": "40551. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381717,
+    "comment": "40552. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381721,
+    "comment": "40553. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381725,
+    "comment": "40554. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381729,
+    "comment": "40555. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381755,
+    "comment": "40556. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381759,
+    "comment": "40557. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381763,
+    "comment": "40558. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381767,
+    "comment": "40559. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381771,
+    "comment": "40560. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381775,
+    "comment": "40561. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381779,
+    "comment": "40669. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381783,
+    "comment": "40670. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381787,
+    "comment": "40671. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381791,
+    "comment": "40672. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381795,
+    "comment": "40673. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1381799,
+    "comment": "40674. Bounty Reward!",
+    "screen_type": 0
+  },
+  {
+    "id": 1396112,
+    "comment": "39634. Cracked Secure Weapon Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1409858,
+    "comment": ""
+  },
+  {
+    "id": 1434683,
+    "comment": "41403. Grenade Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1434755,
+    "comment": "41404. Arm Gear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1434838,
+    "comment": "41405. Energy Sword Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1434858,
+    "comment": "41406. Chassis Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435051,
+    "comment": "41407. Leg Gear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435057,
+    "comment": "41408. Medical System Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435063,
+    "comment": "41409. Battle Hammer Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435078,
+    "comment": "41410. Reactor Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435106,
+    "comment": "41411. Grenade Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435114,
+    "comment": "41412. Chassis Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435201,
+    "comment": "41417. Operating System Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435221,
+    "comment": "41418. Powered Servo Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435235,
+    "comment": "41419. Arm Gear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435270,
+    "comment": "41420. Medical System Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435312,
+    "comment": "41421. Chassis Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435336,
+    "comment": "41422. Reactor Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435379,
+    "comment": "41423. Leg Gear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1435385,
+    "comment": "41424. Energy Sword Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1439136,
+    "comment": "41031. Astrek Armor Case: Chassis",
+    "screen_type": 0
+  },
+  {
+    "id": 1474930,
+    "comment": "40368. Rare Module Cache",
+    "screen_type": 1
+  },
+  {
+    "id": 1474950,
+    "comment": "40367. Rare Ability Cache",
+    "screen_type": 1
+  },
+  {
+    "id": 1474970,
+    "comment": "40366. Rare Armor Cache",
+    "screen_type": 1
+  },
+  {
+    "id": 1474990,
+    "comment": "40365. Rare Weapon Cache",
+    "screen_type": 1
+  },
+  {
+    "id": 1475010,
+    "comment": "40310. Epic Armor Cache",
+    "screen_type": 1
+  },
+  {
+    "id": 1475030,
+    "comment": "40302. Secure Armor Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1475036,
+    "comment": "40302. Secure Armor Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1475042,
+    "comment": "40302. Secure Armor Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1475078,
+    "comment": "39777. Treasure Cache",
+    "screen_type": 1
+  },
+  {
+    "id": 1475090,
+    "comment": "39770. Epic Module Cache",
+    "screen_type": 1
+  },
+  {
+    "id": 1475110,
+    "comment": "39769. Epic Ability Cache",
+    "screen_type": 1
+  },
+  {
+    "id": 1475130,
+    "comment": "39768. Epic Weapon Cache",
+    "screen_type": 1
+  },
+  {
+    "id": 1475150,
+    "comment": "39755. Secure Module Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1475156,
+    "comment": "39755. Secure Module Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1475162,
+    "comment": "39755. Secure Module Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1475190,
+    "comment": "39481. Secure Ability Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1475196,
+    "comment": "39481. Secure Ability Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1475202,
+    "comment": "39481. Secure Ability Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1475230,
+    "comment": "39410. Secure Weapon Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1475236,
+    "comment": "39410. Secure Weapon Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1475242,
+    "comment": "39410. Secure Weapon Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1484641,
+    "comment": "41559. ARES Pack",
+    "screen_type": 1
+  },
+  {
+    "id": 1484656,
+    "comment": "41560. Cheetah ARES Pack",
+    "screen_type": 1
+  },
+  {
+    "id": 1484671,
+    "comment": "41561. Angel ARES Pack",
+    "screen_type": 1
+  },
+  {
+    "id": 1485105,
+    "comment": "41563. Secure Vanity Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1485111,
+    "comment": "41563. Secure Vanity Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1488189,
+    "comment": ""
+  },
+  {
+    "id": 1488215,
+    "comment": "41568. Rare Vanity Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1488260,
+    "comment": "41569. Epic Vanity Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1488275,
+    "comment": "41570. Legendary Vanity Locker",
+    "screen_type": 1
+  },
+  {
+    "id": 1489332,
+    "comment": "41577. LV20 Primary Weapon Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1490958,
+    "comment": "41589. LV30 Secondary Weapon Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1490973,
+    "comment": "41586. LV20 Ability Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1490988,
+    "comment": "41585. LV20 Armor Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1493297,
+    "comment": "41611. Mk. 3 Module Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1497311,
+    "comment": "41644. The Force Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1504948,
+    "comment": "40228. Legendary Commander’s Crate",
+    "screen_type": 1
+  },
+  {
+    "id": 1534103,
+    "comment": "41768. Chassis Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1534358,
+    "comment": "41416. Headgear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1534364,
+    "comment": "41769. Headgear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1534516,
+    "comment": "41770. Arm Gear Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1534618,
+    "comment": "41771. Reactor Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1534674,
+    "comment": "41772. Operating System Case",
+    "screen_type": 0
+  },
+  {
+    "id": 1564362,
+    "comment": "41856. Arsenal Compensation Package",
+    "screen_type": 1
+  },
+  {
+    "id": 1595639,
+    "comment": "41942. War Machine Pack",
+    "screen_type": 1
+  },
+  {
+    "id": 1609157,
+    "comment": "41857. Ace of Honor Pack",
+    "screen_type": 1
+  },
+  {
+    "id": 1634590,
+    "comment": "41594. Champion's Cache",
+    "screen_type": 1
+  },
+  {
+    "id": 1634610,
+    "comment": "41593. Contender's Cache",
+    "screen_type": 1
+  },
+  {
+    "id": 1635680,
+    "comment": "42100. Homecoming Pack",
+    "screen_type": 1
+  }
+]
