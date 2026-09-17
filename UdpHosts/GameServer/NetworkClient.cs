@@ -164,6 +164,10 @@ public class NetworkClient : INetworkClient
     {
         if (AssignedShard != null)
         {
+            // TempConsoleMessage uses null-terminated [AeroString] fields, which can only carry ASCII:
+            // the packer under-sizes the buffer for multi-byte characters and throws instead of sending.
+            message = message.AsAeroSafeText();
+
             if (message.Length > 200)
             {
                 List<string> splits = SplitConsoleMessage(message);

@@ -14,6 +14,7 @@ PIN is split into two areas:
 - [NPC AI](NPC_AI.md) — how spawned mobs target, chase, attack and leash, and how to tune it
 - [NPC routines & movement census](NPC_ROUTINES.md) — bounded ambient roaming, real placed work/rest activities, every database movement invocation, and the missing original-route boundary
 - [World Population](WORLD_POPULATION.md) — how a zone gets filled with every mob/NPC the database puts there: where the positions come from, what the two collision checks are, what bounds the cost, and the `\population` command
+- [Chat Commands](CHAT_COMMANDS.md) — **all** in-game commands: the full `\help` chat command list plus the Admin-channel command set, with usage, aliases, and where each prints (chat window vs console)
 - [Map Files Findings](MAP_FILES_FINDINGS.md) — **new** — full breakdown of actual client map files (`*.zone`, `*.gtchunk`) from `maps.zip` (3.2GB, 38 zones, 281 chunks): format, layers, path routes (vehicle, not NPC), Melding wall, subzone grids, encounter names
 - [Map Analysis for Server](MAP_ANALYSIS_FOR_SERVER.md) — **new** — actionable guide translating map findings into concrete server tasks: ZoneBounds early-out, SubZoneGrid for habitat, PropDoodad for work stations, path layers clarified as vehicle routes
 - [Single Zone](SINGLE_ZONE.md) — one shard simulates one zone: what `ZoneId` controls, which zones have authored data, and what players in other zones experience

@@ -62,7 +62,7 @@ public class BalanceServerCommand : ServerCommand
         }
 
         var crystite = inventory.GetResourceQuantity(VendorCatalog.CrystiteSdbId);
-        SourceFeedback($"Crystite (10): {crystite:N0}  — vendors charge this. 'crystite 100000' to add more.", context);
+        SourceFeedback($"Crystite (10): {crystite:N0}  - vendors charge this. 'crystite 100000' to add more.", context);
         SourceFeedback("Add any: 'resource <sdbId> <amount>'  e.g. 'resource 10 250000'. Fill all: 'wallet' or 'wallet all'.", context);
     }
 }

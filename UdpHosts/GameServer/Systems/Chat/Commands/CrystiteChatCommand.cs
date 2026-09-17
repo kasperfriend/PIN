@@ -1,7 +1,7 @@
 namespace GameServer.Systems.Chat.Commands;
 
 [ChatCommand(
-    "Add crystite (vendor currency) to your wallet — the one vendors charge. No amount = 100k, e.g. \\crystite 500000.",
+    "Add crystite (vendor currency) to your wallet - the one vendors charge. No amount = 100k, e.g. \\crystite 500000.",
     "crystite [amount]",
     "crystite",
     "cy",
