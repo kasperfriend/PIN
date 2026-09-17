@@ -156,6 +156,7 @@ public static class PlayerRewards
         }
 
         context.ActivatingItemConsumed = true;
+        context.ActivatingItemConsumedImplicitly = true;
         return true;
     }
 

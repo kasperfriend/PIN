@@ -67,6 +67,21 @@ public sealed class ItemRewardCommandTests : IDisposable
     }
 
     [Fact]
+    public void BoostChain_ApplyThenConsumeItem_SpendsOnlyOne()
+    {
+        var (context, _, inventory) = CreateActivation(Booster);
+        inventory.AddResource(Booster, 2);
+
+        Assert.True(new ApplyPermanentEffectCommand(new ApplyPermanentEffectCommandDef { Id = 1, EffectId = 3509, BoostType = CharacterUnlocks.BoostXp, Percent = 25, DurationSeconds = 600 }).Execute(context));
+        Assert.True(new ConsumeItemCommand(new ConsumeItemCommandDef { Id = 2 }).Execute(context));
+        Assert.Equal(1u, inventory.GetResourceQuantity(Booster));
+
+        // An explicit second ConsumeItem still takes one - only the implicit spend is folded into the first.
+        Assert.True(new ConsumeItemCommand(new ConsumeItemCommandDef { Id = 3 }).Execute(context));
+        Assert.Equal(0u, inventory.GetResourceQuantity(Booster));
+    }
+
+    [Fact]
     public void UnlockTitles_WithoutTheKit_Fails()
     {
         var (context, character, _) = CreateActivation(TitleKit);

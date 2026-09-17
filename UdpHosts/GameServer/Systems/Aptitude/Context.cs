@@ -148,6 +148,13 @@ public class Context
     /// </summary>
     public bool ActivatingItemConsumed { get => _shared.ActivatingItemConsumed; set => _shared.ActivatingItemConsumed = value; }
 
+    /// <summary>
+    ///     Whether that spend was done by a reward node rather than a <c>ConsumeItem</c>: a <c>ConsumeItem</c>
+    ///     that follows it (boost chains are <c>ApplyPermanentEffect, ..., ConsumeItem</c>) is then already
+    ///     paid for, while two explicit <c>ConsumeItem</c> nodes still take one each.
+    /// </summary>
+    public bool ActivatingItemConsumedImplicitly { get => _shared.ActivatingItemConsumedImplicitly; set => _shared.ActivatingItemConsumedImplicitly = value; }
+
     public static Context CopyContext(Context original)
     {
         return new Context(original.Shard, original.Initiator, original._shared)
@@ -194,6 +201,7 @@ public class Context
 internal sealed class SharedActivationState
 {
     public bool ActivatingItemConsumed;
+    public bool ActivatingItemConsumedImplicitly;
 }
 
 /// <summary>An item an activation granted, for the reward screen.</summary>

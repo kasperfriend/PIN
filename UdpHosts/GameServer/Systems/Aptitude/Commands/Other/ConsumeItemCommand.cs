@@ -49,9 +49,11 @@ public class ConsumeItemCommand : Command, ICommand
             return true;
         }
 
-        if (context.ActivatingItemConsumed)
+        if (context.ActivatingItemConsumedImplicitly)
         {
-            // A reward node earlier in this activation already spent the item (see PlayerRewards.ConsumeActivatingItem).
+            // A reward node earlier in this activation already spent the item (see PlayerRewards.ConsumeActivatingItem);
+            // this node is the explicit spend it stood in for.
+            context.ActivatingItemConsumedImplicitly = false;
             return true;
         }
 
