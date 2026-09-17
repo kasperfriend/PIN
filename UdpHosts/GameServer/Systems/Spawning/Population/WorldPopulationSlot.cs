@@ -62,4 +62,11 @@ public sealed class WorldPopulationSlot
     ///     visible instead of silently short.
     /// </summary>
     public bool Parked { get; set; }
+
+    /// <summary>
+    ///     Whether the most recent refused placement attempt hit ground the zone covers from above -
+    ///     a cave floor, a tunnel, ground under a roof. What the park announcement names as the
+    ///     reason, so a zone whose sky check is over-refusing says so instead of going quiet.
+    /// </summary>
+    public bool LastRefusalWasCover { get; set; }
 }

@@ -425,6 +425,106 @@ public class WorldPopulationServiceTests
     }
 
     [Fact]
+    public void Tick_ParkingSlots_SaysSoInTheLog_InsteadOfGoingQuiet()
+    {
+        var logger = new CapturingLogger();
+        var rules = new StandardWorldPopulationRules
+        {
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            MaxPlacementFailures = 2,
+            PlacementRetryDelayMs = 0,
+        };
+        var world = CreateWorld(rules, logger: logger.Logger);
+        world.Terrain.AddPlane(Vector3.Zero, 2, 2, 16f); // one cell, four slots
+        world.Data.AddMonster(10);
+
+        // The #112 cave shape: the cell's centre is in the open, so the plan keeps the cell, and
+        // every spot a body could stand on is covered. The four slots park - and the log has to
+        // say that a slot gave up, and why, because a world that emptied itself into parked slots
+        // used to leave no trace of itself at all.
+        world.Terrain.ExposedToSky = position => position == new Vector3(8f, 8f, 0f);
+
+        Tick(world, 6);
+
+        Assert.Equal(4, world.Service.ParkedSlotCount);
+
+        // The first park names the slot and its reason: the zone covers the spot from above.
+        Assert.Equal(1, logger.CountContaining("gave up on its ground"));
+        Assert.Contains(
+            "covers from above",
+            logger.Messages.First(message => message.Contains("gave up on its ground", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Tick_AZoneWhoseSkyCheckKeepsSomeOpenGround_KeepsTheCheckTrusted()
+    {
+        var rules = new StandardWorldPopulationRules
+        {
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            SpawnBudget = 12,
+        };
+        var world = CreateWorld(rules);
+        AddGroundAndRoster(world);
+
+        // The eastern half of the plane sits under cover: the two eastern cell columns are refused
+        // by the sky check, the zone's open ground remains, and so the check is working, not
+        // failing - it is trusted, the kept cells keep refusing cover at placement (that half is
+        // the parking tests', whose kept cells hold covered spots), and the open half populates.
+        world.Terrain.ExposedToSky = position => position.X < 64f;
+
+        Tick(world, 10);
+
+        Assert.False(world.Service.Plan.CoverCheckSuspect);
+        Assert.True(world.Terrain.CoverRefusalsEnabled);
+        Assert.Equal(8, world.Service.Plan.RefusedCoveredCells);
+
+        // The open half spawns, and nothing parked: the kept cells lie entirely on exposed ground,
+        // so no slot ever meets the cover check at placement in this zone.
+        Assert.True(world.Service.LiveCount > 0);
+        Assert.Equal(0, world.Service.ParkedSlotCount);
+        Assert.Equal(0, world.Service.CoverRefusedPlacements);
+    }
+
+    [Fact]
+    public void Tick_AZoneWhoseSkyCheckRefusesEverything_StillPopulates()
+    {
+        var rules = new StandardWorldPopulationRules
+        {
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            SpawnBudget = 12,
+        };
+        var world = CreateWorld(rules);
+        AddGroundAndRoster(world);
+
+        // A zone whose collision covers every walkable spot from above - a proxy dome, sentinel
+        // zone bounds, canopy cover over the whole map. The check agreeing with none of the zone's
+        // own ground is the check being wrong, and a plan that obeyed it was the plan of nothing:
+        // the zone went empty with nothing in the log to point at. The plan now overrides the
+        // check, keeps the cells, and placement follows - populated beats empty, caves included.
+        world.Terrain.ExposedToSky = _ => false;
+
+        Tick(world, 6);
+
+        Assert.True(world.Service.Plan.CoverCheckSuspect);
+        Assert.False(world.Terrain.CoverRefusalsEnabled);
+        Assert.Equal(16, world.Service.Plan.RefusedCoveredCells);
+        Assert.Equal(16, world.Service.Plan.CellCount);
+
+        // The zone fills, and nothing parked: cover refuses nothing here any more.
+        Assert.NotEmpty(world.Spawner.Spawned);
+        Assert.True(world.Service.LiveCount > 0);
+        Assert.Equal(0, world.Service.ParkedSlotCount);
+        Assert.Equal(0, world.Service.CoverRefusedPlacements);
+
+        // The status says the check was overridden, so an operator looking at \population status
+        // sees why this zone's plan kept its covered cells.
+        Assert.Contains("was overridden", world.Service.DescribeStatus());
+    }
+
+    [Fact]
     public void Status_SaysSoWhenCellsAreUnderCover()
     {
         var world = CreateWorld();

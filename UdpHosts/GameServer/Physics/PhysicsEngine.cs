@@ -591,7 +591,12 @@ public partial class PhysicsEngine
         var boundsMax = ZoneBoundsMax;
         if (boundsMax.HasValue && float.IsFinite(boundsMax.Value.Z) && boundsMax.Value.Z > position.Z + 1f)
         {
-            top = boundsMax.Value.Z;
+            // The reach is clamped to the fallback: a zone without real bounds ships the ±float.MaxValue
+            // sentinel (zone 1100's map file carries it), which passes the IsFinite check, and a cast
+            // 3.4e38 up overflows the segment's length to +infinity - a zero direction with an infinite
+            // maximumT, a query about nothing. Real cover sits far below the fallback reach anyway; the
+            // clamp only ever shortens a cast that could not have meant anything.
+            top = MathF.Min(boundsMax.Value.Z, position.Z + SkyReachFallback);
         }
 
         var from = new Vector3(position.X, position.Y, position.Z + 0.05f);

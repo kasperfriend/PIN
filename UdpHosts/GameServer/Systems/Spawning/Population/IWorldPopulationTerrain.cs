@@ -61,6 +61,15 @@ public interface IWorldPopulationTerrain
     /// <returns>True when nothing of the zone's own geometry sits above the spot.</returns>
     bool IsExposedToSky(Vector3 position);
 
+    /// <summary>
+    ///     Whether the placement probe may refuse a spot for being covered from above. On by default;
+    ///     the service turns it off when the plan itself found the zone's sky check untrustworthy - the
+    ///     check contradicted every cell of the zone (a proxy dome, sentinel bounds, canopy cover over
+    ///     the whole map) - because a check that refuses everything populates nothing, and an empty
+    ///     world is a worse failure than an NPC in a cave.
+    /// </summary>
+    bool CoverRefusalsEnabled { get; set; }
+
     /// <summary>Zone bounds from ZoneBoundsLayer (0x21000) if present, from actual client map file.</summary>
     Vector3? ZoneBoundsMin { get; }
     Vector3? ZoneBoundsMax { get; }

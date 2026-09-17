@@ -279,9 +279,57 @@ public class WorldPopulationPlannerTests
         Assert.Equal(64, planner.ScannedSurfaces);
         Assert.Equal(12, planner.CellCount);
         Assert.Equal(4, planner.RefusedCoveredCells);
+        Assert.False(planner.CoverCheckSuspect);
 
         // Nothing the plan keeps - a cell or a slot in one - sits on ground the sky does not reach.
         Assert.All(planner.Cells.Values, cell => Assert.True(terrain.IsExposedToSky(cell.Center)));
+    }
+
+    [Fact]
+    public void Plan_KeepsTheWorldWhenTheCoverCheckRefusesEveryCell()
+    {
+        var (planner, data, terrain) = CreatePlanner();
+        AddGround(terrain);
+
+        // A zone whose collision contradicts the sky check everywhere: the check is what is broken
+        // (a proxy dome, sentinel bounds, canopy cover over the whole map), not the ground - and a
+        // plan that obeys it is a plan of nothing, which is the "world population stopped
+        // generating" report.
+        terrain.ExposedToSky = _ => false;
+        data.AddMonster(10);
+
+        Build(planner);
+
+        // The refused cells were given back: the zone populates, loudly marked as overridden.
+        Assert.Equal(16, planner.RefusedCoveredCells);
+        Assert.Equal(16, planner.CellCount);
+        Assert.True(planner.CoverCheckSuspect);
+        Assert.NotEmpty(planner.Cells.Values.SelectMany(cell => cell.Slots));
+        Assert.Equal(1, planner.PlacedRosterCount);
+    }
+
+    [Fact]
+    public void Plan_SalvagedCellsFitTheirHabitatsLikePlannedOnes()
+    {
+        var (planner, data, terrain) = CreatePlanner();
+        AddGround(terrain);
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(56f, 56f, 0f), 40f, WorldPopulationHabitat.Settlement, 1001u));
+        data.LevelsByBand[1001u] = 12;
+        data.AddMonster(11, WorldPopulationHabitat.Settlement);
+
+        // Every cell covered: the plan is salvaged out of the refusals, so a settlement row must
+        // still find settlement ground - the salvage classifies the cells it hands back.
+        terrain.ExposedToSky = _ => false;
+
+        Build(planner);
+
+        Assert.True(planner.CoverCheckSuspect);
+        var vendor = planner.Cells.Values
+            .SelectMany(cell => cell.Slots)
+            .FirstOrDefault(slot => slot.Candidate.MonsterId == 11);
+        Assert.NotNull(vendor);
+        Assert.Equal(WorldPopulationHabitat.Settlement, vendor.Cell.Habitat);
+        Assert.Equal(12, vendor.Cell.Level);
     }
 
     [Fact]
