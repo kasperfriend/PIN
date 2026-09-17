@@ -249,6 +249,7 @@ public sealed class ItemRewardCommandTests : IDisposable
             shard.EntityMan.Add(character.EntityId, character);
             var player = new FakeNetworkPlayer(shard) { CharacterEntity = character };
             character.SetControllingPlayer(player);
+            player.AttachRealChannels(); // effect removal and unlock/boost updates send on ReliableGss
             inventory = new CharacterInventory(shard, null, character);
             player.Inventory = inventory;
         }

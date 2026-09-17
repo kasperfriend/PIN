@@ -322,6 +322,7 @@ public class ConsumableActivationTests
         shard.EntityMan.Add(character.EntityId, character);
         var player = new FakeNetworkPlayer(shard) { CharacterEntity = character };
         character.SetControllingPlayer(player);
+        player.AttachRealChannels(); // effect removal and unlock/boost updates send on ReliableGss
         character.SetCharacterState(AeroMessages.GSS.Character.CharacterStateData.CharacterStatus.Living, 0);
 
         // Partial updates stay off, so the mutations never touch a (nonexistent) network channel.
