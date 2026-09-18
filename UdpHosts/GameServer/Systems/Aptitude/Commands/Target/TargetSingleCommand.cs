@@ -161,6 +161,15 @@ public class TargetSingleCommand : Command, ICommand
 
         Vector3 from = origin + new Vector3(0f, 0f, EyeHeight);
         Vector3 to = candidate.Position + new Vector3(0f, 0f, EyeHeight);
+
+        // Static occlusion is bidirectional so single-sided meshes cannot occlude
+        // (or fail to occlude) based on which direction the player is facing - the
+        // same cave/through-floor problem as AI LOS.
+        if (physics.HasStaticOcclusion(from, to, context.Self.EntityId))
+        {
+            return false;
+        }
+
         var hit = physics.SegmentRayCast(from, to, context.Self.EntityId);
         return !hit.Hit || hit.HitEntityId == candidate.EntityId;
     }

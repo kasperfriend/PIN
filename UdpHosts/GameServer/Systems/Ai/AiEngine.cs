@@ -884,8 +884,22 @@ public class AiEngine
 
         var from = source.Position + new Vector3(0f, 0f, _eyeHeight);
         var to = target.Position + new Vector3(0f, 0f, _eyeHeight);
-        var hit = physics.SegmentRayCast(from, to, source.EntityId);
 
+        // Static occlusion is checked bidirectionally because BepuPhysics meshes are
+        // single-sided: a single ray from below a floor to a player above hits the
+        // backside of the ground mesh and sails through, which reported the target as
+        // visible through the floor - exactly the bug that let cave mobs shoot players
+        // walking overhead. HasStaticOcclusion casts both directions so either face
+        // winding blocks sight.
+        if (physics.HasStaticOcclusion(from, to, source.EntityId))
+        {
+            return false;
+        }
+
+        // Kinematic (entity) bodies use the plain segment ray; their shapes are convex
+        // primitives that are not subject to single-sided winding, so a single cast
+        // suffices. A hit that lands on the target itself does not block sight.
+        var hit = physics.SegmentRayCast(from, to, source.EntityId);
         return !hit.Hit || hit.HitEntityId == target.EntityId;
     }
 

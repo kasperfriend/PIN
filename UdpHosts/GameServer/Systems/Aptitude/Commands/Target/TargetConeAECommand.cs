@@ -256,6 +256,14 @@ public class TargetConeAECommand : Command, ICommand
 
         Vector3 from = origin + new Vector3(0f, 0f, EyeHeight);
         Vector3 to = candidate.Position + new Vector3(0f, 0f, EyeHeight);
+
+        // Static occlusion bidirectionally so single-sided meshes don't leak sight
+        // (cave floors being the original bug report).
+        if (physics.HasStaticOcclusion(from, to, context.Self.EntityId))
+        {
+            return false;
+        }
+
         var hit = physics.SegmentRayCast(from, to, context.Self.EntityId);
 
         return !hit.Hit || hit.HitEntityId == candidate.EntityId;

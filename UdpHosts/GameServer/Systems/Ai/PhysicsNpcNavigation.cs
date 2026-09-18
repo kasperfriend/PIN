@@ -142,8 +142,29 @@ public sealed class PhysicsNpcNavigation : INpcNavigation
             foreach (var offset in offsets)
             {
                 var up = new Vector3(0f, 0f, height);
-                var hit = physics.SegmentRayCast(from + offset + up, to + offset + up, agent.EntityId, staticOnly: true);
-                if (hit.Hit && hit.T < length - 0.05f)
+                var segFrom = from + offset + up;
+                var segTo = to + offset + up;
+
+                // Forward probe. Static-only; using kinematic NPC bodies as route obstacles
+                // deadlocks crowds, and activity reservations prevent two NPCs from occupying
+                // the same workstation.
+                var hit = physics.SegmentRayCast(segFrom, segTo, agent.EntityId, staticOnly: true);
+                float closestT = hit.Hit ? hit.T : float.MaxValue;
+
+                if (!hit.Hit)
+                {
+                    // Reverse probe catches single-sided wall faces that the baker wound
+                    // away from the agent - same mesh-side issue that broke the cave
+                    // ceiling probe. Hit distance is measured from segTo in the reverse
+                    // cast; convert back to a forward distance.
+                    var backHit = physics.SegmentRayCast(segTo, segFrom, agent.EntityId, staticOnly: true);
+                    if (backHit.Hit)
+                    {
+                        closestT = length - backHit.T;
+                    }
+                }
+
+                if (closestT < length - 0.05f)
                 {
                     return true;
                 }

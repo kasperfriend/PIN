@@ -43,7 +43,7 @@ public sealed class PhysicsWorldPopulationTerrain : IWorldPopulationTerrain
     ///     this, so a zone the rule misreads starts spawning again within the first update that
     ///     tries to place, instead of parking its plan later on.
     /// </summary>
-    private const int CoverChecksBeforeSuspicion = 40;
+    private const int CoverChecksBeforeSuspicion = 200;
 
     /// <summary>
     ///     The refusal share - nine spots in ten - at or above which the overhead-cover rule counts
@@ -53,10 +53,10 @@ public sealed class PhysicsWorldPopulationTerrain : IWorldPopulationTerrain
     ///     <see cref="SuspendCoverRuleIfItRefusesTheWholeZone"/>), and an empty world is the worse
     ///     outcome of the two.
     /// </summary>
-    private const int CoverRefusalNumerator = 9;
+    private const int CoverRefusalNumerator = 19;
 
     /// <summary>Denominator of <see cref="CoverRefusalNumerator"/>; integer arithmetic keeps it exact.</summary>
-    private const int CoverRefusalDenominator = 10;
+    private const int CoverRefusalDenominator = 20;
 
     private readonly PhysicsEngine _physics;
     private readonly IWorldPopulationRules _rules;
