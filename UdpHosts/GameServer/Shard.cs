@@ -86,8 +86,9 @@ public class Shard : IShard
 
         // Threads: the bake gets its own setting (it runs before a client is let in, so it may take
         // almost every core), the plan build gets its own (it runs next to the tick and the players,
-        // so it wants fewer), and both fall back to ServerWorkerThreads when they are 0.
-        var bakeThreads = Settings.ResolvedNavigationBakeThreads;
+        // so it wants fewer), and each falls back to ServerWorkerThreads and then to its own
+        // automatic rule - see ParallelWork.ResolveBake / ResolvePlan and Docs/MULTITHREADING.md §1.
+        int bakeThreads = ParallelWork.ResolveBake(Settings.ResolvedNavigationBakeThreads);
         Physics = new PhysicsEngine(EventBus, Settings.ZoneId, Settings.MapsPath, Settings.AssetDBPath, Settings.LoadMapsCollision, debugCallbacks, false, Settings.CachePath, Settings.ForceReloadZone, bakeThreads, Settings.PhysicsThreads);
         AI = new AiEngine(this, EventBus);
         Movement = new MovementRelay(this);
@@ -115,7 +116,7 @@ public class Shard : IShard
         // tick-budgeted pacing, which is the number the service is handed here (0 = on the tick).
         var populationRules = StandardWorldPopulationRules.FromSettings(settings);
         var planWorkerThreads = settings.WorldPopulationPlanOnWorkers
-            ? ParallelWork.Resolve(settings.ResolvedWorldPopulationPlanThreads)
+            ? ParallelWork.ResolvePlan(settings.ResolvedWorldPopulationPlanThreads)
             : 0;
         WorldPopulation = new WorldPopulationService(
             this,
@@ -130,7 +131,7 @@ public class Shard : IShard
         // from the engine rather than recomputed, so the line cannot disagree with it.
         Logger.Information(
             "Threads: navigation bake {Bake}, world population plan {Plan}, physics dispatcher {Physics} - configured ServerWorkerThreads {Shared}, NavigationBakeThreads {BakeSetting}, WorldPopulationPlanThreads {PlanSetting}, PhysicsThreads {PhysicsSetting} (0 = automatic; {Cores} logical processors)",
-            ParallelWork.Resolve(bakeThreads),
+            bakeThreads,
             planWorkerThreads > 0
                 ? $"{planWorkerThreads} thread(s) off the shard's tick"
                 : "on the shard's tick (WorldPopulationPlanOnWorkers is false)",

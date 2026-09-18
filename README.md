@@ -179,17 +179,25 @@ of work (`0` = automatic everywhere):
 <add key="WorldPopulationPlanOnWorkers" value="true"/><!-- build the plan off the shard's tick -->
 ```
 
-The automatic values are one thread per processor minus the shard's own core,
-capped at eight for the bake and the plan, and cores − 2 capped at four for
-physics. On an 8-thread CPU that is `7`, `7`, `4`; on a 16-thread CPU `8`, `8`,
-`4` unless you write numbers. A number you write is used as given, so a
-16-thread machine can be told to run the bake on 14 threads:
+Every count is `0` = automatic, and automatic means "work it out for this machine":
+the bake takes all but the shard's own core (capped at 16, because it runs before any
+client is let in), the plan build takes half the box (capped at 8, because it runs next
+to a live shard), and physics keeps the engine's own `cores - 2`, capped at 4. Find your
+logical processor count in the row for it - **writing nothing already gives you these**:
 
-| Machine | `NavigationBakeThreads` | `WorldPopulationPlanThreads` |
-|---------|------------------------|------------------------------|
-| 8 threads (4c/8t) | `7` | `6` |
-| 16 threads (8c/16t), dedicated | `14` | `10` |
-| 16 threads, game client on the same box | `10` | `8` |
+| Logical CPUs | Bake | Plan | Physics |
+|---|---|---|---|
+| 2 (1c/2t) | 1 | 1 | 1 |
+| 4 (2c/4t) | 3 | 2 | 3 |
+| 6 (3c/6t) | 5 | 3 | 4 |
+| 8 (4c/8t) | 7 | 4 | 4 |
+| 12 (6c/12t) | 11 | 6 | 4 |
+| 16 (8c/16t) | 15 | 8 | 4 |
+| 20+ (10c/20t and up) | 16 | 8 | 4 |
+
+Running the game client on the same machine as the server? Halve the bake and the plan
+(8 threads → `3` and `2`, 16 → `7` and `4`) so the client keeps cores to load and draw
+with. A number you write is used as given, including above the caps; restart to apply.
 
 See [`Docs/MULTITHREADING.md`](Docs/MULTITHREADING.md) for what each piece of
 work is, what deliberately stays on the shard's single thread, and why the

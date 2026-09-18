@@ -195,16 +195,10 @@ public partial class PhysicsEngine
         // fleet busy: every Bepu dispatch thread is a spinning worker that competes with the game
         // client for a core, and the typical setup runs server and client on the same machine. This
         // simulation profile (mostly static zone geometry plus a few hundred kinematic bodies) is
-        // comfortably served by a handful of threads, so cap the fleet - unless the operator set
-        // PhysicsThreads, in which case their number is used as given (see Docs/MULTITHREADING.md).
-        const int MaxDispatcherThreads = 4;
-        var targetThreadCount = physicsThreads > 0
-            ? physicsThreads
-            : int.Clamp(
-                Environment.ProcessorCount > 4 ? Environment.ProcessorCount - 2 : Environment.ProcessorCount - 1,
-                1,
-                MaxDispatcherThreads);
-        _physicsThreads = targetThreadCount;
+        // comfortably served by a handful of threads, so the fleet is capped -
+        // ParallelWork.DefaultPhysicsDegree holds that rule - unless the operator set PhysicsThreads,
+        // in which case their number is used as given (see Docs/MULTITHREADING.md).
+        _physicsThreads = ParallelWork.ResolvePhysics(physicsThreads);
 
         BufferPool = new BufferPool();
         ThreadDispatcher = new ThreadDispatcher(targetThreadCount);

@@ -174,8 +174,11 @@ public sealed class WorldPopulationPlanner
 
     /// <param name="maxDegreeOfParallelism">
     ///     How many threads the cell build and the deployable cluster filter may use. 0 (the default)
-    ///     is automatic (see <see cref="ParallelWork" />); 1 keeps the whole plan on the calling
-    ///     thread, which is what a shard building its plan inside its own tick asks for. The terrain
+    ///     is the plan build's automatic rule - half the logical processors, capped at
+    ///     <see cref="ParallelWork.MaxPlanDegree" />, because the build runs while players are in the
+    ///     zone and the shard's tick, the physics dispatcher and (usually) the game client are all
+    ///     busy (see <see cref="ParallelWork.AutomaticPlanDegree" />); 1 keeps the whole plan on the
+    ///     calling thread, which is what a shard building its plan inside its own tick asks for. The terrain
     ///     and the data source are then read from several threads at once, so both have to answer
     ///     without writing shared state - the shipped implementations only read the loaded zone and
     ///     the static database.
@@ -197,7 +200,7 @@ public sealed class WorldPopulationPlanner
         _cellSize = rules.CellSize > 0f ? rules.CellSize : 32f;
         _maxNpcsPerCell = Math.Max(1, rules.MaxNpcsPerCell);
         _maxPlannedSlots = Math.Max(1, rules.MaxPlannedSlots);
-        _degree = ParallelWork.Resolve(maxDegreeOfParallelism);
+        _degree = ParallelWork.ResolvePlan(maxDegreeOfParallelism);
     }
 
     /// <summary>Whether the plan is finished.</summary>

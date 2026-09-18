@@ -1,5 +1,6 @@
 using GameServer;
 using GameServer.Systems.Spawning.Population;
+using Shared.Common;
 using Xunit;
 
 namespace GameServer.Tests;
@@ -185,7 +186,7 @@ public class StandardWorldPopulationRulesTests
     [Fact]
     public void ThePerPieceThreadSettings_OverrideTheSharedOneWhenTheyAreSet()
     {
-        // 0 follows the shared setting (which 0 then takes as automatic); a number is its own.
+        // 0 follows the shared setting when it is set; a number is its own.
         var shared = new GameServerSettings { ServerWorkerThreads = 12 };
 
         Assert.Equal(12, shared.ResolvedNavigationBakeThreads);
@@ -200,6 +201,21 @@ public class StandardWorldPopulationRulesTests
 
         Assert.Equal(14, perPiece.ResolvedNavigationBakeThreads);
         Assert.Equal(9, perPiece.ResolvedWorldPopulationPlanThreads);
+    }
+
+    [Fact]
+    public void WithNothingConfigured_EachPieceFollowsItsOwnAutomaticRule()
+    {
+        // The important default: a machine nobody has configured does not get one thread count for
+        // everything. 0 here means "0 to the resolver", which is what makes the bake take the whole
+        // box and the plan build take half of it.
+        var settings = new GameServerSettings();
+
+        Assert.Equal(0, settings.ResolvedNavigationBakeThreads);
+        Assert.Equal(0, settings.ResolvedWorldPopulationPlanThreads);
+
+        Assert.InRange(ParallelWork.ResolveBake(settings.ResolvedNavigationBakeThreads), 1, ParallelWork.MaxBakeDegree);
+        Assert.InRange(ParallelWork.ResolvePlan(settings.ResolvedWorldPopulationPlanThreads), 1, ParallelWork.MaxPlanDegree);
     }
 
     [Fact]

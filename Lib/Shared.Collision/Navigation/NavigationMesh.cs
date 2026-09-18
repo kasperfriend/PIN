@@ -130,8 +130,10 @@ public sealed class NavigationMesh
     /// </param>
     /// <param name="maxDegreeOfParallelism">
     ///     How many threads the face filter, the duplicate check, the edge map and the spatial index
-    ///     may use. 0 (the default) is automatic: one thread per processor minus the one the shard
-    ///     loop runs on, capped at <see cref="ParallelWork.MaxAutomaticDegree" />. The three
+    ///     may use. 0 (the default) is the bake's automatic rule: all but the shard's own core, capped
+    ///     at <see cref="ParallelWork.MaxBakeDegree" /> - a bake runs while the shard is still loading
+    ///     and refuses clients, so it may take almost the whole machine (see
+    ///     <see cref="ParallelWork.AutomaticBakeDegree" />). The three
     ///     delegates above are then called from several threads at once, so they must not write to
     ///     anything (the ones the server passes in only read the static database and the zone
     ///     loader's own exclusion list). 1 keeps the bake single-threaded.
@@ -150,7 +152,7 @@ public sealed class NavigationMesh
         }
 
         materialCost ??= _ => 1f;
-        _degree = ParallelWork.Resolve(maxDegreeOfParallelism);
+        _degree = ParallelWork.ResolveBake(maxDegreeOfParallelism);
 
         var source = triangles.ToArray();
         var faces = FilterFaces(source, materialCost, excludedAt, materialExcluded, minimumWalkableNormalZ);

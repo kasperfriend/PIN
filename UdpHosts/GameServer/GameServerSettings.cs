@@ -111,60 +111,67 @@ public class GameServerSettings
     public bool LoadZoneEntities { get; set; } = true;
 
     /// <summary>
-    ///    Threads the server's own background work may use: the zone's navigation-mesh bake at
-    ///    startup, and the world-population plan build that follows it. 0 (the default) is one
-    ///    thread per processor minus the one the shard loop runs on, capped at eight, so a machine
-    ///    that also runs the game client keeps cores for it; 1 keeps that work on a single background
-    ///    thread instead of several; a larger number is used as given - an operator who writes one has
-    ///    measured their machine, which is how a 16-thread box gets more than the automatic eight.
-    ///    <see cref="NavigationBakeThreads"/> and <see cref="WorldPopulationPlanThreads"/> override it
-    ///    per piece of work. See <c>Docs/MULTITHREADING.md</c> for what is threaded, what deliberately
-    ///    is not, and worked-out values for 8- and 16-thread machines.
+    ///    Shared default for the zone's navigation-mesh bake at startup and the world-population plan
+    ///    build that follows it. Unlike the per-piece settings below, 0 here means "each of them
+    ///    decides" rather than automatic - a machine nobody has configured gets the bake spread over
+    ///    the whole box (<see cref="ParallelWork.AutomaticBakeDegree"/>) and the plan build on half of
+    ///    it (<see cref="ParallelWork.AutomaticPlanDegree"/>), which is not one number. A positive
+    ///    value here applies to both, and each per-piece setting still overrides it. 1 keeps that work
+    ///    on a single background thread. See <c>Docs/MULTITHREADING.md</c> §1 for what is threaded,
+    ///    what deliberately is not, and the per-CPU table.
     /// </summary>
     public int ServerWorkerThreads { get; set; }
 
     /// <summary>
     ///    Threads the zone's navigation-mesh bake may use, overriding
-    ///    <see cref="ServerWorkerThreads"/>. 0 (the default) follows it. The bake happens while the
-    ///    shard is still loading, before it accepts a client, so this is the one piece of work that
-    ///    can be given almost every core on the machine: on a 16-thread box with the game client not
-    ///    yet running, 14-15 is fine; running the client on the same machine, leave it room. 1 bakes
-    ///    on a single thread.
+    ///    <see cref="ServerWorkerThreads"/>. 0 (the default) means the bake's own automatic rule: all
+    ///    but the shard's own core, capped at sixteen. The bake happens while the shard is still
+    ///    loading, before it accepts a client, so it is the one piece of work that may take almost the
+    ///    whole machine - which is why its automatic count is larger than the plan build's. Halve it
+    ///    when the game client runs on the same machine. 1 bakes on a single background thread.
     /// </summary>
     public int NavigationBakeThreads { get; set; }
 
     /// <summary>
     ///    Threads the world-population plan build may use, overriding
-    ///    <see cref="ServerWorkerThreads"/>. 0 (the default) follows it. This build runs while
-    ///    players are in the zone, next to the shard's tick, the physics dispatcher and (on a shared
-    ///    machine) the game client, so the useful number here is smaller than the bake's: about half
-    ///    the cores is a good starting point, and both the shard and the plan are happiest when one
-    ///    or two cores are left alone. Only used when <see cref="WorldPopulationPlanOnWorkers"/> is
-    ///    true.
+    ///    <see cref="ServerWorkerThreads"/>. 0 (the default) means the plan build's own automatic
+    ///    rule: half the logical processors, capped at eight. That build runs while players are in the
+    ///    zone, next to the shard's tick, the physics dispatcher and (on a shared machine) the game
+    ///    client, so the other half is left to them. 1 builds the plan on one background thread. Only
+    ///    used when <see cref="WorldPopulationPlanOnWorkers"/> is true.
     /// </summary>
     public int WorldPopulationPlanThreads { get; set; }
 
     /// <summary>
-    ///    Threads the Bepu physics dispatcher may use. 0 (the default) is the engine's own automatic
-    ///    choice: one thread per processor minus two, capped at four, which is what a 20 Hz shard
-    ///    timestep with mostly static zone geometry needs. A larger number is used as given for a zone
-    ///    with many moving bodies - every dispatch thread spins while it waits for work, so it buys
-    ///    physics throughput with CPU the shard, the population build and the game client would
-    ///    otherwise have.
+    ///    Threads the Bepu physics dispatcher may use. 0 (the default) is the engine's own rule: one
+    ///    thread per processor minus two, capped at four, which is what a 20 Hz shard timestep with
+    ///    mostly static zone geometry needs. A larger number is used as given for a zone with many
+    ///    moving bodies - every dispatch thread spins while it waits for work, so it buys physics
+    ///    throughput with CPU the shard, the population build and the game client would otherwise
+    ///    have.
     /// </summary>
     public int PhysicsThreads { get; set; }
 
     /// <summary>
-    ///    The bake's thread count: <see cref="NavigationBakeThreads"/> when it is set, otherwise the
-    ///    shared <see cref="ServerWorkerThreads"/> (0 = automatic).
+    ///    The bake's configured thread count, in the order that decides it: this piece's own setting,
+    ///    then the shared <see cref="ServerWorkerThreads"/>, then 0 - which means the bake's own
+    ///    automatic rule (all but the shard's own core, capped at 16) rather than the shared one's, so
+    ///    a machine nobody has configured still gets its bake spread over the whole box. See
+    ///    <see cref="ParallelWork.ResolveBake"/>.
     /// </summary>
-    public int ResolvedNavigationBakeThreads => NavigationBakeThreads > 0 ? NavigationBakeThreads : ServerWorkerThreads;
+    public int ResolvedNavigationBakeThreads => NavigationBakeThreads > 0
+        ? NavigationBakeThreads
+        : ServerWorkerThreads > 0 ? ServerWorkerThreads : 0;
 
     /// <summary>
-    ///    The plan build's thread count: <see cref="WorldPopulationPlanThreads"/> when it is set,
-    ///    otherwise the shared <see cref="ServerWorkerThreads"/> (0 = automatic).
+    ///    The plan build's configured thread count, in the order that decides it: this piece's own
+    ///    setting, then the shared <see cref="ServerWorkerThreads"/>, then 0 - which means the plan
+    ///    build's own automatic rule (half the logical processors, capped at 8), the gentler one that
+    ///    belongs to work running next to a live shard. See <see cref="ParallelWork.ResolvePlan"/>.
     /// </summary>
-    public int ResolvedWorldPopulationPlanThreads => WorldPopulationPlanThreads > 0 ? WorldPopulationPlanThreads : ServerWorkerThreads;
+    public int ResolvedWorldPopulationPlanThreads => WorldPopulationPlanThreads > 0
+        ? WorldPopulationPlanThreads
+        : ServerWorkerThreads > 0 ? ServerWorkerThreads : 0;
 
     /// <summary>
     ///    Build the world-population plan on worker threads rather than one budgeted slice per shard

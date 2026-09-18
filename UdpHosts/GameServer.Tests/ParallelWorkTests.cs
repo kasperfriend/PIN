@@ -108,4 +108,39 @@ public class ParallelWorkTests
         Assert.Equal(4, ParallelWork.Resolve(4));
         Assert.InRange(ParallelWork.AutomaticDegree, 1, ParallelWork.MaxAutomaticDegree);
     }
+
+    [Fact]
+    public void Resolve_KeepsEachPieceOfWorksOwnIdeaOfAutomatic()
+    {
+        // One number for everything would be wrong in both directions: the bake runs before the
+        // shard accepts a client (so it may take the whole box), the plan build runs next to the
+        // live shard (so it takes half), and physics is the engine's own small fleet. A configured
+        // number is always used as given, whatever the caps are.
+        Assert.Equal(ParallelWork.AutomaticBakeDegree, ParallelWork.ResolveBake(0));
+        Assert.Equal(ParallelWork.AutomaticPlanDegree, ParallelWork.ResolvePlan(0));
+        Assert.Equal(ParallelWork.DefaultPhysicsDegree, ParallelWork.ResolvePhysics(0));
+
+        Assert.Equal(24, ParallelWork.ResolveBake(24));
+        Assert.Equal(24, ParallelWork.ResolvePlan(24));
+        Assert.Equal(24, ParallelWork.ResolvePhysics(24));
+    }
+
+    [Fact]
+    public void TheAutomaticDegreeOfAPiece_FollowsTheRuleItsDocumentationStates()
+    {
+        // These are the numbers Docs/MULTITHREADING.md §1 tabulates for every CPU size, so a change
+        // to one of them has to be a change to the table too, not just to the code.
+        int cores = Environment.ProcessorCount;
+
+        Assert.Equal(Math.Clamp(cores - 1, 1, ParallelWork.MaxBakeDegree), ParallelWork.AutomaticBakeDegree);
+        Assert.Equal(Math.Clamp(cores / 2, 1, ParallelWork.MaxPlanDegree), ParallelWork.AutomaticPlanDegree);
+        Assert.Equal(
+            Math.Clamp(cores > 4 ? cores - 2 : cores - 1, 1, 4),
+            ParallelWork.DefaultPhysicsDegree);
+
+        // And the shapes an operator reads off the table: the plan build never takes more than half
+        // the box, and the bake always takes at least as much as the plan.
+        Assert.True(ParallelWork.AutomaticPlanDegree <= Math.Max(1, cores / 2));
+        Assert.True(ParallelWork.AutomaticBakeDegree >= ParallelWork.AutomaticPlanDegree);
+    }
 }

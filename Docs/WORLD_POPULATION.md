@@ -517,8 +517,8 @@ values, not a comma.
 | `WorldPopulationTickIntervalMs` | `250` | Milliseconds between population streaming updates |
 | `WorldPopulationPlanWorkPerTick` | `20000` | Navigation faces (or cells) the planner processes per update when the plan is built on the shard's tick (`WorldPopulationPlanOnWorkers=false`); the on-worker default ignores it |
 | `WorldPopulationPlanOnWorkers` | `true` | Build the plan on a background worker instead of one budgeted slice per update, so the zone is populated in the time the plan's CPU work takes rather than in tens of seconds of updates. The plan is identical either way |
-| `WorldPopulationPlanThreads` | `0` | Threads the plan build may use. `0` = follow `ServerWorkerThreads` (itself one per processor minus the shard's own core, capped at 8); a number is used as given - 6 on an 8-thread CPU, 8-10 on a dedicated 16-thread one. See [`MULTITHREADING.md`](MULTITHREADING.md) §1 |
-| `ServerWorkerThreads` | `0` | What the navigation bake and the plan build use when their own keys are `0` |
+| `WorldPopulationPlanThreads` | `0` | Threads the plan build may use. `0` = the plan's own automatic rule, half the logical processors capped at 8 (2 on a 4-thread CPU, 4 on 8, 8 on 16 and above), unless `ServerWorkerThreads` is set, which then applies; a number you write is used as given. See [`MULTITHREADING.md`](MULTITHREADING.md) §1 for the per-CPU table |
+| `ServerWorkerThreads` | `0` | Shared default for the two keys above when it is set (their own keys still win) |
 | `WorldPopulationMinSeparation` | `0.5` | Extra metres of gap required between two NPC bodies |
 | `WorldPopulationMinPlayerDistance` | `25` | Metres of clearance from every player before an NPC may be placed |
 | `WorldPopulationMaxPlacementAttempts` | `6` | Positions one slot tries in each placement round |

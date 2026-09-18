@@ -26,18 +26,62 @@ namespace Shared.Common;
 public static class ParallelWork
 {
     /// <summary>
-    ///     Ceiling for the automatic thread count. The typical setup runs the game client on the
-    ///     same machine as the server, and every worker added here is a core taken from the client's
-    ///     frame budget - so a machine with many cores gets a few threads, not all of them.
+    ///     Ceiling for the generic automatic thread count (<see cref="AutomaticDegree" />). The
+    ///     typical setup runs the game client on the same machine as the server, and every worker
+    ///     added here is a core taken from the client's frame budget - so a machine with many cores
+    ///     gets a few threads, not all of them.
     /// </summary>
     public const int MaxAutomaticDegree = 8;
 
     /// <summary>
+    ///     Ceiling for the navigation bake's automatic thread count. Higher than the generic cap
+    ///     because of when the bake runs: the shard is still loading and refuses clients, so there is
+    ///     no client, no tick and no plan to compete with, and the bake is the last thing between an
+    ///     operator and a playable server. Past this many threads the passes are memory-bound anyway.
+    /// </summary>
+    public const int MaxBakeDegree = 16;
+
+    /// <summary>
+    ///     Ceiling for the plan build's automatic thread count. Lower than the bake's because of when
+    ///     *it* runs: players are in the zone, the shard's tick is running, the physics dispatcher is
+    ///     spinning, and on the usual machine the game client is drawing a frame on the same package.
+    /// </summary>
+    public const int MaxPlanDegree = 8;
+
+    /// <summary>
     ///     How many threads the server's background work uses when nothing is configured: one per
     ///     processor except the one the shard loop runs on, capped at
-    ///     <see cref="MaxAutomaticDegree" />.
+    ///     <see cref="MaxAutomaticDegree" />. This is the generic rule, kept for callers that only
+    ///     know they have CPU-bound work; the bake and the plan have their own below, because when
+    ///     they run decides how much of the machine they may take.
     /// </summary>
     public static int AutomaticDegree => Math.Clamp(Environment.ProcessorCount - 1, 1, MaxAutomaticDegree);
+
+    /// <summary>
+    ///     The navigation bake's automatic thread count: all but the shard's own core, capped at
+    ///     <see cref="MaxBakeDegree" />. On 8 logical processors that is 7, on 16 that is 15, on 32
+    ///     that is 16.
+    /// </summary>
+    public static int AutomaticBakeDegree => Math.Clamp(Environment.ProcessorCount - 1, 1, MaxBakeDegree);
+
+    /// <summary>
+    ///     The plan build's automatic thread count: half the logical processors, capped at
+    ///     <see cref="MaxPlanDegree" />, never less than one. The other half is what the tick, the
+    ///     physics dispatcher and (usually) the game client are doing while the plan is built. On 4
+    ///     logical processors that is 2, on 8 that is 4, on 16 that is 8, on 32 that is 8.
+    /// </summary>
+    public static int AutomaticPlanDegree => Math.Clamp(Environment.ProcessorCount / 2, 1, MaxPlanDegree);
+
+    /// <summary>
+    ///     How many threads the Bepu physics dispatcher uses when nothing is configured: one per
+    ///     processor minus two, capped at four. A 20 Hz shard timestep over mostly static zone
+    ///     geometry does not need a large fleet, and every dispatch thread spins while it waits for
+    ///     work.
+    /// </summary>
+    public static int DefaultPhysicsDegree => Math.Clamp(
+        Environment.ProcessorCount > 4 ? Environment.ProcessorCount - 2 : Environment.ProcessorCount - 1,
+        1,
+        4);
 
     /// <summary>
     ///     Turns a configured thread count into a degree of parallelism. Zero (or a negative value,
@@ -48,6 +92,33 @@ public static class ParallelWork
     /// <returns>How many threads the work may use; never less than 1.</returns>
     public static int Resolve(int configuredThreads) =>
         configuredThreads > 0 ? configuredThreads : AutomaticDegree;
+
+    /// <summary>
+    ///     Turns a configured thread count into a degree of parallelism for a zone's navigation bake,
+    ///     whose automatic count is <see cref="AutomaticBakeDegree" />.
+    /// </summary>
+    /// <param name="configuredThreads">The configured thread count; 0 for automatic.</param>
+    /// <returns>How many threads the bake may use; never less than 1.</returns>
+    public static int ResolveBake(int configuredThreads) =>
+        configuredThreads > 0 ? configuredThreads : AutomaticBakeDegree;
+
+    /// <summary>
+    ///     Turns a configured thread count into a degree of parallelism for a world-population plan
+    ///     build, whose automatic count is <see cref="AutomaticPlanDegree" />.
+    /// </summary>
+    /// <param name="configuredThreads">The configured thread count; 0 for automatic.</param>
+    /// <returns>How many threads the plan build may use; never less than 1.</returns>
+    public static int ResolvePlan(int configuredThreads) =>
+        configuredThreads > 0 ? configuredThreads : AutomaticPlanDegree;
+
+    /// <summary>
+    ///     Turns a configured thread count into a degree of parallelism for the Bepu physics
+    ///     dispatcher, whose automatic count is <see cref="DefaultPhysicsDegree" />.
+    /// </summary>
+    /// <param name="configuredThreads">The configured thread count; 0 for automatic.</param>
+    /// <returns>How many threads the dispatcher runs with; never less than 1.</returns>
+    public static int ResolvePhysics(int configuredThreads) =>
+        configuredThreads > 0 ? configuredThreads : DefaultPhysicsDegree;
 
     /// <summary>
     ///     Runs <paramref name="body" /> once for every index in <c>[0, count)</c>, on at most

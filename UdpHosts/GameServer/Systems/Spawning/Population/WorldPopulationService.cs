@@ -168,7 +168,7 @@ public sealed class WorldPopulationService
     ///     <see cref="IWorldPopulationRules.PlanWorkPerTick" /> slice at a time, the way it always
     ///     did; a positive number builds it on a background worker that uses up to that many threads
     ///     and hands the finished plan to the tick. A live shard passes the resolved
-    ///     <c>ServerWorkerThreads</c>, so a zone with a player in it is planned in about the time its
+    ///     <c>WorldPopulationPlanThreads</c> (half the box by default), so a zone with a player in it is planned in about the time its
     ///     CPU work takes instead of in tens of seconds of budgeted updates - and the shard's tick,
     ///     which used to pay for every one of those updates, does not pay at all. The plan itself is
     ///     the same plan either way.
