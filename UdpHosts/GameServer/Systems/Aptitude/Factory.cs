@@ -809,6 +809,7 @@ public class Factory
             //     return new MovementFacingCommand(SDBInterface.GetMovementFacingCommandDef(commandId));
             case CommandType.RequireFriends:
                 return new RequireFriendsCommand(SDBInterface.GetRequireFriendsCommandDef(commandId));
+            // Same gap as RequireSinAcquired above: per-character SIN-view acquisition isn't modeled, so the filter would have nothing to test.
             // case CommandType.TargetFilterBySinAcquired:
             //     return new TargetFilterBySinAcquiredCommand(SDBInterface.GetTargetFilterBySinAcquiredCommandDef(commandId));
             case CommandType.RequireMovementFlags:
@@ -830,8 +831,8 @@ public class Factory
             // Only a static char-level CurrentDurabilityPctProp (= 100) exists; per-slot item wear isn't modeled, so the answer would be fabricated.
             // case CommandType.RequireItemDurability:
             //     return new RequireItemDurabilityCommand(SDBInterface.GetRequireItemDurabilityCommandDef(commandId));
-            // case CommandType.RequireEliteLevel:
-            //     return new RequireEliteLevelCommand(SDBInterface.GetRequireEliteLevelCommandDef(commandId));
+            case CommandType.RequireEliteLevel:
+                return new RequireEliteLevelCommand(SDBInterface.GetRequireEliteLevelCommandDef(commandId));
             case CommandType.RequireCAISState:
                 return new RequireCAISStateCommand(SDBInterface.GetRequireCAISStateCommandDef(commandId));
             // case CommandType.InflictHitFeedback:
