@@ -337,6 +337,7 @@ public class GameServerModule : Module
         ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationMinSeparation", value => settings.WorldPopulationMinSeparation = value);
         ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationMinPlayerDistance", value => settings.WorldPopulationMinPlayerDistance = value);
         ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationMaxPlacementAttempts", value => settings.WorldPopulationMaxPlacementAttempts = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationPlacementAttemptsPerUpdate", value => settings.WorldPopulationPlacementAttemptsPerUpdate = value);
         ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationPlacementRetryDelayMs", value => settings.WorldPopulationPlacementRetryDelayMs = value);
         ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationMaxPlacementFailures", value => settings.WorldPopulationMaxPlacementFailures = value);
         ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationRespawnDelayMs", value => settings.WorldPopulationRespawnDelayMs = value);

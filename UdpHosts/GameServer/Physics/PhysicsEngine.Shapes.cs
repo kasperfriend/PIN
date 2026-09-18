@@ -263,6 +263,13 @@ public partial class PhysicsEngine
             return entry.ShapeIndex;
         }
 
+        // The answer is remembered too, not just the successful one. This is the hot path of every
+        // entity's movement update, and the asset it is asking about is the one that does not load -
+        // so without an entry here the loader (and its warning) was consulted again on every tick of
+        // every entity carrying that pose. A cached fallback entry has no aim centre, which is the
+        // same answer callers got before: aim at the estimate.
+        _compoundCache[key] = new CompoundCacheEntry { ShapeIndex = _fallbackShape };
+
         _logger.Debug("Returning fallback shape for assetId {assetId}", key.AssetId);
         return _fallbackShape;
     }

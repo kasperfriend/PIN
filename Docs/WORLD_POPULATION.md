@@ -41,10 +41,12 @@ itself says an NPC can stand on, around the players who are in it.
 > refuses a spot another planned or spawned body already holds, which no ray can
 > see because that body may not exist yet).
 
-> **The cost is bounded by four independent brakes**: a live NPC cap, a spawn
-> budget per time window, an update interval, and the plan's own work budget while
-> it is being built. A player sprinting into an empty corner of the zone fills it
-> over a couple of seconds rather than in one tick.
+> **The cost is bounded by five independent brakes**: a live NPC cap, a spawn
+> budget per time window, an update interval, the plan's own work budget while it
+> is being built, and a placement work budget, which is what bounds an update when
+> the ground refuses most of what it is asked. A player sprinting or gliding into
+> an empty corner of the zone fills it over a couple of seconds rather than in one
+> tick, and the shard keeps answering its clients while it does.
 
 ---
 
@@ -449,6 +451,23 @@ that parks, plus every fiftieth after it, is logged with its monster row, its sp
 the rounds of jittered attempts that were refused there, because a plan that parks
 itself whole is the one shape of an empty world that a count alone does not explain.
 
+**Placement work budget.** One population update spends at most
+`PlacementAttemptsPerUpdate` (200) placement attempts in total, across every slot it
+looks at. That budget is the system's brake on the shard's own tick: an attempt that
+reaches the terrain costs about fifteen physics queries (the ground probe, the
+standing-volume probes, the overhead-cover probe), and the refusals above are exactly
+the case where a whole queue of them produces nothing. Without the budget one update
+could ask the physics engine tens of thousands of questions inside a single shard tick
+- which is what its clients see as a ping spike while flying over fresh cells and then
+as a connection problem, and what a client pressing Enter World sees as a server that
+never answers its handshake. A slot that runs out of budget is **deferred**, not
+failed: it keeps its place in the queue and the position its round had reached, so a
+round may span several updates while still counting as one round towards
+`MaxPlacementFailures`, and the ground is explored at a steady rate instead of in one
+stall. `population status` counts the deferrals in its lifetime line (`N placement
+deferrals`), which is the number that says whether the budget is too small for a zone
+or the ground is refusing more than the zone can absorb.
+
 ---
 
 ## 6. Configuration
@@ -477,6 +496,7 @@ values, not a comma.
 | `WorldPopulationMinSeparation` | `0.5` | Extra metres of gap required between two NPC bodies |
 | `WorldPopulationMinPlayerDistance` | `25` | Metres of clearance from every player before an NPC may be placed |
 | `WorldPopulationMaxPlacementAttempts` | `6` | Positions one slot tries in each placement round |
+| `WorldPopulationPlacementAttemptsPerUpdate` | `200` | Placement attempts one update may spend before it defers the rest of its queue; a round may span updates |
 | `WorldPopulationPlacementRetryDelayMs` | `1000` | Wait after a failed placement round, in milliseconds |
 | `WorldPopulationMaxPlacementFailures` | `8` | Failed placement rounds after which a slot is parked |
 | `WorldPopulationRespawnDelayMs` | `30000` | Base wait after an NPC dies before its slot refills, in milliseconds |
@@ -526,7 +546,7 @@ Example:
 World population: on (live 124/150 NPCs of 2853 monster rows, 82 kinds in the world)
 Plan: 9841 cells, 20000 slots, 2853 rows placed, 214 cells refused by chunk rules
 Streaming: 68 active cells, 213 slots queued, 1 players, activate 150 m / deactivate 225 m
-Lifetime: 422 spawned, 298 despawned, 17 lost, 214 placements refused, 9 slots parked, 143 bodies in the placement grid
+Lifetime: 422 spawned, 298 despawned, 17 lost, 214 placements refused, 9 slots parked, 46 placement deferrals, 143 bodies in the placement grid
 Cover: 61 spots refused as covered
 ```
 
@@ -653,7 +673,7 @@ rules` for the client-only chunks.
 | `MonsterHabitatClassifierTests.cs` | the exclusion set, each habitat rule, behaviour arguments being stripped, an empty behaviour being eligible |
 | `SpawnOccupancyGridTests.cs` | radius + separation, a body bigger than a hash cell, the height window, remove/re-add/clear, negative coordinates |
 | `WorldPopulationPlannerTests.cs` | cells from ground, coverage and habitat fit, unplaceable rows, habitat/level from anchors, the level gradient, an outpost's capture radius is not settlement, the field fills with wilderness-only rows rather than the Melding's army, settlement over Melding, chunk refusals, the count/difficulty/slot caps, the budget-exempt expensive row, jitter bounds, the anchor fallback, work spreading, determinism |
-| `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, body separation, the level of the area, `ListLiveNear`, `status` (including the `Cover:` line and the suspension), the command |
+| `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, body separation, the level of the area, the placement work budget (one update spends no more than it, a deferred slot is not parked early, a small budget still fills), `ListLiveNear`, `status` (including the `Cover:` line and the suspension), the command |
 | `PhysicsWorldPopulationTerrainTests.cs` | the placement checks against a real engine over floor and roof slabs: an open spot resolves, a roofed one is refused while the floor beside it still resolves, an arch above the probe's reach stays open, an unprovable spot is refused, and the overhead-cover rule suspends itself for a zone it reads as covered everywhere while a zone with open ground to approve keeps it |
 | `Fakes/WorldPopulationFakes.cs` | a fixed roster/anchor/level/chunk source, a plane of walkable ground with switches for refusing a placement, and a spawner that records spawns and can kill or despawn one |
 

@@ -177,6 +177,83 @@ public class WorldPopulationServiceTests
     }
 
     [Fact]
+    public void Tick_SpendsAtMostItsPlacementBudgetPerUpdate()
+    {
+        // A zone whose ground refuses the plan: every attempt costs physics queries, and a full
+        // queue of refusals used to be walked in one update - the stall a player sees as a ping
+        // spike while flying, and the shard's clients as a connection problem. The budget is what
+        // keeps one update bounded, whatever the ground answers.
+        var rules = new StandardWorldPopulationRules
+        {
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            PlacementAttemptsPerUpdate = 3,
+            PlacementRetryDelayMs = 0,
+            MaxPlacementFailures = 2,
+        };
+        var world = CreateWorld(rules, playerAt: new Vector3(8f, 8f, 0f));
+        world.Terrain.AddPlane(Vector3.Zero, 2, 2, 16f); // one cell, four slots
+        world.Terrain.AcceptPlacements = false;
+        world.Data.AddMonster(10);
+
+        Tick(world, 3); // surfaces, cells, then the plan completes and starts placing
+
+        // The first slot spent the whole update's budget and went back on the queue.
+        Assert.Equal(1, world.Service.DeferredPlacements);
+        Assert.Equal(0, world.Service.ParkedSlotCount);
+
+        int callsBefore = world.Terrain.PlacementCalls;
+        Tick(world);
+
+        // Whatever the update did, the ground was asked at most PlacementAttemptsPerUpdate times:
+        // the shard's tick is not allowed to become the placement queue's.
+        Assert.InRange(world.Terrain.PlacementCalls - callsBefore, 1, rules.PlacementAttemptsPerUpdate);
+        Assert.Equal(2, world.Service.DeferredPlacements);
+
+        // Deferred is not refused: the round that ran out of budget is not charged a failure, so
+        // the slots are still unparked.
+        Assert.Equal(0, world.Service.ParkedSlotCount);
+
+        // Rounds still complete - a round may just span several updates - and a slot the ground
+        // refuses is parked after MaxPlacementFailures of them, not never.
+        Tick(world, 40);
+        Assert.Equal(4, world.Service.ParkedSlotCount);
+        Assert.Contains("placement deferrals", world.Service.DescribeStatus());
+    }
+
+    [Fact]
+    public void Tick_KeepsFillingWithASingleAttemptPerUpdate()
+    {
+        var rules = new StandardWorldPopulationRules
+        {
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            PlacementAttemptsPerUpdate = 1,
+
+            // Tiny bodies and no extra separation: every planned slot fits wherever it lands, so
+            // this test is about the budget and not about the occupancy grid.
+            MinSeparation = 0f,
+            DefaultBodyRadius = 0.01f,
+            DefaultBodyHeight = 0.1f,
+        };
+        var world = CreateWorld(rules);
+        AddGroundAndRoster(world);
+
+        Tick(world, 3);
+
+        Assert.True(world.Service.Plan.IsComplete);
+        int live = world.Service.LiveCount;
+        Assert.True(live > 0);
+
+        Tick(world, 10);
+
+        // Good ground and one attempt an update: every update adds one NPC. The budget slows the
+        // fill down, it does not stop it.
+        Assert.Equal(live + 10, world.Service.LiveCount);
+        Assert.Equal(0, world.Service.DeferredPlacements);
+    }
+
+    [Fact]
     public void Tick_NeverGoesPastTheLiveCap()
     {
         var rules = new StandardWorldPopulationRules

@@ -72,6 +72,19 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
 
     public int MaxPlacementAttempts { get; init; } = 6;
 
+    /// <summary>
+    ///     Every placement attempt one update may spend. An attempt that reaches the terrain is the
+    ///     ground probe, the standing-volume probes and the overhead-cover probe - about fifteen
+    ///     physics queries, and the reason a refused slot costs real time. 200 attempts per 250 ms
+    ///     update keeps the worst case (a queue full of refused spots, which is what flying a glider
+    ///     over a zone whose ground refuses most of it produces) inside a few milliseconds of the
+    ///     shard's tick, and the plan still gets up to 800 attempts a second - far more than the
+    ///     default spawn budget needs for slots that place on their first position. Raise it on a
+    ///     machine with headroom for a zone that fills too slowly; lower it if the shard's tick still
+    ///     shows stalls while flying.
+    /// </summary>
+    public int PlacementAttemptsPerUpdate { get; init; } = 200;
+
     public int PlacementRetryDelayMs { get; init; } = 1_000;
 
     public int MaxPlacementFailures { get; init; } = 8;
@@ -135,6 +148,7 @@ public class StandardWorldPopulationRules : IWorldPopulationRules
             MinSeparation = NonNegativeOrDefault(settings.WorldPopulationMinSeparation, 0.5f),
             MinPlayerDistance = NonNegativeOrDefault(settings.WorldPopulationMinPlayerDistance, 25f),
             MaxPlacementAttempts = PositiveOrDefault(settings.WorldPopulationMaxPlacementAttempts, 6),
+            PlacementAttemptsPerUpdate = PositiveOrDefault(settings.WorldPopulationPlacementAttemptsPerUpdate, 200),
             PlacementRetryDelayMs = NonNegativeOrDefault(settings.WorldPopulationPlacementRetryDelayMs, 1_000),
             MaxPlacementFailures = PositiveOrDefault(settings.WorldPopulationMaxPlacementFailures, 8),
             RespawnDelayMs = NonNegativeOrDefault(settings.WorldPopulationRespawnDelayMs, 30_000),

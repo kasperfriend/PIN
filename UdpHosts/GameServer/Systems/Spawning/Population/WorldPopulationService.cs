@@ -30,10 +30,14 @@ namespace GameServer.Systems.Spawning.Population;
 ///         about.
 ///     </para>
 ///     <para>
-///         <b>Bounded cost.</b> Four independent brakes: the live NPC cap, the spawn budget per time
+///         <b>Bounded cost.</b> Five independent brakes: the live NPC cap, the spawn budget per time
 ///         window, the update interval (the shard ticks every 5 ms, this runs a few times a second),
-///         and the plan's own work budget while it is being built. A player sprinting into an empty
-///         corner of the zone therefore fills it over a couple of seconds rather than in one tick.
+///         the plan's own work budget while it is being built, and the placement work budget, which
+///         is what bounds an update whose ground refuses the slots it is trying: refusals do not
+///         spend spawn budget, so without a work budget the loop walked the entire queue, about
+///         fifteen physics queries per attempt. A player sprinting or gliding into an empty corner
+///         of the zone therefore fills it over a couple of seconds rather than in one tick, and the
+///         shard keeps answering its clients while it does.
 ///     </para>
 ///     <para>
 ///         <b>Collisions.</b> Two kinds, both checked before anything is spawned: the physical one
@@ -47,7 +51,7 @@ namespace GameServer.Systems.Spawning.Population;
 /// </remarks>
 public sealed class WorldPopulationService
 {
-    /// <summary>Salt keeping the retry jitter's hashes independent of the plan's.</summary>
+/// <summary>Salt keeping the retry jitter's hashes independent of the plan's.</summary>
     private const int RetryAngleSalt = 0x3D71;
 
     /// <summary>Salt for the retry jitter's distance draw.</summary>
@@ -68,7 +72,7 @@ public sealed class WorldPopulationService
     private const int MaxConsecutiveFailures = 3;
 
     /// <summary>
-    ///     Updates between two "the plan is still building" lines. The reason is worth repeating
+///     Updates between two "the plan is still building" lines. The reason is worth repeating
     ///     because it is the only one that resolves on its own, and a zone that stays empty for a
     ///     minute should say so rather than fall silent.
     /// </summary>
@@ -180,6 +184,15 @@ public sealed class WorldPopulationService
     /// <summary>Total placement refusals, for telling a zone whose plan does not fit its ground.</summary>
     public int RefusedPlacements { get; private set; }
 
+    /// <summary>
+    ///     Total slots handed back to the queue because an update ran out of
+    ///     <see cref="IWorldPopulationRules.PlacementAttemptsPerUpdate"/> before trying them. A
+    ///     healthy shard sees these whenever a player streams in more ground than one update can
+    ///     validate; a number that climbs without the live count following it is the budget set
+    ///     lower than the zone needs.
+    /// </summary>
+    public int DeferredPlacements { get; private set; }
+
     /// <summary>How many bodies the placement grid is holding.</summary>
     public int OccupancyCount => _occupancy.Count;
 
@@ -204,7 +217,7 @@ public sealed class WorldPopulationService
 
     /// <summary>
     ///     One world population update. Called from the shard's tick, after the entity manager's, so
-    ///     the zone's own entities exist before the plan is built and the occupancy grid is seeded
+///     the zone's own entities exist before the plan is built and the occupancy grid is seeded
     ///     from them. Does its work at most every
     ///     <see cref="IWorldPopulationRules.TickIntervalMs"/> and returns immediately otherwise.
     /// </summary>
@@ -384,7 +397,7 @@ public sealed class WorldPopulationService
     }
 
     /// <summary>
-    ///     Says the plan is still being built, with its progress, every
+///     Says the plan is still being built, with its progress, every
     ///     <see cref="PlanningAnnouncementTicks"/> updates rather than once.
     /// </summary>
     /// <remarks>
@@ -435,7 +448,7 @@ public sealed class WorldPopulationService
     ///     <paramref name="position"/>, nearest first, with the monster row and the position each one
     ///     actually ended up at (which the AI may have moved since it was placed). Capped at
     ///     <paramref name="limit"/> entries. This is what the <c>\population near</c> command shows:
-    ///     the quickest way to see whether what the plan put somewhere is what belongs there.
+///     the quickest way to see whether what the plan put somewhere is what belongs there.
     /// </summary>
     public IReadOnlyList<(uint MonsterId, Vector3 Position, float Distance)> ListLiveNear(
         Vector3 position,
@@ -499,12 +512,13 @@ public sealed class WorldPopulationService
                 : string.Format(CultureInfo.InvariantCulture, "activate {0:0} m / deactivate {1:0} m", _rules.ActivationRadius, _rules.DeactivationRadius)));
         _ = text.AppendLine(string.Format(
             CultureInfo.InvariantCulture,
-            "Lifetime: {0} spawned, {1} despawned, {2} lost, {3} placements refused, {4} slots parked, {5} bodies in the placement grid",
+            "Lifetime: {0} spawned, {1} despawned, {2} lost, {3} placements refused, {4} slots parked, {5} placement deferrals, {6} bodies in the placement grid",
             SpawnedTotal,
             DespawnedTotal,
             LostTotal,
             RefusedPlacements,
             ParkedSlotCount,
+            DeferredPlacements,
             OccupancyCount));
 
         // Only when the terrain has an overhead-cover rule and it has seen something: a terrain
@@ -740,6 +754,7 @@ public sealed class WorldPopulationService
             slot.NotBefore = Math.Max(
                 slot.NotBefore,
                 currentTime + (ulong)Math.Max(0, slot.Candidate.SpawnDelayMs));
+            slot.ResetPlacementRound();
             _pending.Enqueue(slot);
         }
     }
@@ -752,6 +767,7 @@ public sealed class WorldPopulationService
         foreach (var slot in cell.Slots)
         {
             slot.NotBefore = 0;
+            slot.ResetPlacementRound();
 
             if (slot.EntityId == 0)
             {
@@ -791,7 +807,16 @@ public sealed class WorldPopulationService
         // through what was queued rather than chase its own tail.
         int guard = _pending.Count;
 
-        while (budget > 0 && guard-- > 0 && _pending.TryDequeue(out var slot))
+        // Work, not spawns, is what this loop spends. Every attempt costs about fifteen physics
+        // queries (ground probe, standing-volume probes, overhead-cover probe), so a queue of
+        // refused slots used to burn the whole shard tick before it produced anything: the shard
+        // stopped answering its clients for as long as that took, which is the ping spike a player
+        // sees while gliding across a zone (each new cell refills the queue) and the connect timeout
+        // of a client trying to get back into the world. The budget bounds one update; what it does
+        // not get to is deferred - not failed - and is tried on the next update.
+        int work = Math.Max(1, _rules.PlacementAttemptsPerUpdate);
+
+        while (budget > 0 && work > 0 && guard-- > 0 && _pending.TryDequeue(out var slot))
         {
             if (slot.EntityId != 0 || slot.Parked)
             {
@@ -810,45 +835,80 @@ public sealed class WorldPopulationService
                 continue;
             }
 
-            switch (TryPlace(slot))
+            switch (TryPlace(slot, work, out int spent))
             {
                 case PlacementOutcome.Placed:
+                    work -= spent;
                     budget--;
                     break;
                 case PlacementOutcome.RefusedByGround:
+                    work -= spent;
                     RetryLater(slot, currentTime, countsAsFailure: true);
                     break;
+                case PlacementOutcome.Deferred:
+                    // Out of work for this update. Back on the queue, where it keeps both its place
+                    // and the attempt its round had reached: no failure is counted, so a slot the
+                    // ground refuses is still parked only after MaxPlacementFailures full rounds of
+                    // trying, not because the update ran out of work.
+                    work -= spent;
+                    _pending.Enqueue(slot);
+                    DeferredPlacements++;
+                    break;
                 default:
+                    work -= spent;
                     RetryLater(slot, currentTime, countsAsFailure: false);
                     break;
             }
         }
     }
 
-    private PlacementOutcome TryPlace(WorldPopulationSlot slot)
+    /// <summary>
+    ///     Tries to place one slot, spending at most <paramref name="workBudget"/> attempts and
+    ///     reporting what it spent in <paramref name="attemptsSpent"/>. Running out of budget is not
+    ///     a refusal: the attempt the round had reached is recorded on the slot and the caller gets
+    ///     <see cref="PlacementOutcome.Deferred"/> back, so the slot keeps its progress and its place
+    ///     in the queue instead of being charged a failure it did not have.
+    /// </summary>
+    /// <remarks>
+    ///     A round - the slot's anchor and the jittered positions around it, up to
+    ///     <see cref="IWorldPopulationRules.MaxPlacementAttempts"/> of them - may therefore span
+    ///     several updates. What makes a round a round is unchanged: it is one pass over the slot's
+    ///     positions, and its result is what counts a failure towards parking the slot.
+    /// </remarks>
+    private PlacementOutcome TryPlace(WorldPopulationSlot slot, int workBudget, out int attemptsSpent)
     {
         var candidate = slot.Candidate;
         float radius = candidate.ResolvedBodyRadius(_rules);
         float height = candidate.ResolvedBodyHeight(_rules);
         int attempts = Math.Max(1, _rules.MaxPlacementAttempts);
 
-        bool refusedByGround = false;
-        bool refusedByOccupancy = false;
+        attemptsSpent = 0;
 
-        for (int attempt = 0; attempt < attempts; attempt++)
+        for (int attempt = slot.AttemptsThisRound; attempt < attempts; attempt++)
         {
+            if (attemptsSpent >= workBudget)
+            {
+                // Out of placement work for this update. The round continues where it stopped the
+                // next time the slot is dequeued; the slot is due immediately, because a deferral
+                // sets no NotBefore.
+                slot.AttemptsThisRound = attempt;
+                return PlacementOutcome.Deferred;
+            }
+
+            attemptsSpent++;
+
             var position = attempt == 0 ? slot.Anchor : slot.Anchor + RetryJitter(slot, attempt);
 
             if (IsTooCloseToAPlayer(position) ||
                 !_occupancy.IsAreaFree(position, radius, _rules.MinSeparation))
             {
-                refusedByOccupancy = true;
+                slot.RoundRefusedForRoom = true;
                 continue;
             }
 
             if (!_terrain.TryResolveStandingSpot(position, radius, height, out var resolved))
             {
-                refusedByGround = true;
+                slot.RoundRefusedByGround = true;
                 continue;
             }
 
@@ -857,7 +917,7 @@ public sealed class WorldPopulationService
             if (IsTooCloseToAPlayer(resolved) ||
                 !_occupancy.IsAreaFree(resolved, radius, _rules.MinSeparation))
             {
-                refusedByOccupancy = true;
+                slot.RoundRefusedForRoom = true;
                 continue;
             }
 
@@ -871,12 +931,14 @@ public sealed class WorldPopulationService
             {
                 // The spawner refused the row itself (no such monster, no entity manager). No
                 // position is going to change that.
+                slot.ResetPlacementRound();
                 return PlacementOutcome.RefusedByGround;
             }
 
             slot.EntityId = entityId;
             slot.NotBefore = 0;
             slot.Failures = 0;
+            slot.ResetPlacementRound();
             _occupancy.Add(entityId, resolved, radius);
             _liveSlots.Add(slot);
             SpawnedTotal++;
@@ -889,8 +951,12 @@ public sealed class WorldPopulationService
 
         // A slot only ever refused by the ground is a slot whose ground does not fit its body; a
         // slot that was also refused for room is worth another look later, when whatever was
-        // standing there has moved.
-        return refusedByGround && !refusedByOccupancy
+        // standing there has moved. The round is over either way, so the next one starts at the
+        // anchor again.
+        bool refusedByGroundOnly = slot.RoundRefusedByGround && !slot.RoundRefusedForRoom;
+        slot.ResetPlacementRound();
+
+        return refusedByGroundOnly
             ? PlacementOutcome.RefusedByGround
             : PlacementOutcome.RefusedForRoom;
     }
@@ -992,7 +1058,7 @@ public sealed class WorldPopulationService
     }
 
     /// <summary>
-    ///     Removes everything this service spawned and forgets every activation, keeping the plan
+///     Removes everything this service spawned and forgets every activation, keeping the plan
     ///     (which is only memory) so turning the feature back on does not have to build it again.
     ///     Only ever touches entities it spawned itself.
     /// </summary>
@@ -1034,5 +1100,12 @@ public sealed class WorldPopulationService
 
         /// <summary>Something transient was in the way: a player, or another body.</summary>
         RefusedForRoom,
+
+        /// <summary>
+        ///     The update ran out of placement work before this slot had spent its attempts. Not a
+        ///     refusal: the slot goes back on the queue and is tried on the next update, with no
+        ///     failure charged.
+        /// </summary>
+        Deferred,
     }
 }
