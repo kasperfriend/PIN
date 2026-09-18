@@ -1,5 +1,70 @@
 # Changelog
 
+## [0.5.0] - 2026-09-18
+
+This is the release that fills the world and makes the fighting real. Every zone is now populated with the mobs, NPCs and turrets the static database puts there ([#87](https://github.com/kasperfriend/PIN/pull/87)), placed on walkable ground from the original zone metadata ([#86](https://github.com/kasperfriend/PIN/pull/86), [#106](https://github.com/kasperfriend/PIN/pull/106)), following the shard's zone rather than the whole world ([#92](https://github.com/kasperfriend/PIN/pull/92)), with the new `WorldPopulationSpawnFullZone` setting ([#100](https://github.com/kasperfriend/PIN/pull/100)) holding a whole zone's population open — no distance streaming, no despawns, kept alive with no players connected. Every one of those NPCs can be used: vendors, talkers, doctors and ability casters open their real menus ([#101](https://github.com/kasperfriend/PIN/pull/101), [#102](https://github.com/kasperfriend/PIN/pull/102), [#104](https://github.com/kasperfriend/PIN/pull/104)), a vendor's stock, prices, gates, discounts and machine roll come from the recorded store ([#105](https://github.com/kasperfriend/PIN/pull/105)), and every talkable NPC answers with original Firefall dialog ([#111](https://github.com/kasperfriend/PIN/pull/111)). Data-backed ambient routines ([#93](https://github.com/kasperfriend/PIN/pull/93), [#94](https://github.com/kasperfriend/PIN/pull/94)) and a bounded navigation bake ([#107](https://github.com/kasperfriend/PIN/pull/107)) are what make them mill around instead of standing still.
+
+Combat moved onto the database's own numbers. Monster health and the level band a zone implies, per-hit attack damage and turret weapons all come out of `staticdb` ([#82](https://github.com/kasperfriend/PIN/pull/82), [#99](https://github.com/kasperfriend/PIN/pull/99)), the same rows decide player weapon damage, and the projectile path now runs the combat defense pipeline instead of the `Damage defense calcs` placeholder ([#79](https://github.com/kasperfriend/PIN/pull/79), [#91](https://github.com/kasperfriend/PIN/pull/91)). NPC, mob and unmanned turret fire is visible to every client, scatters inside the weapon's own spread cone and is aimed at the middle of the target's collision volume, led for its movement and drop-compensated for the parabolic rows ([#83](https://github.com/kasperfriend/PIN/pull/83), [#99](https://github.com/kasperfriend/PIN/pull/99)); player shots are visible to other players; and the targeting and weapon-swap aptitude commands (`Friendlies`, `Hostiles`, `ByHostility`, `Single`, `SwitchWeapon`) are implemented instead of stubbed ([#81](https://github.com/kasperfriend/PIN/pull/81), [#84](https://github.com/kasperfriend/PIN/pull/84)).
+
+Items do what their data says. Salvage, consumable spending and vendor purchases work ([#109](https://github.com/kasperfriend/PIN/pull/109)); the consumables audit implemented `Return` and `StatRequirement`, read vitals through `LoadRegisterFromStat` instead of a flat 1.0, made a Health Pack heal what its chain declares, rolled a spent item back when the activation fails and told the client when a guid item leaves the bag ([#113](https://github.com/kasperfriend/PIN/pull/113)); and the unlock kits, upgrade kits, loot crates, packages, boosts, rental contracts and reward tokens behind the reward commands now grant, roll and persist what their chains declare ([#113](https://github.com/kasperfriend/PIN/pull/113)). A new character starts with its own battleframe rather than the admin's sandbox ([#108](https://github.com/kasperfriend/PIN/pull/108)), and the currency cheats make vendor testing possible without a live economy ([#110](https://github.com/kasperfriend/PIN/pull/110)).
+
+Remote play is finished end to end: the advertised address is configurable and every interface is bound by default ([#77](https://github.com/kasperfriend/PIN/pull/77)), the server issues the TLS certificate its advertised address needs and hands it to players ([#78](https://github.com/kasperfriend/PIN/pull/78)), and it is served from a PKCS#12 because Schannel cannot sign a handshake with an ephemeral key — the bug that made a trusted certificate still flash the login form red on Windows ([#80](https://github.com/kasperfriend/PIN/pull/80)). A GameServer that cannot bind its port now fails instead of printing "ready" while deaf ([#88](https://github.com/kasperfriend/PIN/pull/88)), and `WebHostManager` explains what a refused bind means before the stack traces do ([#103](https://github.com/kasperfriend/PIN/pull/103)). Underneath, four audit passes over the hosts and the shard removed session-lifetime leaks, per-packet allocations and unbounded loops ([#75](https://github.com/kasperfriend/PIN/pull/75), [#76](https://github.com/kasperfriend/PIN/pull/76), [#90](https://github.com/kasperfriend/PIN/pull/90), [#96](https://github.com/kasperfriend/PIN/pull/96)) — the shard loop is paced instead of spinning, and packet, GRPC and physics faults are contained instead of killing the process. `\help` no longer crashes the chat send path and every in-game command is documented ([#116](https://github.com/kasperfriend/PIN/pull/116)).
+
+The itemised, per-change entries for this cycle are the ones collected under [`[Unreleased]`](#unreleased) below: that heading has accumulated everything since `0.3.0` (it was never cut at `0.3.0` or `0.4.0`), and this section is the release-shaped summary of the `0.4.0` → `0.5.0` half of it. PRs [#112](https://github.com/kasperfriend/PIN/pull/112) and [#114](https://github.com/kasperfriend/PIN/pull/114) — keeping the world population out of caves, tunnels and covered ground — were reverted by [#115](https://github.com/kasperfriend/PIN/pull/115), because the cover check refused whole zones and the population stopped generating; the population spawns everywhere again until that check is reworked.
+
+### Pull requests in this release
+
+| PR | Title | Merged |
+|---|---|---|
+| [#75](https://github.com/kasperfriend/PIN/pull/75) | Fix session-lifetime leaks, hot-path waste and log noise across the hosts | 2026-09-11 |
+| [#76](https://github.com/kasperfriend/PIN/pull/76) | Per-packet hot-path pass: allocation-free wire headers, compiled dispatch, cached factory misses, bounded catch-up and logs | 2026-09-11 |
+| [#77](https://github.com/kasperfriend/PIN/pull/77) | Configurable advertised host + bind every interface by default (remote play over LAN/VPN) | 2026-09-12 |
+| [#78](https://github.com/kasperfriend/PIN/pull/78) | Issue the TLS certificate the advertised address needs, and hand it to players | 2026-09-12 |
+| [#79](https://github.com/kasperfriend/PIN/pull/79) | Implement combat damage response mitigation | 2026-09-12 |
+| [#80](https://github.com/kasperfriend/PIN/pull/80) | Serve self-issued TLS certs from a PKCS#12 so Schannel can sign the handshake | 2026-09-12 |
+| [#81](https://github.com/kasperfriend/PIN/pull/81) | Implement targeting commands: Friendlies, Hostiles, ByHostility, Single | 2026-09-12 |
+| [#82](https://github.com/kasperfriend/PIN/pull/82) | Fire NPC and mob attacks from the static database | 2026-09-13 |
+| [#83](https://github.com/kasperfriend/PIN/pull/83) | NPC spread, visible shots, turret fire, and player-on-player tracers | 2026-09-13 |
+| [#84](https://github.com/kasperfriend/PIN/pull/84) | Implement SwitchWeapon: the weapon-swap effects of 74 abilities now swap the weapon | 2026-09-13 |
+| [#85](https://github.com/kasperfriend/PIN/pull/85) | Serve web assets from named roots, and say what the asset host holds | 2026-09-14 |
+| [#86](https://github.com/kasperfriend/PIN/pull/86) | Align NPC navigation with original zone metadata | 2026-09-13 |
+| [#87](https://github.com/kasperfriend/PIN/pull/87) | Populate zones with every mob and NPC the database puts there | 2026-09-14 |
+| [#88](https://github.com/kasperfriend/PIN/pull/88) | Fail a GameServer that cannot bind its port, instead of printing ready while deaf | 2026-09-14 |
+| [#89](https://github.com/kasperfriend/PIN/pull/89) | Fix invisible world population NPCs, zone-load diagnostics, and scope pose broadcasts | 2026-09-14 |
+| [#90](https://github.com/kasperfriend/PIN/pull/90) | Contain projectile faults, reduce population load, and fix glider cleanup | 2026-09-14 |
+| [#91](https://github.com/kasperfriend/PIN/pull/91) | Fix discarded shots, the zone-entry network tick NRE and the faction stance table | 2026-09-14 |
+| [#92](https://github.com/kasperfriend/PIN/pull/92) | Population follows the shard's zone only, and says so when players are elsewhere | 2026-09-14 |
+| [#93](https://github.com/kasperfriend/PIN/pull/93) | Add data-backed ambient NPC routines and complete movement census | 2026-09-14 |
+| [#94](https://github.com/kasperfriend/PIN/pull/94) | Implement true-to-original world-population and routine improvements | 2026-09-14 |
+| [#95](https://github.com/kasperfriend/PIN/pull/95) | Map findings: ZoneBounds early-out, vehicle paths, melding interpolation, NPC jitter/leash/despawn, docs | 2026-09-14 |
+| [#96](https://github.com/kasperfriend/PIN/pull/96) | Decrease log severity of KeyframeRequest failed to find to Verbose | 2026-09-14 |
+| [#97](https://github.com/kasperfriend/PIN/pull/97) | Fix build: import Shared.Collision.Layers for the zone layer types PhysicsEngine now exposes | 2026-09-14 |
+| [#98](https://github.com/kasperfriend/PIN/pull/98) | Serve every chunk name the client asks for, and say which of them matter | 2026-09-14 |
+| [#99](https://github.com/kasperfriend/PIN/pull/99) | NPC ping hot-path pass, model-accurate mob/NPC aim, and the same corrected aim for unmanned turrets | 2026-09-15 |
+| [#100](https://github.com/kasperfriend/PIN/pull/100) | Add WorldPopulationSpawnFullZone setting to spawn and keep full zone population | 2026-09-15 |
+| [#101](https://github.com/kasperfriend/PIN/pull/101) | Make every interactable NPC work (vendors, talk, doctor, ability-casters) | 2026-09-15 |
+| [#102](https://github.com/kasperfriend/PIN/pull/102) | Fix channelled NPC interactions cancelling early (vendor/doctor menus not opening) | 2026-09-15 |
+| [#103](https://github.com/kasperfriend/PIN/pull/103) | WebHostManager says what a refused bind means before the stack traces do | 2026-09-15 |
+| [#104](https://github.com/kasperfriend/PIN/pull/104) | Fix AuthorizeTerminal id truncation, flush vendor auth, log silent interactions | 2026-09-15 |
+| [#105](https://github.com/kasperfriend/PIN/pull/105) | Fix the vendor Buy button, then serve the recorded store: real prices, gates, discounts and the real machine roll | 2026-09-15 |
+| [#106](https://github.com/kasperfriend/PIN/pull/106) | Place NPCs on walkable ground, keep wildlife around outposts, and let them mill | 2026-09-16 |
+| [#107](https://github.com/kasperfriend/PIN/pull/107) | Bound the navigation-mesh bake so a zone that finished its chunks actually opens | 2026-09-16 |
+| [#108](https://github.com/kasperfriend/PIN/pull/108) | A new character starts with its own battleframe, not with the admin's sandbox | 2026-09-16 |
+| [#109](https://github.com/kasperfriend/PIN/pull/109) | Fix salvage, consumable spending, and the phantom "inventory full" at vendor purchase | 2026-09-16 |
+| [#110](https://github.com/kasperfriend/PIN/pull/110) | Add currency cheats for vendors (crystite/resource/wallet/balance/bags) | 2026-09-16 |
+| [#111](https://github.com/kasperfriend/PIN/pull/111) | Implement dialogue for every talkable NPC | 2026-09-17 |
+| [#112](https://github.com/kasperfriend/PIN/pull/112) | Keep world population out of caves, tunnels and covered ground | 2026-09-17 |
+| [#113](https://github.com/kasperfriend/PIN/pull/113) | Consumables audit: implement Return/StatRequirement, fix Health Pack heal, roll back spent items, replicate removals | 2026-09-17 |
+| [#114](https://github.com/kasperfriend/PIN/pull/114) | World population: survive a cover check that refuses the whole zone, clamp the sky cast, log parking | 2026-09-17 |
+| [#115](https://github.com/kasperfriend/PIN/pull/115) | Revert PR #112 and PR #114: fix world population not generating NPCs | 2026-09-17 |
+| [#116](https://github.com/kasperfriend/PIN/pull/116) | Fix \help chat command crash and document all in-game commands | 2026-09-17 |
+
+### Known limitations
+
+- Boosts are stored, applied and expired (on login and by a 60 s sweep) but do not multiply anything yet: there is no XP system to multiply. `CharacterUnlocks.BoostFraction` is the hook
+- Hit reactions and the per-ability chain animations are documented as not derivable from this build (`Docs/NPC_AI.md` §3) rather than guessed: the table that says when a stumble fires has 0 rows, and the animation commands that do exist belong to status effects the NPC path does not expire yet
+- In-game verification remains the final arbiter for the glider and ADS behaviour documented in `Docs/GLIDER_AND_ADS.md`
+
 ## [Unreleased]
 
 ### Added

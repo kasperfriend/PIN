@@ -12,7 +12,7 @@
         <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)/stylecop.ruleset</CodeAnalysisRuleSet>
     </PropertyGroup>
     <PropertyGroup>
-        <Version>0.2.0</Version>
+        <Version>0.5.0</Version>
         <!-- Bitter stays at the version FauFau 1.5.1 was compiled against: a build
              stamped with the PIN product version fails to load from the single-file
              GameServer bundle at runtime (missing-assembly startup crash). -->
