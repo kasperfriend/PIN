@@ -71,6 +71,26 @@ public sealed class WorldPopulationPlanner
     /// <summary>How far a slot may turn away from its cell's facing, in radians (~34° either way).</summary>
     private const float FacingSpread = 0.6f;
 
+    /// <summary>
+    ///     Metres within which two of the zone's deployables count as the same place. A camp or a
+    ///     watchtower with its gear is several props standing together; what makes a place a place
+    ///     in the authored data is that company, not the prop itself. Two planning cells: generous
+    ///     enough for a spread camp, tight enough that the zone's lone props stay props.
+    /// </summary>
+    private const float DeployableClusterRadius = 60f;
+
+    /// <summary>
+    ///     How many neighbouring deployables make one deployable a place worth painting as
+    ///     settlement ground.
+    /// </summary>
+    private const int DeployableClusterMinPeers = 2;
+
+    /// <summary>
+    ///     Two deployables closer than this are the same prop authored twice (the zone data holds
+    ///     those), and a stacked copy is not company.
+    /// </summary>
+    private const float DeployableStackEpsilon = 1f;
+
     // Salts keep the hashes that decide different things independent of each other.
     private const int DensityOrderSalt = 0x51ED;
     private const int FacingSpreadSalt = 0x7A11;
@@ -268,6 +288,7 @@ public sealed class WorldPopulationPlanner
     private void PrepareCells()
     {
         _anchors = _data.GetAnchors(_zoneId) ?? Array.Empty<WorldPopulationAnchor>();
+        _anchors = FilterLoneDeployables(_anchors);
         BucketAnchors();
 
         if (_drafts.Count == 0)
@@ -353,6 +374,96 @@ public sealed class WorldPopulationPlanner
             _meldingCells.Count,
             RefusedChunkCells,
             UsedAnchorFallback ? ", built from authored anchors" : string.Empty);
+    }
+
+    /// <summary>
+    ///     Keeps the zone's deployables that are a place and drops the ones that are a prop. The
+    ///     zone's deployables mark settled ground, but only in company: a camp or a settlement's
+    ///     surround is several of them standing together, while a lone thumper pad, watchtower or
+    ///     terminal in the open field is just a prop - and giving every one of those a settlement
+    ///     circle is what put civilians, guards and vendors standing alone in the middle of
+    ///     nowhere. Deployable-like anchors are the settlement anchors that carry no radius of
+    ///     their own (outposts do, and the Melding is not a settlement); the check is their
+    ///     horizontal neighbourhood against <see cref="DeployableClusterRadius"/>,
+    ///     <see cref="DeployableClusterMinPeers"/> and <see cref="DeployableStackEpsilon"/>. The
+    ///     answer is a subset of the input, in the input's order, so the plan stays the same plan
+    ///     everywhere.
+    /// </summary>
+    private IReadOnlyList<WorldPopulationAnchor> FilterLoneDeployables(IReadOnlyList<WorldPopulationAnchor> anchors)
+    {
+        var deployables = new List<int>();
+        for (int i = 0; i < anchors.Count; i++)
+        {
+            var anchor = anchors[i];
+            if (anchor.Habitat == WorldPopulationHabitat.Settlement && anchor.Radius <= 0f)
+            {
+                deployables.Add(i);
+            }
+        }
+
+        if (deployables.Count == 0)
+        {
+            return anchors;
+        }
+
+        var kept = new HashSet<int>();
+        int dropped = 0;
+
+        for (int i = 0; i < deployables.Count; i++)
+        {
+            int peers = 0;
+            for (int j = 0; j < deployables.Count && peers < DeployableClusterMinPeers; j++)
+            {
+                if (i == j)
+                {
+                    continue;
+                }
+
+                float distance = AiVectors.HorizontalDistance(
+                    anchors[deployables[i]].Position,
+                    anchors[deployables[j]].Position);
+                if (distance > DeployableStackEpsilon && distance <= DeployableClusterRadius)
+                {
+                    peers++;
+                }
+            }
+
+            if (peers >= DeployableClusterMinPeers)
+            {
+                kept.Add(deployables[i]);
+            }
+            else
+            {
+                dropped++;
+            }
+        }
+
+        if (dropped == 0)
+        {
+            return anchors;
+        }
+
+        _logger.Information(
+            "World population plan for zone {ZoneId}: {Dropped} lone deployable anchors paint no settlement ground " +
+            "(a place takes {MinPeers} neighbours within {Radius:0} m; a lone prop is just a prop)",
+            _zoneId,
+            dropped,
+            DeployableClusterMinPeers,
+            DeployableClusterRadius);
+
+        var result = new List<WorldPopulationAnchor>(anchors.Count - dropped);
+        for (int i = 0; i < anchors.Count; i++)
+        {
+            var anchor = anchors[i];
+            if (anchor.Habitat == WorldPopulationHabitat.Settlement && anchor.Radius <= 0f && !kept.Contains(i))
+            {
+                continue;
+            }
+
+            result.Add(anchor);
+        }
+
+        return result;
     }
 
     private void BucketAnchors()

@@ -58,6 +58,13 @@ public partial class PhysicsEngine
     private const float HeadroomMargin = 0.2f;
 
     /// <summary>
+    ///     How far above a body's head <see cref="HasOverheadCover" /> reaches. Every cave,
+    ///     tunnel, underpass and roofed space a mob could be buried in hangs lower than this,
+    ///     while a zone's tree lines and the tops of its natural arches do not.
+    /// </summary>
+    private const float DefaultSkyProbeHeight = 12f;
+
+    /// <summary>
     ///     Fractions of the body height the clearance probes are fired at: ankle, waist, shoulder.
     ///     Three heights catch both a low crate the body would stand inside and a barrier it would
     ///     poke its head through.
@@ -181,7 +188,8 @@ public partial class PhysicsEngine
                 ? new NavigationMesh(
                     _zoneLoader.NavigationTriangles,
                     materialId => SDBInterface.GetPhysicsMaterial(materialId)?.AIPathingCost ?? 1f,
-                    _zoneLoader.IsNavigationExcluded)
+                    _zoneLoader.IsNavigationExcluded,
+                    materialExcluded: IsUnderwaterMaterial)
                 : null;
             _logger.Information(
                 "Zone {ZoneId}: navigation mesh has {TriangleCount} source triangles and {FaceCount} walkable faces after {Elapsed}",
@@ -618,6 +626,51 @@ public partial class PhysicsEngine
 
         return !overlapEnumerator.Found;
     }
+
+    /// <summary>
+    ///     Whether straight up from <paramref name="feet" /> there is static world geometry
+    ///     overhead: the test that tells open ground from a cave, a tunnel, the underside of an
+    ///     overhang, and ground buried under the terrain itself. The probe comes DOWN from the
+    ///     sky, so it sees the world's top at this X/Y however the meshes around the spot happen
+    ///     to face, and it stops just above the body's head — by construction it can never hit
+    ///     the ground the spot stands on, which is the failure that made a whole zone read as
+    ///     covered in an earlier version of this check.
+    /// </summary>
+    /// <remarks>
+    ///     The reach is short on purpose (<see cref="DefaultSkyProbeHeight" />): every cave,
+    ///     tunnel and roofed space hangs lower over a body than that, while a zone's tree lines
+    ///     and natural arches do not — a probe that reaches the sky reads a forest as a roof,
+    ///     which is the other half of "the whole zone read as covered". A spot under a tall
+    ///     natural arch is accepted, and that is the right answer for ambient spawning.
+    /// </remarks>
+    /// <param name="feet">Bottom centre of the body, on the ground surface.</param>
+    /// <param name="bodyHeight">Body height in metres; the probe starts at the head.</param>
+    /// <returns>True when static geometry hangs over the spot.</returns>
+    public bool HasOverheadCover(Vector3 feet, float bodyHeight)
+    {
+        if (!float.IsFinite(feet.X) || !float.IsFinite(feet.Y) || !float.IsFinite(feet.Z) ||
+            !float.IsFinite(bodyHeight) || bodyHeight < 0f)
+        {
+            // A spot this broken cannot be proven to be in the open, and an unproven spot is
+            // exactly what this check exists to keep out of the world.
+            return true;
+        }
+
+        var from = new Vector3(feet.X, feet.Y, feet.Z + bodyHeight + DefaultSkyProbeHeight);
+        var to = new Vector3(feet.X, feet.Y, feet.Z + bodyHeight + 0.1f);
+        return SegmentRayCast(from, to, 0, staticOnly: true).Hit;
+    }
+
+    /// <summary>
+    ///     The physics materials whose terrain is never navigation or spawn ground, matched by
+    ///     the name the shipped database gives the material rather than by its id: <c>Water</c>
+    ///     (10011) and <c>Water_Shallow</c> (10048) tag the shallows and the sea/lake beds below
+    ///     the water line. A mob planned onto one would stand under water, invisible to whoever
+    ///     walks above it yet able to see and shoot them, so the navigation mesh is baked without
+    ///     these faces: no spawn point, and no path into the water either.
+    /// </summary>
+    private static bool IsUnderwaterMaterial(uint materialId) =>
+        SDBInterface.GetPhysicsMaterial(materialId)?.Name is "Water" or "Water_Shallow";
 
     public void HandleProjectileImpact(
         CharacterEntity source,

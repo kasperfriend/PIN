@@ -161,6 +161,32 @@ public class NavigationMeshTests
     }
 
     [Fact]
+    public void FacesWithAnExcludedMaterialAreNeverBakedIntoTheMesh()
+    {
+        // The beds under a zone's water line are collision but never ground: a mob planned onto
+        // one would stand under water, invisible to whoever walks above it yet able to see and
+        // shoot them. The two patches sit far apart so that neither is a disconnected island
+        // against the other - without the material filter both would be baked.
+        var mesh = new NavigationMesh(
+            Ground(size: 4f, material: 1)
+                .Concat(Quad(200f, 0f, 204f, 4f, z: -6f, material: 7))
+                .ToArray(),
+            _ => 1f,
+            materialExcluded: material => material == 7);
+
+        Assert.Equal(2, mesh.FaceCount);
+        Assert.All(Centroids(mesh), centroid => Assert.InRange(centroid.Z, -0.01f, 0.01f));
+
+        var unfiltered = new NavigationMesh(
+            Ground(size: 4f, material: 1)
+                .Concat(Quad(200f, 0f, 204f, 4f, z: -6f, material: 7))
+                .ToArray(),
+            _ => 1f);
+
+        Assert.Equal(4, unfiltered.FaceCount);
+    }
+
+    [Fact]
     public void AFaceWhoseBoundsAreAbsurdIsStillBakedInConstantTime()
     {
         // A face is entered in the runtime index in every cell its horizontal bounds cover, so that a
@@ -192,23 +218,24 @@ public class NavigationMeshTests
         Assert.NotEmpty(mesh.FindPath(new Vector3(1f, 1f, 0f), new Vector3(4f, 4f, 0f), (_, _) => false, 1.25f));
     }
 
-    private static NavigationTriangle[] Ground(float size = 10f) => Quad(0f, 0f, size, size, z: 0f);
+    private static NavigationTriangle[] Ground(float size = 10f, uint material = 1) =>
+        Quad(0f, 0f, size, size, z: 0f, material);
 
     private static NavigationTriangle[] Island(float x, float y, float z, float size) =>
         Quad(x, y, x + size, y + size, z);
 
-    private static NavigationTriangle[] Quad(float minX, float minY, float maxX, float maxY, float z) =>
+    private static NavigationTriangle[] Quad(float minX, float minY, float maxX, float maxY, float z, uint material = 1) =>
     [
         new NavigationTriangle(
             new Vector3(minX, minY, z),
             new Vector3(maxX, minY, z),
             new Vector3(minX, maxY, z),
-            1),
+            material),
         new NavigationTriangle(
             new Vector3(maxX, minY, z),
             new Vector3(maxX, maxY, z),
             new Vector3(minX, maxY, z),
-            1),
+            material),
     ];
 
     private static Vector3[] Centroids(NavigationMesh mesh)
