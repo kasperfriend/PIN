@@ -79,6 +79,12 @@ UdpHosts/GameServer/Systems/Spawning/Population/
 └── EntityManagerWorldPopulationSpawner.cs  spawns through EntityManager.SpawnCharacter
 ```
 
+The planner's threads and the zone's navigation bake both run on
+`Lib/Shared.Common/ParallelWork.cs`, the server's one place for bounded
+parallelism; [`MULTITHREADING.md`](MULTITHREADING.md) describes what is threaded,
+what deliberately is not, and the determinism contracts that keep the threaded
+results identical to the single-threaded ones.
+
 Supporting changes outside that folder:
 
 * `Physics/PhysicsEngine.cs` — `TryGetGroundSurface` (ground probe **with the
@@ -210,8 +216,13 @@ file lists each tile as both `ZoneChunkRefLayer` (0x10101) and `ZoneChunkRef2Lay
 loading both would stack walkable faces on tree canopies and in cavities under
 rocks. Duplicate faces at the same height keep one copy; a small disconnected
 island stacked over or under a larger surface (a canopy, an under-rock cavity) is
-removed, while a large disconnected layer (a balcony, a bridge) is kept. Up to
-`PlanWorkPerTick` (20,000) faces are accumulated per update.
+removed, while a large disconnected layer (a balcony, a bridge) is kept.
+
+The bake itself (all of it, not just the filtering above) uses the server's
+worker threads: the per-face passes are spread over them and merged back in
+index order, so the mesh is the mesh a single-threaded bake produces - asserted
+by `NavigationMeshTests.ABakeOnSeveralThreadsIsTheBakeOnOne`, and described in
+[`MULTITHREADING.md`](MULTITHREADING.md).
 
 That filtering is bounded, and it has to be: the bake is a step of loading the zone, on the
 thread that decides when the server stops refusing clients, and it runs over every walkable
@@ -300,6 +311,16 @@ index. Two servers with the same database and the same zone plan the same world,
 and a cell that is deactivated and reactivated shows the player the same NPCs in
 the same places rather than a reshuffle.
 
+**Threads and pacing.** Where that work *runs* changed: by default the whole plan
+is built on a background worker as soon as the zone has a player in it, and the
+two phases whose per-item work is real CPU - classifying each cell against the
+anchors around it, and the deployable cluster filter - are spread over the
+server's worker threads. The plan is identical to the one the tick used to build
+(asserted by tests), it simply takes the CPU time its work needs instead of one
+20,000-unit slice per 250 ms update. `WorldPopulationPlanOnWorkers=false` restores
+the old pacing and `ServerWorkerThreads` decides how many threads the work may
+use; [`MULTITHREADING.md`](MULTITHREADING.md) has the details.
+
 ---
 
 ## 4. Streaming around the players
@@ -319,8 +340,10 @@ Per update:
    zones are treated as absent for this purpose (with their own announcement naming
    the zones and the `ZoneId` fix); a mixed crowd populates around the players who
    are here, and `status` counts the rest (`1 players (1 in other zones: …)`).
-2. **Plan not complete?** One `Work` call, then return. Nothing spawns until the plan
-   exists.
+2. **Plan not complete?** Make sure the plan is being built - the worker is started
+   if there is not one running (the default), or one `Work` slice is spent on the
+   tick itself (`WorldPopulationPlanOnWorkers=false`) - then return. Nothing spawns
+   until the plan exists.
 3. **Seed the placement grid** from everything already in the world (the zone's
    authored NPCs, its deployables and outposts, every player), once per plan
    lifetime. Bodies that appear later are caught by the physical check instead,
@@ -492,7 +515,9 @@ values, not a comma.
 | `WorldPopulationSpawnBudget` | `4` | Most NPCs spawned per budget window |
 | `WorldPopulationSpawnBudgetWindowMs` | `100` | Length of the spawn budget window, in milliseconds |
 | `WorldPopulationTickIntervalMs` | `250` | Milliseconds between population streaming updates |
-| `WorldPopulationPlanWorkPerTick` | `20000` | Navigation faces processed by the incremental planner per update |
+| `WorldPopulationPlanWorkPerTick` | `20000` | Navigation faces (or cells) the planner processes per update when the plan is built on the shard's tick (`WorldPopulationPlanOnWorkers=false`); the on-worker default ignores it |
+| `WorldPopulationPlanOnWorkers` | `true` | Build the plan on a background worker instead of one budgeted slice per update, so the zone is populated in the time the plan's CPU work takes rather than in tens of seconds of updates. The plan is identical either way |
+| `ServerWorkerThreads` | `0` | Threads the navigation bake and the plan worker may use. `0` = one per processor minus the shard's own core, capped at 8; `1` = a single background thread; a larger number is used as given. See [`MULTITHREADING.md`](MULTITHREADING.md) |
 | `WorldPopulationMinSeparation` | `0.5` | Extra metres of gap required between two NPC bodies |
 | `WorldPopulationMinPlayerDistance` | `25` | Metres of clearance from every player before an NPC may be placed |
 | `WorldPopulationMaxPlacementAttempts` | `6` | Positions one slot tries in each placement round |
@@ -653,7 +678,7 @@ cannot be faithful to a spawn table that was never shipped.
 | Live NPCs | `MaxLiveNpcs` (150). A 150 m activation radius covers roughly 70 cells of 32 m (the cell keys considered are the radius' bounding box, 11×11 = 121, of which only the ones with planned ground activate), i.e. ~280 slots at the 4-per-cell cap. The 150-NPC ceiling leaves headroom for combat and reliable entity state; several players still share that cap |
 | Spawn rate | 4 per 100 ms = 40/s worst case. This keeps the scope-in burst below the ordinary zone's traffic budget rather than relying on the scope queue's 800/s drain capacity |
 | Update cost | One update per 250 ms: a bounding-box scan of cell keys per player, one queue drain under budget, one pass over the live slots |
-| Planning cost | Spread over ticks: 20,000 mesh faces and 20,000 cells per update, so a large zone is planned in a couple of seconds of updates that each stay well under a millisecond of extra work. Planning does not start until a player is in the zone |
+| Planning cost | By default: none on the tick. The plan is built on a background worker over `ServerWorkerThreads` threads and the tick only watches for it, so a large zone is planned in about the wall clock its CPU work takes (well under a second for a zone of a few hundred thousand faces) instead of in tens of seconds of budgeted updates. With `WorldPopulationPlanOnWorkers=false` the old pacing applies: 20,000 mesh faces and 20,000 cells per update, each update well under a millisecond of extra work. Planning does not start until a player is in the zone |
 | Plan memory | `MaxPlannedSlots` (20,000) slots, tens of thousands of cells; the drafts are dropped as soon as the cells exist |
 | Placement queries | The occupancy grid hashes at 1/4 of the cell size (min 4 m) and scans a range derived from the largest registered radius, so a query is a handful of hash cells rather than a scan of the zone |
 | Idle zone | Zero. No players means no plan work, no cells, no NPCs |
@@ -672,10 +697,12 @@ rules` for the client-only chunks.
 |------|--------|
 | `MonsterHabitatClassifierTests.cs` | the exclusion set, each habitat rule, behaviour arguments being stripped, an empty behaviour being eligible |
 | `SpawnOccupancyGridTests.cs` | radius + separation, a body bigger than a hash cell, the height window, remove/re-add/clear, negative coordinates |
-| `WorldPopulationPlannerTests.cs` | cells from ground, coverage and habitat fit, unplaceable rows, habitat/level from anchors, the level gradient, an outpost's capture radius is not settlement, the field fills with wilderness-only rows rather than the Melding's army, settlement over Melding, chunk refusals, the count/difficulty/slot caps, the budget-exempt expensive row, jitter bounds, the anchor fallback, work spreading, determinism |
-| `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, body separation, the level of the area, the placement work budget (one update spends no more than it, a deferred slot is not parked early, a small budget still fills), `ListLiveNear`, `status` (including the `Cover:` line and the suspension), the command |
+| `WorldPopulationPlannerTests.cs` | cells from ground, coverage and habitat fit, unplaceable rows, habitat/level from anchors, the level gradient, an outpost's capture radius is not settlement, the field fills with wilderness-only rows rather than the Melding's army, settlement over Melding, chunk refusals, the count/difficulty/slot caps, the budget-exempt expensive row, jitter bounds, the anchor fallback, work spreading, determinism, and the same plan on one thread and on eight (cell build and the deployable rule) |
+| `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, body separation, the level of the area, the placement work budget (one update spends no more than it, a deferred slot is not parked early, a small budget still fills), the same plan built on a worker as on the tick, `ListLiveNear`, `status` (including the `Cover:` line and the suspension), the command |
 | `PhysicsWorldPopulationTerrainTests.cs` | the placement checks against a real engine over floor and roof slabs: an open spot resolves, a roofed one is refused while the floor beside it still resolves, an arch above the probe's reach stays open, an unprovable spot is refused, and the overhead-cover rule suspends itself for a zone it reads as covered everywhere while a zone with open ground to approve keeps it |
 | `Fakes/WorldPopulationFakes.cs` | a fixed roster/anchor/level/chunk source, a plane of walkable ground with switches for refusing a placement, and a spawner that records spawns and can kill or despawn one |
+| `ParallelWorkTests.cs` | the bounded-parallelism helper the plan and the bake run on: every index exactly once, one thread runs inline, a body's exception comes back as itself, the slices cover the range in order, `0` resolves to automatic |
+| `NavigationMeshTests.cs` | the bake itself: snapping, adjacency, exclusions, duplicate surfaces, islands, the absurd-bounds guard - and that a bake on eight threads is the bake on one, face for face and route for route |
 
 The fakes are why the plan and the streaming can be asserted on without a loaded
 `clientdb.sd2` or a zone with collision: `IWorldPopulationDataSource`,

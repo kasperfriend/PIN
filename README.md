@@ -163,10 +163,18 @@ GitHub release archive it is at the root of the zip (`Publish\`), next to
 a fallback template.
 
 The remaining settings (`Port`, `ZoneId`, `ClientVersion`, `GrpcChannelAddress`,
-the `serilog:` logging keys, ...) still live in the XML `App.config`, which ships
-next to `GameServer.exe` as `GameServer.dll.config`. GameServer parses that file
-directly from disk, so editing it works the same way in a local build and in the
-single-file release build.
+the `serilog:` logging keys, `ServerWorkerThreads`, ...) still live in the XML
+`App.config`, which ships next to `GameServer.exe` as `GameServer.dll.config`.
+GameServer parses that file directly from disk, so editing it works the same way
+in a local build and in the single-file release build.
+
+`ServerWorkerThreads` (default `0` = automatic) is how many threads the server's
+own background work may use: the zone's navigation-mesh bake at startup and the
+world-population plan build. The default is one thread per processor minus the
+shard's own core, capped at eight, so a machine that also runs the game client
+keeps cores for it. See [`Docs/MULTITHREADING.md`](Docs/MULTITHREADING.md) for
+what is threaded, what deliberately is not, and why the results are the same
+either way.
 
 ### Connecting with friends
 

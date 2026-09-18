@@ -133,6 +133,7 @@ public class GameServerModule : Module
             }
 
             ApplyWorldPopulationSettings(appSettings, settings);
+            ApplyServerWorkerSettings(appSettings, settings);
 
             if (appSettings["AssetDBPath"] != null)
             {
@@ -347,6 +348,19 @@ public class GameServerModule : Module
         ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationDeployableInfluenceRadius", value => settings.WorldPopulationDeployableInfluenceRadius = value);
         ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationOutpostSettlementRadius", value => settings.WorldPopulationOutpostSettlementRadius = value);
         ApplyWorldPopulationFloatSetting(appSettings, "WorldPopulationMeldingInfluenceRadius", value => settings.WorldPopulationMeldingInfluenceRadius = value);
+    }
+
+    /// <summary>
+    ///     Apply the entries that decide how many threads the server's own background work uses.
+    ///     Kept next to the population settings it bounds, and separate from container construction
+    ///     for the same reason: the operator-facing keys are regression-tested.
+    /// </summary>
+    /// <param name="appSettings">The appSettings entries read from the XML configuration file.</param>
+    /// <param name="settings">Settings to fill in.</param>
+    internal static void ApplyServerWorkerSettings(NameValueCollection appSettings, GameServerSettings settings)
+    {
+        ApplyWorldPopulationIntSetting(appSettings, "ServerWorkerThreads", value => settings.ServerWorkerThreads = value);
+        ApplyWorldPopulationBoolSetting(appSettings, "WorldPopulationPlanOnWorkers", value => settings.WorldPopulationPlanOnWorkers = value);
     }
 
     /// <summary>

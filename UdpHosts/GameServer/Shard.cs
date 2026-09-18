@@ -83,7 +83,7 @@ public class Shard : IShard
         Outposts = new ConcurrentDictionary<uint, IDictionary<uint, OutpostEntity>>();
         EventBus = new EventBus();
         var debugCallbacks = new DebugProjectileHitCallbacks(this);
-        Physics = new PhysicsEngine(EventBus, Settings.ZoneId, Settings.MapsPath, Settings.AssetDBPath, Settings.LoadMapsCollision, debugCallbacks, false, Settings.CachePath, Settings.ForceReloadZone);
+        Physics = new PhysicsEngine(EventBus, Settings.ZoneId, Settings.MapsPath, Settings.AssetDBPath, Settings.LoadMapsCollision, debugCallbacks, false, Settings.CachePath, Settings.ForceReloadZone, Settings.ServerWorkerThreads);
         AI = new AiEngine(this, EventBus);
         Movement = new MovementRelay(this);
         Abilities = new AbilitySystem(this);
@@ -106,13 +106,28 @@ public class Shard : IShard
         // World population: the zone's own monsters and NPCs, placed from the database and streamed
         // around the players. Built even when the setting is off - constructing it is one object and
         // no work, and having it is what lets \population on turn the feature on at runtime.
+        // The plan build runs on the server's worker threads unless the operator asked for the old
+        // tick-budgeted pacing, which is the number the service is handed here (0 = on the tick).
         var populationRules = StandardWorldPopulationRules.FromSettings(settings);
+        var planWorkerThreads = settings.WorldPopulationPlanOnWorkers
+            ? ParallelWork.Resolve(settings.ServerWorkerThreads)
+            : 0;
         WorldPopulation = new WorldPopulationService(
             this,
             populationRules,
             new SdbWorldPopulationDataSource(),
             new PhysicsWorldPopulationTerrain(Physics, populationRules),
-            new EntityManagerWorldPopulationSpawner(this, populationRules.DeactivationRadius));
+            new EntityManagerWorldPopulationSpawner(this, populationRules.DeactivationRadius),
+            planWorkerThreads);
+
+        Logger.Information(
+            "Server worker threads: {Threads} (configured {Configured}; 0 = automatic) - zone navigation bake {Bake}, world population plan {Plan}",
+            ParallelWork.Resolve(settings.ServerWorkerThreads),
+            settings.ServerWorkerThreads,
+            $"{ParallelWork.Resolve(settings.ServerWorkerThreads)} thread(s)",
+            planWorkerThreads > 0
+                ? $"{planWorkerThreads} thread(s) off the shard's tick"
+                : "on the shard's tick, one budget per update (WorldPopulationPlanOnWorkers is false)");
     }
 
     public DateTime StartTime => DateTimeExtensions.Epoch.AddSeconds(_startTime);

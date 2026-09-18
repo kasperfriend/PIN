@@ -26,6 +26,14 @@ public sealed class SdbWorldPopulationDataSource : IWorldPopulationDataSource
     /// <summary><c>clientonly</c> by chunk id, per zone, so a chunk lookup is a dictionary hit.</summary>
     private readonly Dictionary<uint, Dictionary<uint, byte>> _clientOnlyByZone = [];
 
+    /// <summary>
+    ///     Guards the one-time fill of <see cref="_clientOnlyByZone" />. The planner is asked about
+    ///     chunks from several threads at once when it is given worker threads
+    ///     (<see cref="WorldPopulationPlanner" />), and a dictionary filled by two of them at the same
+    ///     time is a corrupted dictionary, not a slow one.
+    /// </summary>
+    private readonly object _clientOnlyLock = new();
+
     public IReadOnlyList<WorldPopulationCandidate> GetCandidates()
     {
         var monsters = SDBInterface.GetMonsters();
@@ -201,19 +209,24 @@ public sealed class SdbWorldPopulationDataSource : IWorldPopulationDataSource
 
     private Dictionary<uint, byte> ClientOnlyByChunk(uint zoneId)
     {
-        if (_clientOnlyByZone.TryGetValue(zoneId, out var cached))
+        lock (_clientOnlyLock)
         {
-            return cached;
-        }
+            if (_clientOnlyByZone.TryGetValue(zoneId, out var cached))
+            {
+                return cached;
+            }
 
-        var links = new Dictionary<uint, byte>();
-        foreach (var link in SDBInterface.GetZoneChunks(zoneId))
-        {
-            links[link.Chunkid] = link.Clientonly;
-        }
+            var links = new Dictionary<uint, byte>();
+            foreach (var link in SDBInterface.GetZoneChunks(zoneId))
+            {
+                links[link.Chunkid] = link.Clientonly;
+            }
 
-        _clientOnlyByZone[zoneId] = links;
-        return links;
+            // Kept forever: these rows do not change while the server runs, and the zone is planned
+            // once. The lock is not on the fast path of anything that runs every tick.
+            _clientOnlyByZone[zoneId] = links;
+            return links;
+        }
     }
 
     private static string FactionName(uint factionId) =>

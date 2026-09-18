@@ -111,6 +111,28 @@ public class GameServerSettings
     public bool LoadZoneEntities { get; set; } = true;
 
     /// <summary>
+    ///    Threads the server's own background work may use: the zone's navigation-mesh bake at
+    ///    startup, and the world-population plan build that follows it. 0 (the default) is one
+    ///    thread per processor minus the one the shard loop runs on, capped at eight, so a machine
+    ///    that also runs the game client keeps cores for it; 1 keeps that work on a single background
+    ///    thread instead of several; a larger number is used as given. See
+    ///    <c>Docs/MULTITHREADING.md</c> for what is threaded and what deliberately is not.
+    /// </summary>
+    public int ServerWorkerThreads { get; set; }
+
+    /// <summary>
+    ///    Build the world-population plan on worker threads rather than one budgeted slice per shard
+    ///    tick (the default). The plan used to be drip-fed to the tick so that no single tick paid
+    ///    for it - which also meant a zone waited tens of seconds, at 20,000 faces per 250 ms, before
+    ///    the first NPC could be placed. On workers the same plan is built in about the time its CPU
+    ///    work takes (well under a second on a zone that is a million faces, spread over
+    ///    <see cref="ServerWorkerThreads"/> threads), the tick only watches for it, and the plan is
+    ///    identical either way. Set false to keep the old tick-budgeted behaviour, for a machine so
+    ///    busy that even a short background burst is unwelcome.
+    /// </summary>
+    public bool WorldPopulationPlanOnWorkers { get; set; } = true;
+
+    /// <summary>
     ///    Populate the zone with the monsters and NPCs the database says belong there, around the
     ///    players that are in it. Placement comes from the zone's own walkable collision, its
     ///    outposts/deployables/Melding perimeters and its chunk metadata; the roster is every

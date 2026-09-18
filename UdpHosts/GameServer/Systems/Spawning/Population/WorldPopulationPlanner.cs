@@ -4,6 +4,7 @@ using System.Linq;
 using System.Numerics;
 using GameServer.Systems.Ai;
 using Serilog;
+using Shared.Common;
 
 namespace GameServer.Systems.Spawning.Population;
 
@@ -41,7 +42,21 @@ namespace GameServer.Systems.Spawning.Population;
 ///         Everything is deterministic - roster order, cell order, jitter, facing, density picks - so
 ///         two servers with the same database and the same zone plan the same world.
 ///     </para>
+///     <para>
+///         <b>Threads.</b> The two phases whose per-item work is real CPU - the cell build, which
+///         classifies every patch of ground against the anchors around it and asks the database about
+///         its chunk and level, and the deployable cluster filter, which compares every deployable
+///         with every other - are run over <see cref="ParallelWork" /> when the planner is given more
+///         than one thread. Both write results into per-item slots and apply them in cell order
+///         afterwards, so the plan does not depend on how many threads built it; the surface scan
+///         stays on one thread, because it is a single dictionary append per face and the sums it
+///         keeps (a running total of the positions in a cell) are not associative across a split.
+///         Moving the whole build off the shard's tick is what makes the plan appear in a second
+///         instead of in tens of seconds of budgeted updates - see
+///         <see cref="WorldPopulationService" />.
+///     </para>
 /// </remarks>
+    /// </remarks>
 public sealed class WorldPopulationPlanner
 {
     /// <summary>
@@ -135,7 +150,20 @@ public sealed class WorldPopulationPlanner
     private readonly int _maxNpcsPerCell;
     private readonly int _maxPlannedSlots;
 
-    private Phase _phase = Phase.Surfaces;
+    /// <summary>
+    ///     How many threads the phases that take threads may use: 1 plans the way the planner always
+    ///     did, on the calling thread.
+    /// </summary>
+    private readonly int _degree;
+
+    /// <summary>
+    ///     Written by whoever builds the plan - the shard's tick, or the worker
+    ///     <see cref="WorldPopulationService" /> starts for it - and read by the tick to decide
+    ///     whether the plan is ready. Volatile because those are two different threads in the worker
+    ///     case, and the tick's read of it is what publishes every write the build made before it.
+    /// </summary>
+    private volatile Phase _phase = Phase.Surfaces;
+
     private int _nextSurface;
 
     /// <summary>Draft keys in ascending order, i.e. the order cells are built in.</summary>
@@ -144,12 +172,21 @@ public sealed class WorldPopulationPlanner
     private int _nextDraft;
     private bool _cellsPrepared;
 
+    /// <param name="maxDegreeOfParallelism">
+    ///     How many threads the cell build and the deployable cluster filter may use. 0 (the default)
+    ///     is automatic (see <see cref="ParallelWork" />); 1 keeps the whole plan on the calling
+    ///     thread, which is what a shard building its plan inside its own tick asks for. The terrain
+    ///     and the data source are then read from several threads at once, so both have to answer
+    ///     without writing shared state - the shipped implementations only read the loaded zone and
+    ///     the static database.
+    /// </param>
     public WorldPopulationPlanner(
         uint zoneId,
         IWorldPopulationRules rules,
         IWorldPopulationDataSource data,
         IWorldPopulationTerrain terrain,
-        ILogger logger)
+        ILogger logger,
+        int maxDegreeOfParallelism = 0)
     {
         _zoneId = zoneId;
         _rules = rules;
@@ -160,6 +197,7 @@ public sealed class WorldPopulationPlanner
         _cellSize = rules.CellSize > 0f ? rules.CellSize : 32f;
         _maxNpcsPerCell = Math.Max(1, rules.MaxNpcsPerCell);
         _maxPlannedSlots = Math.Max(1, rules.MaxPlannedSlots);
+        _degree = ParallelWork.Resolve(maxDegreeOfParallelism);
     }
 
     /// <summary>Whether the plan is finished.</summary>
@@ -260,6 +298,14 @@ public sealed class WorldPopulationPlanner
         draft.Count++;
     }
 
+    /// <summary>
+    ///     Builds up to <paramref name="budget" /> of the queued cells and applies them in cell
+    ///     order. This is the phase the planner's threads are for: classifying one cell against the
+    ///     anchors around it and asking the database about its chunk and level is a few microseconds
+    ///     of real work each, tens of thousands of times over.
+    /// </summary>
+    /// <param name="budget">Most cells to build in this call.</param>
+    /// <returns>How many cells were built.</returns>
     private int BuildCells(int budget)
     {
         if (!_cellsPrepared)
@@ -268,13 +314,42 @@ public sealed class WorldPopulationPlanner
             PrepareCells();
         }
 
-        int done = 0;
-        while (_nextDraft < _draftKeys.Count && done < budget)
+        int done = Math.Min(Math.Max(0, budget), _draftKeys.Count - _nextDraft);
+
+        if (done <= 0)
         {
-            BuildCell(_draftKeys[_nextDraft]);
-            _nextDraft++;
-            done++;
+            if (_nextDraft >= _draftKeys.Count)
+            {
+                FinishCells();
+            }
+
+            return 0;
         }
+
+        if (_degree > 1 && done > 1)
+        {
+            // Built on the workers, applied here: the ordering of the cell list, of the three habitat
+            // lists and of the refusal count is what the rest of the plan (and the tests that pin the
+            // plan down) reads, so the cells are built in parallel and folded in in ascending key
+            // order, exactly as the single-threaded loop folded them in.
+            var built = new CellBuildResult[done];
+            int first = _nextDraft;
+            ParallelWork.Range(done, _degree, offset => built[offset] = BuildCellDraft(_draftKeys[first + offset]));
+
+            for (int offset = 0; offset < done; offset++)
+            {
+                ApplyCell(built[offset]);
+            }
+        }
+        else
+        {
+            for (int offset = 0; offset < done; offset++)
+            {
+                ApplyCell(BuildCellDraft(_draftKeys[_nextDraft + offset]));
+            }
+        }
+
+        _nextDraft += done;
 
         if (_nextDraft >= _draftKeys.Count)
         {
@@ -283,6 +358,67 @@ public sealed class WorldPopulationPlanner
 
         return done;
     }
+
+    /// <summary>
+    ///     Builds one cell without touching any of the plan's own state, so several of them can be
+    ///     built at once: the cell (or the reason it was refused) is the whole result, and
+    ///     <see cref="ApplyCell" /> is what puts it into the plan, in order.
+    /// </summary>
+    /// <param name="key">The grid key of the draft to build.</param>
+    /// <returns>The cell, or the refusal the chunk rules gave it.</returns>
+    private CellBuildResult BuildCellDraft(long key)
+    {
+        var draft = _drafts[key];
+        var center = draft.Count > 0 ? draft.Sum / draft.Count : Vector3.Zero;
+
+        var cell = new WorldPopulationCell(key, draft.X, draft.Y)
+        {
+            Center = center,
+            SurfaceCount = draft.Count,
+            ChunkRecordId = _terrain.GetChunkRecordId(center),
+        };
+
+        if (!_data.IsChunkSpawnable(_zoneId, cell.ChunkRecordId))
+        {
+            return new CellBuildResult(null, key);
+        }
+
+        Classify(cell);
+        return new CellBuildResult(cell, key);
+    }
+
+    /// <summary>Folds one built cell into the plan, in cell order.</summary>
+    /// <param name="result">What <see cref="BuildCellDraft" /> returned for one draft.</param>
+    private void ApplyCell(CellBuildResult result)
+    {
+        if (result.Cell is not { } cell)
+        {
+            // The zone's chunk metadata says the server does not simulate this chunk.
+            RefusedChunkCells++;
+            return;
+        }
+
+        _cells[result.Key] = cell;
+        _keysInDensityOrder.Add(result.Key);
+
+        switch (cell.Habitat)
+        {
+            case WorldPopulationHabitat.Settlement:
+                _settlementCells.Add(cell);
+                break;
+            case WorldPopulationHabitat.Melding:
+                _meldingCells.Add(cell);
+                break;
+            default:
+                _wildernessCells.Add(cell);
+                break;
+        }
+    }
+
+    /// <summary>One draft built into a cell, or refused by the chunk rules.</summary>
+    /// <param name="Cell">The built cell, or null when the chunk rules refused its ground.</param>
+    /// <param name="Key">The grid key the draft came from.</param>
+    private readonly record struct CellBuildResult(WorldPopulationCell? Cell, long Key);
 
     /// <summary>Reads the data the cells are classified against and freezes the order the cells are built in.</summary>
     private void PrepareCells()
@@ -310,43 +446,6 @@ public sealed class WorldPopulationPlanner
         // meant to be the same plan everywhere.
         _draftKeys.AddRange(_drafts.Keys.OrderBy(draftKey => draftKey));
         _nextDraft = 0;
-    }
-
-    private void BuildCell(long key)
-    {
-        var draft = _drafts[key];
-        var center = draft.Count > 0 ? draft.Sum / draft.Count : Vector3.Zero;
-
-        var cell = new WorldPopulationCell(key, draft.X, draft.Y)
-        {
-            Center = center,
-            SurfaceCount = draft.Count,
-            ChunkRecordId = _terrain.GetChunkRecordId(center),
-        };
-
-        if (!_data.IsChunkSpawnable(_zoneId, cell.ChunkRecordId))
-        {
-            RefusedChunkCells++;
-            return;
-        }
-
-        Classify(cell);
-
-        _cells[key] = cell;
-        _keysInDensityOrder.Add(key);
-
-        switch (cell.Habitat)
-        {
-            case WorldPopulationHabitat.Settlement:
-                _settlementCells.Add(cell);
-                break;
-            case WorldPopulationHabitat.Melding:
-                _meldingCells.Add(cell);
-                break;
-            default:
-                _wildernessCells.Add(cell);
-                break;
-        }
     }
 
     private void FinishCells()
@@ -406,10 +505,12 @@ public sealed class WorldPopulationPlanner
             return anchors;
         }
 
-        var kept = new HashSet<int>();
-        int dropped = 0;
-
-        for (int i = 0; i < deployables.Count; i++)
+        // Every deployable asks the same question of every other one - the one pass in the plan that
+        // is genuinely quadratic - and the answers do not depend on each other, so they are asked in
+        // parallel. The result is the set of deployables that have company; which thread counted the
+        // neighbours of one of them cannot change whether it has any.
+        var company = new bool[deployables.Count];
+        ParallelWork.Range(deployables.Count, _degree, i =>
         {
             int peers = 0;
             for (int j = 0; j < deployables.Count && peers < DeployableClusterMinPeers; j++)
@@ -428,7 +529,15 @@ public sealed class WorldPopulationPlanner
                 }
             }
 
-            if (peers >= DeployableClusterMinPeers)
+            company[i] = peers >= DeployableClusterMinPeers;
+        });
+
+        var kept = new HashSet<int>();
+        int dropped = 0;
+
+        for (int i = 0; i < deployables.Count; i++)
+        {
+            if (company[i])
             {
                 kept.Add(deployables[i]);
             }

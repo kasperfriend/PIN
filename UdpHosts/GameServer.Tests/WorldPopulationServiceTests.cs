@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Threading;
@@ -55,7 +56,8 @@ public class WorldPopulationServiceTests
         StandardWorldPopulationRules rules = null,
         Vector3? playerAt = null,
         bool withPlayer = true,
-        ILogger logger = null)
+        ILogger logger = null,
+        int planWorkerThreads = 0)
     {
         var shard = new FakeShard();
 
@@ -78,7 +80,7 @@ public class WorldPopulationServiceTests
             SpawnBudget = 12,
         };
 
-        var service = new WorldPopulationService(shard, rules, data, terrain, spawner);
+        var service = new WorldPopulationService(shard, rules, data, terrain, spawner, planWorkerThreads);
 
         var world = new World
         {
@@ -154,6 +156,57 @@ public class WorldPopulationServiceTests
         Assert.Equal(64, world.Service.LiveCount);
         Assert.Equal(64, world.Service.Plan.SlotCount);
         Assert.All(world.Spawner.Spawned, spawn => Assert.True(spawn.Position.Length() < 200f));
+    }
+
+    [Fact]
+    public void Tick_BuildsTheSamePlanOnWorkersAsOnTheTick()
+    {
+        // The live shard hands the plan build to worker threads as soon as there is a player in the
+        // zone, because the tick-budgeted build it replaced took tens of seconds to produce the first
+        // NPC. The plan the workers publish has to be the plan the tick built - same cells, same
+        // slots, same monster rows in the same order - or a machine with a different core count
+        // populates the same zone differently.
+        var onTick = CreateWorld();
+        AddGroundAndRoster(onTick);
+        Tick(onTick, 8);
+
+        var onWorkers = CreateWorld(planWorkerThreads: 4);
+        AddGroundAndRoster(onWorkers);
+
+        var deadline = Stopwatch.StartNew();
+        while (!onWorkers.Service.Plan.IsComplete && deadline.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            Tick(onWorkers);
+            Thread.Sleep(1);
+        }
+
+        Assert.True(onWorkers.Service.Plan.IsComplete, "the plan worker never finished");
+
+        Assert.Equal(onTick.Service.Plan.CellCount, onWorkers.Service.Plan.CellCount);
+        Assert.Equal(onTick.Service.Plan.SlotCount, onWorkers.Service.Plan.SlotCount);
+        Assert.Equal(onTick.Service.Plan.PlacedRosterCount, onWorkers.Service.Plan.PlacedRosterCount);
+
+        foreach (var (key, cell) in onTick.Service.Plan.Cells)
+        {
+            Assert.True(
+                onWorkers.Service.Plan.Cells.TryGetValue(key, out var other),
+                $"cell {key} is missing from the worker's plan");
+            Assert.Equal(cell.Center, other.Center);
+            Assert.Equal(cell.Habitat, other.Habitat);
+            Assert.Equal(cell.Level, other.Level);
+            Assert.Equal(cell.Slots.Count, other.Slots.Count);
+
+            for (int i = 0; i < cell.Slots.Count; i++)
+            {
+                Assert.Equal(cell.Slots[i].Candidate.MonsterId, other.Slots[i].Candidate.MonsterId);
+                Assert.Equal(cell.Slots[i].Anchor, other.Slots[i].Anchor);
+            }
+        }
+
+        // And the plan streams in: once it is up, the ticks around the player spawn as usual.
+        Tick(onWorkers, 4);
+
+        Assert.NotEmpty(onWorkers.Spawner.Spawned);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System.Numerics;
 using Serilog;
+using Shared.Common;
 
 namespace Shared.Collision.Navigation;
 
@@ -24,6 +25,19 @@ namespace Shared.Collision.Navigation;
 ///     number of comparisons. A zone that spends that budget keeps the faces it had not reached and
 ///     says so in the log; an unfiltered patch of ground is a worse outcome than a server that
 ///     never finishes starting, which is what an unbounded version of these passes looked like.
+///     <para>
+///         <b>Threads.</b> A millisecond budget is not the only lever any more: the passes that are
+///         pure per-face work over read-only input - the face filter, the duplicate check, the edge
+///         map and the spatial index - are run over as many threads as the shard was configured with
+///         (<see cref="maxDegreeOfParallelism"/>), and the zone's bake is what the server's own
+///         worker threads exist for in the first place. Every one of them writes only the slots its
+///         own index owns or merges its per-thread state back in index order, so the mesh a
+///         multi-threaded bake produces is the mesh a single-threaded bake produces, face for face -
+///         which is asserted by a test rather than hoped for. The stacked-island pass stays on one
+///         thread: its union-find and its shared candidate budget are a single state, and threading
+///         through them would buy a fraction of the bake's time at the price of a result that
+///         depends on which thread got there first.
+///     </para>
 /// </remarks>
 public sealed class NavigationMesh
 {
@@ -100,6 +114,13 @@ public sealed class NavigationMesh
     private NavFace[] _faces;
     private readonly Dictionary<SpatialKey, List<int>> _spatial = [];
 
+    /// <summary>
+    ///     How many threads this mesh's passes may use: 1 makes every pass run inline, the way the
+    ///     bake ran before the worker threads existed, which is what a test comparing the two bakes
+    ///     asks for.
+    /// </summary>
+    private readonly int _degree;
+
     /// <param name="materialExcluded">
     ///     Decides, by physics material id, whether a triangle is collision but never navigation
     ///     ground. The zone tags the beds under its water line with the Water materials: a mob
@@ -107,12 +128,21 @@ public sealed class NavigationMesh
     ///     able to see and shoot them, so those faces join neither this mesh nor the spawn data
     ///     the mesh enumerates. Nothing is excluded when omitted.
     /// </param>
+    /// <param name="maxDegreeOfParallelism">
+    ///     How many threads the face filter, the duplicate check, the edge map and the spatial index
+    ///     may use. 0 (the default) is automatic: one thread per processor minus the one the shard
+    ///     loop runs on, capped at <see cref="ParallelWork.MaxAutomaticDegree" />. The three
+    ///     delegates above are then called from several threads at once, so they must not write to
+    ///     anything (the ones the server passes in only read the static database and the zone
+    ///     loader's own exclusion list). 1 keeps the bake single-threaded.
+    /// </param>
     public NavigationMesh(
         IEnumerable<NavigationTriangle> triangles,
         Func<uint, float> materialCost,
         Func<Vector3, bool>? excludedAt = null,
         float minimumWalkableNormalZ = 0.35f,
-        Func<uint, bool>? materialExcluded = null)
+        Func<uint, bool>? materialExcluded = null,
+        int maxDegreeOfParallelism = 0)
     {
         if (triangles == null)
         {
@@ -120,38 +150,10 @@ public sealed class NavigationMesh
         }
 
         materialCost ??= _ => 1f;
+        _degree = ParallelWork.Resolve(maxDegreeOfParallelism);
+
         var source = triangles.ToArray();
-        var faces = new List<NavFace>(source.Length);
-
-        foreach (var triangle in source)
-        {
-            if (materialExcluded?.Invoke(triangle.PhysicsMaterialId) == true)
-            {
-                continue;
-            }
-
-            var normal = triangle.Normal;
-            if (normal.Z < minimumWalkableNormalZ ||
-                !float.IsFinite(normal.Z) ||
-                TriangleArea(triangle) < 0.0001f)
-            {
-                continue;
-            }
-
-            var centroid = triangle.Centroid;
-            if (excludedAt?.Invoke(centroid) == true)
-            {
-                continue;
-            }
-
-            float cost = materialCost(triangle.PhysicsMaterialId);
-            if (!float.IsFinite(cost) || cost < 0f)
-            {
-                cost = 1f;
-            }
-
-            faces.Add(new NavFace(triangle, centroid, MathF.Max(cost, 0.001f)));
-        }
+        var faces = FilterFaces(source, materialCost, excludedAt, materialExcluded, minimumWalkableNormalZ);
 
         // Same surface twice first, then the patches that float over or hang under the ground, then
         // the adjacency the pathfinder walks. The edge map the adjacency is built from is collected
@@ -168,6 +170,89 @@ public sealed class NavigationMesh
         _faces = Compact(_faces, MarkStackedIslands(edges), out var compactedFrom);
         BuildAdjacency(edges, edgePoints, compactedFrom);
         BuildSpatialIndex();
+
+        if (_degree > 1)
+        {
+            _logger.Information(
+                "Navigation mesh: baked {FaceCount} walkable faces out of {TriangleCount} collision triangles on {Threads} worker thread(s)",
+                _faces.Length,
+                source.Length,
+                _degree);
+        }
+    }
+
+    /// <summary>
+    ///     The faces the mesh keeps, in input order: collision triangles that are walkable ground,
+    ///     are not excluded by the zone's own metadata and have a usable material cost.
+    /// </summary>
+    /// <remarks>
+    ///     The heaviest of the parallel passes in practice, because it is the only one that consults
+    ///     the database twice per triangle (the material's pathing cost, and whether the material is
+    ///     water) and asks the zone loader about every centroid. Each index writes its own slot in
+    ///     the candidate array; the compaction afterwards walks that array in index order, so the
+    ///     result is the same face list a serial loop would have built.
+    /// </remarks>
+    private NavFace[] FilterFaces(
+        NavigationTriangle[] source,
+        Func<uint, float> materialCost,
+        Func<Vector3, bool>? excludedAt,
+        Func<uint, bool>? materialExcluded,
+        float minimumWalkableNormalZ)
+    {
+        var candidates = new NavFace?[source.Length];
+
+        ParallelWork.Range(source.Length, _degree, index =>
+        {
+            var triangle = source[index];
+
+            if (materialExcluded?.Invoke(triangle.PhysicsMaterialId) == true)
+            {
+                return;
+            }
+
+            var normal = triangle.Normal;
+            if (normal.Z < minimumWalkableNormalZ ||
+                !float.IsFinite(normal.Z) ||
+                TriangleArea(triangle) < 0.0001f)
+            {
+                return;
+            }
+
+            var centroid = triangle.Centroid;
+            if (excludedAt?.Invoke(centroid) == true)
+            {
+                return;
+            }
+
+            float cost = materialCost(triangle.PhysicsMaterialId);
+            if (!float.IsFinite(cost) || cost < 0f)
+            {
+                cost = 1f;
+            }
+
+            candidates[index] = new NavFace(triangle, centroid, MathF.Max(cost, 0.001f));
+        });
+
+        int kept = 0;
+        for (int index = 0; index < candidates.Length; index++)
+        {
+            if (candidates[index] != null)
+            {
+                kept++;
+            }
+        }
+
+        var faces = new NavFace[kept];
+        int write = 0;
+        for (int index = 0; index < candidates.Length; index++)
+        {
+            if (candidates[index] is { } face)
+            {
+                faces[write++] = face;
+            }
+        }
+
+        return faces;
     }
 
     public int FaceCount => _faces.Length;
@@ -428,6 +513,14 @@ public sealed class NavigationMesh
     ///     unmatched, and that costs one extra face in the mesh: the zone's own chunk references are
     ///     deduplicated while it is read, so nothing here is the only thing standing between a tile
     ///     and its own copy.
+    /// <para>
+    ///         The pass is parallelized over the buckets, not over the faces: a bucket is the state
+    ///         this pass keeps (its largest face so far), so the faces of one bucket have to be judged
+    ///         in ascending face order by one thread, while different buckets share nothing but the
+    ///         read-only face array. Every bucket lands in one partition of its key's hash, and each
+    ///         partition walks the faces in the same ascending order the serial pass walked them, so
+    ///         the drops are the serial pass's drops.
+    ///     </para>
     /// </remarks>
     private bool[] MarkDuplicateFaces()
     {
@@ -437,12 +530,44 @@ public sealed class NavigationMesh
             return drop;
         }
 
+        if (_degree <= 1)
+        {
+            JudgeDuplicateFaces(0, null, drop);
+            return drop;
+        }
+
+        // The buckets are partitioned, so the key of every face is needed before the passes that
+        // judge them start: computed once, in parallel, instead of once per partition.
+        var keys = new DuplicateKey[_faces.Length];
+        ParallelWork.Range(keys.Length, _degree, index => keys[index] = DuplicateKey.Of(_faces[index].Centroid));
+
+        ParallelWork.Range(_degree, _degree, partition => JudgeDuplicateFaces(partition, keys, drop));
+
+        return drop;
+    }
+
+    /// <summary>
+    ///     Judges the duplicate buckets of one partition - or, when <paramref name="keys" /> is null,
+    ///     all of them, on the calling thread. Writes only its own buckets' entries in
+    ///     <paramref name="drop" />.
+    /// </summary>
+    /// <param name="partition">Bucket partition to judge; ignored when <paramref name="keys" /> is null.</param>
+    /// <param name="keys">The quantised centroid of every face, or null for the single-threaded pass.</param>
+    /// <param name="drop">Receives the faces that are the smaller copy of their surface.</param>
+    private void JudgeDuplicateFaces(int partition, DuplicateKey[]? keys, bool[] drop)
+    {
         // Bucket -> the largest face in it that is still standing.
         var largest = new Dictionary<DuplicateKey, int>();
+
         for (int i = 0; i < _faces.Length; i++)
         {
+            var key = keys?[i] ?? DuplicateKey.Of(_faces[i].Centroid);
+            if (keys != null && BucketPartitionOf(key) != partition)
+            {
+                continue;
+            }
+
             var centroid = _faces[i].Centroid;
-            var key = DuplicateKey.Of(centroid);
             float area = TriangleArea(_faces[i].Triangle);
 
             if (largest.TryGetValue(key, out int other) && !drop[other])
@@ -472,9 +597,18 @@ public sealed class NavigationMesh
                 largest[key] = i;
             }
         }
-
-        return drop;
     }
+
+    /// <summary>
+    ///     Which partition judges a bucket. Mixing the three quantised coordinates keeps neighbouring
+    ///     buckets - adjacent patches of the same duplicated surface - in different partitions, which
+    ///     is what balances the pass; the value only decides who does the work, never the work's
+    ///     outcome.
+    /// </summary>
+    private int BucketPartitionOf(DuplicateKey key) => (int)((((uint)key.X * 73856093u) ^
+                                                            ((uint)key.Y * 19349663u) ^
+                                                            ((uint)key.Z * 83492791u)) %
+                                                           (uint)_degree);
 
     /// <summary>
     ///     Marks the faces of disconnected walkable patches that sit over or under a larger surface:
@@ -617,19 +751,64 @@ public sealed class NavigationMesh
     private Dictionary<SpatialKey, List<int>> IndexFacesByCentroid()
     {
         var spatial = new Dictionary<SpatialKey, List<int>>();
-        for (int index = 0; index < _faces.Length; index++)
-        {
-            var key = ToSpatialKey(_faces[index].Centroid);
-            if (!spatial.TryGetValue(key, out var faces))
-            {
-                faces = [];
-                spatial[key] = faces;
-            }
 
-            faces.Add(index);
+        if (_degree <= 1)
+        {
+            IndexFacesByCentroidRange(0, _faces.Length, spatial);
+            return spatial;
         }
 
+        var slices = ParallelWork.Slices(_faces.Length, _degree);
+        var localIndex = new Dictionary<SpatialKey, List<int>>[slices.Length];
+
+        ParallelWork.Range(slices.Length, slices.Length, slice =>
+        {
+            var local = new Dictionary<SpatialKey, List<int>>();
+            var (from, count) = slices[slice];
+            IndexFacesByCentroidRange(from, from + count, local);
+            localIndex[slice] = local;
+        });
+
+        MergeSliceIndex(spatial, localIndex);
         return spatial;
+    }
+
+    /// <summary>Enters the faces in <c>[from, to)</c> into the given centroid index.</summary>
+    /// <param name="from">First face index to enter, inclusive.</param>
+    /// <param name="to">Last face index to enter, exclusive.</param>
+    /// <param name="index">Index to fill; the mesh's own in the single-threaded pass.</param>
+    private void IndexFacesByCentroidRange(int from, int to, Dictionary<SpatialKey, List<int>> index)
+    {
+        for (int face = from; face < to; face++)
+        {
+            AddFaceToCell(index, ToSpatialKey(_faces[face].Centroid), face);
+        }
+    }
+
+    /// <summary>
+    ///     Merges a pass's per-slice cell indexes into one, in slice order, so every cell's face list
+    ///     comes out ascending - the order the serial pass built it, and the order the scans over it
+    ///     (the stacked-island candidate walk, the point queries) depend on.
+    /// </summary>
+    /// <param name="target">The mesh's own index; receives every slice's faces.</param>
+    /// <param name="slices">The per-slice indexes, ascending by the face indices they cover.</param>
+    private static void MergeSliceIndex(
+        Dictionary<SpatialKey, List<int>> target,
+        Dictionary<SpatialKey, List<int>>[] slices)
+    {
+        for (int slice = 0; slice < slices.Length; slice++)
+        {
+            foreach (var pair in slices[slice])
+            {
+                if (target.TryGetValue(pair.Key, out var faces))
+                {
+                    faces.AddRange(pair.Value);
+                    continue;
+                }
+
+                target[pair.Key] = pair.Value;
+            }
+        }
     }
 
     /// <summary>
@@ -705,11 +884,67 @@ public sealed class NavigationMesh
     ///     pass needs the grouping to know which faces are connected, and needs nothing else: the
     ///     adjacency itself is only worth building once the faces that survive have been compacted.
     /// </summary>
+    /// <remarks>
+    ///     Three hashed inserts per face, which is why this one gets threads: the range is cut into
+    ///     contiguous slices, each slice fills its own maps, and the slices are merged back in slice
+    ///     order. Merging in that order matters - a slice covers an ascending run of face indices, so
+    ///     appending every slice's faces to a shared edge leaves the same ascending list the serial
+    ///     pass built, and the map is filled in the same order (the first slice that saw an edge is
+    ///     the first face that had it) - which is what keeps the adjacency the pathfinder walks, and
+    ///     therefore the routes it finds, identical to the single-threaded bake's.
+    /// </remarks>
     private void CollectSharedEdges(
         Dictionary<EdgeKey, List<int>> edges,
         Dictionary<EdgeKey, (Vector3 A, Vector3 B)> edgePoints)
     {
-        for (int index = 0; index < _faces.Length; index++)
+        if (_degree <= 1)
+        {
+            CollectSharedEdgesRange(0, _faces.Length, edges, edgePoints);
+            return;
+        }
+
+        var slices = ParallelWork.Slices(_faces.Length, _degree);
+        var localEdges = new Dictionary<EdgeKey, List<int>>[slices.Length];
+        var localPoints = new Dictionary<EdgeKey, (Vector3 A, Vector3 B)>[slices.Length];
+
+        ParallelWork.Range(slices.Length, slices.Length, slice =>
+        {
+            var sliceEdges = new Dictionary<EdgeKey, List<int>>();
+            var slicePoints = new Dictionary<EdgeKey, (Vector3 A, Vector3 B)>();
+            var (from, count) = slices[slice];
+            CollectSharedEdgesRange(from, from + count, sliceEdges, slicePoints);
+            localEdges[slice] = sliceEdges;
+            localPoints[slice] = slicePoints;
+        });
+
+        for (int slice = 0; slice < slices.Length; slice++)
+        {
+            foreach (var pair in localEdges[slice])
+            {
+                if (edges.TryGetValue(pair.Key, out var shared))
+                {
+                    shared.AddRange(pair.Value);
+                    continue;
+                }
+
+                edges[pair.Key] = pair.Value;
+                edgePoints[pair.Key] = localPoints[slice][pair.Key];
+            }
+        }
+    }
+
+    /// <summary>Collects the shared edges of the faces in <c>[from, to)</c> into the given maps.</summary>
+    /// <param name="from">First face index to collect, inclusive.</param>
+    /// <param name="to">Last face index to collect, exclusive.</param>
+    /// <param name="edges">Receives the faces of each quantised edge.</param>
+    /// <param name="edgePoints">Receives the two endpoints of each quantised edge.</param>
+    private void CollectSharedEdgesRange(
+        int from,
+        int to,
+        Dictionary<EdgeKey, List<int>> edges,
+        Dictionary<EdgeKey, (Vector3 A, Vector3 B)> edgePoints)
+    {
+        for (int index = from; index < to; index++)
         {
             var triangle = _faces[index].Triangle;
             AddEdge(edges, edgePoints, EdgeKey.Create(triangle.A, triangle.B), index, triangle.A, triangle.B);
@@ -786,12 +1021,43 @@ public sealed class NavigationMesh
     ///     are absurd, or not finite at all, which is exactly what turns this loop into a walk over
     ///     billions of cells - is entered at its centroid cell alone, where it can still be found by
     ///     anything near its middle.
+    ///     <para>
+    ///     Runs over the same slice-and-merge shape as the edge map, and for the same reason: every
+    ///     cell's list comes out in ascending face order, which is the order the queries over it
+    ///     (<see cref="FindContainingFace"/>, <see cref="FindNearestFace"/>) break their ties in.
+    ///     </para>
     /// </summary>
     private void BuildSpatialIndex()
     {
-        for (int index = 0; index < _faces.Length; index++)
+        if (_degree <= 1)
         {
-            var triangle = _faces[index].Triangle;
+            BuildSpatialIndexRange(0, _faces.Length, _spatial);
+            return;
+        }
+
+        var slices = ParallelWork.Slices(_faces.Length, _degree);
+        var localIndex = new Dictionary<SpatialKey, List<int>>[slices.Length];
+
+        ParallelWork.Range(slices.Length, slices.Length, slice =>
+        {
+            var local = new Dictionary<SpatialKey, List<int>>();
+            var (from, count) = slices[slice];
+            BuildSpatialIndexRange(from, from + count, local);
+            localIndex[slice] = local;
+        });
+
+        MergeSliceIndex(_spatial, localIndex);
+    }
+
+    /// <summary>Enters the faces in <c>[from, to)</c> into the given cell index.</summary>
+    /// <param name="from">First face index to enter, inclusive.</param>
+    /// <param name="to">Last face index to enter, exclusive.</param>
+    /// <param name="index">Index to fill; the mesh's own in the single-threaded pass.</param>
+    private void BuildSpatialIndexRange(int from, int to, Dictionary<SpatialKey, List<int>> index)
+    {
+        for (int face = from; face < to; face++)
+        {
+            var triangle = _faces[face].Triangle;
             int minX = FloorCell(MathF.Min(triangle.A.X, MathF.Min(triangle.B.X, triangle.C.X)));
             int maxX = FloorCell(MathF.Max(triangle.A.X, MathF.Max(triangle.B.X, triangle.C.X)));
             int minY = FloorCell(MathF.Min(triangle.A.Y, MathF.Min(triangle.B.Y, triangle.C.Y)));
@@ -799,7 +1065,7 @@ public sealed class NavigationMesh
 
             if ((long)maxX - minX > MaxIndexSpanCells || (long)maxY - minY > MaxIndexSpanCells)
             {
-                AddFaceToCell(ToSpatialKey(_faces[index].Centroid), index);
+                AddFaceToCell(index, ToSpatialKey(_faces[face].Centroid), face);
                 continue;
             }
 
@@ -807,18 +1073,18 @@ public sealed class NavigationMesh
             {
                 for (int y = minY; y <= maxY; y++)
                 {
-                    AddFaceToCell(new SpatialKey(x, y), index);
+                    AddFaceToCell(index, new SpatialKey(x, y), face);
                 }
             }
         }
     }
 
-    private void AddFaceToCell(SpatialKey key, int faceIndex)
+    private static void AddFaceToCell(Dictionary<SpatialKey, List<int>> index, SpatialKey key, int faceIndex)
     {
-        if (!_spatial.TryGetValue(key, out var faces))
+        if (!index.TryGetValue(key, out var faces))
         {
             faces = [];
-            _spatial[key] = faces;
+            index[key] = faces;
         }
 
         faces.Add(faceIndex);
