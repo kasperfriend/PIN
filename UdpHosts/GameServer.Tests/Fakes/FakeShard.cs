@@ -101,7 +101,12 @@ public sealed class FakeShard : IShard
 
     public IDictionary<uint, IDictionary<uint, OutpostEntity>> Outposts { get; } = new ConcurrentDictionary<uint, IDictionary<uint, OutpostEntity>>();
 
-    public PhysicsEngine Physics { get; } = null;
+    /// <summary>
+    ///     Null unless a test loads a real engine into it: the collision-backed navigation and the
+    ///     spawn snap both branch on it, so the tests that exercise them against real geometry set
+    ///     one here instead of faking the probes.
+    /// </summary>
+    public PhysicsEngine Physics { get; set; } = null;
 
     public AiEngine AI { get; set; }
 

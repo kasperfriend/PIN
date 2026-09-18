@@ -65,6 +65,49 @@ public partial class PhysicsEngine
     private const float DefaultSkyProbeHeight = 12f;
 
     /// <summary>
+    ///     How far below a query <see cref="TryGetGroundSurface" />'s winding fallback reaches when
+    ///     the downward probe sees nothing. The fallback answers "the surface the feet rest on" for
+    ///     a triangle wound away from the sky, and this is the one piece of that query the caller's
+    ///     own window cannot bound: a spawn snap with a ten kilometre window would otherwise settle
+    ///     on whatever floor sits at the bottom of it. Five metres is deeper than any step, spawn
+    ///     jitter or body height the callers probe for.
+    /// </summary>
+    private const float GroundBackfaceProbeReach = 5f;
+
+    /// <summary>
+    ///     How many stacked surfaces <see cref="TryGetGroundSurface" />'s winding fallback walks
+    ///     upward before it settles on the highest one found. One is the usual answer (the surface
+    ///     under the query); the rest cover a floor stacked under another floor inside the reach.
+    /// </summary>
+    private const int GroundBackfaceProbes = 4;
+
+    /// <summary>
+    ///     Gap left between the winding fallback's re-casts so the surface it just hit is not hit
+    ///     again by the next probe up.
+    /// </summary>
+    private const float GroundBackfaceProbeEpsilon = 0.001f;
+
+    /// <summary>
+    ///     How many of a zone's walkable navigation faces the load-time winding report samples. A
+    ///     few hundred is enough to tell a zone whose ground the downward ray can see from one whose
+    ///     ground it cannot, and it costs that many ray casts once, at load.
+    /// </summary>
+    private const int GroundVisibilitySamples = 256;
+
+    /// <summary>
+    ///     How far above and below a sampled face's own height the load-time report's probes reach.
+    ///     Wide enough to span the jitter of a face centroid and the mesh's own spacing.
+    /// </summary>
+    private const float GroundVisibilityProbeReach = 2f;
+
+    /// <summary>
+    ///     How close to the sampled face's own height a probe's hit has to land to count as that
+    ///     face's ground, rather than as some other surface (a roof, a deck, a floor beneath it)
+    ///     that happens to sit inside the probe's window.
+    /// </summary>
+    private const float GroundVisibilityTolerance = 1f;
+
+    /// <summary>
     ///     Fractions of the body height the clearance probes are fired at: ankle, waist, shoulder.
     ///     Three heights catch both a low crate the body would stand inside and a barrier it would
     ///     poke its head through.
@@ -197,6 +240,8 @@ public partial class PhysicsEngine
                 _zoneLoader.NavigationTriangles.Count,
                 _navigationMesh?.FaceCount ?? 0,
                 bakeStarted.Elapsed);
+
+            LogGroundVisibility(zoneId);
         }
         else
         {
@@ -502,21 +547,96 @@ public partial class PhysicsEngine
     /// <remarks>
     ///     Used to place freshly spawned mobs on the terrain. The probe only tests static
     ///     geometry so a player or another mob standing nearby cannot be mistaken for the ground.
+    ///     Either face winding is seen - see <see cref="TryGetGroundSurface" />, whose two-way
+    ///     probe this is a thin wrapper over.
     /// </remarks>
     public Vector3? FindGround(Vector3 position, ulong ignoreEntityId = 0)
     {
-        const float searchUp = 10_000f;
-        const float searchDown = 10_000f;
+        return TryGetGroundSurface(position, out var ground, out _, 10_000f, 10_000f, ignoreEntityId)
+            ? ground
+            : null;
+    }
 
-        var from = new Vector3(position.X, position.Y, position.Z + searchUp);
-        var to = new Vector3(position.X, position.Y, position.Z - searchDown);
-        var hit = SegmentRayCast(from, to, ignoreEntityId, staticOnly: true);
-        if (!hit.Hit)
+    /// <summary>
+    ///     Says which way the loaded zone's ground was baked, by asking both halves of the same
+    ///     question about a sample of the faces the navigation mesh kept: does the straight downward
+    ///     probe see the face's own surface, and does the two-way probe.
+    /// </summary>
+    /// <remarks>
+    ///     The two numbers should agree, and on a zone whose ground is wound towards the sky they do,
+    ///     which makes this line a formality. They cannot agree on the rest. The navigation mesh
+    ///     decides walkable ground with a cross product of one handedness
+    ///     (<see cref="Shared.Collision.Navigation.NavigationTriangle.Normal" />) while the physics
+    ///     mesh's ray test uses the other, and both read the bake's vertices in the same order - so a
+    ///     face the mesh calls walkable is one a downward ray sees from below (see
+    ///     <see cref="TryGetGroundSurface" />). A zone like that is a zone where every probe that
+    ///     assumed ground faces up found nothing under a standing body: a mob that exists, shoots, and
+    ///     cannot walk, and a spawn snap that dropped bodies onto whatever floor the down ray could
+    ///     see. Printed rather than inferred because it is the one number that tells an operator which
+    ///     kind of zone they have.
+    /// </remarks>
+    /// <param name="zoneId">The zone this report is about.</param>
+    private void LogGroundVisibility(uint zoneId)
+    {
+        var mesh = _navigationMesh;
+        if (mesh == null || mesh.FaceCount <= 0)
         {
-            return null;
+            return;
         }
 
-        return new Vector3(position.X, position.Y, hit.HitPosition.Z);
+        int stride = Math.Max(1, mesh.FaceCount / GroundVisibilitySamples);
+        List<Vector3> centroids = [];
+        for (int face = 0; face < mesh.FaceCount && centroids.Count < GroundVisibilitySamples; face += stride)
+        {
+            if (mesh.TryGetFaceCentroid(face, out var centroid))
+            {
+                centroids.Add(centroid);
+            }
+        }
+
+        var (downward, twoWay) = MeasureGroundVisibility(centroids);
+        _logger.Information(
+            "Zone {ZoneId}: of {Sampled} sampled walkable faces, the straight downward ground probe sees {SeenDownward} at the face's own height and the two-way probe sees {SeenTwoWay} - the difference is ground the bake wound away from the sky, which only the two-way probe finds",
+            zoneId,
+            centroids.Count,
+            downward,
+            twoWay);
+    }
+
+    /// <summary>
+    ///     The measurement behind <see cref="LogGroundVisibility" />: how many of
+    ///     <paramref name="points" /> the straight downward probe finds at their own height, and how
+    ///     many of them the two-way probe (see <see cref="TryGetGroundSurface" />) does.
+    /// </summary>
+    /// <remarks>
+    ///     Internal rather than private because the two numbers are exactly the finding this probe
+    ///     exists for, and a test can hold a piece of ground of known winding to them without a zone
+    ///     file: a sheet wound away from the sky is seen by the second probe alone.
+    /// </remarks>
+    /// <param name="points">Points a face of the ground could be probed at.</param>
+    /// <returns>The count the downward probe found, then the count the two-way probe found.</returns>
+    internal (int SeenDownward, int SeenTwoWay) MeasureGroundVisibility(IReadOnlyList<Vector3> points)
+    {
+        int downward = 0;
+        int twoWay = 0;
+        foreach (var point in points)
+        {
+            var from = new Vector3(point.X, point.Y, point.Z + GroundVisibilityProbeReach);
+            var to = new Vector3(point.X, point.Y, point.Z - GroundVisibilityProbeReach);
+            var hit = SegmentRayCast(from, to, 0, staticOnly: true);
+            if (hit.Hit && MathF.Abs(hit.HitPosition.Z - point.Z) <= GroundVisibilityTolerance)
+            {
+                downward++;
+            }
+
+            if (TryGetGroundSurface(point, out var ground, out _, GroundVisibilityProbeReach, GroundVisibilityProbeReach) &&
+                MathF.Abs(ground.Z - point.Z) <= GroundVisibilityTolerance)
+            {
+                twoWay++;
+            }
+        }
+
+        return (downward, twoWay);
     }
 
     /// <summary>
@@ -526,37 +646,96 @@ public partial class PhysicsEngine
     ///     is over a void.
     /// </summary>
     /// <remarks>
-    ///     The normal is what tells walkable ground from a cliff face: the zone's navigation mesh is
-    ///     baked with a minimum walkable normal Z of 0.35, so a surface steeper than that is one no
-    ///     NPC could stand on even though the ray hit something. Callers that only need the height
-    ///     keep using <see cref="FindGround" />.
+    ///     <para>
+    ///         The normal is what tells walkable ground from a cliff face: the zone's navigation mesh is
+    ///         baked with a minimum walkable normal Z of 0.35, so a surface steeper than that is one no
+    ///         NPC could stand on even though the ray hit something. It may face either way - see below -
+    ///         so callers that ask how walkable the surface is have to test the magnitude. Callers that
+    ///         only need the height keep using <see cref="FindGround" />.
+    ///     </para>
+    ///     <para>
+    ///         Both windings are probed. BepuPhysics mesh shapes are single-sided - a ray registers a
+    ///         triangle only when it strikes the front face the winding names - and the winding is
+    ///         whatever the zone file wrote: both loaders build their triangles from the bake's
+    ///         vertices in the same order, with nothing normalising either. PIN's navigation mesh
+    ///         reads that order with the opposite cross product (see
+    ///         <see cref="Shared.Collision.Navigation.NavigationTriangle.Normal" />), so the ground it
+    ///         keeps as walkable and the ground this probe's lone downward ray could see are
+    ///         complementary sets - and which of them a zone's terrain lands in is the bake's
+    ///         business, not the engine's. That is the same mesh-side fact
+    ///         <see cref="HasStaticOcclusion" />, <see cref="HasOverheadCover" /> and the navigation wall
+    ///         probes already answer for sight lines, cover and walls; the ground probe is the one
+    ///         locomotion itself stands on, and it was the last of them that a lone downward ray could
+    ///         still be blind to. On a surface wound away from the sky the old probe saw nothing under the
+    ///         feet (so an NPC could not take a single step, while it kept firing, and routine and combat
+    ///         movement failed the same way) and, when it saw something further down, the spawn snap
+    ///         dropped mobs through the surface onto it.
+    ///     </para>
+    ///     <para>
+    ///         The upward fallback starts at most <see cref="GroundBackfaceProbeReach" /> below the query
+    ///         and walks up through stacked surfaces, so it never settles on a floor arbitrarily far
+    ///         under a plan point. The higher of the two hits wins: the surface the query's own feet rest
+    ///         on, not the floor beneath it.
+    ///     </para>
     /// </remarks>
     /// <param name="position">The point to look under.</param>
     /// <param name="ground">The surface position, keeping <paramref name="position" />'s X and Y.</param>
-    /// <param name="normal">The normal of the surface that was hit.</param>
+    /// <param name="normal">The normal of the surface that was hit, facing either way.</param>
     /// <param name="searchUp">How far above <paramref name="position" /> the probe starts.</param>
     /// <param name="searchDown">How far below <paramref name="position" /> the probe reaches.</param>
+    /// <param name="ignoreEntityId">Kinematic body to exclude, or 0. Static geometry is never excluded.</param>
     /// <returns>Whether a surface was hit.</returns>
     public bool TryGetGroundSurface(
         Vector3 position,
         out Vector3 ground,
         out Vector3 normal,
         float searchUp = 10_000f,
-        float searchDown = 10_000f)
+        float searchDown = 10_000f,
+        ulong ignoreEntityId = 0)
     {
         ground = position;
         normal = default;
 
         var from = new Vector3(position.X, position.Y, position.Z + searchUp);
         var to = new Vector3(position.X, position.Y, position.Z - searchDown);
-        var hit = SegmentRayCast(from, to, 0, staticOnly: true);
-        if (!hit.Hit)
+        var hit = SegmentRayCast(from, to, ignoreEntityId, staticOnly: true);
+        bool found = hit.Hit;
+        float foundZ = hit.HitPosition.Z;
+        Vector3 foundNormal = hit.Normal;
+
+        // The same surface, looked at from the other side. The nearest upward hit is the lowest
+        // surface in the reach, so the probe keeps walking up from just above each hit and keeps the
+        // highest one it finds - the surface nearest the query point from below.
+        float reach = float.IsFinite(searchDown)
+            ? MathF.Min(searchDown, GroundBackfaceProbeReach)
+            : GroundBackfaceProbeReach;
+        var upFrom = new Vector3(position.X, position.Y, position.Z - reach);
+        var upTo = new Vector3(position.X, position.Y, position.Z);
+        for (int probe = 0; probe < GroundBackfaceProbes && upFrom.Z < upTo.Z; probe++)
+        {
+            var back = SegmentRayCast(upFrom, upTo, ignoreEntityId, staticOnly: true);
+            if (!back.Hit)
+            {
+                break;
+            }
+
+            if (!found || back.HitPosition.Z > foundZ)
+            {
+                found = true;
+                foundZ = back.HitPosition.Z;
+                foundNormal = back.Normal;
+            }
+
+            upFrom = new Vector3(upFrom.X, upFrom.Y, back.HitPosition.Z + GroundBackfaceProbeEpsilon);
+        }
+
+        if (!found)
         {
             return false;
         }
 
-        ground = new Vector3(position.X, position.Y, hit.HitPosition.Z);
-        normal = hit.Normal;
+        ground = new Vector3(position.X, position.Y, foundZ);
+        normal = foundNormal;
         return true;
     }
 

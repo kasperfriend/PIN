@@ -1,15 +1,36 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using Serilog;
 
 namespace GameServer.Systems.Ai;
 
 /// <summary>Collision-backed NPC navigation. No original patrol geometry is synthesized here.</summary>
 public sealed class PhysicsNpcNavigation : INpcNavigation
 {
+    /// <summary>
+    ///     How long one NPC's "there is no walkable ground under me" line is held back after it is
+    ///     written. The condition is per NPC and lasts until the ground changes, so the line is about
+    ///     the first sighting, not about a rate.
+    /// </summary>
+    private const ulong MissingGroundWarningIntervalMs = 10_000;
+
+    /// <summary>Entries the missing-ground warning table keeps before it starts over.</summary>
+    private const int MissingGroundWarningCapacity = 1_024;
+
     private static readonly NpcPathfinder.Options Options = new(
         CellSize: 2f, MaxStepHeight: NpcGroundMovement.MaximumStepHeight,
         MaxSearchDistance: 64f, MaxExpandedNodes: 4096, WaypointTolerance: 0.35f);
+
+    private static readonly ILogger _logger = Log.ForContext<PhysicsNpcNavigation>();
+
+    /// <summary>
+    ///     When the next missing-ground warning may be written, per entity. Cleared above
+    ///     <see cref="MissingGroundWarningCapacity" /> entries, a count only reached by ids of NPCs
+    ///     that have since left the world: the warning itself is what the operator needs, and a stale
+    ///     id is worth less than the memory.
+    /// </summary>
+    private readonly Dictionary<ulong, ulong> _missingGroundWarnedAt = [];
 
     private readonly IShard _shard;
     private readonly IAiRules _rules;
@@ -83,17 +104,71 @@ public sealed class PhysicsNpcNavigation : INpcNavigation
             return !Blocked(from, desired);
         }
 
-        bool result = NpcGroundMovement.TryStep(from, desired, GroundAt,
+        // A step fails for exactly two reasons - nothing to stand on along it, or something in the
+        // way - and the first of them is invisible in every other signal the server has: the NPC
+        // simply never moves while it keeps shooting, which reads as anything but a ground probe.
+        // Remember where the ground was missing so a refused step can say so (see WarnIfNoGround).
+        Vector3? missingGround = null;
+        NpcGroundSurface? TrackGround(Vector3 point)
+        {
+            var surface = GroundAt(point);
+            if (surface == null && missingGround == null)
+            {
+                missingGround = point;
+            }
+
+            return surface;
+        }
+
+        bool result = NpcGroundMovement.TryStep(from, desired, TrackGround,
             Blocked,
             _shard.Physics.IsNavigationExcluded, out var grounded);
         if (result)
         {
             position = _rules.SnapToGround ? grounded : desired;
         }
+        else if (missingGround.HasValue)
+        {
+            WarnIfNoGround(agent, from, desired, missingGround.Value);
+        }
 
         return result;
     }
 
+    /// <summary>
+    ///     Says once, per NPC and per <see cref="MissingGroundWarningIntervalMs" />, that a step was
+    ///     refused because there was no walkable surface under the path it asked for. On a zone whose
+    ///     collision has a face winding the probe cannot see through, this line is the whole symptom -
+    ///     a mob that stands still and shoots - and the numbers it carries (the feet, the requested
+    ///     step and the point with nothing under it) are what tells that apart from a wall.
+    /// </summary>
+    private void WarnIfNoGround(NpcNavigationAgent agent, Vector3 from, Vector3 desired, Vector3 missingGround)
+    {
+        ulong now = _shard.CurrentTime;
+        if (_missingGroundWarnedAt.TryGetValue(agent.EntityId, out ulong warnedAt) &&
+            now < warnedAt + MissingGroundWarningIntervalMs)
+        {
+            return;
+        }
+
+        if (_missingGroundWarnedAt.Count >= MissingGroundWarningCapacity)
+        {
+            _missingGroundWarnedAt.Clear();
+        }
+
+        _missingGroundWarnedAt[agent.EntityId] = now;
+        _logger.Debug(
+            "NPC {EntityId}: no walkable ground under {Ground} - the step from {From} to {To} was refused " +
+            "(agent radius {Radius}, height {Height}, zone {ZoneId})",
+            agent.EntityId, missingGround, from, desired, agent.Radius, agent.Height, _shard.ZoneId);
+    }
+
+    /// <summary>
+    ///     The walkable surface under <paramref name="point" />, or null when there is none within a
+    ///     step. The normal is tested by magnitude: the zone's collision carries both face windings,
+    ///     and a surface wound away from the sky - one <see cref="Physics.PhysicsEngine.TryGetGroundSurface" />
+    ///     sees only from below - describes the same walkable ground as any other.
+    /// </summary>
     private NpcGroundSurface? GroundAt(Vector3 point)
     {
         var physics = _shard.Physics;
@@ -106,7 +181,7 @@ public sealed class PhysicsNpcNavigation : INpcNavigation
         point.Z -= offset;
         if (!physics.TryGetGroundSurface(point, out var ground, out var normal,
             searchUp: NpcGroundMovement.MaximumStepHeight, searchDown: NpcGroundMovement.MaximumStepHeight) ||
-            normal.Z < NpcGroundMovement.MinimumNormalZ)
+            MathF.Abs(normal.Z) < NpcGroundMovement.MinimumNormalZ)
         {
             return null;
         }

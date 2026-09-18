@@ -10,6 +10,13 @@ public readonly record struct NpcGroundSurface(Vector3 Position, Vector3 Normal)
 ///     snap), this checks every half metre of a step, rejecting holes, floors above/below, steep
 ///     surfaces and excluded regions. Pure callbacks keep the safety rules executable in tests.
 /// </summary>
+/// <remarks>
+///     A surface's normal is tested by magnitude, not by sign: the zone's baked collision carries
+///     both face windings, so the same walkable ground presents an up-facing normal where a lone
+///     downward ray can see it and a down-facing one where only an upward ray can
+///     (<see cref="Physics.PhysicsEngine.TryGetGroundSurface" />). What makes ground unwalkable is
+///     being steep, and both signs of a steep normal are equally steep.
+/// </remarks>
 public static class NpcGroundMovement
 {
     public const float MaximumStepHeight = 1.25f;
@@ -46,7 +53,7 @@ public static class NpcGroundMovement
             probe.Z = previous.Z;
             var surface = groundAt(probe);
             if (!surface.HasValue || !Finite(surface.Value.Position) || !Finite(surface.Value.Normal) ||
-                surface.Value.Normal.Z < MinimumNormalZ ||
+                MathF.Abs(surface.Value.Normal.Z) < MinimumNormalZ ||
                 MathF.Abs(surface.Value.Position.Z - previous.Z) > MaximumStepHeight ||
                 excluded?.Invoke(surface.Value.Position) == true ||
                 blocked(previous, surface.Value.Position))

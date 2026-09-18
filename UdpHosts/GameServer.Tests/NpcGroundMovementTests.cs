@@ -39,6 +39,22 @@ public class NpcGroundMovementTests
     }
 
     [Fact]
+    public void WalkableGroundCountsWhicheverWayItsTrianglesFace()
+    {
+        // The zone's baked collision carries both face windings, so the same walkable ground
+        // reports an up-facing normal where a downward ray reaches it and a down-facing one where
+        // only an upward ray does (see PhysicsEngine.TryGetGroundSurface).
+        Assert.True(NpcGroundMovement.TryStep(Vector3.Zero, new Vector3(2f, 0f, 0f),
+            p => new NpcGroundSurface(p, -Vector3.UnitZ), (_, _) => false, null, out var result));
+        Assert.Equal(new Vector3(2f, 0f, 0f), result);
+
+        // What makes a surface unwalkable is being steep - and both signs of a steep normal are
+        // equally steep.
+        Assert.False(NpcGroundMovement.TryStep(Vector3.Zero, Vector3.UnitX,
+            p => new NpcGroundSurface(p, new Vector3(1f, 0f, -0.2f)), (_, _) => false, null, out _));
+    }
+
+    [Fact]
     public void SteepSurfacesWallsAndExcludedRegionsAllRejectMovement()
     {
         Assert.False(NpcGroundMovement.TryStep(Vector3.Zero, Vector3.UnitX,

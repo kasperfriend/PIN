@@ -1024,6 +1024,26 @@ and static body clearance. There is no 100 m post-movement drop or 10 km navigat
 probe. Missing collision chunks/holes are failures, not a fabricated flat plane.
 `SnapToGround=false` disables the final Z snap but not the ground-support check.
 
+The ground probe looks both ways, and that is load-bearing rather than defensive.
+BepuPhysics mesh shapes are single-sided - a ray registers a triangle only when it
+strikes the face the winding names - and both loaders build the collision mesh from
+the bake's vertices in the same order (`A = indices[+2], B = indices[+1],
+C = indices[0]`), so a face's visible side is whatever the zone file wrote, with
+nothing normalising it. The navigation mesh reads that same order with the opposite
+cross product (`NavigationTriangle.Normal` is `cross(B - A, C - A)`; Bepu's ray
+test takes `cross(C - A, B - A)`), so a face the mesh keeps as walkable is one a
+downward ray sees from below. `PhysicsEngine.TryGetGroundSurface` therefore casts
+down and then, if that saw nothing, walks upward from at most five metres below the
+query and keeps the highest hit: the surface the feet rest on, not the floor beneath
+it. A ground surface's normal is accordingly tested by magnitude (`|normal.Z|`)
+everywhere a walkable slope is judged, since the same walkable ground presents an
+up-facing or down-facing normal depending on which way its triangles were baked.
+Both the population's standing-spot check and the spawn snap read the same probe, so
+a surface only an upward ray can see is ground for them too. The zone load reports
+which kind of zone it is, one line comparing the straight downward probe with the
+two-way one over a sample of the navigation mesh's own faces; a zone where the two
+numbers disagree is one that would have frozen every walking NPC before this.
+
 The clearance part of that check (six ray casts of static geometry around the
 agent's body) runs on every *other* movement tick, not every tick: at the 50 ms
 movement cadence it was the bulk of what a walking NPC cost on a populated zone,
