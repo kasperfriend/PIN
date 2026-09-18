@@ -142,6 +142,84 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public bool IsAirborne { get; set; }
 
     /// <summary>
+    ///     How long after dealing or taking damage a character still counts as "in combat" for
+    ///     <c>RequireInCombatCommand</c> and the supercharge trickle. The value is the server-side
+    ///     convention; the client displays its own combat state from the same events.
+    /// </summary>
+    public const uint CombatStateWindowMs = 5000;
+
+    /// <summary>Shard time (ms) of the last damage this character took. 0 = never since spawn.</summary>
+    public uint LastDamageTakenTime { get; private set; }
+
+    /// <summary>The damage type id of the last damage taken, stamped alongside <see cref="LastDamageTakenTime"/>.</summary>
+    public byte LastDamageTakenType { get; private set; }
+
+    /// <summary>Shard time (ms) of the last damage this character (or a deployable it owns) dealt. 0 = never.</summary>
+    public uint LastDamageDealtTime { get; private set; }
+
+    /// <summary>The damage type id of the last damage dealt, stamped alongside <see cref="LastDamageDealtTime"/>.</summary>
+    public byte LastDamageDealtType { get; private set; }
+
+    /// <summary>
+    ///     Shard time (ms) of the character's last jump. Stamped by the movement relay when the
+    ///     client-reported jump counter resets - which deliberately includes server-commanded
+    ///     launches, because a glider pad reports its launch as a jump through the same counter.
+    ///     0 = no jump since spawn.
+    /// </summary>
+    public uint LastJumpTime { get; private set; }
+
+    /// <summary>Records a damage event reaching this character (post-mitigation).</summary>
+    public void NoteDamageTaken(uint time, byte damageType)
+    {
+        LastDamageTakenTime = time;
+        LastDamageTakenType = damageType;
+    }
+
+    /// <summary>Records a damage event this character caused (directly or through an owned entity).</summary>
+    public void NoteDamageDealt(uint time, byte damageType)
+    {
+        LastDamageDealtTime = time;
+        LastDamageDealtType = damageType;
+    }
+
+    /// <summary>Records the jump edge reported by the client's movement input.</summary>
+    public void NoteJump(uint time)
+    {
+        LastJumpTime = time;
+    }
+
+    /// <summary>
+    ///     Whether the character dealt or took damage inside <see cref="CombatStateWindowMs"/> of
+    ///     <paramref name="time"/>. Both stamps are shard-time; the wrap-safe subtraction only goes
+    ///     wrong after 49 days of uninterrupted combat.
+    /// </summary>
+    public bool IsInCombatState(uint time)
+    {
+        return (LastDamageTakenTime != 0 && unchecked(time - LastDamageTakenTime) <= CombatStateWindowMs)
+            || (LastDamageDealtTime != 0 && unchecked(time - LastDamageDealtTime) <= CombatStateWindowMs);
+    }
+
+    /// <summary>
+    ///     Adds supercharge to the 0..100 HKM gauge the combat controller replicates. Generation is
+    ///     event-driven (dealing and taking damage), modelled after the live game where combat is
+    ///     what charges the HKM module; see <see cref="Systems.Combat.DamageSystem"/> for the rates.
+    /// </summary>
+    public void AddSuperCharge(float amount)
+    {
+        if (amount == 0f)
+        {
+            return;
+        }
+
+        float value = Character_CombatController.SuperChargeProp.Value + amount;
+        Character_CombatController.SuperChargeProp = new AeroMessages.GSS.Character.Controller.SuperChargeData
+        {
+            Value = Math.Clamp(value, 0f, 100f),
+            Op = (byte)Enums.Operand.ASSIGN,
+        };
+    }
+
+    /// <summary>
     ///     Provisional launch state the server keeps for a character it has just pushed with a launch impulse
     ///     (a glider pad's <c>ForcePush</c>), so the aptitude gates that keep the launch effects alive do not
     ///     tear the launch down before the client can confirm it.

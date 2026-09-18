@@ -14,6 +14,20 @@ public class DamageSystem
 {
     private static readonly ILogger Logger = Log.ForContext<DamageSystem>();
 
+    /// <summary>
+    ///     Supercharge gauge points per post-mitigation damage event the character dealt. The live
+    ///     game charged HKM modules from combat; 25 landed hits to a full gauge keeps the pacing in
+    ///     the same ballpark across levels without inventing the per-module charge curves, which are
+    ///     not recoverable from the data we can load.
+    /// </summary>
+    public const float SuperChargePerDamageDealt = 4f;
+
+    /// <summary>
+    ///     Supercharge gauge points per post-mitigation damage event taken. Getting hit also charges
+    ///     the HKM module, just at half tempo (50 hits to a full gauge).
+    /// </summary>
+    public const float SuperChargePerDamageTaken = 2f;
+
     private readonly IEventBus _eventBus;
     private readonly IShard _shard;
     private readonly INpcDeathRules _rules;
@@ -69,6 +83,32 @@ public class DamageSystem
             // Publish the post-defense amount. AI aggro and hit feedback should
             // agree with the damage that actually reached the target.
             _eventBus.Publish(new EntityDamagedEvent(target, appliedAmount, source));
+
+            // Combat bookkeeping for the aptitude gates (RequireInCombat /
+            // RequireTookDamage / RequireDamageType) and the supercharge gauge:
+            // both sides of a real hit get stamped, and the supercharge accrues
+            // from the event. Damage that was fully mitigated or rejected does
+            // none of this.
+            uint time = unchecked((uint)_shard.CurrentTime);
+            if (target is CharacterEntity victim)
+            {
+                victim.NoteDamageTaken(time, damageType);
+                victim.AddSuperCharge(SuperChargePerDamageTaken);
+            }
+
+            // Credit owned sources (turrets, pets) to their owner, the same way
+            // InflictDamage resolves the attacker.
+            var dealer = source switch
+            {
+                CharacterEntity direct => direct,
+                Systems.Aptitude.IAptitudeTarget { Owner: CharacterEntity owner } => owner,
+                _ => null,
+            };
+            if (dealer != null)
+            {
+                dealer.NoteDamageDealt(time, damageType);
+                dealer.AddSuperCharge(SuperChargePerDamageDealt);
+            }
         }
 
         return appliedAmount;
