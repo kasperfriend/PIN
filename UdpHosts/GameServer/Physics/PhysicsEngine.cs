@@ -201,7 +201,7 @@ public partial class PhysicsEngine
         _physicsThreads = ParallelWork.ResolvePhysics(physicsThreads);
 
         BufferPool = new BufferPool();
-        ThreadDispatcher = new ThreadDispatcher(targetThreadCount);
+        ThreadDispatcher = new ThreadDispatcher(_physicsThreads);
         Simulation = Simulation.Create(BufferPool, new NarrowPhaseCallbacks(), new PoseIntegratorCallbacks(new Vector3(0, 0, -8)), new SolveDescription(8, 1));
 
         _fallbackShape = Simulation.Shapes.Add(new Sphere(0.9f));
