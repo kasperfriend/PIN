@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Shared.Collision.Navigation;
@@ -216,6 +217,60 @@ public class NavigationMeshTests
 
         // And the ground next to that triangle is still walkable on its own faces.
         Assert.NotEmpty(mesh.FindPath(new Vector3(1f, 1f, 0f), new Vector3(4f, 4f, 0f), (_, _) => false, 1.25f));
+    }
+
+    [Fact]
+    public void ABakeOnSeveralThreadsIsTheBakeOnOne()
+    {
+        // A zone's worth of ground in miniature: a grid of quads, every seventh surface recorded
+        // twice, every eleventh a canopy floating over it. Each threaded pass gets several slices of
+        // it, and the two bakes have to agree face for face and route for route - the mesh enumerates
+        // its faces for world population and its adjacency is what an NPC's path is made of, so a
+        // bake that depended on the thread count would put different NPCs on different ground on two
+        // machines with the same zone.
+        const int Columns = 20;
+        var triangles = new List<NavigationTriangle>();
+
+        for (int column = 0; column < Columns; column++)
+        {
+            for (int row = 0; row < Columns; row++)
+            {
+                float x = column * 4f;
+                float y = row * 4f;
+
+                triangles.AddRange(Quad(x, y, x + 4f, y + 4f, z: 0f));
+
+                if ((column + row) % 7 == 0)
+                {
+                    triangles.AddRange(Quad(x, y, x + 4f, y + 4f, z: 0f));
+                }
+
+                if ((column + row) % 11 == 0)
+                {
+                    triangles.AddRange(Island(x + 1f, y + 1f, z: 6f, size: 1f));
+                }
+            }
+        }
+
+        var serial = new NavigationMesh(triangles, _ => 1f, maxDegreeOfParallelism: 1);
+        var parallel = new NavigationMesh(triangles, _ => 1f, maxDegreeOfParallelism: 8);
+
+        Assert.Equal(serial.FaceCount, parallel.FaceCount);
+
+        for (int i = 0; i < serial.FaceCount; i++)
+        {
+            Assert.True(serial.TryGetFaceCentroid(i, out var expected));
+            Assert.True(parallel.TryGetFaceCentroid(i, out var actual));
+            Assert.Equal(expected, actual);
+        }
+
+        var start = new Vector3(1f, 1f, 0f);
+        var goal = new Vector3((Columns * 4f) - 2f, (Columns * 4f) - 2f, 0f);
+        var serialPath = serial.FindPath(start, goal, (_, _) => false, 1.25f);
+        var parallelPath = parallel.FindPath(start, goal, (_, _) => false, 1.25f);
+
+        Assert.NotEmpty(serialPath);
+        Assert.Equal(serialPath, parallelPath);
     }
 
     private static NavigationTriangle[] Ground(float size = 10f, uint material = 1) =>

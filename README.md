@@ -163,10 +163,45 @@ GitHub release archive it is at the root of the zip (`Publish\`), next to
 a fallback template.
 
 The remaining settings (`Port`, `ZoneId`, `ClientVersion`, `GrpcChannelAddress`,
-the `serilog:` logging keys, ...) still live in the XML `App.config`, which ships
-next to `GameServer.exe` as `GameServer.dll.config`. GameServer parses that file
-directly from disk, so editing it works the same way in a local build and in the
-single-file release build.
+the `serilog:` logging keys, `ServerWorkerThreads`, ...) still live in the XML
+`App.config`, which ships next to `GameServer.exe` as `GameServer.dll.config`.
+GameServer parses that file directly from disk, so editing it works the same way
+in a local build and in the single-file release build.
+
+How many threads the server's own heavy work may use is configurable, per piece
+of work (`0` = automatic everywhere):
+
+```xml
+<add key="ServerWorkerThreads" value="0"/>            <!-- default for the two below -->
+<add key="NavigationBakeThreads" value="0"/>          <!-- the zone's navigation bake (at startup) -->
+<add key="WorldPopulationPlanThreads" value="0"/>     <!-- the world-population plan build (in play) -->
+<add key="PhysicsThreads" value="0"/>                 <!-- the Bepu physics dispatcher -->
+<add key="WorldPopulationPlanOnWorkers" value="true"/><!-- build the plan off the shard's tick -->
+```
+
+Every count is `0` = automatic, and automatic means "work it out for this machine":
+the bake takes all but the shard's own core (capped at 16, because it runs before any
+client is let in), the plan build takes half the box (capped at 8, because it runs next
+to a live shard), and physics keeps the engine's own `cores - 2`, capped at 4. Find your
+logical processor count in the row for it - **writing nothing already gives you these**:
+
+| Logical CPUs | Bake | Plan | Physics |
+|---|---|---|---|
+| 2 (1c/2t) | 1 | 1 | 1 |
+| 4 (2c/4t) | 3 | 2 | 3 |
+| 6 (3c/6t) | 5 | 3 | 4 |
+| 8 (4c/8t) | 7 | 4 | 4 |
+| 12 (6c/12t) | 11 | 6 | 4 |
+| 16 (8c/16t) | 15 | 8 | 4 |
+| 20+ (10c/20t and up) | 16 | 8 | 4 |
+
+Running the game client on the same machine as the server? Halve the bake and the plan
+(8 threads → `3` and `2`, 16 → `7` and `4`) so the client keeps cores to load and draw
+with. A number you write is used as given, including above the caps; restart to apply.
+
+See [`Docs/MULTITHREADING.md`](Docs/MULTITHREADING.md) for what each piece of
+work is, what deliberately stays on the shard's single thread, and why the
+results are the same at any thread count.
 
 ### Connecting with friends
 

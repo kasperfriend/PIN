@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using GameServer.Data;
 using GameServer.Entities;
 using GameServer.Entities.Character;
@@ -103,12 +105,46 @@ public sealed class WorldPopulationService
     private readonly List<string> _elsewhereZones = [];
     private readonly List<WorldPopulationCell> _deactivating = [];
 
+    /// <summary>
+    ///     How much planner work one step of the plan worker asks for. The phases are sequential and
+    ///     each step finishes a phase, so the number is only a ceiling: the point of the worker is
+    ///     that the budget that used to pace the plan (20,000 a tick) no longer bounds it.
+    /// </summary>
+    private const int PlanWorkerStepBudget = 1_000_000;
+
     private ulong _lastUpdate;
     private ulong _lastSpawnWindow;
     private int _spawnedThisWindow;
     private int _consecutiveFailures;
     private bool _occupancySeeded;
     private IdleReason _announcedIdle = IdleReason.None;
+
+    /// <summary>
+    ///     How many threads the plan build uses: 0 keeps the build on the shard's tick, one budget
+    ///     slice per update, which is what a test shard and the <c>WorldPopulationPlanOnWorkers=false</c>
+    ///     setting ask for; a positive number builds it on a background worker using that many
+    ///     threads.
+    /// </summary>
+    private readonly int _planThreads;
+
+    /// <summary>Guards the worker's start/stop handshake, which the tick and the worker both touch.</summary>
+    private readonly object _planWorkerLock = new();
+
+    /// <summary>The running plan worker, or null; replaced when one finished and the plan is not.</summary>
+    private Task? _planWorker;
+
+    /// <summary>
+    ///     A failure the worker caught, waiting for the shard's tick to report it - the failure
+    ///     handling below (counting failures, turning the feature off, clearing the NPCs) touches
+    ///     entities, which only the tick thread may do.
+    /// </summary>
+    private Exception? _planWorkerFailure;
+
+    /// <summary>How long the zone has been waiting for its plan, started with the first build attempt.</summary>
+    private readonly Stopwatch _planWait = new();
+
+    /// <summary>Whether the "the plan is ready" line has been said, so it is said once.</summary>
+    private bool _planReadyAnnounced;
 
     /// <summary>
     ///     Starts at zero so a plan that builds in a second or two never reports itself: "still
@@ -126,18 +162,31 @@ public sealed class WorldPopulationService
         Planning,
     }
 
+    /// <param name="planWorkerThreads">
+    ///     Threads the plan build may use, and with them whether it happens at all inside the shard's
+    ///     tick: 0 (the default, and what the tests use) builds the plan on the tick exactly one
+    ///     <see cref="IWorldPopulationRules.PlanWorkPerTick" /> slice at a time, the way it always
+    ///     did; a positive number builds it on a background worker that uses up to that many threads
+    ///     and hands the finished plan to the tick. A live shard passes the resolved
+    ///     <c>WorldPopulationPlanThreads</c> (half the box by default), so a zone with a player in it is planned in about the time its
+    ///     CPU work takes instead of in tens of seconds of budgeted updates - and the shard's tick,
+    ///     which used to pay for every one of those updates, does not pay at all. The plan itself is
+    ///     the same plan either way.
+    /// </param>
     public WorldPopulationService(
         IShard shard,
         IWorldPopulationRules rules,
         IWorldPopulationDataSource data,
         IWorldPopulationTerrain terrain,
-        IWorldPopulationSpawner spawner)
+        IWorldPopulationSpawner spawner,
+        int planWorkerThreads = 0)
     {
         _shard = shard;
         _logger = shard.Logger.ForContext<WorldPopulationService>();
         _rules = rules;
         _terrain = terrain;
         _spawner = spawner;
+        _planThreads = Math.Max(0, planWorkerThreads);
 
         // The placement grid hashes at a finer resolution than the plan's cells: its queries are a
         // couple of body radii wide, not 32 m.
@@ -147,7 +196,12 @@ public sealed class WorldPopulationService
             rules,
             data,
             terrain,
-            shard.Logger.ForContext<WorldPopulationPlanner>());
+            shard.Logger.ForContext<WorldPopulationPlanner>(),
+
+            // 1 rather than 0 when the plan is built inside the tick: that path makes no promises
+            // about wall clock (it is the "somebody measured their machine, use less of it" setting),
+            // and a parallel phase inside the tick is exactly the burst of threads it exists to avoid.
+            maxDegreeOfParallelism: Math.Max(1, _planThreads));
 
         Enabled = rules.Enabled;
     }
@@ -245,35 +299,50 @@ public sealed class WorldPopulationService
 
         try
         {
-            Update(currentTime);
+            Update(currentTime, ct);
             _consecutiveFailures = 0;
         }
         catch (Exception ex)
         {
-            _consecutiveFailures++;
-            _logger.Error(
-                ex,
-                "World population update failed ({Count} in a row); the feature turns itself off after {Max}",
-                _consecutiveFailures,
-                MaxConsecutiveFailures);
-
-            if (_consecutiveFailures >= MaxConsecutiveFailures)
-            {
-                Enabled = false;
-
-                try
-                {
-                    Clear("its update kept failing");
-                }
-                catch (Exception clearEx)
-                {
-                    _logger.Error(clearEx, "World population could not clear its NPCs while turning itself off");
-                }
-            }
+            ReportFailure(ex);
         }
     }
 
-    private void Update(ulong currentTime)
+    /// <summary>
+    ///     Counts one failed population update and, when it is the third in a row, turns the feature
+    ///     off and takes its NPCs with it. Both the tick's own failures and the plan worker's go
+    ///     through here, because the two halves of the system fail for the same kind of reason
+    ///     (the zone's data does not suit the code) and an operator should not have to read two
+    ///     different counters to see it.
+    /// </summary>
+    /// <param name="ex">What went wrong.</param>
+    private void ReportFailure(Exception ex)
+    {
+        _consecutiveFailures++;
+        _logger.Error(
+            ex,
+            "World population update failed ({Count} in a row); the feature turns itself off after {Max}",
+            _consecutiveFailures,
+            MaxConsecutiveFailures);
+
+        if (_consecutiveFailures < MaxConsecutiveFailures)
+        {
+            return;
+        }
+
+        Enabled = false;
+
+        try
+        {
+            Clear("its update kept failing");
+        }
+        catch (Exception clearEx)
+        {
+            _logger.Error(clearEx, "World population could not clear its NPCs while turning itself off");
+        }
+    }
+
+    private void Update(ulong currentTime, CancellationToken ct)
     {
         if (!Enabled || !_rules.Enabled)
         {
@@ -316,12 +385,43 @@ public sealed class WorldPopulationService
 
         if (!_planner.IsComplete)
         {
-            _ = _planner.Work(Math.Max(1, _rules.PlanWorkPerTick));
+            // A worker's failure is reported here, on the thread that may touch entities.
+            var planFailure = Interlocked.Exchange(ref _planWorkerFailure, null);
+            if (planFailure != null)
+            {
+                ReportFailure(planFailure);
+                if (!Enabled)
+                {
+                    return;
+                }
+            }
+
+            _planWait.Start();
+
+            if (_planThreads > 0)
+            {
+                // The plan is somebody else's job now: this tick only starts the worker when there
+                // is not one running and watches for the plan it publishes. The tick's own cost is
+                // the work the plan build cannot do on another thread - activating cells, placing
+                // NPCs, refilling what died - which is where it was always needed.
+                StartPlanWorker(ct);
+            }
+            else
+            {
+                _ = _planner.Work(Math.Max(1, _rules.PlanWorkPerTick));
+            }
+
             if (!_planner.IsComplete)
             {
                 AnnouncePlanning();
                 return;
             }
+        }
+
+        if (!_planReadyAnnounced && _planner.IsComplete)
+        {
+            _planReadyAnnounced = true;
+            LogPlanReady();
         }
 
         _announcedIdle = IdleReason.None;
@@ -417,13 +517,98 @@ public sealed class WorldPopulationService
 
         _ticksSincePlanningAnnouncement = 0;
 
+        // Said with where the work is happening: "20,000 per update" described a plan that was being
+        // drip-fed to the tick, and an operator who reads it while the plan is being built on worker
+        // threads would be looking for progress in the wrong place.
+        string pace = _planThreads > 0
+            ? $"built on {_planThreads} worker thread(s), off the shard's tick"
+            : $"{_rules.PlanWorkPerTick} per update";
+
         _logger.Information(
-            "World population: still building the plan for zone {ZoneId} ({Surfaces} walkable surfaces scanned, {Cells} cells so far, " +
-            "{Budget} per update); nothing spawns until it finishes",
+            "World population: still building the plan for zone {ZoneId} ({Surfaces} walkable surfaces scanned, {Cells} cells so far, {Pace}); nothing spawns until it finishes",
             _shard.ZoneId,
             _planner.ScannedSurfaces,
             _planner.CellCount,
-            _rules.PlanWorkPerTick);
+            pace);
+    }
+
+    /// <summary>
+    ///     Starts the worker that builds the plan when one is not already building it. Called from
+    ///     the shard's tick; the worker itself only ever touches the planner (its own data source and
+    ///     the loaded zone's navigation mesh), never the shard's clients, entities or channels.
+    /// </summary>
+    /// <param name="ct">The shard's cancellation token, so a stopping server stops the build too.</param>
+    private void StartPlanWorker(CancellationToken ct)
+    {
+        lock (_planWorkerLock)
+        {
+            if (_planWorker is { IsCompleted: false })
+            {
+                return;
+            }
+
+            _planWorker = Task.Factory.StartNew(
+                () => BuildPlan(ct),
+                ct,
+                TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach,
+                TaskScheduler.Default);
+        }
+    }
+
+    /// <summary>
+    ///     Builds the plan to completion on a worker, one phase step at a time, and reports how long
+    ///     it took. Never lets an exception escape: a caught failure is handed to the tick through
+    ///     <see cref="_planWorkerFailure" />, because turning the feature off means despawning its
+    ///     NPCs and only the tick's thread may do that.
+    /// </summary>
+    /// <param name="ct">The shard's cancellation token.</param>
+    private void BuildPlan(CancellationToken ct)
+    {
+        var started = Stopwatch.StartNew();
+
+        try
+        {
+            while (!_planner.IsComplete && !ct.IsCancellationRequested)
+            {
+                _ = _planner.Work(PlanWorkerStepBudget);
+            }
+        }
+        catch (Exception ex)
+        {
+            _planWorkerFailure = ex;
+            return;
+        }
+
+        if (!_planner.IsComplete)
+        {
+            // The shard is stopping; the plan is simply unfinished, and nobody is waiting for it.
+            return;
+        }
+
+        started.Stop();
+        _logger.Information(
+            "World population plan for zone {ZoneId}: built on {Threads} worker thread(s) in {Elapsed} (off the shard's tick), {Cells} cells, {Slots} slots",
+            _shard.ZoneId,
+            _planThreads,
+            started.Elapsed,
+            _planner.CellCount,
+            _planner.SlotCount);
+    }
+
+    /// <summary>
+    ///     Says the plan has just become usable, once: how big it is and how long the zone waited for
+    ///     it. The wait is the number that used to be tens of seconds.
+    /// </summary>
+    private void LogPlanReady()
+    {
+        _logger.Information(
+            "World population: plan for zone {ZoneId} is ready after {Elapsed} ({Cells} cells, {Slots} slots, {Placed} of {Roster} monster rows placed) - cells around the players activate from here",
+            _shard.ZoneId,
+            _planWait.Elapsed,
+            _planner.CellCount,
+            _planner.SlotCount,
+            _planner.PlacedRosterCount,
+            _planner.RosterCount);
     }
 
     /// <summary>How many distinct monster rows are in the world right now.</summary>
@@ -493,8 +678,12 @@ public sealed class WorldPopulationService
             ? $"Plan: {_planner.CellCount} cells, {_planner.SlotCount} slots, {_planner.PlacedRosterCount} rows placed" +
               (_planner.UnplacedRosterCount > 0 ? $", {_planner.UnplacedRosterCount} rows have no ground of their kind in this zone" : string.Empty) +
               (_planner.RefusedChunkCells > 0 ? $", {_planner.RefusedChunkCells} cells refused by chunk rules" : string.Empty) +
-              (_planner.UsedAnchorFallback ? ", built from authored anchors (no walkable surfaces)" : string.Empty)
-            : $"Plan: building ({_planner.ScannedSurfaces} surfaces scanned, {_planner.CellCount} cells so far)");
+              (_planner.UsedAnchorFallback ? ", built from authored anchors (no walkable surfaces)" : string.Empty) +
+              (_planThreads > 0 ? $", built on {_planThreads} worker thread(s) off the shard's tick" : string.Empty)
+            : $"Plan: building ({_planner.ScannedSurfaces} surfaces scanned, {_planner.CellCount} cells so far" +
+              (_planThreads > 0
+                  ? $", on {_planThreads} worker thread(s) off the shard's tick)"
+                  : $", {_rules.PlanWorkPerTick} per update)"));
         string players = PlayerCount.ToString(CultureInfo.InvariantCulture) + " players";
         if (PlayersElsewhereCount > 0)
         {

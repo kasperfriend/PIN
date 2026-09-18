@@ -23,6 +23,7 @@ using Shared.Collision;
 using Shared.Collision.Layers;
 using Shared.Collision.Navigation;
 using Shared.Collision.ZoneLoading;
+using Shared.Common;
 
 namespace GameServer.Physics;
 
@@ -147,33 +148,60 @@ public partial class PhysicsEngine
     private readonly bool _forceReload;
     private readonly bool _isDebugPipeClient;
 
+    /// <summary>
+    ///     Threads the zone's navigation bake may use (0 = automatic, see
+    ///     <see cref="ParallelWork" />). The bake is the last heavy step of loading a zone - the one
+    ///     that decides when the shard lets a client in - and the one step of loading a zone that is
+    ///     pure CPU over data nothing writes: the chunks themselves cannot be threaded, because
+    ///     converting them builds Bepu shapes in the simulation the shard thread owns.
+    /// </summary>
+    private readonly int _workerThreads;
+
+    /// <summary>
+    ///     Threads the Bepu physics dispatcher runs with (0 = the engine's automatic choice). Read
+    ///     back by the shard's startup log so the line cannot disagree with what was built.
+    /// </summary>
+    private readonly int _physicsThreads;
+
     private TypedIndex _fallbackShape;
     private NavigationMesh? _navigationMesh;
     private int _debugEntityIndex = -1;
     private double _debugTimeAccumulator;
 
-    public PhysicsEngine(EventBus eventBus, uint zoneId, string mapsPath = "", string assetDBPath = "", bool loadMapsCollision = false, DebugProjectileHitCallbacks? debugProjectileHitCallbacks = null, bool isDebugPipeClient = false, string cachePath = "", bool forceReload = false)
+    /// <summary>
+    ///     Builds the simulation for one zone and, when collision loading is enabled, loads the
+    ///     zone's collision and bakes its navigation mesh.
+    /// </summary>
+    /// <param name="workerThreads">
+    ///     Threads the zone's navigation bake may use once collision is loaded; 0 means automatic
+    ///     (see <see cref="ParallelWork" />). Only the bake is threaded - loading the chunks
+    ///     themselves builds Bepu shapes in this simulation, which is single-threaded work.
+    /// </param>
+    /// <param name="physicsThreads">
+    ///     Threads the Bepu physics dispatcher runs with; 0 keeps the engine's own choice (see
+    ///     <see cref="PhysicsThreadCount" />), a positive number is used as given.
+    /// </param>
+    public PhysicsEngine(EventBus eventBus, uint zoneId, string mapsPath = "", string assetDBPath = "", bool loadMapsCollision = false, DebugProjectileHitCallbacks? debugProjectileHitCallbacks = null, bool isDebugPipeClient = false, string cachePath = "", bool forceReload = false, int workerThreads = 0, int physicsThreads = 0)
     {
         _eventBus = eventBus;
         _logger = Log.Logger.ForContext<PhysicsEngine>();
         _mapsPath = mapsPath;
         _cachePath = cachePath;
         _forceReload = forceReload;
+        _workerThreads = workerThreads;
         DebugProjectileHitCallbacks = debugProjectileHitCallbacks;
 
         // The 20 Hz timestep of a zone shard does not have enough work to keep a large dispatcher
         // fleet busy: every Bepu dispatch thread is a spinning worker that competes with the game
         // client for a core, and the typical setup runs server and client on the same machine. This
         // simulation profile (mostly static zone geometry plus a few hundred kinematic bodies) is
-        // comfortably served by a handful of threads, so cap the fleet.
-        const int MaxDispatcherThreads = 4;
-        var targetThreadCount = int.Clamp(
-            Environment.ProcessorCount > 4 ? Environment.ProcessorCount - 2 : Environment.ProcessorCount - 1,
-            1,
-            MaxDispatcherThreads);
+        // comfortably served by a handful of threads, so the fleet is capped -
+        // ParallelWork.DefaultPhysicsDegree holds that rule - unless the operator set PhysicsThreads,
+        // in which case their number is used as given (see Docs/MULTITHREADING.md).
+        _physicsThreads = ParallelWork.ResolvePhysics(physicsThreads);
 
         BufferPool = new BufferPool();
-        ThreadDispatcher = new ThreadDispatcher(targetThreadCount);
+        ThreadDispatcher = new ThreadDispatcher(_physicsThreads);
         Simulation = Simulation.Create(BufferPool, new NarrowPhaseCallbacks(), new PoseIntegratorCallbacks(new Vector3(0, 0, -8)), new SolveDescription(8, 1));
 
         _fallbackShape = Simulation.Shapes.Add(new Sphere(0.9f));
@@ -231,17 +259,25 @@ public partial class PhysicsEngine
             // and says nothing else looks exactly like a server that is still loading chunks, and the
             // operator reading it is waiting for the wrong thing.
             var bakeStarted = Stopwatch.StartNew();
+
+            // The bake is also where this shard's worker threads are first used: every pass of it
+            // except the stacked-island filter is per-face work over read-only input, so the same
+            // mesh comes out of it in a fraction of the wall clock (the thread count is in the line
+            // below, and the "N worker thread(s)" line the mesh itself writes when it finishes).
+            var bakeThreads = ParallelWork.Resolve(_workerThreads);
             _logger.Information(
-                "Zone {ZoneId}: baking the navigation mesh from {TriangleCount} collision triangles",
+                "Zone {ZoneId}: baking the navigation mesh from {TriangleCount} collision triangles on {Threads} worker thread(s)",
                 zoneId,
-                _zoneLoader.NavigationTriangles.Count);
+                _zoneLoader.NavigationTriangles.Count,
+                bakeThreads);
 
             _navigationMesh = _zoneLoader.NavigationTriangles.Count > 0
                 ? new NavigationMesh(
                     _zoneLoader.NavigationTriangles,
                     materialId => SDBInterface.GetPhysicsMaterial(materialId)?.AIPathingCost ?? 1f,
                     _zoneLoader.IsNavigationExcluded,
-                    materialExcluded: IsUnderwaterMaterial)
+                    materialExcluded: IsUnderwaterMaterial,
+                    maxDegreeOfParallelism: _workerThreads)
                 : null;
             _logger.Information(
                 "Zone {ZoneId}: navigation mesh has {TriangleCount} source triangles and {FaceCount} walkable faces after {Elapsed}",
@@ -286,6 +322,13 @@ public partial class PhysicsEngine
 
     /// <summary>How many walkable faces the loaded zone's navigation mesh has; 0 when there is none.</summary>
     public int WalkableFaceCount => _navigationMesh?.FaceCount ?? 0;
+
+    /// <summary>
+    ///     How many threads the physics dispatcher was built with: the configured
+    ///     <c>PhysicsThreads</c> when it is set, otherwise the automatic choice - one thread per
+    ///     processor minus two, capped at four.
+    /// </summary>
+    public int PhysicsThreadCount => _physicsThreads;
 
     /// <summary>
     ///     The centroid of one walkable face of the loaded navigation mesh: a spot the zone's own

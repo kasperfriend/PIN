@@ -81,6 +81,9 @@ public sealed class PhysicsWorldPopulationTerrain : IWorldPopulationTerrain
     /// <summary>Chunk id by index in the zone's own chunk grid, built on first use.</summary>
     private Dictionary<(int X, int Y), uint> _chunkByIndex;
 
+    /// <summary>Guards the one-time build of <see cref="_chunkByIndex" />; the planner may be threaded.</summary>
+    private readonly object _chunkIndexLock = new();
+
     /// <summary>
     ///     The corner the chunk index is measured from. A zone's chunk origins are not necessarily
     ///     multiples of the chunk size (Coral Forest's are offset by half a chunk in Y, because the
@@ -245,6 +248,19 @@ public sealed class PhysicsWorldPopulationTerrain : IWorldPopulationTerrain
         (int)MathF.Floor((position.X - _chunkGridOrigin.X) / ChunkOriginCalculator.ChunkSize),
         (int)MathF.Floor((position.Y - _chunkGridOrigin.Y) / ChunkOriginCalculator.ChunkSize));
 
+    /// <summary>
+    ///     The zone's chunk grid, keyed by tile: built once, on first use, from the chunk references
+    ///     the zone file was loaded from.
+    /// </summary>
+    /// <remarks>
+    ///     The build is under a lock because the planner may be running on the shard's worker threads
+    ///     when it asks (see <see cref="WorldPopulationPlanner" />): two threads filling this in at
+    ///     once would be two threads writing one dictionary and - worse - two candidates for
+    ///     <see cref="_chunkGridOrigin" />, so a cell's chunk could depend on which of them won. Once
+    ///     built it is only read.
+    /// </remarks>
+    /// <param name="chunks">The loaded zone's chunk references.</param>
+    /// <returns>The chunk id of each tile of the zone's grid.</returns>
     private Dictionary<(int X, int Y), uint> ChunkByIndex(IReadOnlyList<ZoneChunkRef> chunks)
     {
         if (_chunkByIndex != null)
@@ -252,31 +268,39 @@ public sealed class PhysicsWorldPopulationTerrain : IWorldPopulationTerrain
             return _chunkByIndex;
         }
 
-        var minX = float.MaxValue;
-        var minY = float.MaxValue;
-        foreach (var chunk in chunks)
+        lock (_chunkIndexLock)
         {
-            minX = MathF.Min(minX, chunk.Origin.X);
-            minY = MathF.Min(minY, chunk.Origin.Y);
-        }
-
-        _chunkGridOrigin = new Vector3(minX, minY, 0f);
-
-        var map = new Dictionary<(int X, int Y), uint>(chunks.Count);
-        foreach (var chunk in chunks)
-        {
-            var index = ChunkIndex(chunk.Origin);
-            if (map.TryGetValue(index, out var existing) && existing != 0)
+            if (_chunkByIndex != null)
             {
-                // Two zone refs landed on the same tile. Keep the copy that knows its ChunkRecord
-                // id; the overlapping one is the undeduped 0x10100/0x10101 pair.
-                continue;
+                return _chunkByIndex;
             }
 
-            map[index] = chunk.ChunkRecordId;
-        }
+            var minX = float.MaxValue;
+            var minY = float.MaxValue;
+            foreach (var chunk in chunks)
+            {
+                minX = MathF.Min(minX, chunk.Origin.X);
+                minY = MathF.Min(minY, chunk.Origin.Y);
+            }
 
-        _chunkByIndex = map;
-        return map;
+            _chunkGridOrigin = new Vector3(minX, minY, 0f);
+
+            var map = new Dictionary<(int X, int Y), uint>(chunks.Count);
+            foreach (var chunk in chunks)
+            {
+                var index = ChunkIndex(chunk.Origin);
+                if (map.TryGetValue(index, out var existing) && existing != 0)
+                {
+                    // Two zone refs landed on the same tile. Keep the copy that knows its ChunkRecord
+                    // id; the overlapping one is the undeduped 0x10100/0x10101 pair.
+                    continue;
+                }
+
+                map[index] = chunk.ChunkRecordId;
+            }
+
+            _chunkByIndex = map;
+            return map;
+        }
     }
 }

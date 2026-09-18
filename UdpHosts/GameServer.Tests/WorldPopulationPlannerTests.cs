@@ -17,7 +17,7 @@ namespace GameServer.Tests;
 public class WorldPopulationPlannerTests
 {
     private static (WorldPopulationPlanner Planner, FakeWorldPopulationDataSource Data, FakeWorldPopulationTerrain Terrain)
-        CreatePlanner(StandardWorldPopulationRules rules = null)
+        CreatePlanner(StandardWorldPopulationRules rules = null, int maxDegreeOfParallelism = 0)
     {
         var data = new FakeWorldPopulationDataSource();
         var terrain = new FakeWorldPopulationTerrain();
@@ -26,7 +26,8 @@ public class WorldPopulationPlannerTests
             rules ?? new StandardWorldPopulationRules(),
             data,
             terrain,
-            Log.Logger);
+            Log.Logger,
+            maxDegreeOfParallelism);
 
         return (planner, data, terrain);
     }
@@ -524,13 +525,47 @@ public class WorldPopulationPlannerTests
         var first = BuildFixedPlan();
         var second = BuildFixedPlan();
 
-        Assert.Equal(first.CellCount, second.CellCount);
-        Assert.Equal(first.SlotCount, second.SlotCount);
-        Assert.Equal(first.PlacedRosterCount, second.PlacedRosterCount);
+        AssertSamePlan(first, second, "the second plan");
+    }
 
-        foreach (var (key, cell) in first.Cells)
+    [Fact]
+    public void Plan_IsTheSamePlanBuiltOnSeveralThreadsAsOnOne()
+    {
+        // The cell build is the phase with worker threads under it (classification is a handful of
+        // anchor comparisons and two database lookups per cell, tens of thousands of times over), so
+        // this is the assertion that the threaded build is still one plan: same cells, same habitat
+        // and level, same slots in the same order.
+        var onOne = BuildFixedPlan(maxDegreeOfParallelism: 1);
+        var onSeveral = BuildFixedPlan(maxDegreeOfParallelism: 8);
+
+        AssertSamePlan(onOne, onSeveral, "the plan built on eight threads");
+    }
+
+    [Fact]
+    public void Plan_KeepsTheSamePlacesWhenTheDeployableRuleRunsOnSeveralThreads()
+    {
+        // The deployable filter is the plan's one quadratic pass (every deployable against every
+        // other), which is why it takes the threads too; which of them are in company decides what
+        // ground is settlement, so the two plans have to agree on it.
+        var onOne = BuildDeployablePlan(maxDegreeOfParallelism: 1);
+        var onSeveral = BuildDeployablePlan(maxDegreeOfParallelism: 8);
+
+        AssertSamePlan(onOne, onSeveral, "the plan built on eight threads");
+    }
+
+    /// <summary>
+    ///     Asserts two plans are the same plan: the same counts and, cell for cell and slot for slot,
+    ///     the same ground, habitat, level, facing and monster rows.
+    /// </summary>
+    private static void AssertSamePlan(WorldPopulationPlanner expected, WorldPopulationPlanner actual, string subject)
+    {
+        Assert.Equal(expected.CellCount, actual.CellCount);
+        Assert.Equal(expected.SlotCount, actual.SlotCount);
+        Assert.Equal(expected.PlacedRosterCount, actual.PlacedRosterCount);
+
+        foreach (var (key, cell) in expected.Cells)
         {
-            Assert.True(second.Cells.TryGetValue(key, out var other), $"cell {key} is missing from the second plan");
+            Assert.True(actual.Cells.TryGetValue(key, out var other), $"cell {key} is missing from {subject}");
             Assert.Equal(cell.Center, other.Center);
             Assert.Equal(cell.Habitat, other.Habitat);
             Assert.Equal(cell.Level, other.Level);
@@ -546,9 +581,9 @@ public class WorldPopulationPlannerTests
         }
     }
 
-    private static WorldPopulationPlanner BuildFixedPlan()
+    private static WorldPopulationPlanner BuildFixedPlan(int maxDegreeOfParallelism = 0)
     {
-        var (planner, data, terrain) = CreatePlanner();
+        var (planner, data, terrain) = CreatePlanner(maxDegreeOfParallelism: maxDegreeOfParallelism);
         AddGround(terrain);
         data.Anchors.Add(new WorldPopulationAnchor(new Vector3(16f, 16f, 0f), 40f, WorldPopulationHabitat.Settlement, 1001u));
         data.Anchors.Add(new WorldPopulationAnchor(new Vector3(112f, 112f, 0f), 40f, WorldPopulationHabitat.Melding, 0u));
@@ -557,6 +592,41 @@ public class WorldPopulationPlannerTests
         data.AddMonster(11, WorldPopulationHabitat.Settlement);
         data.AddMonster(12, WorldPopulationHabitat.Melding | WorldPopulationHabitat.Wilderness, difficultyCost: 300);
         data.AddMonster(13, WorldPopulationHabitat.Wilderness, difficultyCost: 50);
+
+        Build(planner);
+        return planner;
+    }
+
+    /// <summary>
+    ///     The fixed plan's ground with the deployables a zone actually has: camps of three or four
+    ///     props standing together, and a few lone props out in the field that must not paint
+    ///     settlement ground.
+    /// </summary>
+    private static WorldPopulationPlanner BuildDeployablePlan(int maxDegreeOfParallelism)
+    {
+        var (planner, data, terrain) = CreatePlanner(maxDegreeOfParallelism: maxDegreeOfParallelism);
+        AddGround(terrain);
+
+        for (int camp = 0; camp < 6; camp++)
+        {
+            float x = 8f + (camp * 20f);
+            data.Anchors.Add(new WorldPopulationAnchor(new Vector3(x, 8f, 0f), 0f, WorldPopulationHabitat.Settlement, 0u));
+            data.Anchors.Add(new WorldPopulationAnchor(new Vector3(x + 4f, 8f, 0f), 0f, WorldPopulationHabitat.Settlement, 0u));
+            data.Anchors.Add(new WorldPopulationAnchor(new Vector3(x, 12f, 0f), 0f, WorldPopulationHabitat.Settlement, 0u));
+        }
+
+        // Far enough apart that none of them is the others' company: the rule's radius is 60 m.
+        for (int lone = 0; lone < 6; lone++)
+        {
+            data.Anchors.Add(new WorldPopulationAnchor(
+                new Vector3(200f + (lone * 400f), 200f, 0f),
+                0f,
+                WorldPopulationHabitat.Settlement,
+                0u));
+        }
+
+        data.AddMonster(10, WorldPopulationHabitat.Wilderness);
+        data.AddMonster(11, WorldPopulationHabitat.Settlement);
 
         Build(planner);
         return planner;

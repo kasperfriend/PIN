@@ -1,5 +1,6 @@
 using GameServer;
 using GameServer.Systems.Spawning.Population;
+using Shared.Common;
 using Xunit;
 
 namespace GameServer.Tests;
@@ -141,6 +142,80 @@ public class StandardWorldPopulationRulesTests
         Assert.Equal(0f, rules.DeployableInfluenceRadius);
         Assert.Equal(0f, rules.OutpostSettlementRadius);
         Assert.Equal(55f, rules.MeldingInfluenceRadius);
+    }
+
+    [Fact]
+    public void AppConfig_MapsTheWorkerThreadSettings()
+    {
+        var appSettings = AppConfigFile.ParseAppSettings(
+            """
+            <configuration><appSettings>
+                <add key="ServerWorkerThreads" value="6"/>
+                <add key="NavigationBakeThreads" value="14"/>
+                <add key="WorldPopulationPlanThreads" value="9"/>
+                <add key="PhysicsThreads" value="5"/>
+                <add key="WorldPopulationPlanOnWorkers" value="false"/>
+            </appSettings></configuration>
+            """,
+            "test");
+        var settings = new GameServerSettings();
+
+        GameServerModule.ApplyServerWorkerSettings(appSettings, settings);
+
+        Assert.Equal(6, settings.ServerWorkerThreads);
+        Assert.Equal(14, settings.NavigationBakeThreads);
+        Assert.Equal(9, settings.WorldPopulationPlanThreads);
+        Assert.Equal(5, settings.PhysicsThreads);
+        Assert.False(settings.WorldPopulationPlanOnWorkers);
+    }
+
+    [Fact]
+    public void Defaults_LeaveTheBackgroundWorkAutomatic()
+    {
+        var settings = new GameServerSettings();
+
+        // 0 is the automatic thread count everywhere, and the plan is built off the tick: the
+        // settings a server started with no config at all should have.
+        Assert.Equal(0, settings.ServerWorkerThreads);
+        Assert.Equal(0, settings.NavigationBakeThreads);
+        Assert.Equal(0, settings.WorldPopulationPlanThreads);
+        Assert.Equal(0, settings.PhysicsThreads);
+        Assert.True(settings.WorldPopulationPlanOnWorkers);
+    }
+
+    [Fact]
+    public void ThePerPieceThreadSettings_OverrideTheSharedOneWhenTheyAreSet()
+    {
+        // 0 follows the shared setting when it is set; a number is its own.
+        var shared = new GameServerSettings { ServerWorkerThreads = 12 };
+
+        Assert.Equal(12, shared.ResolvedNavigationBakeThreads);
+        Assert.Equal(12, shared.ResolvedWorldPopulationPlanThreads);
+
+        var perPiece = new GameServerSettings
+        {
+            ServerWorkerThreads = 4,
+            NavigationBakeThreads = 14,
+            WorldPopulationPlanThreads = 9,
+        };
+
+        Assert.Equal(14, perPiece.ResolvedNavigationBakeThreads);
+        Assert.Equal(9, perPiece.ResolvedWorldPopulationPlanThreads);
+    }
+
+    [Fact]
+    public void WithNothingConfigured_EachPieceFollowsItsOwnAutomaticRule()
+    {
+        // The important default: a machine nobody has configured does not get one thread count for
+        // everything. 0 here means "0 to the resolver", which is what makes the bake take the whole
+        // box and the plan build take half of it.
+        var settings = new GameServerSettings();
+
+        Assert.Equal(0, settings.ResolvedNavigationBakeThreads);
+        Assert.Equal(0, settings.ResolvedWorldPopulationPlanThreads);
+
+        Assert.InRange(ParallelWork.ResolveBake(settings.ResolvedNavigationBakeThreads), 1, ParallelWork.MaxBakeDegree);
+        Assert.InRange(ParallelWork.ResolvePlan(settings.ResolvedWorldPopulationPlanThreads), 1, ParallelWork.MaxPlanDegree);
     }
 
     [Fact]
