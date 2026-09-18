@@ -115,10 +115,56 @@ public class GameServerSettings
     ///    startup, and the world-population plan build that follows it. 0 (the default) is one
     ///    thread per processor minus the one the shard loop runs on, capped at eight, so a machine
     ///    that also runs the game client keeps cores for it; 1 keeps that work on a single background
-    ///    thread instead of several; a larger number is used as given. See
-    ///    <c>Docs/MULTITHREADING.md</c> for what is threaded and what deliberately is not.
+    ///    thread instead of several; a larger number is used as given - an operator who writes one has
+    ///    measured their machine, which is how a 16-thread box gets more than the automatic eight.
+    ///    <see cref="NavigationBakeThreads"/> and <see cref="WorldPopulationPlanThreads"/> override it
+    ///    per piece of work. See <c>Docs/MULTITHREADING.md</c> for what is threaded, what deliberately
+    ///    is not, and worked-out values for 8- and 16-thread machines.
     /// </summary>
     public int ServerWorkerThreads { get; set; }
+
+    /// <summary>
+    ///    Threads the zone's navigation-mesh bake may use, overriding
+    ///    <see cref="ServerWorkerThreads"/>. 0 (the default) follows it. The bake happens while the
+    ///    shard is still loading, before it accepts a client, so this is the one piece of work that
+    ///    can be given almost every core on the machine: on a 16-thread box with the game client not
+    ///    yet running, 14-15 is fine; running the client on the same machine, leave it room. 1 bakes
+    ///    on a single thread.
+    /// </summary>
+    public int NavigationBakeThreads { get; set; }
+
+    /// <summary>
+    ///    Threads the world-population plan build may use, overriding
+    ///    <see cref="ServerWorkerThreads"/>. 0 (the default) follows it. This build runs while
+    ///    players are in the zone, next to the shard's tick, the physics dispatcher and (on a shared
+    ///    machine) the game client, so the useful number here is smaller than the bake's: about half
+    ///    the cores is a good starting point, and both the shard and the plan are happiest when one
+    ///    or two cores are left alone. Only used when <see cref="WorldPopulationPlanOnWorkers"/> is
+    ///    true.
+    /// </summary>
+    public int WorldPopulationPlanThreads { get; set; }
+
+    /// <summary>
+    ///    Threads the Bepu physics dispatcher may use. 0 (the default) is the engine's own automatic
+    ///    choice: one thread per processor minus two, capped at four, which is what a 20 Hz shard
+    ///    timestep with mostly static zone geometry needs. A larger number is used as given for a zone
+    ///    with many moving bodies - every dispatch thread spins while it waits for work, so it buys
+    ///    physics throughput with CPU the shard, the population build and the game client would
+    ///    otherwise have.
+    /// </summary>
+    public int PhysicsThreads { get; set; }
+
+    /// <summary>
+    ///    The bake's thread count: <see cref="NavigationBakeThreads"/> when it is set, otherwise the
+    ///    shared <see cref="ServerWorkerThreads"/> (0 = automatic).
+    /// </summary>
+    public int ResolvedNavigationBakeThreads => NavigationBakeThreads > 0 ? NavigationBakeThreads : ServerWorkerThreads;
+
+    /// <summary>
+    ///    The plan build's thread count: <see cref="WorldPopulationPlanThreads"/> when it is set,
+    ///    otherwise the shared <see cref="ServerWorkerThreads"/> (0 = automatic).
+    /// </summary>
+    public int ResolvedWorldPopulationPlanThreads => WorldPopulationPlanThreads > 0 ? WorldPopulationPlanThreads : ServerWorkerThreads;
 
     /// <summary>
     ///    Build the world-population plan on worker threads rather than one budgeted slice per shard

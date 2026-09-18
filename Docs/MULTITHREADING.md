@@ -18,26 +18,31 @@ wait.
 | Chunk collision loading (`ZoneLoader` → `ChunkProcessor` → `TagfileLoader`) | Shard construction | 1 - see *What is deliberately still serial* |
 | Shard tick (packets, entities, physics, AI, placement) | The shard's loop thread | 1, always |
 
-## 1. The setting
+## 1. The settings
 
 ```xml
 <add key="ServerWorkerThreads" value="0"/>
+<add key="NavigationBakeThreads" value="0"/>
+<add key="WorldPopulationPlanThreads" value="0"/>
+<add key="PhysicsThreads" value="0"/>
 <add key="WorldPopulationPlanOnWorkers" value="true"/>
 ```
 
-`ServerWorkerThreads` decides how many threads the navigation bake uses, and
-how many the plan worker's parallel phases use.
+Every count is `0` = automatic, and every count is one number per piece of work:
 
-- `0` (the default) is automatic: one thread per processor **minus one**, capped
-  at 8. The minus one is the shard's own core, and the cap is for the setup most
-  people run: the game client on the same machine as the server. A 16-core
-  machine gets 8 worker threads, not 15.
-- `1` keeps both pieces of work on a single background thread - the bake inline
-  on the thread that is loading the zone, the plan on one worker.
-- A larger number is used as given. An operator who writes a number has measured
-  their machine.
+| Key | Decides | `0` means |
+|-----|---------|-----------|
+| `ServerWorkerThreads` | The default for both pieces below | one thread per processor minus one, capped at 8 |
+| `NavigationBakeThreads` | Threads the zone's navigation bake may use | follow `ServerWorkerThreads` |
+| `WorldPopulationPlanThreads` | Threads the plan build may use | follow `ServerWorkerThreads` |
+| `PhysicsThreads` | Threads the Bepu physics dispatcher runs with | one per processor minus two, capped at 4 |
+| `WorldPopulationPlanOnWorkers` | *Where* the plan is built (worker or shard tick) | - (it is a boolean, `true` by default) |
 
-`WorldPopulationPlanOnWorkers` decides *where* the plan is built:
+A positive number is always used **as given** - including past the automatic
+caps, which is the point of setting one. `1` keeps that piece of work on a
+single background thread.
+
+### Where the plan is built
 
 - `true` (the default) starts a worker the first time the zone has a player in
   it and the plan is not ready. The worker builds the whole plan and the tick
@@ -49,14 +54,47 @@ how many the plan worker's parallel phases use.
   update, on the shard's own thread. That is the setting to use on a machine so
   busy that even a short burst on background threads is unwelcome; it costs the
   zone the wait it always had - at 20,000 faces per 250 ms, tens of seconds for a
-  large zone.
+  large zone. `WorldPopulationPlanThreads` is ignored on this path, because
+  nothing is threaded any more.
 
-Both are read from `App.config` at startup like every other setting (see
-`Docs/WORLD_POPULATION.md` §6 for the rest of the population block), and the
-shard logs what it resolved:
+### What to write on an 8- and a 16-thread machine
+
+The bake and the plan want different numbers, because they run in different
+company. The bake happens while the shard is still loading and refuses clients:
+nothing else on the server is busy, so it can take almost every core. The plan
+runs while players are in the zone, next to the shard's tick, the physics
+dispatcher and - on the machine most people run - the game client, so it should
+leave cores alone.
+
+| Machine | `NavigationBakeThreads` | `WorldPopulationPlanThreads` | `PhysicsThreads` |
+|---------|------------------------|------------------------------|------------------|
+| 4 cores / 8 threads | `7` (or leave `0`: automatic gives 7) | `4`-`6` | `4` (the automatic cap) |
+| 8 cores / 16 threads | `14`-`15` | `8`-`10` | `4`-`6` |
+| 8/16 threads **and the game client on the same machine** | `8`-`10` | `6`-`8` | `4` |
+
+The automatic `8` cap exists for exactly that last row: a 16-thread box that also
+runs the client should not have the server's background work taking 15 threads by
+default. A dedicated server (or a load you do not watch) can be told to.
+
+`ServerWorkerThreads` is the one number to set if you would rather not think
+about it: it moves both the bake and the plan, and the two per-piece keys override
+it for one of them.
+
+`PhysicsThreads` is the one knob that is not about loading or populating: it
+changes how much of each tick the physics solve spreads over. Every Bepu dispatch
+thread spins while it waits for work, so raising it takes CPU from everything else
+on the machine - including the shard's own tick. `0` is what the engine has always
+used and is right for the shipped content; raise it only for a zone with many
+moving bodies (a big fight), and watch the tick time when you do.
+
+### Where they are read
+
+All five come from `App.config` at startup like every other setting (`App.Default.config`
+ships them with these comments; see `Docs/WORLD_POPULATION.md` §6 for the rest of the
+population block), and the shard logs what it resolved:
 
 ```
-Server worker threads: 4 (configured 0; 0 = automatic) - zone navigation bake 4 thread(s), world population plan 4 thread(s) off the shard's tick
+Threads: navigation bake 14, world population plan 8 thread(s) off the shard's tick, physics dispatcher 4 - configured ServerWorkerThreads 0, NavigationBakeThreads 14, WorldPopulationPlanThreads 8, PhysicsThreads 0 (0 = automatic; 8 logical processors)
 ```
 
 The bake then says how many threads it used and how long it took:
@@ -175,10 +213,13 @@ builds one plan on the tick and one on a worker and compares the two.
 
 | Question | Answer |
 |----------|--------|
-| How do I make the server use fewer threads? | `ServerWorkerThreads=1` (one background thread), plus `WorldPopulationPlanOnWorkers=false` to keep the plan on the shard's tick entirely |
-| How do I make it use more? | `ServerWorkerThreads=12` - the number is used as given |
+| Which key do I set on an 8-thread CPU? | `NavigationBakeThreads=7`, `WorldPopulationPlanThreads=6`, `PhysicsThreads=4` - or nothing at all: the automatic values are 7, 7 and 4 |
+| And on a 16-thread CPU? | `NavigationBakeThreads=14`, `WorldPopulationPlanThreads=10`, `PhysicsThreads=4`; halve the first two if the game client shares the machine |
+| How do I make the server use only one background thread? | `ServerWorkerThreads=1`, plus `WorldPopulationPlanOnWorkers=false` to keep the plan on the shard's tick entirely |
+| How do I make it use more *at all*? | Write a number: anything above 0 is used as given, past the automatic caps |
 | Why is the default capped at cores - 1 and at 8? | The minus one leaves the shard's loop its own core; the cap leaves the game client room on the machine most people run the server on |
 | Does the plan change if the thread count changes? | No, and two tests assert it. Cells, slots, positions, facings and monster rows are identical |
 | Does the bake change? | No, and `ABakeOnSeveralThreadsIsTheBakeOnOne` asserts it face for face, route for route |
-| Which log lines say what happened? | `Server worker threads: …`, `baking the navigation mesh from … on N worker thread(s)`, `baked … on N worker thread(s)`, `World population plan for zone … built on N worker thread(s) in …` |
+| Does the physics get faster with more threads? | Not for the shipped content - it is mostly static geometry at 20 Hz, and the solve is not the tick's bottleneck. It is a knob for zones with many moving bodies, and it costs CPU everywhere else |
+| Which log lines say what happened? | `Threads: navigation bake …`, `baking the navigation mesh from … on N worker thread(s)`, `baked … on N worker thread(s)`, `World population plan for zone … built on N worker thread(s) in …` |
 | Why is my CPU still not pinned during the bake? | The stacked-island pass is single-threaded by design, and the zone cache / disk read are serial too - a bake is not a benchmark |

@@ -168,13 +168,32 @@ the `serilog:` logging keys, `ServerWorkerThreads`, ...) still live in the XML
 GameServer parses that file directly from disk, so editing it works the same way
 in a local build and in the single-file release build.
 
-`ServerWorkerThreads` (default `0` = automatic) is how many threads the server's
-own background work may use: the zone's navigation-mesh bake at startup and the
-world-population plan build. The default is one thread per processor minus the
-shard's own core, capped at eight, so a machine that also runs the game client
-keeps cores for it. See [`Docs/MULTITHREADING.md`](Docs/MULTITHREADING.md) for
-what is threaded, what deliberately is not, and why the results are the same
-either way.
+How many threads the server's own heavy work may use is configurable, per piece
+of work (`0` = automatic everywhere):
+
+```xml
+<add key="ServerWorkerThreads" value="0"/>            <!-- default for the two below -->
+<add key="NavigationBakeThreads" value="0"/>          <!-- the zone's navigation bake (at startup) -->
+<add key="WorldPopulationPlanThreads" value="0"/>     <!-- the world-population plan build (in play) -->
+<add key="PhysicsThreads" value="0"/>                 <!-- the Bepu physics dispatcher -->
+<add key="WorldPopulationPlanOnWorkers" value="true"/><!-- build the plan off the shard's tick -->
+```
+
+The automatic values are one thread per processor minus the shard's own core,
+capped at eight for the bake and the plan, and cores − 2 capped at four for
+physics. On an 8-thread CPU that is `7`, `7`, `4`; on a 16-thread CPU `8`, `8`,
+`4` unless you write numbers. A number you write is used as given, so a
+16-thread machine can be told to run the bake on 14 threads:
+
+| Machine | `NavigationBakeThreads` | `WorldPopulationPlanThreads` |
+|---------|------------------------|------------------------------|
+| 8 threads (4c/8t) | `7` | `6` |
+| 16 threads (8c/16t), dedicated | `14` | `10` |
+| 16 threads, game client on the same box | `10` | `8` |
+
+See [`Docs/MULTITHREADING.md`](Docs/MULTITHREADING.md) for what each piece of
+work is, what deliberately stays on the shard's single thread, and why the
+results are the same at any thread count.
 
 ### Connecting with friends
 

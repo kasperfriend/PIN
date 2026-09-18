@@ -157,6 +157,12 @@ public partial class PhysicsEngine
     /// </summary>
     private readonly int _workerThreads;
 
+    /// <summary>
+    ///     Threads the Bepu physics dispatcher runs with (0 = the engine's automatic choice). Read
+    ///     back by the shard's startup log so the line cannot disagree with what was built.
+    /// </summary>
+    private readonly int _physicsThreads;
+
     private TypedIndex _fallbackShape;
     private NavigationMesh? _navigationMesh;
     private int _debugEntityIndex = -1;
@@ -171,7 +177,11 @@ public partial class PhysicsEngine
     ///     (see <see cref="ParallelWork" />). Only the bake is threaded - loading the chunks
     ///     themselves builds Bepu shapes in this simulation, which is single-threaded work.
     /// </param>
-    public PhysicsEngine(EventBus eventBus, uint zoneId, string mapsPath = "", string assetDBPath = "", bool loadMapsCollision = false, DebugProjectileHitCallbacks? debugProjectileHitCallbacks = null, bool isDebugPipeClient = false, string cachePath = "", bool forceReload = false, int workerThreads = 0)
+    /// <param name="physicsThreads">
+    ///     Threads the Bepu physics dispatcher runs with; 0 keeps the engine's own choice (see
+    ///     <see cref="PhysicsThreadCount" />), a positive number is used as given.
+    /// </param>
+    public PhysicsEngine(EventBus eventBus, uint zoneId, string mapsPath = "", string assetDBPath = "", bool loadMapsCollision = false, DebugProjectileHitCallbacks? debugProjectileHitCallbacks = null, bool isDebugPipeClient = false, string cachePath = "", bool forceReload = false, int workerThreads = 0, int physicsThreads = 0)
     {
         _eventBus = eventBus;
         _logger = Log.Logger.ForContext<PhysicsEngine>();
@@ -185,12 +195,16 @@ public partial class PhysicsEngine
         // fleet busy: every Bepu dispatch thread is a spinning worker that competes with the game
         // client for a core, and the typical setup runs server and client on the same machine. This
         // simulation profile (mostly static zone geometry plus a few hundred kinematic bodies) is
-        // comfortably served by a handful of threads, so cap the fleet.
+        // comfortably served by a handful of threads, so cap the fleet - unless the operator set
+        // PhysicsThreads, in which case their number is used as given (see Docs/MULTITHREADING.md).
         const int MaxDispatcherThreads = 4;
-        var targetThreadCount = int.Clamp(
-            Environment.ProcessorCount > 4 ? Environment.ProcessorCount - 2 : Environment.ProcessorCount - 1,
-            1,
-            MaxDispatcherThreads);
+        var targetThreadCount = physicsThreads > 0
+            ? physicsThreads
+            : int.Clamp(
+                Environment.ProcessorCount > 4 ? Environment.ProcessorCount - 2 : Environment.ProcessorCount - 1,
+                1,
+                MaxDispatcherThreads);
+        _physicsThreads = targetThreadCount;
 
         BufferPool = new BufferPool();
         ThreadDispatcher = new ThreadDispatcher(targetThreadCount);
@@ -314,6 +328,13 @@ public partial class PhysicsEngine
 
     /// <summary>How many walkable faces the loaded zone's navigation mesh has; 0 when there is none.</summary>
     public int WalkableFaceCount => _navigationMesh?.FaceCount ?? 0;
+
+    /// <summary>
+    ///     How many threads the physics dispatcher was built with: the configured
+    ///     <c>PhysicsThreads</c> when it is set, otherwise the automatic choice - one thread per
+    ///     processor minus two, capped at four.
+    /// </summary>
+    public int PhysicsThreadCount => _physicsThreads;
 
     /// <summary>
     ///     The centroid of one walkable face of the loaded navigation mesh: a spot the zone's own

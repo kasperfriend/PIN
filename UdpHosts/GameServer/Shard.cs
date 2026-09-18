@@ -83,7 +83,12 @@ public class Shard : IShard
         Outposts = new ConcurrentDictionary<uint, IDictionary<uint, OutpostEntity>>();
         EventBus = new EventBus();
         var debugCallbacks = new DebugProjectileHitCallbacks(this);
-        Physics = new PhysicsEngine(EventBus, Settings.ZoneId, Settings.MapsPath, Settings.AssetDBPath, Settings.LoadMapsCollision, debugCallbacks, false, Settings.CachePath, Settings.ForceReloadZone, Settings.ServerWorkerThreads);
+
+        // Threads: the bake gets its own setting (it runs before a client is let in, so it may take
+        // almost every core), the plan build gets its own (it runs next to the tick and the players,
+        // so it wants fewer), and both fall back to ServerWorkerThreads when they are 0.
+        var bakeThreads = Settings.ResolvedNavigationBakeThreads;
+        Physics = new PhysicsEngine(EventBus, Settings.ZoneId, Settings.MapsPath, Settings.AssetDBPath, Settings.LoadMapsCollision, debugCallbacks, false, Settings.CachePath, Settings.ForceReloadZone, bakeThreads, Settings.PhysicsThreads);
         AI = new AiEngine(this, EventBus);
         Movement = new MovementRelay(this);
         Abilities = new AbilitySystem(this);
@@ -110,7 +115,7 @@ public class Shard : IShard
         // tick-budgeted pacing, which is the number the service is handed here (0 = on the tick).
         var populationRules = StandardWorldPopulationRules.FromSettings(settings);
         var planWorkerThreads = settings.WorldPopulationPlanOnWorkers
-            ? ParallelWork.Resolve(settings.ServerWorkerThreads)
+            ? ParallelWork.Resolve(settings.ResolvedWorldPopulationPlanThreads)
             : 0;
         WorldPopulation = new WorldPopulationService(
             this,
@@ -120,14 +125,21 @@ public class Shard : IShard
             new EntityManagerWorldPopulationSpawner(this, populationRules.DeactivationRadius),
             planWorkerThreads);
 
+        // What the numbers above resolved to, so an operator who set a value can see it take effect
+        // and one who left 0 can see what the machine chose. The dispatcher's own count is read back
+        // from the engine rather than recomputed, so the line cannot disagree with it.
         Logger.Information(
-            "Server worker threads: {Threads} (configured {Configured}; 0 = automatic) - zone navigation bake {Bake}, world population plan {Plan}",
-            ParallelWork.Resolve(settings.ServerWorkerThreads),
-            settings.ServerWorkerThreads,
-            $"{ParallelWork.Resolve(settings.ServerWorkerThreads)} thread(s)",
+            "Threads: navigation bake {Bake}, world population plan {Plan}, physics dispatcher {Physics} - configured ServerWorkerThreads {Shared}, NavigationBakeThreads {BakeSetting}, WorldPopulationPlanThreads {PlanSetting}, PhysicsThreads {PhysicsSetting} (0 = automatic; {Cores} logical processors)",
+            ParallelWork.Resolve(bakeThreads),
             planWorkerThreads > 0
                 ? $"{planWorkerThreads} thread(s) off the shard's tick"
-                : "on the shard's tick, one budget per update (WorldPopulationPlanOnWorkers is false)");
+                : "on the shard's tick (WorldPopulationPlanOnWorkers is false)",
+            Physics.PhysicsThreadCount,
+            settings.ServerWorkerThreads,
+            settings.NavigationBakeThreads,
+            settings.WorldPopulationPlanThreads,
+            settings.PhysicsThreads,
+            Environment.ProcessorCount);
     }
 
     public DateTime StartTime => DateTimeExtensions.Epoch.AddSeconds(_startTime);

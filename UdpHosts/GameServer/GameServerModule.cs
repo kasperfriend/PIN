@@ -360,6 +360,9 @@ public class GameServerModule : Module
     internal static void ApplyServerWorkerSettings(NameValueCollection appSettings, GameServerSettings settings)
     {
         ApplyWorldPopulationIntSetting(appSettings, "ServerWorkerThreads", value => settings.ServerWorkerThreads = value);
+        ApplyWorldPopulationIntSetting(appSettings, "NavigationBakeThreads", value => settings.NavigationBakeThreads = value);
+        ApplyWorldPopulationIntSetting(appSettings, "WorldPopulationPlanThreads", value => settings.WorldPopulationPlanThreads = value);
+        ApplyWorldPopulationIntSetting(appSettings, "PhysicsThreads", value => settings.PhysicsThreads = value);
         ApplyWorldPopulationBoolSetting(appSettings, "WorldPopulationPlanOnWorkers", value => settings.WorldPopulationPlanOnWorkers = value);
     }
 

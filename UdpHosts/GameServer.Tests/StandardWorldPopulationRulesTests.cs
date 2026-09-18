@@ -150,6 +150,9 @@ public class StandardWorldPopulationRulesTests
             """
             <configuration><appSettings>
                 <add key="ServerWorkerThreads" value="6"/>
+                <add key="NavigationBakeThreads" value="14"/>
+                <add key="WorldPopulationPlanThreads" value="9"/>
+                <add key="PhysicsThreads" value="5"/>
                 <add key="WorldPopulationPlanOnWorkers" value="false"/>
             </appSettings></configuration>
             """,
@@ -159,6 +162,9 @@ public class StandardWorldPopulationRulesTests
         GameServerModule.ApplyServerWorkerSettings(appSettings, settings);
 
         Assert.Equal(6, settings.ServerWorkerThreads);
+        Assert.Equal(14, settings.NavigationBakeThreads);
+        Assert.Equal(9, settings.WorldPopulationPlanThreads);
+        Assert.Equal(5, settings.PhysicsThreads);
         Assert.False(settings.WorldPopulationPlanOnWorkers);
     }
 
@@ -167,10 +173,33 @@ public class StandardWorldPopulationRulesTests
     {
         var settings = new GameServerSettings();
 
-        // 0 is the automatic thread count, and the plan is built off the tick: the settings a server
-        // started with no config at all should have.
+        // 0 is the automatic thread count everywhere, and the plan is built off the tick: the
+        // settings a server started with no config at all should have.
         Assert.Equal(0, settings.ServerWorkerThreads);
+        Assert.Equal(0, settings.NavigationBakeThreads);
+        Assert.Equal(0, settings.WorldPopulationPlanThreads);
+        Assert.Equal(0, settings.PhysicsThreads);
         Assert.True(settings.WorldPopulationPlanOnWorkers);
+    }
+
+    [Fact]
+    public void ThePerPieceThreadSettings_OverrideTheSharedOneWhenTheyAreSet()
+    {
+        // 0 follows the shared setting (which 0 then takes as automatic); a number is its own.
+        var shared = new GameServerSettings { ServerWorkerThreads = 12 };
+
+        Assert.Equal(12, shared.ResolvedNavigationBakeThreads);
+        Assert.Equal(12, shared.ResolvedWorldPopulationPlanThreads);
+
+        var perPiece = new GameServerSettings
+        {
+            ServerWorkerThreads = 4,
+            NavigationBakeThreads = 14,
+            WorldPopulationPlanThreads = 9,
+        };
+
+        Assert.Equal(14, perPiece.ResolvedNavigationBakeThreads);
+        Assert.Equal(9, perPiece.ResolvedWorldPopulationPlanThreads);
     }
 
     [Fact]
