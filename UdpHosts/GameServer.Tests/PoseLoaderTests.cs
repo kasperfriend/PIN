@@ -59,7 +59,7 @@ public class PoseLoaderTests : IDisposable
             Origin=<2.1t 0 0>
             """);
 
-        var loader = new GameServer.Physics.PoseLoader.PoseLoader(_root, new CapturingLogger().Logger);
+        var loader = new PoseLoader(_root, new CapturingLogger().Logger);
 
         Assert.True(loader.TryLoad("00189610", out var pose));
         Assert.Equal("Giant Beetle", pose.Name);
@@ -84,7 +84,7 @@ public class PoseLoaderTests : IDisposable
             """);
 
         var logger = new CapturingLogger();
-        var loader = new GameServer.Physics.PoseLoader.PoseLoader(_root, logger.Logger);
+        var loader = new PoseLoader(_root, logger.Logger);
 
         Assert.False(loader.TryLoad("00189611", out _));
         Assert.Equal(1, loader.ReadCount);
@@ -102,7 +102,7 @@ public class PoseLoaderTests : IDisposable
     [Fact]
     public void TryLoad_RemembersAnAssetThatIsNotThereAtAll()
     {
-        var loader = new GameServer.Physics.PoseLoader.PoseLoader(_root, new CapturingLogger().Logger);
+        var loader = new PoseLoader(_root, new CapturingLogger().Logger);
 
         Assert.False(loader.TryLoad("00299999", out _));
         Assert.False(loader.TryLoad("00299999", out _));
@@ -115,7 +115,7 @@ public class PoseLoaderTests : IDisposable
     public void TryLoad_RemembersAnIdThatIsNotAnAssetName()
     {
         var logger = new CapturingLogger();
-        var loader = new GameServer.Physics.PoseLoader.PoseLoader(_root, logger.Logger);
+        var loader = new PoseLoader(_root, logger.Logger);
 
         Assert.False(loader.TryLoad("not-an-id", out _));
         Assert.False(loader.TryLoad("not-an-id", out _));
@@ -138,7 +138,7 @@ public class PoseLoaderTests : IDisposable
             Radius=0.5
             """);
 
-        var loader = new GameServer.Physics.PoseLoader.PoseLoader(_root, new CapturingLogger().Logger);
+        var loader = new PoseLoader(_root, new CapturingLogger().Logger);
 
         Assert.True(loader.TryLoad("00189612", out var first));
         Assert.True(loader.TryLoad("00189612", out var second));
