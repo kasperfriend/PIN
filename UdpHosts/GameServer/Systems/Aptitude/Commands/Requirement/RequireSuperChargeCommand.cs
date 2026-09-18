@@ -20,18 +20,20 @@ public class RequireSuperChargeCommand : Command, ICommand
 
         if (target is CharacterEntity character)
         {
-            var currentValue = character.Character_CombatController.SuperChargeProp.Value;
+            if (character.Character_CombatController?.SuperChargeProp == null)
+            {
+                // No controllers yet (character never became observable): no gauge, no gate.
+                return false;
+            }
 
             var percent = AbilitySystem.RegistryOp(context.Register, Params.Percent, (Operand)Params.PercentRegop);
 
-            // The row asks for a fraction of the 0..100 gauge; the old math compared
-            // against a fraction of the CURRENT charge, which was vacuously true for
-            // any Percent <= 100.
-            // NOTE: the factory still routes this command to the fail-open
-            // placeholder on purpose - nothing generates supercharge yet (see
-            // ConsumeSuperChargeCommand), so gating on the gauge would brick HKMs
-            // after their first cast. This class is the ready-to-enable gate.
-            return currentValue >= percent / 100f * 100f;
+            // The row asks for a fraction of the 0..100 gauge, so the row's Percent is
+            // the absolute threshold. The old math took a fraction of the CURRENT
+            // charge, which was vacuously true for any Percent <= 100. DamageSystem
+            // feeds the gauge from damage events (SuperChargePerDamageDealt/Taken), so
+            // gating on it does not brick HKMs.
+            return character.Character_CombatController.SuperChargeProp.Value >= percent;
         }
 
         Logger.Warning("{Command} {CommandId} fails because target is not a Character. If this is happening, we should investigate why.", nameof(RequireSuperChargeCommand), Params.Id);

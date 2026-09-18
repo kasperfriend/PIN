@@ -22,6 +22,13 @@ public class ConsumeSuperChargeCommand : Command, ICommand
 
         if (target is CharacterEntity character)
         {
+            if (character.Character_CombatController?.SuperChargeProp == null)
+            {
+                // No controllers yet (character never became observable): nothing to burn.
+                Logger.Warning("{Command} {CommandId} fails because the character has no supercharge gauge (controllers not initialized)", nameof(ConsumeSuperChargeCommand), Params.Id);
+                return false;
+            }
+
             var currentValue = character.Character_CombatController.SuperChargeProp.Value;
 
             var percent = AbilitySystem.RegistryOp(context.Register, Params.Percent, (Operand)Params.PercentRegop);
@@ -31,11 +38,9 @@ public class ConsumeSuperChargeCommand : Command, ICommand
             // less and less as the gauge drained (a 100%-cost HKM at 55 charge
             // burnt exactly what was left instead of requiring a full gauge).
             //
-            // Known gap: nothing on the server GENERATES supercharge yet (in the
-            // live game it accrues from dealing/taking damage), so burn-only
-            // behavior is what keeps RequireSuperCharge a fail-open placeholder -
-            // gating on the gauge today would brick HKMs after their first cast.
-            var value = percent / 100f * 100f;
+            // The gauge is fed from damage events by DamageSystem
+            // (SuperChargePerDamageDealt/Taken), so consuming here is paired.
+            var value = percent;
 
             character.Character_CombatController.SuperChargeProp = new SuperChargeData()
                {

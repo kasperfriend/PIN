@@ -211,6 +211,13 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             return;
         }
 
+        if (Character_CombatController?.SuperChargeProp == null)
+        {
+            // Controllers only exist once the character has been made observable
+            // (InitControllers); charge accrued earlier has nowhere to live yet.
+            return;
+        }
+
         float value = Character_CombatController.SuperChargeProp.Value + amount;
         Character_CombatController.SuperChargeProp = new AeroMessages.GSS.Character.Controller.SuperChargeData
         {
