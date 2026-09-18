@@ -109,6 +109,15 @@ public sealed class FakeWorldPopulationTerrain : IWorldPopulationTerrain
 
     public int SurfaceCount => Surfaces.Count;
 
+    /// <summary>
+    ///     What <see cref="IWorldPopulationTerrain.CoverRefusals"/> reports. The fake has no cover
+    ///     rule of its own, so a test sets the number it wants the status text to show.
+    /// </summary>
+    public int CoverRefusals { get; set; }
+
+    /// <summary>What <see cref="IWorldPopulationTerrain.CoverRuleSuspended"/> reports.</summary>
+    public bool CoverRuleSuspended { get; set; }
+
     public Vector3? ZoneBoundsMin { get; set; }
     public Vector3? ZoneBoundsMax { get; set; }
 

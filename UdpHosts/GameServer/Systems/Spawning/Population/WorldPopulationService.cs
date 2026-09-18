@@ -507,6 +507,19 @@ public sealed class WorldPopulationService
             ParkedSlotCount,
             OccupancyCount));
 
+        // Only when the terrain has an overhead-cover rule and it has seen something: a terrain
+        // without one (the test terrains, a shard with no collision) prints nothing.
+        if (_terrain.CoverRefusals > 0 || _terrain.CoverRuleSuspended)
+        {
+            _ = text.AppendLine(string.Format(
+                CultureInfo.InvariantCulture,
+                "Cover: {0} spots refused as covered{1}",
+                _terrain.CoverRefusals,
+                _terrain.CoverRuleSuspended
+                    ? " - the rule is suspended for this zone, because it refused almost every spot it judged; spots are placed on the plan's ground again"
+                    : string.Empty));
+        }
+
         if (_terrain.ZoneBoundsMin.HasValue && _terrain.ZoneBoundsMax.HasValue)
         {
             _ = text.AppendLine(string.Format(
@@ -895,11 +908,35 @@ public sealed class WorldPopulationService
                 // The ground it wants does not exist. Stop asking, and say so in the status.
                 slot.Parked = true;
                 ParkedSlotCount++;
+                LogParkedSlot(slot);
                 return;
             }
         }
 
         _pending.Enqueue(slot);
+    }
+
+    /// <summary>
+    ///     Says the first slot that parks, and then every fiftieth, naming the row and the patch of
+    ///     ground it was trying to stand on. A zone that parks its plan used to do it in complete
+    ///     silence - the status counted the parks and nothing in the log explained them - which is
+    ///     exactly the shape of an empty world nobody can diagnose from the log alone. (#114 had
+    ///     started saying this; #115 removed the line with the check it belonged to.)
+    /// </summary>
+    private void LogParkedSlot(WorldPopulationSlot slot)
+    {
+        if (ParkedSlotCount != 1 && ParkedSlotCount % 50 != 0)
+        {
+            return;
+        }
+
+        _logger.Information(
+            "World population: slot parked ({Parked} so far) - dbcharacter::Monster row {MonsterId} found no ground it fits around {Anchor} in zone {ZoneId} after {Failures} rounds of jittered attempts, so that cell's slot is out of the plan",
+            ParkedSlotCount,
+            slot.Candidate.MonsterId,
+            slot.Anchor,
+            _shard.ZoneId,
+            slot.Failures);
     }
 
     private Vector3 RetryJitter(WorldPopulationSlot slot, int attempt)

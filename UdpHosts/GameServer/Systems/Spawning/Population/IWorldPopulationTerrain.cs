@@ -49,6 +49,21 @@ public interface IWorldPopulationTerrain
     /// <returns>Whether a body of that size can stand there.</returns>
     bool TryResolveStandingSpot(Vector3 candidate, float bodyRadius, float bodyHeight, out Vector3 position);
 
+    /// <summary>
+    ///     How many candidate spots the ground's overhead-cover rule has refused since the terrain
+    ///     was created, or 0 when the terrain has no such rule. <c>\population status</c> prints it,
+    ///     so a world that spawns nothing has a number to point at even when the rule is not yet
+    ///     convinced it is wrong about the zone.
+    /// </summary>
+    int CoverRefusals => 0;
+
+    /// <summary>
+    ///     Whether the overhead-cover rule has switched itself off for this zone because it was
+    ///     refusing almost every spot it judged - the failure shape that emptied whole zones before
+    ///     (see <see cref="PhysicsWorldPopulationTerrain"/>). Printed by <c>\population status</c>.
+    /// </summary>
+    bool CoverRuleSuspended => false;
+
     /// <summary>Zone bounds from ZoneBoundsLayer (0x21000) if present, from actual client map file.</summary>
     Vector3? ZoneBoundsMin { get; }
     Vector3? ZoneBoundsMax { get; }
