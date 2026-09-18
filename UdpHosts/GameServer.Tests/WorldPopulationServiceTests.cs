@@ -390,6 +390,31 @@ public class WorldPopulationServiceTests
     }
 
     [Fact]
+    public void Tick_SaysTheFirstParkedSlot_SoAnEmptyZoneIsNotSilent()
+    {
+        var logger = new CapturingLogger();
+        var rules = new StandardWorldPopulationRules
+        {
+            MinPlayerDistance = 0f,
+            PlanWorkPerTick = 100_000,
+            MaxPlacementFailures = 2,
+            PlacementRetryDelayMs = 0,
+        };
+        var world = CreateWorld(rules, logger: logger.Logger);
+        world.Terrain.AddPlane(Vector3.Zero, 2, 2, 16f); // one cell, four slots
+        world.Terrain.AcceptPlacements = false;
+        world.Data.AddMonster(10);
+
+        Tick(world, 6);
+
+        Assert.Equal(4, world.Service.ParkedSlotCount);
+
+        // The first park says which row and where, once - four slots parking is one story, not four.
+        Assert.Equal(1, logger.CountContaining("slot parked"));
+        Assert.Contains("row 10", logger.Messages.First(message => message.Contains("slot parked")));
+    }
+
+    [Fact]
     public void Tick_SurvivesAZoneWhoseDataBlowsUpAndTurnsItselfOff()
     {
         var world = CreateWorld();
@@ -517,6 +542,27 @@ public class WorldPopulationServiceTests
 
         world.Service.Enabled = false;
         Assert.StartsWith("World population: off", world.Service.DescribeStatus());
+    }
+
+    [Fact]
+    public void Status_ReportsTheCoverRuleAndItsSuspension()
+    {
+        var world = CreateWorld();
+        AddGroundAndRoster(world);
+        Tick(world, 8);
+
+        // No cover refusal yet: nothing about cover in the report.
+        Assert.DoesNotContain("Cover:", world.Service.DescribeStatus());
+
+        world.Terrain.CoverRefusals = 40;
+        Assert.Contains("Cover: 40 spots refused as covered", world.Service.DescribeStatus());
+
+        // A rule that was wrong about the zone says so here, with what it did: an operator reading
+        // the status of a world that spawns nothing gets the mechanism, not just a count.
+        world.Terrain.CoverRuleSuspended = true;
+        var suspended = world.Service.DescribeStatus();
+        Assert.Contains("Cover: 40 spots refused as covered", suspended);
+        Assert.Contains("suspended for this zone", suspended);
     }
 
     [Fact]

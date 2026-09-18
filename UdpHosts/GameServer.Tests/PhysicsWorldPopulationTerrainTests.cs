@@ -71,6 +71,52 @@ public class PhysicsWorldPopulationTerrainTests
     }
 
     [Fact]
+    public void AZoneTheCoverRuleReadsAsCoveredEverywhereStillPopulates()
+    {
+        AddBox(new Vector3(0f, 0f, -1f), new Vector3(20f, 20f, 1f)); // ground, top at z = 0
+        AddBox(new Vector3(0f, 0f, 11f), new Vector3(20f, 20f, 1f)); // a roof over the whole of it
+
+        // Every spot the rule is asked about is refused. That is the shape that emptied whole zones
+        // twice before, so the rule suspends itself instead of letting the plan park on ground the
+        // zone's own collision calls walkable.
+        for (int i = 0; i < 40; i++)
+        {
+            Assert.False(_terrain.TryResolveStandingSpot(new Vector3(0f, 0f, 0f), 0.7f, 1.8f, out _));
+        }
+
+        Assert.True(_terrain.CoverRuleSuspended);
+        Assert.Equal(40, _terrain.CoverRefusals);
+
+        // And from there on the spot resolves: the population comes back as it was before the rule.
+        Assert.True(_terrain.TryResolveStandingSpot(new Vector3(0f, 0f, 0f), 0.7f, 1.8f, out var spot));
+        Assert.InRange(spot.Z, -0.01f, 0.01f);
+    }
+
+    [Fact]
+    public void AZoneWithOpenGroundForTheCoverRuleToApproveKeepsIt()
+    {
+        AddBox(new Vector3(0f, 0f, -1f), new Vector3(20f, 20f, 1f)); // ground, top at z = 0
+        AddBox(new Vector3(0f, 0f, 11f), new Vector3(5f, 5f, 1f)); // a roof over the origin only
+
+        // Half the spots are sheltered and half are open: the rule is answering about single spots,
+        // not contradicting the zone, so it stays on however long it is asked.
+        for (int i = 0; i < 40; i++)
+        {
+            if (i % 2 == 0)
+            {
+                Assert.False(_terrain.TryResolveStandingSpot(new Vector3(0f, 0f, 0f), 0.7f, 1.8f, out _));
+            }
+            else
+            {
+                Assert.True(_terrain.TryResolveStandingSpot(new Vector3(15f, 15f, 0f), 0.7f, 1.8f, out _));
+            }
+        }
+
+        Assert.False(_terrain.CoverRuleSuspended);
+        Assert.Equal(20, _terrain.CoverRefusals);
+    }
+
+    [Fact]
     public void ASpotThatCannotBeProvenOpenIsRefused()
     {
         AddBox(new Vector3(0f, 0f, -1f), new Vector3(20f, 20f, 1f)); // flat ground with its top at z = 0

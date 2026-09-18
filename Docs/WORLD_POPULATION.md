@@ -407,7 +407,14 @@ A planned position is checked twice, and both checks have to pass.
    everywhere as covered - either way a whole zone stops spawning, which is the
    failure an earlier take on this check was reverted for. Reaching 12 m from the
    head and never past the head means it can do neither, by construction; a natural
-   arch or canopy above 12 m is scenery over open ground, not a rooftop.
+   arch or canopy above 12 m is scenery over open ground, not a rooftop. The rule is
+   also not allowed to be wrong about a zone in silence: the terrain counts the spots
+   it judges and the spots it refuses, and once it has refused nine in ten of at least
+   forty judged spots it suspends the rule for the zone, logs a warning naming the
+   counters, and places on the plan's ground as the pre-check system did - an empty
+   world is the worse of the two failures on offer. `\population status` prints the
+   same counters (`Cover: N spots refused as covered`), so a world that spawns nothing
+   has a number and a mechanism to point at.
 
 **Server side** (`SpawnOccupancyGrid` + player distance):
 
@@ -437,7 +444,10 @@ never fills). Then:
 | room (a player, another body) | transient | retried after `PlacementRetryDelayMs` (1 s), never parked |
 
 A parked slot is not retried and is counted in `population status`, so a zone whose
-plan does not fit its ground is visible instead of silently short.
+plan does not fit its ground is visible instead of silently short - and the first slot
+that parks, plus every fiftieth after it, is logged with its monster row, its spot and
+the rounds of jittered attempts that were refused there, because a plan that parks
+itself whole is the one shape of an empty world that a count alone does not explain.
 
 ---
 
@@ -501,7 +511,7 @@ apart.
 
 | Command | Effect |
 |---------|--------|
-| `\population` / `\population status` | Four lines: the switch, the plan, the streaming state, the lifetime counters |
+| `\population` / `\population status` | Four lines: the switch, the plan, the streaming state, the lifetime counters - plus a fifth, the cover counters, once the overhead-cover rule has refused a spot or suspended itself |
 | `\population on` | Enables it (`enable`, `1` also work); the zone fills in around players over the next few seconds |
 | `\population off` | Disables it (`disable`, `0`); every NPC it spawned is removed at the next update, the zone's own entities stay |
 | `\population near [radius]` | Up to 15 live population NPCs within `radius` (default 100 m) of the caller, nearest first, with name, monster id, position and distance |
@@ -517,7 +527,14 @@ World population: on (live 124/150 NPCs of 2853 monster rows, 82 kinds in the wo
 Plan: 9841 cells, 20000 slots, 2853 rows placed, 214 cells refused by chunk rules
 Streaming: 68 active cells, 213 slots queued, 1 players, activate 150 m / deactivate 225 m
 Lifetime: 422 spawned, 298 despawned, 17 lost, 214 placements refused, 9 slots parked, 143 bodies in the placement grid
+Cover: 61 spots refused as covered
 ```
+
+(`Cover:` only appears once the ground's overhead-cover rule has refused something.
+When the rule has been wrong enough about the zone to suspend itself - nine refusals
+in ten or more, over at least forty judged spots - the line says so alongside the
+count, because that suspension is the explanation for a world that was about to spawn
+nothing.)
 
 ---
 
@@ -590,6 +607,17 @@ Stated plainly, because each of these shaped a decision above:
   interpolated every 60 m from the shipped spline knots so the wall is continuous),
   outposts do carry one and use their own, and the deployable-cluster rule infers
   "part of a camp" from props standing in company (§3).
+* **The overhead-cover check cannot tell a cave roof from a canopy.** It asks
+  whether static geometry sits within 12 m above the body's head - the question the
+  engine can answer cheaply - which is not quite "is this spot indoors": a zone whose
+  tree lines, arches or collision proxies hang inside that band reads as covered
+  ground, and that is how the two earlier takes on the check emptied their zones
+  (§5, step 6). It is therefore allowed to be wrong only in the small: the terrain
+  counts what the rule judges and what it refuses, suspends the rule for the zone
+  once it has refused nine in ten of at least forty judged spots, and warns in the
+  log when it does. The proper fix for a zone it misreads is a narrower probe tuned
+  against that zone's real collision, which the authoring side does not have: the
+  shipped database holds no zone geometry.
 
 What this means in practice: the system is faithful to the data that exists - every
 row that can be a world inhabitant is placed, on ground the zone vouches for, at the
@@ -625,7 +653,8 @@ rules` for the client-only chunks.
 | `MonsterHabitatClassifierTests.cs` | the exclusion set, each habitat rule, behaviour arguments being stripped, an empty behaviour being eligible |
 | `SpawnOccupancyGridTests.cs` | radius + separation, a body bigger than a hash cell, the height window, remove/re-add/clear, negative coordinates |
 | `WorldPopulationPlannerTests.cs` | cells from ground, coverage and habitat fit, unplaceable rows, habitat/level from anchors, the level gradient, an outpost's capture radius is not settlement, the field fills with wilderness-only rows rather than the Melding's army, settlement over Melding, chunk refusals, the count/difficulty/slot caps, the budget-exempt expensive row, jitter bounds, the anchor fallback, work spreading, determinism |
-| `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, body separation, the level of the area, `ListLiveNear`, `status`, the command |
+| `WorldPopulationServiceTests.cs` | no players → nothing at all, spawning around a player, the spawn budget, the live cap, the activation radius, despawn on leave and on disable, refill after a death, the row's own spawn delay, the player clearance, parking on refused ground, body separation, the level of the area, `ListLiveNear`, `status` (including the `Cover:` line and the suspension), the command |
+| `PhysicsWorldPopulationTerrainTests.cs` | the placement checks against a real engine over floor and roof slabs: an open spot resolves, a roofed one is refused while the floor beside it still resolves, an arch above the probe's reach stays open, an unprovable spot is refused, and the overhead-cover rule suspends itself for a zone it reads as covered everywhere while a zone with open ground to approve keeps it |
 | `Fakes/WorldPopulationFakes.cs` | a fixed roster/anchor/level/chunk source, a plane of walkable ground with switches for refusing a placement, and a spawner that records spawns and can kill or despawn one |
 
 The fakes are why the plan and the streaming can be asserted on without a loaded
