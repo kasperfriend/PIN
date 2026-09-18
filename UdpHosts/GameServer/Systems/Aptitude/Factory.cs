@@ -340,12 +340,12 @@ public class Factory
             //     return new RequireLineOfSightCommand(SDBInterface.GetRequireLineOfSightCommandDef(commandId));
             // case CommandType.CopyInitiationPosition:
             //     return new CopyInitiationPositionCommand(SDBInterface.GetCopyInitiationPositionCommandDef(commandId));
-            // case CommandType.RequireLevel:
-            //     return new RequireLevelCommand(SDBInterface.GetRequireLevelCommandDef(commandId));
+            case CommandType.RequireLevel:
+                return new RequireLevelCommand(SDBInterface.GetRequireLevelCommandDef(commandId));
             case CommandType.RequireJumped:
                 return new RequireJumpedCommand(SDBInterface.GetRequireJumpedCommandDef(commandId));
-            // case CommandType.RequireProjectileSlope:
-            //     return new RequireProjectileSlopeCommand(SDBInterface.GetRequireProjectileSlopeCommandDef(commandId));
+            case CommandType.RequireProjectileSlope:
+                return new RequireProjectileSlopeCommand(SDBInterface.GetRequireProjectileSlopeCommandDef(commandId));
             // case CommandType.CreateSpawnPoint:
             //     return new CreateSpawnPointCommand(CustomDBInterface.GetCreateSpawnPointCommandDef(commandId));
             // case CommandType.TargetCharacterNPCs:
