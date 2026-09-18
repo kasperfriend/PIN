@@ -31,7 +31,7 @@ public class RequireNeedsAmmoCommand : Command, ICommand
             // and the fire/reload path never rewrites them, so until a server-side
             // ammo simulation lands (the burst/reload events in Systems/Combat are
             // the natural hook) this gate always answers "has ammo".
-            var weaponIndex = character.WeaponIndex != null ? character.WeaponIndex.Index : 1;
+            var weaponIndex = character.WeaponIndex.Index;
             var (clip, altClip) = weaponIndex >= 2
                 ? (character.Character_CombatController.Ammo_1Prop, character.Character_CombatController.AltAmmo_1Prop)
                 : (character.Character_CombatController.Ammo_0Prop, character.Character_CombatController.AltAmmo_0Prop);

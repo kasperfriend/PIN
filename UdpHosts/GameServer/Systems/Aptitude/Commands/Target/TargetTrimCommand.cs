@@ -33,7 +33,7 @@ public class TargetTrimCommand : Command, ICommand
         return true;
     }
 
-    private void Trim(AptitudeTargets targets, long trimSize)
+    private void Trim(AptitudeTargets targets, float trimSize)
     {
         // Removing is only meaningful when the list is larger than the trim size.
         // The previous code took Math.Abs on a negative removal count, which wiped the
