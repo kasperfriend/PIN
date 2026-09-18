@@ -78,14 +78,17 @@ public class PhysicsWorldPopulationTerrainTests
 
         // Every spot the rule is asked about is refused. That is the shape that emptied whole zones
         // twice before, so the rule suspends itself instead of letting the plan park on ground the
-        // zone's own collision calls walkable.
-        for (int i = 0; i < 40; i++)
+        // zone's own collision calls walkable. The suspicion threshold is higher than the original
+        // 40 to avoid tripping on the first few outpost-dense cells at plan start; here every
+        // refusal is genuine so drive enough attempts to reach it.
+        const int refusalsNeeded = 200;
+        for (int i = 0; i < refusalsNeeded; i++)
         {
             Assert.False(_terrain.TryResolveStandingSpot(new Vector3(0f, 0f, 0f), 0.7f, 1.8f, out _));
         }
 
         Assert.True(_terrain.CoverRuleSuspended);
-        Assert.Equal(40, _terrain.CoverRefusals);
+        Assert.Equal(refusalsNeeded, _terrain.CoverRefusals);
 
         // And from there on the spot resolves: the population comes back as it was before the rule.
         Assert.True(_terrain.TryResolveStandingSpot(new Vector3(0f, 0f, 0f), 0.7f, 1.8f, out var spot));
@@ -99,8 +102,9 @@ public class PhysicsWorldPopulationTerrainTests
         AddBox(new Vector3(0f, 0f, 11f), new Vector3(5f, 5f, 1f)); // a roof over the origin only
 
         // Half the spots are sheltered and half are open: the rule is answering about single spots,
-        // not contradicting the zone, so it stays on however long it is asked.
-        for (int i = 0; i < 40; i++)
+        // not contradicting the zone, so it stays on however long it is asked - even when the count
+        // is well past the suspicion threshold, the refusal ratio is only 50% (not 95%).
+        for (int i = 0; i < 300; i++)
         {
             if (i % 2 == 0)
             {
@@ -113,7 +117,7 @@ public class PhysicsWorldPopulationTerrainTests
         }
 
         Assert.False(_terrain.CoverRuleSuspended);
-        Assert.Equal(20, _terrain.CoverRefusals);
+        Assert.Equal(150, _terrain.CoverRefusals);
     }
 
     [Fact]

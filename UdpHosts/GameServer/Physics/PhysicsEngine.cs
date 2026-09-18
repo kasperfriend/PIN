@@ -596,7 +596,10 @@ public partial class PhysicsEngine
             var origin = new Vector3(feet.X, feet.Y, feet.Z + (height * heightFraction));
             foreach (var direction in ClearanceProbeDirections)
             {
-                if (SegmentRayCast(origin, origin + (direction * reach), ignoreEntityId, staticOnly: true).Hit)
+                // Bidirectional probe for the same single-sided-mesh reason the sky probe
+                // casts both ways: a wall whose triangles face away from a lone ray lets
+                // the ray sail through and would let a mob place inside the wall.
+                if (HasStaticOcclusion(origin, origin + (direction * reach), ignoreEntityId))
                 {
                     return false;
                 }
@@ -605,9 +608,11 @@ public partial class PhysicsEngine
 
         // Headroom: a body under a low overhang or a ledge is a body stuck in the world. Started
         // just above the feet so a body that sank a hair into the surface does not report itself.
+        // Bidirectional (HasStaticOcclusion) so a ledge whose triangles face up still blocks the
+        // upward probe.
         var headFrom = new Vector3(feet.X, feet.Y, feet.Z + 0.05f);
         var headTo = new Vector3(feet.X, feet.Y, feet.Z + height + HeadroomMargin);
-        if (SegmentRayCast(headFrom, headTo, ignoreEntityId, staticOnly: true).Hit)
+        if (HasStaticOcclusion(headFrom, headTo, ignoreEntityId))
         {
             return false;
         }
@@ -630,14 +635,18 @@ public partial class PhysicsEngine
     /// <summary>
     ///     Whether straight up from <paramref name="feet" /> there is static world geometry
     ///     overhead: the test that tells open ground from a cave, a tunnel, the underside of an
-    ///     overhang, and ground buried under the terrain itself. The probe comes DOWN from the
-    ///     sky, so it sees the world's top at this X/Y however the meshes around the spot happen
-    ///     to face, and it stops just above the body's head — by construction it can never hit
-    ///     the ground the spot stands on, which is the failure that made a whole zone read as
-    ///     covered in an earlier version of this check.
+    ///     overhang, and ground buried under the terrain itself. Two rays are cast — one down
+    ///     from the sky and one up from just above the head — because BepuPhysics mesh shapes are
+    ///     single-sided (hits register only on a triangle's front face as determined by winding
+    ///     order). A cave ceiling whose triangles face away from a single probe direction would
+    ///     let that ray sail right through, which is how mobs used to be placed underground and
+    ///     still shoot players on the surface above them. Either ray hitting is enough to refuse
+    ///     the spot; together they cover every face orientation the zone's baked collision can
+    ///     present. Both stop just above the body's head, so by construction neither can hit the
+    ///     ground the spot stands on.
     /// </summary>
     /// <remarks>
-    ///     The reach is short on purpose (<see cref="DefaultSkyProbeHeight" />): every cave,
+    ///     The reach is short on purpose (<see cref="DefaultSkyProbeHeight"/>): every cave,
     ///     tunnel and roofed space hangs lower over a body than that, while a zone's tree lines
     ///     and natural arches do not — a probe that reaches the sky reads a forest as a roof,
     ///     which is the other half of "the whole zone read as covered". A spot under a tall
@@ -656,9 +665,59 @@ public partial class PhysicsEngine
             return true;
         }
 
-        var from = new Vector3(feet.X, feet.Y, feet.Z + bodyHeight + DefaultSkyProbeHeight);
-        var to = new Vector3(feet.X, feet.Y, feet.Z + bodyHeight + 0.1f);
-        return SegmentRayCast(from, to, 0, staticOnly: true).Hit;
+        var skyTop = new Vector3(feet.X, feet.Y, feet.Z + bodyHeight + DefaultSkyProbeHeight);
+        const float headClearance = 0.1f;
+        var justAboveHead = new Vector3(feet.X, feet.Y, feet.Z + bodyHeight + headClearance);
+
+        // Downward ray: catches ceilings whose triangles face up (roofs, bridge decks seen from
+        // below when the underside is part of the same outward-facing mesh).
+        if (SegmentRayCast(skyTop, justAboveHead, 0, staticOnly: true).Hit)
+        {
+            return true;
+        }
+
+        // Upward ray: catches ceilings whose triangles face down (typical cave/terrain
+        // undersides, where a single-sided mesh's front faces point away from a downward ray
+        // and let it pass straight through — the bug that was placing underground mobs as
+        // open-sky spawns). Either direction alone misses one face winding; together they
+        // cover both.
+        if (SegmentRayCast(justAboveHead, skyTop, 0, staticOnly: true).Hit)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Whether a straight-line segment between two points is blocked by static world
+    ///     geometry, accounting for single-sided collision meshes. BepuPhysics mesh shapes are
+    ///     single-sided: a ray registers a hit only when it strikes a triangle's front face, so
+    ///     a lone ray from below a floor to a target above sails through the floor's backside
+    ///     and reports the target as visible — which is how mobs in caves were able to shoot
+    ///     players walking on the ground above them. Casting both directions sees whichever
+    ///     face orientation the mesh actually presents, which is what a line-of-sight query
+    ///     actually wants: "is there anything solid between these two points".
+    /// </summary>
+    /// <param name="from">Segment start.</param>
+    /// <param name="to">Segment end.</param>
+    /// <param name="ignoreEntityId">Kinematic body to exclude (typically the source's own body), or 0.</param>
+    /// <returns>True when any static geometry occludes the segment.</returns>
+    public bool HasStaticOcclusion(Vector3 from, Vector3 to, ulong ignoreEntityId = 0)
+    {
+        if (SegmentRayCast(from, to, ignoreEntityId, staticOnly: true).Hit)
+        {
+            return true;
+        }
+
+        // Reverse cast catches single-sided backfaces — floors seen from below, ceilings seen
+        // from above, and vertical walls wound the other direction by the mesh baker.
+        if (SegmentRayCast(to, from, ignoreEntityId, staticOnly: true).Hit)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>

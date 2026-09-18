@@ -265,6 +265,17 @@ public sealed class TurretAi
 
         var from = turret.Position + new Vector3(0f, 0f, EyeHeight);
         var to = target.Position + new Vector3(0f, 0f, EyeHeight);
+
+        // Static occlusion must be checked bidirectionally (BepuPhysics meshes are
+        // single-sided); HasStaticOcclusion casts both ways so a floor/ceiling cannot
+        // disappear when looked at from its backface. Same fix that stops cave mobs
+        // shooting through the ground above them applies to turrets mounted under
+        // floors or on the wrong side of geometry.
+        if (physics.HasStaticOcclusion(from, to, turret.EntityId))
+        {
+            return false;
+        }
+
         var hit = physics.SegmentRayCast(from, to, turret.EntityId);
         return !hit.Hit || hit.HitEntityId == target.EntityId;
     }

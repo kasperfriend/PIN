@@ -290,6 +290,36 @@ public class ProjectileSim
 
             var hit = _shard.Physics.SegmentRayCast(projectile.PreviousPosition, projectile.CurrentPosition, projectile.EntityId);
 
+            // BepuPhysics mesh shapes are single-sided: a round fired from inside/under
+            // geometry (the original bug report - mobs spawning in caves) can travel
+            // through the ground mesh and hit the player on the surface because the
+            // forward ray strikes the backside of the floor and registers nothing. A
+            // reverse cast catches that case: if the backface is hit at a closer
+            // parametric distance along the forward segment, use it so the round
+            // impacts the wall/floor instead of teleporting through it. This is the
+            // projectile-sim twin of AiEngine's bidirectional LOS check.
+            if (!hit.Hit)
+            {
+                var backHit = _shard.Physics.SegmentRayCast(projectile.CurrentPosition, projectile.PreviousPosition, projectile.EntityId);
+                if (backHit.Hit)
+                {
+                    float forwardT = (projectile.CurrentPosition - projectile.PreviousPosition).Length() - backHit.T;
+                    hit = new SegmentRaycastHit
+                    {
+                        Hit = true,
+                        T = forwardT,
+                        HitPosition = backHit.HitPosition,
+                        // Reverse-cast normal points back at the projectile; flip it so
+                        // impact-handling (bounce reflection, damage direction) sees a
+                        // normal pointing away from the surface as usual.
+                        Normal = -backHit.Normal,
+                        ChildIndex = backHit.ChildIndex,
+                        Collidable = backHit.Collidable,
+                        HitEntityId = backHit.HitEntityId,
+                    };
+                }
+            }
+
             if (hit.Hit)
             {
                 projectile.HasHit = true;
