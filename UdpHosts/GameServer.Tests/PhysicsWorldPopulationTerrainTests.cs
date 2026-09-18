@@ -82,9 +82,10 @@ public class PhysicsWorldPopulationTerrainTests
 
     private void AddBox(Vector3 center, Vector3 halfExtents)
     {
+        // Bepu's Box takes full dimensions (TagfileLoader doubles Havok's half extents for it).
         var stat = new StaticDescription(
             new RigidPose(center),
-            _engine.Simulation.Shapes.Add(new Box(halfExtents.X, halfExtents.Y, halfExtents.Z)));
+            _engine.Simulation.Shapes.Add(new Box(halfExtents.X * 2f, halfExtents.Y * 2f, halfExtents.Z * 2f)));
         _engine.Simulation.Statics.Add(stat);
     }
 }
