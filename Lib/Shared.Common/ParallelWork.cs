@@ -10,7 +10,7 @@ namespace Shared.Common;
 /// <remarks>
 ///     <para>
 ///         Only the work that is <b>pure CPU over data nobody mutates</b> is meant to go through
-///         here: the zone's navigation bake (the heaviest step of starting a shard) and the world
+///         here: the zone's navigation bake (the last heavy step of starting a shard) and the world
 ///         population plan build (the step that decides what a zone is populated with). Work that
 ///         touches the Bepu simulation, the entity tables or a client's channels stays on the thread
 ///         that owns it - those are not made faster by threads, only wrong by them.

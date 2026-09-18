@@ -69,12 +69,14 @@ Zone 448: navigation mesh has 987,654 source triangles and 604,321 walkable face
 
 ## 2. The navigation bake
 
-The bake is the heaviest thing a shard does before it lets a client in, and it
-was already bounded (see `#107`): the passes are linear, one of them is
-budgeted, and a zone no longer spends hours in its own constructor. What was
-missing is what a bounded pass still costs on a prod zone: millions of hashed
-inserts and a database lookup or two per collision triangle, all of it per-face
-work over an array nothing writes.
+The bake is the last heavy step of loading a zone, and the one that decides when
+a shard stops refusing clients - a zone logs `Loaded successfully` and then sits
+in its own constructor until the mesh exists. It was already bounded (see
+`#107`): the passes are linear, one of them is budgeted, and a zone no longer
+spends hours in its own constructor. What was missing is what a bounded pass
+still costs on a prod zone: millions of hashed inserts and a database lookup or
+two per collision triangle, all of it per-face work over an array nothing
+writes.
 
 The passes that are now spread over the worker threads:
 

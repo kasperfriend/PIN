@@ -150,10 +150,10 @@ public partial class PhysicsEngine
 
     /// <summary>
     ///     Threads the zone's navigation bake may use (0 = automatic, see
-    ///     <see cref="ParallelWork" />). The bake is the heaviest thing the shard does before it lets
-    ///     a client in, and the one step of loading a zone that is pure CPU over data nothing writes:
-    ///     the chunks themselves cannot be threaded, because converting them builds Bepu shapes in
-    ///     the simulation the shard thread owns.
+    ///     <see cref="ParallelWork" />). The bake is the last heavy step of loading a zone - the one
+    ///     that decides when the shard lets a client in - and the one step of loading a zone that is
+    ///     pure CPU over data nothing writes: the chunks themselves cannot be threaded, because
+    ///     converting them builds Bepu shapes in the simulation the shard thread owns.
     /// </summary>
     private readonly int _workerThreads;
 
