@@ -18,6 +18,7 @@ public class StandardWorldPopulationRulesTests
         Assert.Equal(4, rules.SpawnBudget);
         Assert.Equal(100, rules.SpawnBudgetWindowMs);
         Assert.Equal(80f, rules.OutpostSettlementRadius);
+        Assert.Equal(200, rules.PlacementAttemptsPerUpdate);
     }
 
     [Fact]
@@ -40,6 +41,7 @@ public class StandardWorldPopulationRulesTests
             WorldPopulationMinSeparation = -1f,
             WorldPopulationMinPlayerDistance = -1f,
             WorldPopulationMaxPlacementAttempts = 0,
+            WorldPopulationPlacementAttemptsPerUpdate = 0,
             WorldPopulationPlacementRetryDelayMs = -1,
             WorldPopulationMaxPlacementFailures = 0,
             WorldPopulationRespawnDelayMs = -1,
@@ -66,6 +68,7 @@ public class StandardWorldPopulationRulesTests
         Assert.Equal(0.5f, rules.MinSeparation);
         Assert.Equal(25f, rules.MinPlayerDistance);
         Assert.Equal(6, rules.MaxPlacementAttempts);
+        Assert.Equal(200, rules.PlacementAttemptsPerUpdate);
         Assert.Equal(1_000, rules.PlacementRetryDelayMs);
         Assert.Equal(8, rules.MaxPlacementFailures);
         Assert.Equal(30_000, rules.RespawnDelayMs);
@@ -99,6 +102,7 @@ public class StandardWorldPopulationRulesTests
             WorldPopulationMinSeparation = 0.25f,
             WorldPopulationMinPlayerDistance = 0f,
             WorldPopulationMaxPlacementAttempts = 3,
+            WorldPopulationPlacementAttemptsPerUpdate = 7,
             WorldPopulationPlacementRetryDelayMs = 0,
             WorldPopulationMaxPlacementFailures = 2,
             WorldPopulationRespawnDelayMs = 0,
@@ -127,6 +131,7 @@ public class StandardWorldPopulationRulesTests
         Assert.Equal(0.25f, rules.MinSeparation);
         Assert.Equal(0f, rules.MinPlayerDistance);
         Assert.Equal(3, rules.MaxPlacementAttempts);
+        Assert.Equal(7, rules.PlacementAttemptsPerUpdate);
         Assert.Equal(0, rules.PlacementRetryDelayMs);
         Assert.Equal(2, rules.MaxPlacementFailures);
         Assert.Equal(0, rules.RespawnDelayMs);
@@ -161,6 +166,7 @@ public class StandardWorldPopulationRulesTests
                 <add key="WorldPopulationMinSeparation" value="0.25"/>
                 <add key="WorldPopulationMinPlayerDistance" value="0"/>
                 <add key="WorldPopulationMaxPlacementAttempts" value="3"/>
+                <add key="WorldPopulationPlacementAttemptsPerUpdate" value="7"/>
                 <add key="WorldPopulationPlacementRetryDelayMs" value="0"/>
                 <add key="WorldPopulationMaxPlacementFailures" value="2"/>
                 <add key="WorldPopulationRespawnDelayMs" value="0"/>
@@ -194,6 +200,7 @@ public class StandardWorldPopulationRulesTests
         Assert.Equal(0.25f, settings.WorldPopulationMinSeparation);
         Assert.Equal(0f, settings.WorldPopulationMinPlayerDistance);
         Assert.Equal(3, settings.WorldPopulationMaxPlacementAttempts);
+        Assert.Equal(7, settings.WorldPopulationPlacementAttemptsPerUpdate);
         Assert.Equal(0, settings.WorldPopulationPlacementRetryDelayMs);
         Assert.Equal(2, settings.WorldPopulationMaxPlacementFailures);
         Assert.Equal(0, settings.WorldPopulationRespawnDelayMs);

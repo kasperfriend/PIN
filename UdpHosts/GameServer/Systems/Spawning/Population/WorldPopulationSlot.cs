@@ -56,6 +56,35 @@ public sealed class WorldPopulationSlot
     public int Failures { get; set; }
 
     /// <summary>
+    ///     Positions tried in the current round of <see cref="IWorldPopulationRules.MaxPlacementAttempts" />.
+    ///     A round is one pass over the slot's own positions - its anchor first, then jittered ones -
+    ///     and it is what decides whether the slot was refused by the ground (and is one failure
+    ///     closer to being parked) or merely could not fit this time. The round may span several
+    ///     population updates, because one update may only spend
+    ///     <see cref="IWorldPopulationRules.PlacementAttemptsPerUpdate" /> placement attempts in
+    ///     total: the slot picks the round up where it left off.
+    /// </summary>
+    public int AttemptsThisRound { get; set; }
+
+    /// <summary>Whether any attempt of the current round was refused by the ground itself.</summary>
+    public bool RoundRefusedByGround { get; set; }
+
+    /// <summary>Whether any attempt of the current round was refused because something was in the way.</summary>
+    public bool RoundRefusedForRoom { get; set; }
+
+    /// <summary>
+    ///     Starts a fresh placement round: the next attempt is the anchor again, and the refusal
+    ///     flags are cleared. Called when a round ends (placed, refused, or given up on) and when a
+    ///     slot re-enters the world after its cell or its NPC has been away.
+    /// </summary>
+    public void ResetPlacementRound()
+    {
+        AttemptsThisRound = 0;
+        RoundRefusedByGround = false;
+        RoundRefusedForRoom = false;
+    }
+
+    /// <summary>
     ///     Whether the slot has given up: its ground was refused often enough
     ///     (<see cref="IWorldPopulationRules.MaxPlacementFailures"/>) that retrying it is a spin
     ///     rather than a hope. Reported in the status so a zone whose plan does not fit its ground is

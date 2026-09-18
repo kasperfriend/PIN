@@ -108,6 +108,29 @@ public interface IWorldPopulationRules
     /// <summary>How many positions one slot tries before it gives up this round (its own anchor first, then jittered ones).</summary>
     int MaxPlacementAttempts { get; }
 
+    /// <summary>
+    ///     How many placement attempts one population update may spend across every slot it looks
+    ///     at, before the rest of the queue waits for the next update.
+    /// </summary>
+    /// <remarks>
+    ///     The brake that makes an update bounded in <em>work</em> rather than only in spawns. An
+    ///     attempt is one position tried for a slot: its anchor first, then a jittered position
+    ///     around it. The attempts that reach the terrain cost about fifteen physics queries (a
+    ///     ground probe, the standing-volume probes and the overhead-cover probe) and are the most
+    ///     expensive thing this system does. Without the budget a single update walked the whole
+    ///     queue, and a queue that is refused rather than placed - which is what a zone whose ground
+    ///     refuses most spots produces, and what a player flying a glider across it refills cell
+    ///     after cell - became tens of thousands of probes inside one shard tick. The shard stops
+    ///     answering its clients for as long as that takes: ping spikes while flying, a "Connection
+    ///     Problem" on the client, and a client that cannot get back into the world because its
+    ///     handshake is waiting behind the same tick. A deferred slot is not a failed one: it keeps
+    ///     both the place in the queue and the position its round had reached, and is tried again on
+    ///     the next update, so a round (<see cref="MaxPlacementAttempts"/> positions) may span
+    ///     several updates but still counts as one round when it comes to
+    ///     <see cref="MaxPlacementFailures"/>.
+    /// </remarks>
+    int PlacementAttemptsPerUpdate { get; }
+
     /// <summary>Milliseconds a slot waits after a failed round before it is tried again.</summary>
     int PlacementRetryDelayMs { get; }
 

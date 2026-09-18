@@ -176,6 +176,14 @@ public class GameServerSettings
     /// <summary>Placement positions tried by a slot during one placement round.</summary>
     public int WorldPopulationMaxPlacementAttempts { get; set; } = 6;
 
+    /// <summary>
+    ///    Placement attempts (each one a position tried for a slot; the ones that reach the ground
+    ///    are a ground probe, the standing-volume probes and the overhead-cover probe) one
+    ///    population update may spend before it defers the rest of its queue to the next update.
+    ///    See <c>Docs/WORLD_POPULATION.md</c>.
+    /// </summary>
+    public int WorldPopulationPlacementAttemptsPerUpdate { get; set; } = 200;
+
     /// <summary>Wait after a failed placement round, in milliseconds.</summary>
     public int WorldPopulationPlacementRetryDelayMs { get; set; } = 1_000;
 

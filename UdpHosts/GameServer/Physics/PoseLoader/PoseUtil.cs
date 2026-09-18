@@ -20,9 +20,51 @@ public class PoseUtil
         }
 
         return new Vector3(
-            float.Parse(parts[0], CultureInfo.InvariantCulture),
-            float.Parse(parts[1], CultureInfo.InvariantCulture),
-            float.Parse(parts[2], CultureInfo.InvariantCulture));
+            ParseComponent(parts[0], input),
+            ParseComponent(parts[1], input),
+            ParseComponent(parts[2], input));
+    }
+
+    /// <summary>
+    ///     Parses one component of a vector, or throws for the whole vector naming the component that
+    ///     is not a number.
+    /// </summary>
+    private static float ParseComponent(string part, string wholeVector) =>
+        TryParseNumber(part, out var value)
+            ? value
+            : throw new FormatException($"Invalid Vector3 component '{part}' in: {wholeVector}");
+
+    /// <summary>
+    ///     Reads one number as the archive writes them, with a single allowance its own data
+    ///     requires: a few values carry a trailing unit letter, so the shipped pose 00189610 has an
+    ///     origin of <c>&lt;2.1t 0 0&gt;</c> - and every load of that file threw, so the row fell back
+    ///     to a generic body shape (and, before the loader learned to remember failures, paid a file
+    ///     read, a parse and a logged exception per entity per tick for it). A trailing run of
+    ///     letters is dropped and the number in front of it is read; anything that is still not a
+    ///     number is refused, exactly as it was before.
+    /// </summary>
+    private static bool TryParseNumber(string? part, out float value)
+    {
+        value = 0f;
+
+        if (string.IsNullOrEmpty(part))
+        {
+            return false;
+        }
+
+        if (float.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+        {
+            return true;
+        }
+
+        int end = part.Length;
+        while (end > 0 && char.IsLetter(part[end - 1]))
+        {
+            end--;
+        }
+
+        return end > 0 && end != part.Length &&
+               float.TryParse(part[..end], NumberStyles.Float, CultureInfo.InvariantCulture, out value);
     }
 
     public static Quaternion ParseRotation(string input)
@@ -58,12 +100,7 @@ public class PoseUtil
 
     public static float? TryParseFloat(string? input)
     {
-        if (float.TryParse(input?.Trim('"'), NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
-        {
-            return result;
-        }
-
-        return null;
+        return TryParseNumber(input?.Trim('"'), out var result) ? result : null;
     }
 
     public static int? TryParseInt(string? input)
