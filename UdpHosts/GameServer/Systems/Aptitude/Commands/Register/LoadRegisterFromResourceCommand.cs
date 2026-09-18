@@ -1,4 +1,4 @@
-﻿using GameServer.Entities.Character;
+using GameServer.Entities.Character;
 using GameServer.Enums;
 using GameServer.StaticDB.Records.apt;
 
@@ -16,7 +16,11 @@ public class LoadRegisterFromResourceCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
-        // todo: meaning of Params.RegisterVal_0 - RegisterVal_10
+        // The register gets the player's current quantity of the row's resource,
+        // combined with the previous register through the row's regop. The
+        // RegisterVal_0..10 columns are not decoded: they carry no values in
+        // the rows that run server side, and with only ResourceId + Regop the
+        // quantity load is unambiguous.
         if (context.Self is not CharacterEntity character)
         {
             return false;

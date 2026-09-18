@@ -143,10 +143,13 @@ public class Factory
         // All command types having environment of either `both` or `server` were added below
         // If they're commented out they haven't been implemented yet
         // or have zero instances in SDB (for environment `both`) or BaseCommandDef (for environment `server`)
+        // The activation acknowledgement (AbilityActivated) is sent by the combat
+        // controller that owns the activation, so the chain's ActiveInitiation row
+        // (3391 in the SDB) is intentionally left to the placeholder below: running
+        // the old ActiveInitiationCommmand class from the chain would have sent the
+        // message a second time.
         switch ((CommandType)commandTypeRec.Id)
         {
-            // case CommandType.ActiveInitiation:
-            //     return new ActiveInitiationCommand();
             case CommandType.ImpactApplyEffect:
                 return new ImpactApplyEffectCommand(SDBInterface.GetImpactApplyEffectCommandDef(commandId));
             case CommandType.InstantActivation:
@@ -522,8 +525,10 @@ public class Factory
             //     return new ResourceNodeScanDefCommand(CustomDBInterface.GetResourceNodeScanDefCommandDef(commandId));
             case CommandType.ResourceNodeBeaconCalldown:
                 return new ResourceNodeBeaconCalldownCommand(SDBInterface.GetResourceNodeBeaconCalldownCommandDef(commandId));
-            // case CommandType.SendTipMessage:
-            //     return new SendTipMessageCommand(CustomDBInterface.GetSendTipMessageCommandDef(commandId));
+            // SendTipMessage (234) stays a placeholder: its parameter table is
+            // id-only in the data we can load and the client event type has not
+            // been recovered, so there is nothing to send. Same for
+            // RequestArcJobs (349).
             // case CommandType.FallToGround:
             //     return new FallToGroundCommand(CustomDBInterface.GetFallToGroundCommandDef(commandId));
             // case CommandType.BulletTime:
@@ -741,8 +746,7 @@ public class Factory
             //     return new TauntCommand(CustomDBInterface.GetTauntCommandDef(commandId));
             // case CommandType.StartArc:
             //     return new StartArcCommand(CustomDBInterface.GetStartArcCommandDef(commandId));
-            // case CommandType.RequestArcJobs:
-            //     return new RequestArcJobsCommand(CustomDBInterface.GetRequestArcJobsCommandDef(commandId));
+            // RequestArcJobs (349): see the SendTipMessage note above.
             case CommandType.UnlockBattleframes:
                 return new UnlockBattleframesCommand(CustomDBInterface.GetUnlockBattleframesCommandDef(commandId) ?? new UnlockBattleframesCommandDef { Id = commandId });
             // case CommandType.AddAppendageHealthPool:

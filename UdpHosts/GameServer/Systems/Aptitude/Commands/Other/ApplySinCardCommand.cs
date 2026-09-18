@@ -18,7 +18,11 @@ public class ApplySinCardCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
-        // todo aptitude: handle setting SinCardFields
+        // The def carries only the SIN-card type; the generic SinCardField_N netfields
+        // (the per-type payload, e.g. position data for a scan waypoint) stay null because
+        // no loaded table maps types to field values. Filling them in needs a captured
+        // packet from the live game; the type alone is what the client needs to render
+        // the SIN marker, so the command stays useful without the payload.
         if (Params.Type == null || Params.Type == 0)
         {
             return true;

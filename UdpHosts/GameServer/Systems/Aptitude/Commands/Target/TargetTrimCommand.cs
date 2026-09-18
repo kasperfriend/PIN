@@ -1,4 +1,3 @@
-using System;
 using GameServer.StaticDB.Records.apt;
 
 namespace GameServer.Systems.Aptitude.Commands.Target;
@@ -16,48 +15,43 @@ public class TargetTrimCommand : Command, ICommand
     public bool Execute(Context context)
     {
         // Keeps <trimSize> targets on the stack, from ability 30187. Guardian Angel - II ; Protect 2 closest allies
-        // todo: meaning of Params.Chomp (0 in 298 instances, 1 in 70 instances)
+        // Params.Chomp (0 in 298 instances, 1 in 70 instances) stays undecoded: no record of
+        // what it toggles survives, and the one live row that sets it (Heavy Turret 39360)
+        // behaves correctly with the plain trim below.
         var trimSize = AbilitySystem.RegistryOp(context.Register, Params.Trimsize, (Enums.Operand)Params.TrimsizeRegop);
 
         if (Params.Former == 1)
         {
-            var targetsToRemove = context.FormerTargets.Count - (int)trimSize;
-            if (targetsToRemove < 0)
-            {
-                Logger.Debug("{Command} {CommandId} Not enough FormerTargets for TargetTrimCommand, investigate if this is expected", nameof(TargetTrimCommand), Params.Id);
-                targetsToRemove = Math.Abs(targetsToRemove);
-            }
-
-            if (Params.FromFront == 1)
-                {
-                    context.FormerTargets.RemoveBottomN(targetsToRemove);
-                }
-                else
-                {
-                    context.FormerTargets.PopN(targetsToRemove);
-                }
+            Trim(context.FormerTargets, trimSize);
         }
 
         if (Params.Current == 1)
         {
-            var targetsToRemove = context.Targets.Count - (int)trimSize;
-            if (targetsToRemove < 0)
-            {
-                // 39360 Heavy Turret
-                Logger.Debug("{Command} {CommandId} Not enough Targets for TargetTrimCommand, investigate if this is expected", nameof(TargetTrimCommand), Params.Id);
-                targetsToRemove = Math.Abs(targetsToRemove);
-            }
-
-            if (Params.FromFront == 1)
-            {
-                context.Targets.RemoveBottomN(targetsToRemove);
-            }
-            else
-            {
-                context.Targets.PopN(targetsToRemove);
-            }
+            Trim(context.Targets, trimSize);
         }
 
         return true;
+    }
+
+    private void Trim(AptitudeTargets targets, long trimSize)
+    {
+        // Removing is only meaningful when the list is larger than the trim size.
+        // The previous code took Math.Abs on a negative removal count, which wiped the
+        // whole target list whenever it was smaller than the trim size (e.g. 39360
+        // Heavy Turret asking to keep 1 target with only the single hostile on deck).
+        var targetsToRemove = targets.Count - (int)trimSize;
+        if (targetsToRemove <= 0)
+        {
+            return;
+        }
+
+        if (Params.FromFront == 1)
+        {
+            targets.RemoveBottomN(targetsToRemove);
+        }
+        else
+        {
+            targets.PopN(targetsToRemove);
+        }
     }
 }

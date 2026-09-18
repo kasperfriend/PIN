@@ -1,3 +1,4 @@
+using System.Linq;
 using GameServer.StaticDB.Records.aptfs;
 
 namespace GameServer.Systems.Aptitude.Commands.Requirement;
@@ -63,7 +64,6 @@ public class RequireHasEffectCommand : Command, ICommand
 
     private bool HasRequiredEffect(IAptitudeTarget target, Context context)
     {
-        // TODO: Handle Params.SameInitiator
         foreach (EffectState active in target.GetActiveEffects())
         {
             if (active == null)
@@ -73,9 +73,9 @@ public class RequireHasEffectCommand : Command, ICommand
 
             if (active.Effect.Id == Params.EffectId && active.Stacks >= Params.StackCount)
             {
-                if (Params.SameInitiator == 1 && context.Initiator != active.Context.Initiator)
+                if (Params.SameInitiator == 1 && !WasAppliedBy(active, context.Initiator))
                 {
-                    return false;
+                    continue;
                 }
 
                 return true;
@@ -83,5 +83,15 @@ public class RequireHasEffectCommand : Command, ICommand
         }
 
         return false;
+    }
+
+    private static bool WasAppliedBy(EffectState active, IAptitudeTarget initiator)
+    {
+        // The shared status-effect slot coalesces every application of the effect id, so the
+        // same-initiator question has to consult the initiating context and all stacked
+        // ones: any application from this initiator passes the gate, regardless of who
+        // applied a different stack of the same effect.
+        return active.Context?.Initiator == initiator
+            || active.StackedContexts.Any(stacked => stacked.Initiator == initiator);
     }
 }
