@@ -144,6 +144,36 @@ public class StandardWorldPopulationRulesTests
     }
 
     [Fact]
+    public void AppConfig_MapsTheWorkerThreadSettings()
+    {
+        var appSettings = AppConfigFile.ParseAppSettings(
+            """
+            <configuration><appSettings>
+                <add key="ServerWorkerThreads" value="6"/>
+                <add key="WorldPopulationPlanOnWorkers" value="false"/>
+            </appSettings></configuration>
+            """,
+            "test");
+        var settings = new GameServerSettings();
+
+        GameServerModule.ApplyServerWorkerSettings(appSettings, settings);
+
+        Assert.Equal(6, settings.ServerWorkerThreads);
+        Assert.False(settings.WorldPopulationPlanOnWorkers);
+    }
+
+    [Fact]
+    public void Defaults_LeaveTheBackgroundWorkAutomatic()
+    {
+        var settings = new GameServerSettings();
+
+        // 0 is the automatic thread count, and the plan is built off the tick: the settings a server
+        // started with no config at all should have.
+        Assert.Equal(0, settings.ServerWorkerThreads);
+        Assert.True(settings.WorldPopulationPlanOnWorkers);
+    }
+
+    [Fact]
     public void AppConfig_MapsEveryWorldPopulationKeyToSettings()
     {
         var appSettings = AppConfigFile.ParseAppSettings(
