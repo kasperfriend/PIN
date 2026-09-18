@@ -16,6 +16,14 @@ namespace GameServer.Systems.Aptitude.Commands.Activation;
 /// keeps an activation that fails a later requirement (for example not enough
 /// energy) from consuming the cooldown.
 /// </para>
+/// <para>
+/// Unmodelled columns: LocalCooldownPrecoolCount / CategoryCooldownPrecoolCount
+/// (charge-style "uses before the cooldown starts" semantics are unrecovered -
+/// no row data sample is available to confirm them against, so every cast
+/// queues its cooldown) and PreventReset. The regop pairing follows the draft
+/// convention used by InflictCooldown: DurationRegop scales the local cooldown
+/// and CategoryPrecoolRegop the category cooldown; GlobalCooldown has no regop.
+/// </para>
 /// </summary>
 public class InstantActivationCommand : Command, ICommand
 {
