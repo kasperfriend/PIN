@@ -88,6 +88,15 @@ public partial class PhysicsEngine
     private const float GroundBackfaceProbeEpsilon = 0.001f;
 
     /// <summary>
+    ///     How far past the query's own height the winding fallback's segment ends. A segment ray
+    ///     cast reports a hit only strictly inside the segment (<c>t &lt; distance</c>), and the
+    ///     surface a standing body rests on is exactly at the query's height - which is the case this
+    ///     fallback exists for. Ending dead on the query would walk past the very surface it is for;
+    ///     a millimetre of overshoot is not a reach, and it cannot pick up anything above the feet.
+    /// </summary>
+    private const float GroundBackfaceProbeOvershoot = 0.001f;
+
+    /// <summary>
     ///     How many of a zone's walkable navigation faces the load-time winding report samples. A
     ///     few hundred is enough to tell a zone whose ground the downward ray can see from one whose
     ///     ground it cannot, and it costs that many ray casts once, at load.
@@ -710,7 +719,7 @@ public partial class PhysicsEngine
             ? MathF.Min(searchDown, GroundBackfaceProbeReach)
             : GroundBackfaceProbeReach;
         var upFrom = new Vector3(position.X, position.Y, position.Z - reach);
-        var upTo = new Vector3(position.X, position.Y, position.Z);
+        var upTo = new Vector3(position.X, position.Y, position.Z + GroundBackfaceProbeOvershoot);
         for (int probe = 0; probe < GroundBackfaceProbes && upFrom.Z < upTo.Z; probe++)
         {
             var back = SegmentRayCast(upFrom, upTo, ignoreEntityId, staticOnly: true);
