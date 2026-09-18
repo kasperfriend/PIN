@@ -34,9 +34,12 @@ public class RequireLevelCommand : Command, ICommand
             }
             else if (Params.SessionLevel == 1)
             {
-                // todo
-                Logger.Debug("[{Command} {CommandId}] Session level, level {Level}", nameof(RequireLevelCommand), Params.Id, Params.Level);
-                result = true;
+                // Session level = the level the current session scales the character to,
+                // which the server models as EffectiveLevelProp (today it always tracks
+                // the frame level, but staged content is free to lower it). These rows
+                // used to pass unconditionally, which let level-gated encounters treat
+                // a downtiered character as if it were at full frame level.
+                result = character.Character_BaseController.EffectiveLevelProp >= Params.Level;
             }
         }
 
