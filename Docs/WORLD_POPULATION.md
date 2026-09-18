@@ -195,9 +195,14 @@ shard, spread over several ticks, and only starts when a player is in the zone.
 
 **Phase 1 - surfaces.** The zone's navigation mesh (`NavigationMesh`, baked from
 the zone's own collision) is enumerated face by face. A face exists only if the
-triangle was walkable (`normal.Z >= 0.35`) and not excluded from pathing by the
-chunk metadata, so every face centroid is a spot the zone itself says an NPC can
-stand on. Overlapping copies of the same surface are dropped before that: a zone
+triangle was walkable (`normal.Z >= 0.35`), not excluded from pathing by the
+chunk metadata, and not one of the zone's water materials (`Water`,
+`Water_Shallow`, matched by name from `dbphysics::PhysicsMaterial` - the beds
+under the sea and lake line, so a mob on one would stand under water, invisible
+to whoever walks above yet able to see and shoot them; the shipped zone files'
+own water layers are not decoded, so the authored material tags are the
+stand-in for the water level), so every remaining face centroid is a spot the
+zone itself says an NPC can stand on. Overlapping copies of the same surface are dropped before that: a zone
 file lists each tile as both `ZoneChunkRefLayer` (0x10101) and `ZoneChunkRef2Layer`
 (0x10100), and each chunk file carries a skirt that overlaps its neighbours, so
 loading both would stack walkable faces on tree canopies and in cavities under
@@ -235,8 +240,13 @@ every anchor near it, and on a real zone that is the expensive phase. Per cell:
 * **Habitat** — from the authored anchors around the cell: outposts (the inhabited
   camp is `OutpostSettlementRadius`, default 80 m — their authored 150-550 m
   radius in Coral Forest is the capture/control circle, not a wildlife-exclusion
-  zone), the zone's deployables (469 of them: sized by `DeployableInfluenceRadius`),
-  and every Melding perimeter control point (16 Meldings, 4-23 points each: sized
+  zone), the zone's deployables (469 of them: sized by `DeployableInfluenceRadius`,
+  and counted in company only - a camp is several props standing together, so one
+  deployable with fewer than two peers within 60 m paints nothing and a lone
+  watchtower or terminal in the field no longer grows a circle of settlement
+  NPCs in the middle of nowhere; two copies of one prop stacked at a spot are
+  one prop, not company), and every Melding perimeter control point (16 Meldings,
+  4-23 points each: sized
   by `MeldingInfluenceRadius`; the shipped knots are the spline - the planner
   interpolates edges every 60 m so the influence follows the wall instead of a
   dotted line, see `MAP_FILES_FINDINGS.md`). A settlement wins over the Melding
@@ -385,6 +395,19 @@ A planned position is checked twice, and both checks have to pass.
    height along both axes (plus 0.1 m of slack), one vertical probe for headroom
    (plus 0.2 m), and a broad phase query for the non-static bodies (players, mobs,
    vehicles, deployables) that already overlap the box.
+6. `HasOverheadCover` - open sky only: a static-only probe comes **down** from 12 m
+   above the body's head and stops just above it, so one hit says the world hangs
+   over the spot (a cave, a tunnel, the underside of an overhang, ground under the
+   terrain itself) and the spot is refused. The island pass of §3 already drops the
+   small buried patches; what remains for it here is the big owned surfaces (a cave
+   floor is a level of its own, so the mesh legitimately keeps it), and a mob on one
+   is exactly the report "spawned underground, shoots whoever walks above". The
+   probe is phrased with the reworked-check history in mind: starting in the sky
+   reads every tree line as a roof, and reaching the spot's own ground reads
+   everywhere as covered - either way a whole zone stops spawning, which is the
+   failure an earlier take on this check was reverted for. Reaching 12 m from the
+   head and never past the head means it can do neither, by construction; a natural
+   arch or canopy above 12 m is scenery over open ground, not a rooftop.
 
 **Server side** (`SpawnOccupancyGrid` + player distance):
 
@@ -557,10 +580,16 @@ Stated plainly, because each of these shaped a decision above:
 * **`body_radius`/`body_height` are the `-1` "inherit" sentinel on 3,103 of 3,109
   rows**, so almost every body is sized by the rules' defaults, which are the AI's
   navigation agent numbers.
-* **Deployables and Melding control points carry no radius**, so the planner sizes
-  them (`DeployableInfluenceRadius`, `MeldingInfluenceRadius`; Melding edges are
-  interpolated every 60 m from the shipped spline knots so the wall is continuous);
-  outposts do carry one and use their own.
+* **The zone files' water layers are not decoded** (0x20300, 0x40105), so there is
+  no world-space water level to compare a spawn height against. The stand-in is
+  the physics material the assets tag on the beds under the water line (`Water`,
+  `Water_Shallow`), which the navigation bake excludes (§3).
+* **Deployables and Melding control points carry no radius** - and a deployable
+  carries no record of the place it belongs to either, so the planner sizes them
+  (`DeployableInfluenceRadius`, `MeldingInfluenceRadius`; Melding edges are
+  interpolated every 60 m from the shipped spline knots so the wall is continuous),
+  outposts do carry one and use their own, and the deployable-cluster rule infers
+  "part of a camp" from props standing in company (§3).
 
 What this means in practice: the system is faithful to the data that exists - every
 row that can be a world inhabitant is placed, on ground the zone vouches for, at the

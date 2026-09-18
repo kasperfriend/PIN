@@ -130,6 +130,18 @@ public sealed class PhysicsWorldPopulationTerrain : IWorldPopulationTerrain
             return false;
         }
 
+        // Open sky only. The navigation mesh's island filter drops the small buried patches (a
+        // tree canopy, the cavity under a rock), so the mesh legitimately holds the big covered
+        // floors - caves, tunnels, the space under an overhang, the ground under the terrain
+        // itself - and a spot on one is what reads as a mob spawning underground and shooting
+        // whoever walks above it. A spot the world hangs over is not a spawn spot at all,
+        // whatever the mesh says; the check is phrased so it can never hit the spot's own
+        // ground (see HasOverheadCover).
+        if (_physics.HasOverheadCover(ground, bodyHeight))
+        {
+            return false;
+        }
+
         position = ground;
         return true;
     }

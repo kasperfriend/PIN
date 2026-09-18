@@ -99,7 +99,9 @@ public sealed class SdbWorldPopulationDataSource : IWorldPopulationDataSource
         }
 
         // Deployables (469 of them in Coral Forest: watchtowers, thumper pads, terminals) mark the
-        // smaller settled places. The data has no radius for them, so the planner sizes them.
+        // smaller settled places - a lone prop in the wilderness marks nothing, though, so the
+        // planner's deployable-cluster rule only keeps the ones that stand in company. The data
+        // has no radius for them, so the planner sizes them.
         foreach (var deployable in CustomDBInterface.GetZoneDeployables(zoneId).Values)
         {
             anchors.Add(new WorldPopulationAnchor(

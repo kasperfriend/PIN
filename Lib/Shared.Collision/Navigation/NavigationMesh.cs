@@ -9,7 +9,9 @@ namespace Shared.Collision.Navigation;
 ///     adjacency, excluded areas and material costs are all derived from the original zone assets.
 ///     Overlapping copies of the same surface (chunk skirts, a zone file listing the same tile
 ///     twice) and small disconnected islands stacked over or under a larger surface (tree
-///     canopies, cavities under rocks) are dropped so they cannot become spawn points.
+///     canopies, cavities under rocks) are dropped so they cannot become spawn points, and
+///     triangles whose physics material is never ground (the beds under the zone's water line)
+///     are dropped for the same reason.
 /// </summary>
 /// <remarks>
 ///     This constructor is handed every walkable triangle of the zone - a prod zone's collision
@@ -98,11 +100,19 @@ public sealed class NavigationMesh
     private NavFace[] _faces;
     private readonly Dictionary<SpatialKey, List<int>> _spatial = [];
 
+    /// <param name="materialExcluded">
+    ///     Decides, by physics material id, whether a triangle is collision but never navigation
+    ///     ground. The zone tags the beds under its water line with the Water materials: a mob
+    ///     planned onto one would stand under water, invisible to whoever walks above it yet
+    ///     able to see and shoot them, so those faces join neither this mesh nor the spawn data
+    ///     the mesh enumerates. Nothing is excluded when omitted.
+    /// </param>
     public NavigationMesh(
         IEnumerable<NavigationTriangle> triangles,
         Func<uint, float> materialCost,
         Func<Vector3, bool>? excludedAt = null,
-        float minimumWalkableNormalZ = 0.35f)
+        float minimumWalkableNormalZ = 0.35f,
+        Func<uint, bool>? materialExcluded = null)
     {
         if (triangles == null)
         {
@@ -115,6 +125,11 @@ public sealed class NavigationMesh
 
         foreach (var triangle in source)
         {
+            if (materialExcluded?.Invoke(triangle.PhysicsMaterialId) == true)
+            {
+                continue;
+            }
+
             var normal = triangle.Normal;
             if (normal.Z < minimumWalkableNormalZ ||
                 !float.IsFinite(normal.Z) ||

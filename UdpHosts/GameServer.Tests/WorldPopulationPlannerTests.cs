@@ -106,6 +106,80 @@ public class WorldPopulationPlannerTests
     }
 
     [Fact]
+    public void Plan_ALoneDeployablePaintsNoSettlementGround()
+    {
+        var (planner, data, terrain) = CreatePlanner();
+        AddGround(terrain);
+
+        // One prop in the middle of the plane, written the way the data source reads the zone's
+        // deployables: no radius, no band. A lone terminal in the field is just a prop - it is
+        // what stood a settlement monster in the middle of nowhere.
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(16f, 16f, 0f), 0f, WorldPopulationHabitat.Settlement, 0u));
+        data.AddMonster(11, WorldPopulationHabitat.Settlement);
+
+        Build(planner);
+
+        Assert.Equal(0, planner.PlacedRosterCount);
+        Assert.Equal(1, planner.UnplacedRosterCount);
+        Assert.DoesNotContain(planner.Cells.Values, cell => cell.Habitat == WorldPopulationHabitat.Settlement);
+    }
+
+    [Fact]
+    public void Plan_DeployablesStandingInCompanyPaintSettlementGround()
+    {
+        var (planner, data, terrain) = CreatePlanner();
+        AddGround(terrain);
+
+        // A camp is several props standing together: three, well inside the 60 m the cluster
+        // rule gives company. The place they paint is settled ground and the roster takes it.
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(16f, 16f, 0f), 0f, WorldPopulationHabitat.Settlement, 0u));
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(20f, 16f, 0f), 0f, WorldPopulationHabitat.Settlement, 0u));
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(18f, 20f, 0f), 0f, WorldPopulationHabitat.Settlement, 0u));
+        data.AddMonster(11, WorldPopulationHabitat.Settlement);
+
+        Build(planner);
+
+        Assert.Equal(1, planner.PlacedRosterCount);
+        Assert.Contains(planner.Cells.Values, cell => cell.Habitat == WorldPopulationHabitat.Settlement);
+    }
+
+    [Fact]
+    public void Plan_TwoCopiesOfTheSamePropAreStillALoneProp()
+    {
+        var (planner, data, terrain) = CreatePlanner();
+        AddGround(terrain);
+
+        // The zone file holds some props twice at the identical spot; a stacked copy of itself
+        // is not company, or every doubled prop would paint its circle again.
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(16f, 16f, 0f), 0f, WorldPopulationHabitat.Settlement, 0u));
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(16f, 16f, 0f), 0f, WorldPopulationHabitat.Settlement, 0u));
+        data.AddMonster(11, WorldPopulationHabitat.Settlement);
+
+        Build(planner);
+
+        Assert.Equal(0, planner.PlacedRosterCount);
+        Assert.DoesNotContain(planner.Cells.Values, cell => cell.Habitat == WorldPopulationHabitat.Settlement);
+    }
+
+    [Fact]
+    public void Plan_AnOutpostIsAPlaceWhateverTheDeployableRuleSays()
+    {
+        var (planner, data, terrain) = CreatePlanner();
+        AddGround(terrain);
+
+        // An outpost anchor carries its authored capture radius, and the cluster rule only
+        // questions the radius-less settlement anchors the zone's props write - so a single
+        // outpost in the middle of nowhere is still settled ground.
+        data.Anchors.Add(new WorldPopulationAnchor(new Vector3(16f, 16f, 0f), 150f, WorldPopulationHabitat.Settlement, 1001u));
+        data.AddMonster(11, WorldPopulationHabitat.Settlement);
+
+        Build(planner);
+
+        Assert.Equal(1, planner.PlacedRosterCount);
+        Assert.Contains(planner.Cells.Values, cell => cell.Habitat == WorldPopulationHabitat.Settlement);
+    }
+
+    [Fact]
     public void Plan_TakesHabitatAndLevelFromTheAnchorsAroundACell()
     {
         var (planner, data, terrain) = CreatePlanner();
