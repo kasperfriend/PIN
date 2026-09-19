@@ -280,8 +280,8 @@ public class Factory
                 return new RequestBattleFrameListCommand(SDBInterface.GetRequestBattleFrameList(commandId));
             case CommandType.NPCSpawn:
                 return new NPCSpawnCommand(CustomDBInterface.GetNPCSpawnCommandDef(commandId));
-            // case CommandType.ApplyImpulse:
-            //     return new ApplyImpulseCommand(SDBInterface.GetApplyImpulseCommandDef(commandId));
+            case CommandType.ApplyImpulse:
+                return new ApplyImpulseCommand(SDBInterface.GetApplyImpulseCommandDef(commandId));
             case CommandType.DeployableSpawn:
                 return new DeployableSpawnCommand(CustomDBInterface.GetDeployableSpawnCommandDef(commandId));
             // case CommandType.NPCDroidModeChange:
@@ -586,6 +586,9 @@ public class Factory
                 return new ApplyPermanentEffectCommand(CustomDBInterface.GetApplyPermanentEffectCommandDef(commandId) ?? new ApplyPermanentEffectCommandDef { Id = commandId });
             // case CommandType.ModifyHostility:
             //     return new ModifyHostilityCommand(CustomDBInterface.GetModifyHostilityCommandDef(commandId));
+            // Id-only def, and AeroMessages has no client<->server ability-trigger message, so what a
+            // "trigger" is at runtime isn't derivable; the frame-passive registers (Ambush, Conduit,
+            // Rally, E-Tank, Incinerator, ...) wait on that evidence. Docs/BATTLEFRAME_ABILITIES.md.
             // case CommandType.RegisterAbilityTrigger:
             //     return new RegisterAbilityTriggerCommand(CustomDBInterface.GetRegisterAbilityTriggerCommandDef(commandId));
             // case CommandType.SetWeaponDamageType:
@@ -650,6 +653,9 @@ public class Factory
             // (SuperChargePerDamageDealt/Taken), so gating on the gauge is safe now.
             case CommandType.RequireSuperCharge:
                 return new RequireSuperChargeCommand(SDBInterface.GetRequireSuperChargeCommandDef(commandId));
+            // Same trigger-subsystem gap as RegisterAbilityTrigger above; the charged/accel actives
+            // (Overcharge, Shockwave, Absorption Bomb, Afterburner, Heavy Turret, melee auxiliaries,
+            // ...) route through this node. Docs/BATTLEFRAME_ABILITIES.md.
             // case CommandType.ActivateAbilityTrigger:
             //     return new ActivateAbilityTriggerCommand(CustomDBInterface.GetActivateAbilityTriggerCommandDef(commandId));
             case CommandType.TargetByHealth:
@@ -751,6 +757,7 @@ public class Factory
                 return new AddAccountGroupCommand(CustomDBInterface.GetAddAccountGroupCommandDef(commandId) ?? new AddAccountGroupCommandDef { Id = commandId });
             case CommandType.RequireInitiatorExists:
                 return new RequireInitiatorExistsCommand(CustomDBInterface.GetRequireInitiatorExistsCommandDef(commandId));
+            // Same trigger-subsystem gap as the ability triggers above.
             // case CommandType.RegisterTimedTrigger:
             //     return new RegisterTimedTriggerCommand(CustomDBInterface.GetRegisterTimedTriggerCommandDef(commandId));
             // case CommandType.Taunt:
@@ -767,8 +774,10 @@ public class Factory
             //     return new RequireSquadLeaderCommand(SDBInterface.GetRequireSquadLeaderCommandDef(commandId));
             case CommandType.RequireHasCertificate:
                 return new RequireHasCertificateCommand(SDBInterface.GetRequireHasCertificateCommandDef(commandId));
-            // case CommandType.DropAllCarryable:
-            //     return new DropAllCarryableCommand(CustomDBInterface.GetDropAllCarryableCommandDef(commandId));
+            // Id-only def: the carryable inventory is the three replicated slots on the
+            // character's controllers; pickup support is a future feature, not a lookup gap.
+            case CommandType.DropAllCarryable:
+                return new DropAllCarryableCommand(CustomDBInterface.GetDropAllCarryableCommandDef(commandId) ?? new DropAllCarryableCommandDef { Id = commandId });
             // case CommandType.RemoteAbilityCall:
             //     return new RemoteAbilityCallCommand(CustomDBInterface.GetRemoteAbilityCallCommandDef(commandId));
             case CommandType.RequireInCombat:
