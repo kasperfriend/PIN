@@ -47,6 +47,14 @@ public class MovementRelay
         bool sendJumpActioned = IsJumpCounterReset(character.TimeSinceLastJump, poseData.TimeSinceLastJump);
         character.TimeSinceLastJump = poseData.TimeSinceLastJump;
 
+        if (sendJumpActioned)
+        {
+            // Stamp the aptitude-visible jump time in the shard clock. NPCs have no movement-input
+            // path, so LastJumpTime is only maintained for player-driven characters; RequireJumped
+            // reads it. Server-commanded launches arrive here too, by design of the client counter.
+            character.NoteJump(_shard.CurrentTime);
+        }
+
         character.IsAirborne = poseData.GroundTimePositiveAirTimeNegative < 0;
 
         // A pose from the client is the truth the aptitude gates must use from here on. If the server was still

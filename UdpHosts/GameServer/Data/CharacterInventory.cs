@@ -135,6 +135,10 @@ public class CharacterInventory
     public bool IsItemEquipped(ulong guid) =>
         _items.TryGetValue(guid, out var item) && (item.DynamicFlags & (byte)ItemDynamicFlags.IsEquipped) != 0;
 
+    /// <summary>Whether any carried item of the given type is currently equipped in the loadout.</summary>
+    public bool HasItemEquipped(uint sdbId) =>
+        _items.Values.Any(item => item.SdbId == sdbId && (item.DynamicFlags & (byte)ItemDynamicFlags.IsEquipped) != 0);
+
     /// <summary>
     ///     Removes an item from the inventory. Equipped gear refuses to go (it is slotted in a
     ///     loadout, which would be left pointing at a missing item).

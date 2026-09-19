@@ -1,4 +1,4 @@
-﻿using GameServer.Entities.Character;
+using GameServer.Entities.Character;
 using GameServer.Entities.Vehicle;
 using GameServer.StaticDB.Records.aptfs;
 
@@ -28,8 +28,10 @@ public class TargetPassengersCommand : Command, ICommand
 
         if (Params.Filter == 1)
         {
-            context.Targets = new AptitudeTargets();
-
+            // Keep the existing targets that are passengers of this vehicle
+            // (the pilot is excluded), replacing the current list. The filtered
+            // list used to be built into a local that was never assigned back,
+            // which left the command with an empty target list.
             foreach (var target in context.FormerTargets)
             {
                 if (target is not CharacterEntity character)
@@ -45,6 +47,8 @@ public class TargetPassengersCommand : Command, ICommand
 
                 targets.Push(target);
             }
+
+            context.Targets = targets;
         }
         else
         {

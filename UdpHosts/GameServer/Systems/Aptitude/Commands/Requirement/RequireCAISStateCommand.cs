@@ -1,4 +1,4 @@
-﻿using AeroMessages.GSS.Character.Controller;
+using AeroMessages.GSS.Character.Controller;
 using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.aptfs;
 
@@ -28,6 +28,10 @@ public class RequireCAISStateCommand : Command, ICommand
 
         var state = character.Character_BaseController.CAISStatusProp.State;
 
+        // No CAIS driver exists on this server yet, so every character sits at None. None is the
+        // healthy baseline: a row asking for Healthy must still pass for it (emote and ambience
+        // chains gate on Healthy for characters that are fine), while rows asking for Fatigued or
+        // Unhealthy correctly fail until something starts driving those states.
         if (Params.None == 1)
         {
             result = state == CAISStatusData.CAISState.None;
@@ -45,7 +49,7 @@ public class RequireCAISStateCommand : Command, ICommand
 
         if (Params.Healthy == 1)
         {
-            result = result || state == CAISStatusData.CAISState.Healthy;
+            result = result || state is CAISStatusData.CAISState.Healthy or CAISStatusData.CAISState.None;
         }
 
         return result;

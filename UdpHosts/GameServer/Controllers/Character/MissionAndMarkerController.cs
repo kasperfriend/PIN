@@ -1,4 +1,4 @@
-﻿using Aero.Protocol;
+using Aero.Protocol;
 using GameServer.Packets;
 using Serilog;
 
@@ -14,12 +14,16 @@ public class MissionAndMarkerController : Base
     [MessageID(GssCharacterCommand.RequestAllAchievements)]
     public void RequestAllAchievements(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {
-        // TODO: Implement
+        // Unimplemented: there is no server-side achievement tracking yet, so there
+        // is nothing to answer. Consuming the packet keeps it out of the
+        // unhandled-command log; the client shows an empty achievement list.
     }
 
     [MessageID(GssCharacterCommand.TryResumeTutorialChain)]
     public void TryResumeTutorialChain(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {
-        // TODO: Implement
+        // Unimplemented: tutorial chains are mission-script driven and the tutorial
+        // missions are not authored server-side. Consuming the packet keeps it out
+        // of the unhandled-command log.
     }
 }

@@ -42,6 +42,7 @@ jobs:
           python Tools/SdbDump/selftest.py
           python -m unittest discover -s Tools/SdbDump -p 'test_*.py'
           python Tools/SdbDump/npc_movement_audit.py --check
+          python Tools/SdbDump/verify_ability_chains.py --check
       - name: Install Dependencies
         run: dotnet restore
       - name: Build

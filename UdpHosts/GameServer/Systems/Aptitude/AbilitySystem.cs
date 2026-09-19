@@ -1066,11 +1066,6 @@ public class AbilitySystem
         return false;
     }
 
-    public void HandleTargetAbility()
-    {
-        throw new NotImplementedException();
-    }
-
     /// <summary>
     /// Registers a client-initiated ability activation as held active. The character combat
     /// controller calls this after a successful activation; <c>ActivationDurationCommand</c> in
@@ -1110,11 +1105,6 @@ public class AbilitySystem
         return entity != null
             && TryGetState(entity, out var state)
             && state.ActiveActivations.Contains(abilityId);
-    }
-
-    public void HandleActivateConsumable()
-    {
-        throw new NotImplementedException();
     }
 
     /// <summary>

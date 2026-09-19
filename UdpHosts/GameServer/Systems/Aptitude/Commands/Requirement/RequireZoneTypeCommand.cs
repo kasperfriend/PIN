@@ -1,4 +1,4 @@
-﻿using GameServer.Data;
+using GameServer.Data;
 using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.aptfs;
 
@@ -16,7 +16,9 @@ public class RequireZoneTypeCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
-        // todo aptitude: verify
+        // Verified: the row admits a union of categories (each flag adds the zone set
+        // from Data/Zone.cs, whose membership was lifted from the client's
+        // Game.GetZoneInfo) plus one specific zone id; Negate inverts the union.
         bool result = false;
 
         var target = context.Self;

@@ -29,7 +29,9 @@ public class CombatController : Base
     [MessageID(GssCharacterCommand.FireInputIgnored)]
     public void FireInputIgnored(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {
-        // TODO: Implement
+        // Deliberate no-op: the client only reports inputs IT dropped (out of ammo,
+        // cooling weapon, suppressed), so the server has no state to correct here.
+        // Consuming the packet keeps the report out of the unhandled-command log.
     }
 
     [MessageID(GssCharacterCommand.FireBurst)]
@@ -262,6 +264,13 @@ public class CombatController : Base
                     abilityId = abilityModule.AbilityChainId;
                     abilityCategory = abilityModule.UiCategory;
                 }
+                else if (abilitySlot is 16 or 17)
+                {
+                    // Slots 16 (vehicle, V) and 17 (glider, T) hold the vehicle/glider
+                    // item, not an ability module, so there is no AbilityModule record
+                    // to find here.
+                    _logger.Debug("ActivateAbility slot {AbilitySlotIndex}: id {ModuleId} is the vehicle/glider item, not an ability module", abilitySlot, moduleId);
+                }
                 else
                 {
                     _logger.Warning("ActivateAbility slot {AbilitySlotIndex}: module {ModuleId} has no AbilityModule SDB record", abilitySlot, moduleId);
@@ -269,65 +278,42 @@ public class CombatController : Base
             }
         }
 
-        // Defaults if we failed
+        // Frame-default buttons: the server-side loadout has no per-slot default
+        // abilities. The char-create loadout rows (SDB ccsl, loadouts 287-298) slot
+        // ability modules only into slots 6/7/8/9 (HKM and the three ability buttons)
+        // plus gear; every other button starts empty, and an empty slot means
+        // "no ability" - which the client already knows from its replicated loadout.
+        // The battleframe's built-in kit lives in the ability GROUPS as passives
+        // (sprint, jetpack, core triggers), not as button abilities, and the jetpack
+        // permission is granted at spawn. Med systems are module-only (slotted by the
+        // player). The genuinely built-in buttons are Interact (E -> 187) and SIN
+        // targeting (F -> 43); every other empty slot stays unresolved on purpose.
+        // Slots 16 (vehicle, V) and 17 (glider, T) hold the vehicle/glider item rather
+        // than an ability module, and the calldown ability chains (e.g. 34571
+        // "Convoy - Calldown") carry no AbilityModule rows, so no vehicle/glider
+        // ability can be derived from loadout data - a documented gap, not a lookup bug.
         if (abilityId == 0)
         {
-            // Ability1 - Default button 1
-            if (abilitySlot == 0)
-            {
-            }
-
-            // Ability2 - Default button 2
-            if (abilitySlot == 1)
-            {
-            }
-
-            // Ability3 - Default button 3
-            if (abilitySlot == 2)
-            {
-            }
-
-            // AbilityHKM - Default button 4
-            if (abilitySlot == 3)
-            {
-            }
-
-            // AbilityInteract - Default button E
-            if (abilitySlot == 4)
+            if (abilitySlot == 4) // AbilityInteract - Default button E
             {
                 abilityId = 187; // Interact
             }
-
-            // Auxiliary - Default button G
-            if (abilitySlot == 5)
-            {
-            }
-
-            // AbilityMedical - Default button Q
-            if (abilitySlot == 6)
-            {
-            }
-
-            // AbilitySIN - Default button F
-            if (abilitySlot == 13)
+            else if (abilitySlot == 13) // AbilitySIN - Default button F
             {
                 abilityId = 43; // 40? SIN Targetting
-            }
-
-            // Vehicle - Default button V
-            if (abilitySlot == 16)
-            {
-            }
-
-            // Auxiliary - Default button T
-            if (abilitySlot == 17)
-            {
             }
         }
 
         if (abilityId == 0 && moduleId != 0)
         {
-            _logger.Warning("ActivateAbility slot {AbilitySlotIndex}: module {ModuleId} did not resolve to an ability id (AbilityChainId is 0 or missing)", abilitySlot, moduleId);
+            if (abilitySlot is 16 or 17)
+            {
+                _logger.Debug("ActivateAbility slot {AbilitySlotIndex}: vehicle/glider item {ModuleId} has no ability chain on the server (calldown wiring gap)", abilitySlot, moduleId);
+            }
+            else
+            {
+                _logger.Warning("ActivateAbility slot {AbilitySlotIndex}: module {ModuleId} did not resolve to an ability id (AbilityChainId is 0 or missing)", abilitySlot, moduleId);
+            }
         }
 
         _logger.Information("ActivateAbility slot {AbilitySlotIndex}: module {ModuleId} resolved to ability {AbilityId} (category {AbilityCategory})", abilitySlot, moduleId, abilityId, abilityCategory);

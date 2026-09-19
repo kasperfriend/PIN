@@ -26,17 +26,26 @@ public class RequireLevelCommand : Command, ICommand
             return true;
         }
 
+        // The base controller only exists once the character has been made observable
+        // (InitControllers); an unobserved character has no verifiable level, so rows
+        // fail instead of guessing one.
+        var controller = character.Character_BaseController;
+
         bool result = false;
+        if (controller != null)
         {
             if (Params.FrameLevel == 1)
             {
-                result = character.Character_BaseController.LevelProp >= Params.Level;
+                result = controller.LevelProp >= Params.Level;
             }
             else if (Params.SessionLevel == 1)
             {
-                // todo
-                Logger.Debug("[{Command} {CommandId}] Session level, level {Level}", nameof(RequireLevelCommand), Params.Id, Params.Level);
-                result = true;
+                // Session level = the level the current session scales the character to,
+                // which the server models as EffectiveLevelProp (today it always tracks
+                // the frame level, but staged content is free to lower it). These rows
+                // used to pass unconditionally, which let level-gated encounters treat
+                // a downtiered character as if it were at full frame level.
+                result = controller.EffectiveLevelProp >= Params.Level;
             }
         }
 

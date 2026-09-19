@@ -14,7 +14,8 @@ public class CombatController : Base
 {
     public override void Init(INetworkClient client, IPlayer player, IShard shard, ILogger logger)
     {
-        // TODO: Implement
+        // Nothing to register: vehicle combat state lives on VehicleEntity and the
+        // vehicle's ability list is populated at spawn time by EntityMan.SpawnVehicle.
     }
 
     [MessageID(GssVehicleCommand.ActivateAbility)]
@@ -45,7 +46,11 @@ public class CombatController : Base
     [MessageID(GssVehicleCommand.DeactivateAbility)]
     public void DeactivateAbility(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {
-        // todo?
-        // var deactivateAbility = packet.Unpack<DeactivateAbility>();
+        // Vehicle activations are fire-and-forget: unlike the character combat
+        // controller, no BeginAbilityActivation registration happens here, so there
+        // is nothing to end. A future channeled vehicle ability (duration chains
+        // driven by ActivationDurationCommand) would need the same
+        // Begin/EndAbilityActivation mirror the character side uses. The packet is
+        // consumed so it stays out of the unhandled-command log.
     }
 }

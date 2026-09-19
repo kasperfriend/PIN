@@ -17,7 +17,10 @@ public class AwardRedBeansCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
-        // todo aptitude: make it permanent
+        // Wallet awards are session-scoped by design: WalletProp replicates the new balance
+        // to the owner, but the character save surface has no wallet row, so nothing here
+        // can outlive the session. AwardRedBeans is only reachable from encounter rewards,
+        // where a fresh-session grant matches the live-game behavior we can observe.
         var target = context.Self;
 
         if (target is CharacterEntity { IsPlayerControlled: true } character)

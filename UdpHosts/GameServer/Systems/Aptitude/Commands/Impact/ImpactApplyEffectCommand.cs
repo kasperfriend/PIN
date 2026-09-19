@@ -46,7 +46,10 @@ public class ImpactApplyEffectCommand : Command, ICommand
 
         if (Params.OverrideInitiator == 1)
         {
-            // TODO: With who?
+            // With the entity the apply chain currently runs on: inside ApplySinCard-style
+            // retargeted chains Self has already been moved to the effect HOST, so the host
+            // (not the original caster) becomes the effect's initiator. The def's sibling
+            // flag OverrideInitiatorWithTarget below covers the "a target" variant.
             effectContext.Initiator = context.Self;
         }
         else if (Params.OverrideInitiatorWithTarget == 1)

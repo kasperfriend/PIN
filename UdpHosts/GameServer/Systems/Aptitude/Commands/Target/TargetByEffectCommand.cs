@@ -1,4 +1,5 @@
-﻿using GameServer.StaticDB.Records.aptfs;
+using System.Linq;
+using GameServer.StaticDB.Records.aptfs;
 
 namespace GameServer.Systems.Aptitude.Commands.Target;
 
@@ -14,13 +15,23 @@ public class TargetByEffectCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
-        // todo Params.FilterList, equal to 1 in 1086 instances, 0 in 6 instances
+        // Params.FilterList (1 in 1086 instances, 0 in 6) stays undecoded: every row
+        // we can load behaves like a filter over the input target list, so both forms
+        // take the same path until a counterexample shows up.
         var previousTargets = context.Targets;
         var newTargets = new AptitudeTargets();
 
-        Logger.Debug("prev: {Count}", previousTargets.Count);
         foreach (IAptitudeTarget target in previousTargets)
         {
+            // match = the target carries the effect at the required stack count; with
+            // SameInitiator the (coalesced) application must have been initiated by
+            // this chain's initiator. Negate then flips the whole question.
+            //
+            // The old per-effect flip of "condition" broke both axes: a Negate row
+            // kept a target that HAD the required effect as long as it carried any
+            // second, unrelated effect, and the non-negated SameInitiator branch
+            // kept targets whose matching effect came from a DIFFERENT initiator.
+            bool match = false;
             foreach (EffectState active in target.GetActiveEffects())
             {
                 if (active == null)
@@ -28,31 +39,28 @@ public class TargetByEffectCommand : Command, ICommand
                     continue;
                 }
 
-                var condition = Params.EffectId == active.Effect.Id && active.Stacks >= Params.StackCount;
-                if (Params.Negate == 1)
+                if (Params.EffectId != active.Effect.Id || active.Stacks < Params.StackCount)
                 {
-                    condition = !condition;
+                    continue;
                 }
 
-                if (condition)
+                if (Params.SameInitiator == 1 && !WasAppliedBy(active, context.Initiator))
                 {
-                    if (Params.SameInitiator == 1)
-                    {
-                        var condition2 = Params.Negate == 1
-                                             ? context.Initiator == active.Context.Initiator
-                                             : context.Initiator != active.Context.Initiator;
-                        if (condition2)
-                        {
-                            newTargets.Push(target);
-                        }
-                    }
-                    else
-                    {
-                        newTargets.Push(target);
-                    }
-
-                    break;
+                    continue;
                 }
+
+                match = true;
+                break;
+            }
+
+            if (Params.Negate == 1)
+            {
+                match = !match;
+            }
+
+            if (match)
+            {
+                newTargets.Push(target);
             }
         }
 
@@ -65,5 +73,14 @@ public class TargetByEffectCommand : Command, ICommand
         }
 
         return true;
+    }
+
+    private static bool WasAppliedBy(EffectState active, IAptitudeTarget initiator)
+    {
+        // Same rule as RequireHasEffect: the replicated status slot coalesces every
+        // application of the effect id, so consult the initiating context and all
+        // stacked ones - any application from this initiator counts.
+        return active.Context?.Initiator == initiator
+            || active.StackedContexts.Any(stacked => stacked.Initiator == initiator);
     }
 }

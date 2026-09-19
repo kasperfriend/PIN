@@ -34,7 +34,13 @@ public class EndInteractionCommand : ICommand
             return false;
         }
 
-        var interactionEntity = (BaseEntity)context.Targets.Peek();
+        if (context.Targets.Peek() is not BaseEntity interactionEntity)
+        {
+            Logger.Information(
+                "EndInteraction: {Self} finished an interaction whose target is not an entity ({Target}), treating it as interrupted",
+                character, context.Targets.Peek());
+            return false;
+        }
         uint now = context.Shard.CurrentTime;
 
         // Completion bookkeeping: the channel recorded by agsInteractionCompletionTimeCommandDef
