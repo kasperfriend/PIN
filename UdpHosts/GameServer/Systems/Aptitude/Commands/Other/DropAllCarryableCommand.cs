@@ -6,7 +6,7 @@ namespace GameServer.Systems.Aptitude.Commands.Other;
 /// <summary>
 ///     <c>aptgss::DropAllCarryableCommandDef</c> (id only): the character drops every carryable
 ///     object it holds. The carryable system on this server is limited to the three replicated
-///     inventory slots on the character's controller and combat controller; nothing picks a
+///     inventory slots on the character's base controller and observer view; nothing picks a
 ///     carryable up yet, so for any character today this is a state refresh. When one is held,
 ///     the slots clear (the entity itself is left to its own lifecycle, the same way a respawn
 ///     leaves a spawned carryable where it was).
@@ -29,11 +29,11 @@ public class DropAllCarryableCommand : Command, ICommand
             return false;
         }
 
-        // Controllers only exist once the character has been made observable.
         var baseController = character.Character_BaseController;
-        var combatController = character.Character_CombatController;
-        if (baseController == null || combatController == null)
+        var observerView = character.Character_ObserverView;
+        if (baseController == null || observerView == null)
         {
+            // BaseController only exists once the character has been made observable.
             return false;
         }
 
@@ -50,9 +50,9 @@ public class DropAllCarryableCommand : Command, ICommand
         baseController.CarryableObjects_1Prop = null;
         baseController.CarryableObjects_2Prop = null;
 
-        combatController.CarryableObjects_0Prop = null;
-        combatController.CarryableObjects_1Prop = null;
-        combatController.CarryableObjects_2Prop = null;
+        observerView.CarryableObjects_0Prop = null;
+        observerView.CarryableObjects_1Prop = null;
+        observerView.CarryableObjects_2Prop = null;
 
         return true;
     }
