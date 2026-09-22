@@ -62,10 +62,10 @@ public class MarketController : ControllerBase
         var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = new SnakeCasePropertyNamingPolicy() };
 
         var dataDirectory = Path.Combine(AppContext.BaseDirectory, "Data");
-        var attributes = File.ReadAllText(Path.Combine(dataDirectory, "ItemDisplayAttributes.json"));
+        var attributes = System.IO.File.ReadAllText(Path.Combine(dataDirectory, "ItemDisplayAttributes.json"));
         _itemDisplayAttributes = JsonSerializer.Deserialize<Dictionary<string, ItemDisplayAttribute>>(attributes, jsonOptions);
 
-        var categories = File.ReadAllText(Path.Combine(dataDirectory, "MarketCategories.json"));
+        var categories = System.IO.File.ReadAllText(Path.Combine(dataDirectory, "MarketCategories.json"));
         _marketCategories = JsonSerializer.Deserialize<List<MarketCategory>>(categories, jsonOptions);
     }
 }
