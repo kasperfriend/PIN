@@ -17,7 +17,7 @@
         <PackageReference Include="CommandLineParser" Version="2.9.1" />
         <!-- NB: deliberately no Serilog.Settings.AppSettings / System.Configuration.ConfigurationManager here.
              ConfigurationManager locates its config file through Assembly.CodeBase, which is unsupported in the
-             single-file publish. MatrixServer has no App.config; CLI --log-level is the override. -->
+             single-file publish. MatrixServer has no App.config; the CLI log-level switch is the override. -->
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
         <PackageReference Include="Aero.Gen" Version="1.5.0"/>
     </ItemGroup>
