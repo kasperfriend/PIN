@@ -84,27 +84,37 @@ jobs:
       - name: Bundle and verify release files
         shell: pwsh
         run: |
-          function Assert-GameServerPayload([string] $directory) {
-            $executable = Join-Path $directory 'GameServer.exe'
+          function Assert-SingleFileHost([string] $directory, [string] $name) {
+            $executable = Join-Path $directory "$name.exe"
             if (-not (Test-Path -LiteralPath $executable)) {
-              throw 'GameServer payload is missing GameServer.exe.'
+              throw "$name payload is missing $name.exe."
             }
 
-            # GameServer is deliberately a framework-dependent single-file app. Its managed
-            # dependency closure (including Bitter) must be inside the executable rather than
-            # relying on a loose DLL which can be omitted or separated during extraction.
-            $unexpectedFiles = @('GameServer.dll', 'GameServer.deps.json') |
+            # Framework-dependent single-file: managed dependencies live inside the executable.
+            # A leftover $name.dll is what Smart App Control (Code Integrity event 3077 /
+            # VerifiedAndReputableDesktop) blocked on Windows 11.
+            $unexpectedFiles = @("$name.dll", "$name.deps.json") |
               Where-Object { Test-Path -LiteralPath (Join-Path $directory $_) }
             if ($unexpectedFiles) {
-              throw "GameServer was not bundled as a single file; found: $($unexpectedFiles -join ', ')"
+              throw "$name was not bundled as a single file; found: $($unexpectedFiles -join ', ')"
             }
 
             if ((Get-Item -LiteralPath $executable).Length -lt 1MB) {
-              throw 'GameServer.exe is too small to contain its managed dependency bundle.'
+              throw "$name.exe is too small to contain its managed dependency bundle."
             }
           }
 
-          Assert-GameServerPayload (Join-Path $PWD 'Publish')
+          $publishDirectory = Join-Path $PWD 'Publish'
+          Assert-SingleFileHost $publishDirectory 'GameServer'
+          Assert-SingleFileHost $publishDirectory 'MatrixServer'
+          Assert-SingleFileHost $publishDirectory 'WebHostManager'
+          $appsettings = Join-Path $publishDirectory 'config\appsettings.json'
+          if (-not (Test-Path -LiteralPath $appsettings)) {
+            throw 'WebHostManager payload is missing config/appsettings.json (must stay a loose file next to the single-file exe).'
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $publishDirectory 'Data\ItemDisplayAttributes.json'))) {
+            throw 'WebHostManager payload is missing Data/ItemDisplayAttributes.json (must stay a loose file next to the single-file exe).'
+          }
 
           Copy-Item Start.cmd Publish\Start.cmd
           Copy-Item README.md Publish\README.md
@@ -115,7 +125,12 @@ jobs:
           $verificationDirectory = Join-Path $env:RUNNER_TEMP 'pin-release-verify'
           Remove-Item -LiteralPath $verificationDirectory -Recurse -Force -ErrorAction SilentlyContinue
           Expand-Archive -LiteralPath $zip -DestinationPath $verificationDirectory -Force
-          Assert-GameServerPayload $verificationDirectory
+          Assert-SingleFileHost $verificationDirectory 'GameServer'
+          Assert-SingleFileHost $verificationDirectory 'MatrixServer'
+          Assert-SingleFileHost $verificationDirectory 'WebHostManager'
+          if (-not (Test-Path -LiteralPath (Join-Path $verificationDirectory 'config\appsettings.json'))) {
+            throw 'Extracted release is missing config/appsettings.json.'
+          }
 
           function Assert-GameServerBoots([string] $directory) {
             # Boot the shipped single-file GameServer far enough to force the Bitter
@@ -172,6 +187,41 @@ jobs:
           }
 
           Assert-GameServerBoots $verificationDirectory
+
+          function Assert-WebHostManagerBoots([string] $directory) {
+            # --trust-cert loads config and resolves the localhost certificate, then exits 1
+            # with "Nothing to trust...". That is enough to prove the single-file host starts
+            # without CodeBase / could-not-load-assembly, without binding the web ports.
+            $executable = Join-Path $directory 'WebHostManager.exe'
+            $stdoutLog = Join-Path $env:RUNNER_TEMP 'webhostmanager-release-smoke-stdout.log'
+            $stderrLog = Join-Path $env:RUNNER_TEMP 'webhostmanager-release-smoke-stderr.log'
+            Remove-Item -LiteralPath $stdoutLog, $stderrLog -Force -ErrorAction SilentlyContinue
+            $process = Start-Process -FilePath $executable -ArgumentList '--trust-cert' -WorkingDirectory $directory `
+              -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog `
+              -NoNewWindow -PassThru
+            $process | Wait-Process -Timeout 60 -ErrorAction SilentlyContinue
+            if (-not $process.HasExited) {
+              $process | Stop-Process -Force
+              throw 'Smoke test timed out: shipped WebHostManager.exe --trust-cert did not exit within 60 seconds.'
+            }
+
+            $output = ((Get-Content -LiteralPath $stdoutLog -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content -LiteralPath $stderrLog -Raw -ErrorAction SilentlyContinue))
+            Write-Host $output
+
+            if ($output -match 'CodeBase' -or $output -match 'Could not load file or assembly' -or $output -match 'SingleFileBundle' -or $output -match 'Failed to probe') {
+              throw "Shipped WebHostManager.exe --trust-cert failed to load the single-file host.`n$output"
+            }
+
+            if ($process.ExitCode -ne 1) {
+              throw "Shipped WebHostManager.exe --trust-cert exited $($process.ExitCode); expected 1 (localhost has nothing to trust)."
+            }
+
+            if ($output -notmatch 'Nothing to trust') {
+              throw "Shipped WebHostManager.exe --trust-cert did not print the localhost trust message.`n$output"
+            }
+          }
+
+          Assert-WebHostManagerBoots $verificationDirectory
 
           Get-ChildItem $zip | Select-Object Name, Length
 

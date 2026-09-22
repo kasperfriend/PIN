@@ -3,12 +3,21 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+        <!-- Same single-file publish as GameServer / WebHostManager: a loose
+             unsigned MatrixServer.dll is blocked by Smart App Control
+             (Code Integrity event 3077, VerifiedAndReputableDesktop). Local
+             framework-independent builds remain unchanged. -->
+        <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+        <IncludeNativeLibrariesForSelfExtract Condition="'$(RuntimeIdentifier)' != ''">true</IncludeNativeLibrariesForSelfExtract>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="Autofac" Version="9.1.0" />
         <PackageReference Include="CommandLineParser" Version="2.9.1" />
-        <PackageReference Include="Serilog.Settings.AppSettings" Version="3.0.0" />
+        <!-- NB: deliberately no Serilog.Settings.AppSettings / System.Configuration.ConfigurationManager here.
+             ConfigurationManager locates its config file through Assembly.CodeBase, which is unsupported in the
+             single-file publish. MatrixServer has no App.config; CLI --log-level is the override. -->
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
         <PackageReference Include="Aero.Gen" Version="1.5.0"/>
     </ItemGroup>

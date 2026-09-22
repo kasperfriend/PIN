@@ -42,7 +42,12 @@ public static class GameServerApiHost
 
         Log.Information("Starting GRPC GameServerAPI on port {Port}", port);
 
-        var builder = WebApplication.CreateBuilder();
+        // Single-file WebHostManager.exe: the default content root is GetCurrentDirectory(),
+        // which is wrong when the process is started from a shortcut or a different CWD.
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            ContentRootPath = AppContext.BaseDirectory,
+        });
 
         builder.Host.UseSerilog();
 

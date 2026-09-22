@@ -13,7 +13,7 @@ https://user-images.githubusercontent.com/920861/134824107-03e9f99c-b420-47c7-b7
 1. Install Firefall via Steam (paste `steam://install/227700` into address bar of web browser)
 2. Edit the `firefall.ini` located in `steamapps\common\Firefall`
 3. Add content from below
-4. Download and extract the [latest PIN release](https://github.com/themeldingwars/PIN/releases/latest) as a complete archive. Keep `GameServer.exe` and every adjacent file together in the extracted folder. `GameServer.exe` is a single-file build: if you see a `GameServer.dll` next to it, that folder holds an outdated release — delete it and re-extract the latest archive.
+4. Download and extract the [latest PIN release](https://github.com/themeldingwars/PIN/releases/latest) as a complete archive. Keep `GameServer.exe`, `MatrixServer.exe`, `WebHostManager.exe` and every adjacent file together in the extracted folder. All three hosts are framework-dependent single-file builds: if you see a `GameServer.dll`, `MatrixServer.dll` or `WebHostManager.dll` next to them, that folder holds an outdated release — delete it and re-extract the latest archive.
 5. On its first launch, GameServer automatically finds a normal Steam Firefall installation and writes the paths to `GameServer.config.json`. If it cannot find your copy, set `StaticDBPath`, `MapsPath`, and `AssetDBPath` in that file before trying again; see [GameServer config](#gameserver-config).
 6. Make a backup copy of the original `FirefallClient.exe` in `Firefall\system\bin`
 7. Replace the `FirefallClient.exe` with the patched `FirefallClient.exe` from the PIN release
@@ -319,6 +319,10 @@ already listening: `netstat -ano | findstr :4400` for the process id,
 As a last resort the ports move too: every `urls` entry in `Firefall:WebHosts`
 (`config\appsettings.json`) — and the same numbers in `firefall.ini`, which the
 client dials directly.
+
+**`WebHostManager.exe` (or `MatrixServer.exe`) never starts, and Event Viewer → Applications and Services Logs → Microsoft → Windows → CodeIntegrity → Operational shows event 3077 naming `WebHostManager.dll` / `MatrixServer.dll`, policy `VerifiedAndReputableDesktop`**
+
+Windows 11 Smart App Control treated the unsigned ReadyToRun `WebHostManager.dll` (the same shape as `MatrixServer.dll`) that an older multi-file publish dropped next to the apphost as native code and blocked it. The unsigned `.exe` can pass; the first unsigned loaded DLL is what 3077 names. An outdated release still ships those DLLs. Download the latest PIN release (or build from source): `WebHostManager`, `MatrixServer` and `GameServer` are framework-dependent single-file hosts, so there is no such DLL for Code Integrity to refuse. Turning Smart App Control off is not the fix, and a self-signed Authenticode certificate does not satisfy SAC.
 
 **`GameServer terminated: CodeBase is not supported on assemblies loaded from a single-file bundle`**
 
