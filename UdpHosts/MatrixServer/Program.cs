@@ -50,7 +50,7 @@ internal static class Program
     }
 
     /// <summary>
-    ///     Handle the parsed options, essentially overwriting already present settings loaded from App.config
+    ///     Handle the parsed options, overwriting the defaults on <paramref name="settings"/>
     /// </summary>
     /// <param name="options">CLI Options</param>
     /// <param name="settings">Game Server Settings</param>

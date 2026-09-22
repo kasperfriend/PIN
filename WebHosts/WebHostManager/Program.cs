@@ -30,7 +30,7 @@ internal static class Program
                                                           };
 
     private static IConfiguration Configuration { get; } = new ConfigurationBuilder()
-                                                           .SetBasePath(Path.Combine(Directory.GetCurrentDirectory(), "config"))
+                                                           .SetBasePath(ConfigDirectory())
                                                            .AddJsonFile("appsettings.json", false, true)
                                                            .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", true)
                                                            .AddEnvironmentVariables()
@@ -177,5 +177,24 @@ internal static class Program
     private static IEnumerable<Task> StartHosts(CancellationToken ct)
     {
         return HostTypes.Select(t => BaseWebServer.Build(t, Configuration).RunAsync(ct)).ToList();
+    }
+
+    /// <summary>
+    ///     Directory that holds <c>appsettings.json</c>: next to the binary first (the published
+    ///     single-file layout, and a local <c>bin</c> build), then the working directory. Using
+    ///     <see cref="AppContext.BaseDirectory"/> rather than <see cref="Directory.GetCurrentDirectory()"/>
+    ///     is load-bearing for a double-clicked <c>WebHostManager.exe</c> whose CWD is not the
+    ///     extract folder.
+    /// </summary>
+    /// <returns>The folder <c>appsettings.json</c> is read from.</returns>
+    private static string ConfigDirectory()
+    {
+        var nextToBinary = Path.Combine(AppContext.BaseDirectory, "config");
+        if (File.Exists(Path.Combine(nextToBinary, "appsettings.json")))
+        {
+            return nextToBinary;
+        }
+
+        return Path.Combine(Directory.GetCurrentDirectory(), "config");
     }
 }

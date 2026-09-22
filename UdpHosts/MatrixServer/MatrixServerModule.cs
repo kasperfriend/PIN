@@ -1,4 +1,4 @@
-﻿using Autofac;
+using Autofac;
 using Serilog;
 using Shared.Common;
 
@@ -23,8 +23,12 @@ public class MatrixServerModule : Module
     {
         builder.Register(ctx =>
                          {
+                             // Console logging only: ReadFrom.AppSettings() goes through
+                             // ConfigurationManager, which locates App.config via Assembly.CodeBase
+                             // and throws inside the single-file MatrixServer.exe. There is no
+                             // App.config to read in this project anyway; CLI --log-level remains
+                             // the override.
                              var loggerConfig = new LoggerConfiguration()
-                                                .ReadFrom.AppSettings()
                                                 .WriteTo.Console(theme: SerilogTheme.Custom);
 
                              var settings = ctx.Resolve<MatrixServerSettings>();

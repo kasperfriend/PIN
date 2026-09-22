@@ -83,26 +83,44 @@ jobs:
           cp ./Start.cmd ./Publish
           cp ./README.md ./Publish
           cp ./CHANGELOG.md ./Publish
-      - name: Verify GameServer publish payload
+      - name: Verify publish payload
         if: matrix.platform.name == 'Windows' && matrix.dotnet.name == '.NET 10'
         shell: pwsh
         run: |
           $publishDirectory = Join-Path $PWD 'Publish'
-          $executable = Join-Path $publishDirectory 'GameServer.exe'
-          if (-not (Test-Path -LiteralPath $executable)) {
-            throw 'GameServer publish is missing GameServer.exe.'
+
+          function Assert-SingleFileHost([string] $directory, [string] $name) {
+            $executable = Join-Path $directory "$name.exe"
+            if (-not (Test-Path -LiteralPath $executable)) {
+              throw "$name publish is missing $name.exe."
+            }
+
+            # A framework-dependent single-file publish keeps the managed dependency
+            # closure inside the executable. A leftover $name.dll is what Smart App
+            # Control (Code Integrity event 3077 / VerifiedAndReputableDesktop) blocked.
+            $unexpectedFiles = @("$name.dll", "$name.deps.json") |
+              Where-Object { Test-Path -LiteralPath (Join-Path $directory $_) }
+            if ($unexpectedFiles) {
+              throw "$name was not bundled as a single file; found: $($unexpectedFiles -join ', ')"
+            }
+
+            if ((Get-Item -LiteralPath $executable).Length -lt 1MB) {
+              throw "$name.exe is too small to contain its managed dependency bundle."
+            }
           }
 
-          # A framework-dependent single-file publish keeps Bitter and all other managed
-          # dependencies in GameServer.exe, so users cannot receive a mismatched loose payload.
-          $unexpectedFiles = @('GameServer.dll', 'GameServer.deps.json') |
-            Where-Object { Test-Path -LiteralPath (Join-Path $publishDirectory $_) }
-          if ($unexpectedFiles) {
-            throw "GameServer was not bundled as a single file; found: $($unexpectedFiles -join ', ')"
+          Assert-SingleFileHost $publishDirectory 'GameServer'
+          Assert-SingleFileHost $publishDirectory 'MatrixServer'
+          Assert-SingleFileHost $publishDirectory 'WebHostManager'
+
+          $appsettings = Join-Path $publishDirectory 'config\appsettings.json'
+          if (-not (Test-Path -LiteralPath $appsettings)) {
+            throw 'WebHostManager publish is missing config/appsettings.json (must stay a loose file next to the single-file exe).'
           }
 
-          if ((Get-Item -LiteralPath $executable).Length -lt 1MB) {
-            throw 'GameServer.exe is too small to contain its managed dependency bundle.'
+          $marketData = Join-Path $publishDirectory 'Data\ItemDisplayAttributes.json'
+          if (-not (Test-Path -LiteralPath $marketData)) {
+            throw 'WebHostManager publish is missing Data/ItemDisplayAttributes.json (must stay a loose file next to the single-file exe).'
           }
       - name: Smoke-test GameServer startup (Bitter load)
         if: matrix.platform.name == 'Windows' && matrix.dotnet.name == '.NET 10'
@@ -182,6 +200,39 @@ jobs:
             } else {
               Remove-Item -LiteralPath $configPath -Force -ErrorAction SilentlyContinue
             }
+          }
+      - name: Smoke-test WebHostManager
+        if: matrix.platform.name == 'Windows' && matrix.dotnet.name == '.NET 10'
+        shell: pwsh
+        run: |
+          # --trust-cert is a one-shot path: load config, resolve the (localhost) certificate,
+          # print "Nothing to trust..." and exit 1. That is enough to prove the single-file
+          # WebHostManager.exe can start without CodeBase / could-not-load-assembly, without
+          # binding the web ports this runner may not have free. A real SAC 3077 block would
+          # never reach this output.
+          $publishDirectory = Join-Path $PWD 'Publish'
+          $executable = Join-Path $publishDirectory 'WebHostManager.exe'
+          $stdoutLog = Join-Path $env:RUNNER_TEMP 'webhostmanager-smoke-stdout.log'
+          $stderrLog = Join-Path $env:RUNNER_TEMP 'webhostmanager-smoke-stderr.log'
+          Remove-Item -LiteralPath $stdoutLog, $stderrLog -Force -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath $executable -ArgumentList '--trust-cert' -WorkingDirectory $publishDirectory `
+            -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog `
+            -NoNewWindow -PassThru
+          $process | Wait-Process -Timeout 60 -ErrorAction SilentlyContinue
+          if (-not $process.HasExited) {
+            $process | Stop-Process -Force
+            throw 'Smoke test timed out: WebHostManager.exe --trust-cert did not exit within 60 seconds.'
+          }
+          $output = ((Get-Content -LiteralPath $stdoutLog -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content -LiteralPath $stderrLog -Raw -ErrorAction SilentlyContinue))
+          Write-Host $output
+          if ($output -match 'CodeBase' -or $output -match 'Could not load file or assembly' -or $output -match 'SingleFileBundle' -or $output -match 'Failed to probe') {
+            throw "WebHostManager.exe --trust-cert failed to load the single-file host.`n$output"
+          }
+          if ($process.ExitCode -ne 1) {
+            throw "WebHostManager.exe --trust-cert exited $($process.ExitCode); expected 1 (localhost has nothing to trust)."
+          }
+          if ($output -notmatch 'Nothing to trust') {
+            throw "WebHostManager.exe --trust-cert did not print the localhost trust message.`n$output"
           }
       - name: Upload Artifact
         if: matrix.platform.name == 'Windows' && matrix.dotnet.name == '.NET 10'

@@ -2,6 +2,16 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
+
+        <!-- RID-specific publishes (the Windows release) bundle the managed
+             dependency closure into WebHostManager.exe. Smart App Control on
+             Windows 11 (WDAC policy VerifiedAndReputableDesktop, Code Integrity
+             event 3077) blocks the unsigned ReadyToRun WebHostManager.dll the
+             multi-file publish used to drop next to the apphost; a single-file
+             host has no such DLL for Code Integrity to refuse. Local,
+             framework-independent builds remain unchanged. -->
+        <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+        <IncludeNativeLibrariesForSelfExtract Condition="'$(RuntimeIdentifier)' != ''">true</IncludeNativeLibrariesForSelfExtract>
     </PropertyGroup>
 
     <ItemGroup>
@@ -12,9 +22,13 @@
     <ItemGroup>
         <Content Include="config\appsettings.Development.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </Content>
         <Content Include="config\appsettings.json">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </Content>
     </ItemGroup>
 
@@ -23,7 +37,6 @@
         <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.5" />
         <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
         <PackageReference Include="Serilog.Enrichers.Context" Version="4.6.5" />
-        <PackageReference Include="Serilog.Settings.AppSettings" Version="3.0.0" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
         <PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
         <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />

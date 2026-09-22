@@ -52,8 +52,13 @@ public abstract class BaseWebServer
             var certificate = ResolveCertificate(configuration);
 
             #pragma warning disable SYSLIB0039 // TLS 1.0 required
+            // Single-file WebHostManager.exe: ContentRoot defaults to
+            // GetCurrentDirectory(), which is wrong when the process is
+            // started from a shortcut or a different CWD. Assets, certs
+            // and accounts live next to the binary.
             var hostBuilder =
                 Host.CreateDefaultBuilder()
+                    .UseContentRoot(AppContext.BaseDirectory)
                     .ConfigureWebHostDefaults(webBuilder =>
                                               {
                                                   webBuilder.UseKestrel((_, serverOpts) =>
