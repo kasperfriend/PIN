@@ -92,11 +92,30 @@ public class WeaponSim
         var weaponSimState = GetOrCreateState(entity, activeWeaponDetails, time);
 
         // Ammo
-        var ammo = SDBInterface.GetAmmo(weapon.AmmoId); // TODO: Handle ammo overrides
+        //
+        // A weapon fires the ammo row its template names unless a SlotAmmoCommand has substituted one
+        // for this slot (the "load special rounds" family). The substitution is resolved against the
+        // weapon's own row so a `replace_ammo_type` row only fires when the weapon is actually loaded
+        // with the ammo it says to replace.
+        var ammoOverride = entity.GetActiveAmmoOverride(weapon.AmmoId);
+        var ammo = SDBInterface.GetAmmo(ammoOverride?.AmmoType ?? weapon.AmmoId);
         if (ammo == null)
         {
-            _logger.Error("OnFireWeaponProjectile: no dbitems::Ammo row {ammoId} for weapon {weaponId}; not firing", weapon.AmmoId, activeWeaponDetails?.WeaponId);
+            _logger.Error("OnFireWeaponProjectile: no dbitems::Ammo row {ammoId} for weapon {weaponId}; not firing",
+                ammoOverride?.AmmoType ?? weapon.AmmoId, activeWeaponDetails?.WeaponId);
             return;
+        }
+
+        if (ammoOverride != null)
+        {
+            // Both columns are offsets on the weapon's resolved round damage: the additive one first,
+            // then the multiplier, so a row that sets only one of them leaves the other at identity.
+            float scaled = (roundDamage + ammoOverride.WeaponDamageAdd)
+                * (ammoOverride.WeaponDamageMult != 0f ? ammoOverride.WeaponDamageMult : 1f);
+            int adjusted = (int)MathF.Round(scaled);
+            _logger.Debug("OnFireWeaponProjectile: ammo override in force, {BaseAmmo} -> {Ammo}, round damage {Base} -> {Adjusted}",
+                weapon.AmmoId, ammoOverride.AmmoType, roundDamage, adjusted);
+            roundDamage = Math.Max(0, adjusted);
         }
 
         // Ammo stat properties: stat ID from ammo points to weapon attribute to use
@@ -253,7 +272,10 @@ public class WeaponSim
 
         float spreadPct = WeaponSpreadMath.GetCurrentSpreadPct(activeWeaponDetails.SpreadProfile, weaponSimState, time);
 
-        var ammo = SDBInterface.GetAmmo(weapon.AmmoId);
+        // Honour the same substitution the firing path uses, so the debug readout names the rounds the
+        // weapon is actually loaded with.
+        var debugAmmoOverride = entity.GetActiveAmmoOverride(weapon.AmmoId);
+        var ammo = SDBInterface.GetAmmo(debugAmmoOverride?.AmmoType ?? weapon.AmmoId);
         var eventData = new DebugWeaponSimEventData()
         {
             WeaponName = weapon.DebugName,

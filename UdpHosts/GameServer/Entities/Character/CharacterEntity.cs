@@ -47,6 +47,14 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     private int _movementSampleCount;
     private int _movementSampleNewest;
     private ActiveWeaponDetails[,] _weaponDetailsCache;
+
+    /// <summary>
+    /// Weapon-slot ammo substitutions installed by <c>SlotAmmoCommand</c>, keyed by
+    /// <c>(slot index, alt-fire mode)</c> exactly as <see cref="_weaponDetailsCache" /> is. Kept apart
+    /// from that cache on purpose: the cache is rebuilt on every loadout change, and an override that
+    /// lived in it would vanish mid-ability.
+    /// </summary>
+    private readonly Dictionary<(byte Slot, byte Mode), AmmoSlotOverride> _ammoOverrides = [];
     private byte? _monsterDamageResponseOverride;
 
     // Effects can overlap while a glider is handed from one stage to another (or while a pad
@@ -2256,6 +2264,84 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public byte GetActiveFireModeIndex()
     {
         return (byte)(IsAltFireMode() ? 1 : 0);
+    }
+
+    /// <summary>
+    ///     Installs (or, with <c>ammoType == 0</c>, clears) a weapon-slot ammo substitution.
+    ///     <paramref name="slot" /> 255 means "the weapon currently held", which is what a row that
+    ///     leaves <c>target_weapon_slot</c> at 0 asks for.
+    /// </summary>
+    public void SetAmmoOverride(byte slot, byte mode, AmmoSlotOverride overrideInfo)
+    {
+        if (slot == 255)
+        {
+            slot = WeaponIndex.Index;
+        }
+
+        var key = (slot, mode);
+
+        if (overrideInfo == null || overrideInfo.AmmoType == 0)
+        {
+            _ammoOverrides.Remove(key);
+            return;
+        }
+
+        _ammoOverrides[key] = overrideInfo;
+    }
+
+    /// <summary>
+    ///     Removes every ammo substitution installed by one ability activation - what a row with
+    ///     <c>restore_on_rollback</c> set asks for when that activation is rolled back.
+    /// </summary>
+    public void ClearAmmoOverridesForAbility(uint abilityId)
+    {
+        if (abilityId == 0)
+        {
+            return;
+        }
+
+        List<(byte Slot, byte Mode)> doomed = null;
+        foreach (var pair in _ammoOverrides)
+        {
+            if (pair.Value.AbilityId == abilityId)
+            {
+                (doomed ??= []).Add(pair.Key);
+            }
+        }
+
+        if (doomed != null)
+        {
+            foreach (var key in doomed)
+            {
+                _ammoOverrides.Remove(key);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     The ammo substitution in force for the weapon currently held, or null when the weapon fires
+    ///     its own rounds. <see cref="AmmoSlotOverride.ReplaceAmmoType" /> is checked here so callers
+    ///     get either the override that applies or nothing, never a substitution for the wrong ammo.
+    /// </summary>
+    public AmmoSlotOverride? GetActiveAmmoOverride(uint currentAmmoType)
+    {
+        if (_ammoOverrides.Count == 0)
+        {
+            return null;
+        }
+
+        var key = (WeaponIndex.Index, GetActiveFireModeIndex());
+        if (!_ammoOverrides.TryGetValue(key, out var overrideInfo))
+        {
+            return null;
+        }
+
+        if (overrideInfo.ReplaceAmmoType != 0 && overrideInfo.ReplaceAmmoType != currentAmmoType)
+        {
+            return null;
+        }
+
+        return overrideInfo;
     }
 
     public ActiveWeaponDetails? GetWeaponDetails(byte modeIndex)

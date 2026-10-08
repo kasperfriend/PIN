@@ -19,6 +19,7 @@ using GameServer.Systems.Aptitude.Commands.Movement;
 using GameServer.Systems.Aptitude.Commands.NPC;
 using GameServer.Systems.Aptitude.Commands.Object;
 using GameServer.Systems.Aptitude.Commands.Other;
+using GameServer.Systems.Aptitude.Commands.Projectile;
 using GameServer.Systems.Aptitude.Commands.Register;
 using GameServer.Systems.Aptitude.Commands.Requirement;
 using GameServer.Systems.Aptitude.Commands.Self;
@@ -26,6 +27,7 @@ using GameServer.Systems.Aptitude.Commands.SetFlags;
 using GameServer.Systems.Aptitude.Commands.Target;
 using GameServer.Systems.Aptitude.Commands.Unlock;
 using GameServer.Systems.Aptitude.Commands.Update;
+using GameServer.Systems.Aptitude.Commands.Weapon;
 using Serilog;
 
 namespace GameServer.Systems.Aptitude;
@@ -354,8 +356,8 @@ public class Factory
             //     return new NPCBehaviorChangeCommand(CustomDBInterface.GetNPCBehaviorChangeCommandDef(commandId));
             case CommandType.RequireAimMode:
                 return new RequireAimModeCommand(SDBInterface.GetRequireAimModeCommandDef(commandId));
-            // case CommandType.SlotAmmo:
-            //     return new SlotAmmoCommand(SDBInterface.GetSlotAmmoCommandDef(commandId));
+            case CommandType.SlotAmmo:
+                return new SlotAmmoCommand(SDBInterface.GetSlotAmmoCommandDef(commandId));
             // case CommandType.AddPhysics:
             //     return new AddPhysicsCommand(SDBInterface.GetAddPhysicsCommandDef(commandId));
             case CommandType.RequireReload:
