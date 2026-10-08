@@ -37,7 +37,7 @@ public static class NpcPathfinder
         float WaypointTolerance = 0.35f)
     {
         /// <summary>The shipped navigation values.</summary>
-        public static Options Default => new();
+        public static Options Default => new(2f, 1.25f, 64f, 4096, 0.35f);
     }
 
     /// <summary>
@@ -327,6 +327,11 @@ public static class NpcPathfinder
 
     private static Options Sanitize(Options options)
     {
+        if (options == default)
+        {
+            options = Options.Default;
+        }
+
         float cellSize = float.IsFinite(options.CellSize) && options.CellSize >= 0.5f ? options.CellSize : 2f;
         float maxStep = float.IsFinite(options.MaxStepHeight) && options.MaxStepHeight >= 0f ? options.MaxStepHeight : 1.25f;
         float maxDistance = float.IsFinite(options.MaxSearchDistance) && options.MaxSearchDistance >= cellSize

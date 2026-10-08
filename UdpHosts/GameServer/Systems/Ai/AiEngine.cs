@@ -263,6 +263,7 @@ public class AiEngine
                 : _navigationAgentHeight,
             AttackDamage = attackDamage,
             Profile = attackProfile,
+            CombatMovement = NpcCombatMovementProfile.Resolve(baseParams, offensiveParams),
             // A weapon the database gives a magazine and a reload time fires from that magazine; everything
             // else (every melee row) has none and fires forever, exactly as before.
             Magazine = attackProfile.Reloads
@@ -1343,7 +1344,7 @@ public class AiEngine
         }
 
         bool tacticalMovement = false;
-        if (target != null && npc.Profile?.IsRanged == true &&
+        if (target != null && npc.Profile?.IsRanged == true && npc.CombatMovement.GroundTactics &&
             (decision.State is AiBrainState.Chase or AiBrainState.Attack) && !npc.Routine.Profile.FixedInPlace &&
             !IsMovementRestricted(entity) && !IsSliding(entity))
         {
@@ -1363,7 +1364,8 @@ public class AiEngine
                     point => _navigation.FindPath(entity.Position, point, agent),
                     point => _shard.Physics?.HasStaticOcclusion(
                         point + new Vector3(0f, 0f, _eyeHeight),
-                        target.Position + new Vector3(0f, 0f, _eyeHeight), entity.EntityId) == true);
+                        target.Position + new Vector3(0f, 0f, _eyeHeight), entity.EntityId) == true,
+                    npc.CombatMovement, Random.Shared.NextSingle());
             }
 
             var tacticalGoal = npc.Positioning.Goal(currentTime);
@@ -1488,6 +1490,13 @@ public class AiEngine
 
         var direction = delta / horizontal;
         float speed = UsesWalking(npc, state, routineMovement) ? npc.MoveSpeed : npc.ChaseSpeed;
+        if (!routineMovement && (state is AiBrainState.Chase or AiBrainState.Attack))
+        {
+            // speedMultiplier is authored by StockMelee / GiantAranhaMiniBoss. Its missing
+            // CAIS scope is approximated only in combat, never ambient work or leash return.
+            speed *= npc.CombatMovement.SpeedMultiplier;
+        }
+
         float step = speed * (elapsedMs / 1000f);
 
         // Only the final, visible, attackable approach stops at weapon distance.
@@ -1826,6 +1835,7 @@ public class AiEngine
         public ulong LastDamagedAt;
         public ulong NextNavigationWarningAt;
         public NpcCombatPositioning Positioning = new();
+        public NpcCombatMovementProfile CombatMovement = NpcCombatMovementProfile.Default;
         public Vector3 Home;
         public float MoveSpeed;
         public float ChaseSpeed;

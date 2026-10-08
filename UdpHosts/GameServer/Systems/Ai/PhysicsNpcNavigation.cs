@@ -58,6 +58,14 @@ public sealed class PhysicsNpcNavigation : INpcNavigation
         }
 
         var physics = _shard.Physics;
+        if (physics?.HasZoneCollision != true)
+        {
+            // Explicit collision-free development mode has no terrain/search horizon.
+            // Never use this shortcut on a zone with actual ground assets.
+            var flatGoal = new Vector3(goal.X, goal.Y, start.Z);
+            return IsBlocked(start, flatGoal, agent) ? Array.Empty<Vector3>() : new[] { flatGoal };
+        }
+
         int clearanceQueries = 0;
         int groundQueries = 0;
         var groundCache = new Dictionary<Vector3, Vector3?>();

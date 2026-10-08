@@ -7,6 +7,55 @@ namespace GameServer.Tests;
 
 public class NpcCombatPositioningTests
 {
+    [Theory]
+    [InlineData(0f, 0f, false)]
+    [InlineData(0.2f, 0.19f, true)]
+    [InlineData(0.2f, 0.2f, false)]
+    [InlineData(1f, 0.99f, true)]
+    public void AuthoredChanceIsEvaluatedOncePerSearch(float chance, float roll, bool moves)
+    {
+        var positioning = new NpcCombatPositioning();
+        int queries = 0;
+        positioning.Search(100, 1, Vector3.Zero, new Vector3(20f, 0f, 0f),
+            Vector3.Zero, 120f, 15f, 50f, false,
+            point => { queries++; return new[] { point }; }, _ => false,
+            new NpcCombatMovementProfile { MoveChance = chance }, roll);
+        Assert.Equal(moves, positioning.Goal(200).HasValue);
+        Assert.Equal(moves, queries > 0);
+        Assert.False(positioning.CanSearch(200));
+        Assert.True(positioning.CanSearch(4100));
+    }
+
+    [Fact]
+    public void AuthoredMaxMoveBoundsTravelAndDetours()
+    {
+        var positioning = new NpcCombatPositioning();
+        positioning.Search(100, 1, Vector3.Zero, new Vector3(20f, 0f, 0f),
+            Vector3.Zero, 120f, 15f, 50f, false,
+            point => new[] { point }, _ => false,
+            new NpcCombatMovementProfile { MaxMove = 3f });
+        Assert.True(positioning.Goal(200).HasValue);
+        Assert.InRange(positioning.Goal(200).Value.Length(), 2f, 3.001f);
+
+        positioning.Reset();
+        positioning.Search(100, 1, Vector3.Zero, new Vector3(20f, 0f, 0f),
+            Vector3.Zero, 120f, 15f, 50f, false,
+            point => new[] { new Vector3(0f, 4f, 0f), point }, _ => false,
+            new NpcCombatMovementProfile { MaxMove = 3f });
+        Assert.Null(positioning.Goal(200));
+    }
+
+    [Fact]
+    public void NonGroundInvocationsDoNotUseHumanGroundTactics()
+    {
+        var positioning = new NpcCombatPositioning();
+        positioning.Search(100, 1, Vector3.Zero, new Vector3(20f, 0f, 0f),
+            Vector3.Zero, 120f, 15f, 50f, true,
+            _ => throw new InvalidOperationException("must not query ground paths"), _ => true,
+            new NpcCombatMovementProfile { GroundTactics = false });
+        Assert.Null(positioning.Goal(200));
+    }
+
     [Fact]
     public void UnderFireSelectsReachableOccludedCoverAndThenReleasesIt()
     {

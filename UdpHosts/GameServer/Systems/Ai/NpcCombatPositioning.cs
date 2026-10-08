@@ -46,9 +46,21 @@ public sealed class NpcCombatPositioning
         float attackRange,
         bool seekCover,
         Func<Vector3, IReadOnlyList<Vector3>> pathTo,
-        Func<Vector3, bool> occluded)
+        Func<Vector3, bool> occluded,
+        NpcCombatMovementProfile profile = null,
+        float chanceRoll = 0f)
     {
         _nextSearch = now + 4000;
+        profile ??= NpcCombatMovementProfile.Default;
+        // One roll per admitted search, including rejected rolls: a zero/low authored chance
+        // cannot become certainty through tick-by-tick retries. This gates tactics, not pursuit.
+        if (!profile.GroundTactics || profile.MaxMove < 2f || profile.MoveChance <= 0f ||
+            !float.IsFinite(chanceRoll) || chanceRoll < 0f || chanceRoll >= profile.MoveChance)
+        {
+            return;
+        }
+
+        float radius = MathF.Min(6f, profile.MaxMove);
         var away = position - target;
         away.Z = 0f;
         away = away.LengthSquared() > 0.001f ? Vector3.Normalize(away) : Vector3.UnitX;
@@ -60,7 +72,7 @@ public sealed class NpcCombatPositioning
         {
             // Alternating left/right preferences avoid a whole squad choosing one side.
             float angle = (i + (entityId % 2 == 0 ? 0 : 4)) * (MathF.PI / 4f);
-            var candidate = position + (away * MathF.Cos(angle) + side * MathF.Sin(angle)) * 6f;
+            var candidate = position + (away * MathF.Cos(angle) + side * MathF.Sin(angle)) * radius;
             if (AiVectors.HorizontalDistance(candidate, home) > leashRadius)
             {
                 continue;
@@ -80,7 +92,7 @@ public sealed class NpcCombatPositioning
                 previous = waypoint;
             }
 
-            if (!float.IsFinite(pathLength) || pathLength > 12f)
+            if (!float.IsFinite(pathLength) || pathLength > profile.MaxMove)
             {
                 continue;
             }
@@ -88,7 +100,7 @@ public sealed class NpcCombatPositioning
             var point = path[^1];
             float travel = AiVectors.HorizontalDistance(position, point);
             float range = AiVectors.Distance(point, target);
-            if (!NpcGroundMovement.Finite(point) || travel < 2f || travel > 9f ||
+            if (!NpcGroundMovement.Finite(point) || travel < 2f || travel > MathF.Min(9f, profile.MaxMove) ||
                 AiVectors.HorizontalDistance(point, home) > leashRadius || range > attackRange * 0.95f)
             {
                 continue;

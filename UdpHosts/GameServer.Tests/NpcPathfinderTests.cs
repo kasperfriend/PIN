@@ -10,6 +10,17 @@ public class NpcPathfinderTests
     private static Vector3? FlatGround(Vector3 point) => new(point.X, point.Y, 0f);
 
     [Fact]
+    public void OmittedOptionsUseNonZeroStepDefaultsButExplicitZeroStillForbidsSteps()
+    {
+        Assert.Equal(1.25f, NpcPathfinder.Options.Default.MaxStepHeight);
+        Vector3? Ground(Vector3 point) => new(point.X, point.Y, point.X * 0.3f);
+        Assert.NotEmpty(NpcPathfinder.FindPath(Vector3.Zero, new Vector3(2f, 0f, 0.6f),
+            Ground, (_, _) => false));
+        Assert.Empty(NpcPathfinder.FindPath(Vector3.Zero, new Vector3(2f, 0f, 0.6f),
+            Ground, (_, _) => false, new NpcPathfinder.Options(CellSize: 2f, MaxStepHeight: 0f)));
+    }
+
+    [Fact]
     public void ClearGroundUsesTheDirectRoute()
     {
         var path = NpcPathfinder.FindPath(

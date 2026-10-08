@@ -86,6 +86,19 @@ public class AiEngineTests
     }
 
     [Fact]
+    public void AuthoredMeleeSpeedMultiplierChangesPursuitButMoveChanceZeroDoesNotStopIt()
+    {
+        var (normalShard, normalNpc, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = "StockMelee(speedMultiplier=1)" });
+        var (fastShard, fastNpc, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = "StockMelee(speedMultiplier=1.5,moveChance=0)" });
+        Tick(normalShard, FirstTick);
+        Tick(fastShard, FirstTick);
+        Assert.True(normalNpc.Position.X > 0f);
+        Assert.InRange(fastNpc.Position.X / normalNpc.Position.X, 1.49f, 1.51f);
+    }
+
+    [Fact]
     public void VisibleTargetInsideStandoffDoesNotFreezeAnIntermediateDetour()
     {
         // Aggro starts Chase. The next tick reaches Attack, but the route still
