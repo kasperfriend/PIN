@@ -168,6 +168,15 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     /// </summary>
     public uint LastJumpTime { get; private set; }
 
+    /// <summary>
+    ///     Shard time (ms) of the last loadout change - a battleframe swap, a re-equip, or the
+    ///     spawn/relog that installs the starting kit. <c>BattleFrameDuration</c> compares it with
+    ///     the effect's own start time to answer "has this character changed battleframe since the
+    ///     effect was applied", which is the <c>Notchanged</c> column of
+    ///     <c>aptfs::BattleFrameDurationCommandDef</c> (1 in 475 of the 573 rows).
+    /// </summary>
+    public uint LastLoadoutChangeTime { get; private set; }
+
     /// <summary>Records a damage event reaching this character (post-mitigation).</summary>
     public void NoteDamageTaken(uint time, byte damageType)
     {
@@ -1013,6 +1022,10 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         SetScopedState(false);
         Shard.Admin?.ApplyEquipmentOverrides(Player, loadout);
         CurrentLoadout = loadout;
+
+        // Stamp before anything reads the new kit: a battleframe swap has to be visible to the
+        // BattleFrameDuration gates of effects that are still running at this moment.
+        LastLoadoutChangeTime = Shard?.CurrentTime ?? 0u;
         DamageResponseId = _monsterDamageResponseOverride
             ?? (loadout.ChassisID == 0
                 ? (byte)0
