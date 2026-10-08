@@ -39,9 +39,14 @@ public class LoadRegisterFromNamedVarCommand : Command, ICommand
         // pad's effect level through the fallback. What changed is that a chain which *does* assign the
         // variable now reads its own value instead of being indistinguishable from one that did not.
         string key = AbilitySystem.NamedVariableKey(Params.NameId, Params.MemberName);
-        float value = context.Abilities.TryGetNamedVariable(context.Self, key, out var declared)
-            ? declared
-            : Params.UndeclValue;
+        float value = Params.UndeclValue;
+
+        // No ability system means no store to read from - a shard built for tests runs these chains
+        // without one - and the fallback is the value the row asks for in that case.
+        if (context.Abilities != null && context.Abilities.TryGetNamedVariable(context.Self, key, out var declared))
+        {
+            value = declared;
+        }
 
         context.Register = AbilitySystem.RegistryOp(context.Register, value, (Operand)Params.Regop);
 

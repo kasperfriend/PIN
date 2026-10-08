@@ -43,9 +43,11 @@ public class NamedVariableAssignCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
-        if (context.Self == null)
+        if (context.Self == null || context.Abilities == null)
         {
-            Logger.Debug("NamedVariableAssign {CommandId}: no self to hold the variable", Params.Id);
+            // The store lives on the ability system; a shard built for tests runs these chains without
+            // one, and there is nowhere to put the value.
+            Logger.Debug("NamedVariableAssign {CommandId}: no self or ability system to hold the variable", Params.Id);
             return true;
         }
 
