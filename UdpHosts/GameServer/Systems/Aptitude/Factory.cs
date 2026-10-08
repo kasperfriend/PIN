@@ -500,10 +500,10 @@ public class Factory
                 return new RequireArmyCommand(SDBInterface.GetRequireArmyCommandDef(commandId));
             // case CommandType.SetHostility:
             //     return new SetHostilityCommand(CustomDBInterface.GetSetHostilityCommandDef(commandId));
-            // case CommandType.Teleport:
-            //     return new TeleportCommand(CustomDBInterface.GetTeleportCommandDef(commandId));
-            // case CommandType.TargetFromStatusEffect:
-            //     return new TargetFromStatusEffectCommand(SDBInterface.GetTargetFromStatusEffectCommandDef(commandId));
+            case CommandType.Teleport:
+                return new TeleportCommand(CustomDBInterface.GetTeleportCommandDef(commandId) ?? new TeleportCommandDef { Id = commandId });
+            case CommandType.TargetFromStatusEffect:
+                return new TargetFromStatusEffectCommand(SDBInterface.GetTargetFromStatusEffectCommandDef(commandId));
             // case CommandType.TemporaryEquipment:
             //     return new TemporaryEquipmentCommand(CustomDBInterface.GetTemporaryEquipmentCommandDef(commandId));
             case CommandType.RequireDamageResponse:
