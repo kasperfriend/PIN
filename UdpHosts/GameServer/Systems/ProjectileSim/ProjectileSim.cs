@@ -145,6 +145,7 @@ public class ProjectileSim
             TraceId = trace,
             Type = ammoFlags.Simulation,
             Ammo = ammo,
+            AmmoId = ammoId,
             Origin = origin,
             Direction = direction,
             Velocity = velocity,
@@ -188,6 +189,106 @@ public class ProjectileSim
 
         _logger.Debug("Spawned {Type} projectile trace={Trace}, speed={Speed}, range={Range}, lifetime={Lifetime}ms, impactRadius={ImpactRadius}, maxRadius={MaxRadius}", ammoFlags.Simulation, trace, projectileSpeed, range, lifetimeMs, impactRadius, maxRadius);
         SendDebugSpawn(entity, trace, origin, direction, projectileSpeed);
+    }
+
+    /// <summary>
+    ///     Forces the in-flight rounds of one ammo type, fired by one character, to end on the next
+    ///     tick - what an <c>aptfs::DetonateProjectilesCommandDef</c> row asks for (a remote explosive
+    ///     blown early, a detonator ability). The rounds go through the simulation's own expiry path
+    ///     rather than a separate explosion routine, so the terminal callbacks are exactly the ones a
+    ///     round that ran out of lifetime would have fired - including the ammo's airburst ability,
+    ///     which is where the data puts the explosion. Reusing that path is deliberate: the impact
+    ///     branch is inline in <see cref="Tick" /> and retires the round before its callbacks run, so
+    ///     a second copy of it here would be a second place to get the once-and-only-once ordering
+    ///     wrong.
+    /// </summary>
+    /// <param name="source">Restrict to this shooter's rounds, or null for every shooter.</param>
+    /// <param name="ammoTypeId">Restrict to this ammo row, or 0 for every ammo type.</param>
+    /// <returns>How many in-flight rounds were marked.</returns>
+    public int Detonate(CharacterEntity source, uint ammoTypeId)
+    {
+        int marked = 0;
+
+        foreach (var key in _activeProjectiles.Keys)
+        {
+            if (source != null && key.EntityId != source.EntityId)
+            {
+                continue;
+            }
+
+            if (!_activeProjectiles.TryGetValue(key, out var projectile) || !projectile.IsAlive)
+            {
+                continue;
+            }
+
+            if (ammoTypeId != 0 && projectile.AmmoId != ammoTypeId)
+            {
+                continue;
+            }
+
+            // ActiveProjectile is a struct: the expiry test in Tick compares elapsed time against
+            // LifetimeMs, so zeroing it ends the round on the next step.
+            projectile.LifetimeMs = 0;
+            _activeProjectiles[key] = projectile;
+            marked++;
+        }
+
+        if (marked > 0)
+        {
+            _logger.Debug("Detonate: marked {Count} in-flight round(s) (source {Source}, ammo {Ammo})", marked, source?.EntityId, ammoTypeId);
+        }
+
+        return marked;
+    }
+
+    /// <summary>
+    ///     Redirects the in-flight rounds of one ammo type, fired by one character, onto a new target -
+    ///     what an <c>aptfs::SetProjectileTargetCommandDef</c> row asks for (a guided round acquiring a
+    ///     lock mid-flight). Only rounds that were already homing change course: a ballistic round has
+    ///     no seek behaviour to redirect, and pointing one at a target would make it stop obeying its
+    ///     own simulation mode.
+    /// </summary>
+    /// <param name="source">Restrict to this shooter's rounds, or null for every shooter.</param>
+    /// <param name="ammoTypeId">Restrict to this ammo row, or 0 for every ammo type.</param>
+    /// <param name="targetEntityId">The entity to home in on; 0 clears the target.</param>
+    /// <returns>How many in-flight rounds were retargeted.</returns>
+    public int SetTarget(CharacterEntity source, uint ammoTypeId, ulong targetEntityId)
+    {
+        int retargeted = 0;
+
+        foreach (var key in _activeProjectiles.Keys)
+        {
+            if (source != null && key.EntityId != source.EntityId)
+            {
+                continue;
+            }
+
+            if (!_activeProjectiles.TryGetValue(key, out var projectile) || !projectile.IsAlive)
+            {
+                continue;
+            }
+
+            if (ammoTypeId != 0 && projectile.AmmoId != ammoTypeId)
+            {
+                continue;
+            }
+
+            if (projectile.Type != AmmoFlags.SimulationMode.Homing)
+            {
+                continue;
+            }
+
+            projectile.TargetEntityId = targetEntityId;
+            _activeProjectiles[key] = projectile;
+            retargeted++;
+        }
+
+        if (retargeted > 0)
+        {
+            _logger.Debug("SetTarget: retargeted {Count} in-flight round(s) (source {Source}, ammo {Ammo}) onto {Target}", retargeted, source?.EntityId, ammoTypeId, targetEntityId);
+        }
+
+        return retargeted;
     }
 
     public void Tick(double deltaTime, ulong currentTime, CancellationToken ct)

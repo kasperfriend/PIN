@@ -442,8 +442,8 @@ public class Factory
                 return new RequireBackstabCommand(SDBInterface.GetRequireBackstabCommandDef(commandId));
             case CommandType.CalldownVehicle:
                 return new CalldownVehicleCommand(CustomDBInterface.GetCalldownVehicleCommandDef(commandId));
-            // case CommandType.SetProjectileTarget:
-            //     return new SetProjectileTargetCommand(SDBInterface.GetSetProjectileTargetCommandDef(commandId));
+            case CommandType.SetProjectileTarget:
+                return new SetProjectileTargetCommand(SDBInterface.GetSetProjectileTargetCommandDef(commandId));
             case CommandType.SetScopeBubble:
                 // The definition table only carries ids, so give unknown rows a definition of their own instead
                 // of handing a null to a command that has to report its id in its logs.
@@ -573,8 +573,8 @@ public class Factory
                 return new LoadRegisterFromItemStatCommand(SDBInterface.GetLoadRegisterFromItemStatCommandDef(commandId));
             // case CommandType.HostilityHack:
             //     return new HostilityHackCommand(CustomDBInterface.GetHostilityHackCommandDef(commandId));
-            // case CommandType.DetonateProjectiles:
-            //     return new DetonateProjectilesCommand(SDBInterface.GetDetonateProjectilesCommandDef(commandId));
+            case CommandType.DetonateProjectiles:
+                return new DetonateProjectilesCommand(SDBInterface.GetDetonateProjectilesCommandDef(commandId));
             // Zero instances in BaseCommandDef, and the server has no projectile hit bookkeeping to feed it.
             // case CommandType.RequireBulletHit:
             //     return new RequireBulletHitCommand(SDBInterface.GetRequireBulletHitCommandDef(commandId));
