@@ -250,8 +250,8 @@ public class Factory
                 return new RequireEnergyCommand(SDBInterface.GetRequireEnergyCommandDef(commandId));
             case CommandType.HealDamage:
                 return new HealDamageCommand(SDBInterface.GetHealDamageCommandDef(commandId));
-            // case CommandType.Bullrush:
-            //     return new BullrushCommand(SDBInterface.GetBullrushCommandDef(commandId));
+            case CommandType.Bullrush:
+                return new BullrushCommand(SDBInterface.GetBullrushCommandDef(commandId));
             case CommandType.EnergyToDamage:
                 return new EnergyToDamageCommand(SDBInterface.GetEnergyToDamageCommandDef(commandId));
             // case CommandType.RequireGrapple:
@@ -508,8 +508,8 @@ public class Factory
             //     return new TemporaryEquipmentCommand(CustomDBInterface.GetTemporaryEquipmentCommandDef(commandId));
             case CommandType.RequireDamageResponse:
                 return new RequireDamageResponseCommand(SDBInterface.GetRequireDamageResponseCommandDef(commandId));
-            // case CommandType.TargetByDamageResponse:
-            //     return new TargetByDamageResponseCommand(SDBInterface.GetTargetByDamageResponseCommandDef(commandId));
+            case CommandType.TargetByDamageResponse:
+                return new TargetByDamageResponseCommand(SDBInterface.GetTargetByDamageResponseCommandDef(commandId));
             case CommandType.OrientationLock:
                 return new OrientationLockCommand(SDBInterface.GetOrientationLockCommandDef(commandId));
             case CommandType.LoadRegisterFromModulePower:
@@ -618,8 +618,8 @@ public class Factory
                 return new ApplySinCardCommand(CustomDBInterface.GetApplySinCardCommandDef(commandId));
             case CommandType.UnlockOrnaments:
                 return new UnlockOrnamentsCommand(CustomDBInterface.GetUnlockOrnamentsCommandDef(commandId) ?? new UnlockOrnamentsCommandDef { Id = commandId });
-            // case CommandType.DropCarryable:
-            //     return new DropCarryableCommand(CustomDBInterface.GetDropCarryableCommandDef(commandId));
+            case CommandType.DropCarryable:
+                return new DropCarryableCommand(CustomDBInterface.GetDropCarryableCommandDef(commandId) ?? new DropCarryableCommandDef { Id = commandId });
             // Per-character SIN-view acquisition isn't modeled on this server (TargetFilterBySinAcquired shares the gap), so nothing can answer the gate.
             // case CommandType.RequireSinAcquired:
             //     return new RequireSinAcquiredCommand(SDBInterface.GetRequireSinAcquiredCommandDef(commandId));
