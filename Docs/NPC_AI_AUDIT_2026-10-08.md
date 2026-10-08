@@ -4,7 +4,7 @@
 
 The previous implementation was **not healthy on movement/tactics**, despite having aggro, facing, attacks and a path API. This patch addresses concrete control-flow and planner/locomotion mismatches and adds a small ranged tactical policy. It is **not a claim that all original CAIS behavior is implemented**, or that a live zone has been verified.
 
-Validation in this workspace: `git diff --check` passes; all 11 changed/new C# files parse without syntax errors using tree-sitter's C# grammar. `dotnet test UdpHosts/GameServer.Tests/GameServer.Tests.csproj --no-restore` could not execute: `dotnet: command not found`. Syntax parsing is not compilation, type checking or a passing test suite. Client map assets and a running game client were not available for a live reproduction.
+Validation: implementation commit `1843284` passes the six GitHub CI jobs (Linux/macOS/Windows × .NET 10/11), with **1,460/1,460 tests passing per job**. Windows .NET 10 also passes publish/payload checks and GameServer/WebHostManager startup smoke tests. Locally, the complete DB census verification, `git diff --check`, and syntax parsing of all changed C# files pass. The local .NET SDK is absent; no interactive game-client/live-zone reproduction has been performed. See the final CI record below.
 
 ## Findings and changes
 
@@ -26,7 +26,7 @@ Validation in this workspace: `git diff --check` passes; all 11 changed/new C# f
 - Applies to ranged NPCs with real navigation surfaces. Melee enemies approach and attack; they do not adopt ranged cover behavior.
 - Does not override `FixedInPlace`, movement restrictions, ability slides, leash return or death.
 - At most eight candidate paths per tactical search, one tactical search admitted per movement tick, and a four-second per-NPC cooldown.
-- Candidates are six metres around the current position. Reject unreachable/non-finite paths, excessive detours, positions outside the leash, and positions beyond firing reach.
+- Candidates are at most six metres around the current position, further constrained by authored `maxMove`. Reject unreachable/non-finite paths, excessive detours, positions outside the leash, and positions beyond firing reach.
 - Cover requires bidirectional **static** chest-height occlusion toward the enemy. Ordinary repositioning requires an unobstructed line of fire.
 - A tactical goal lasts 2.5 seconds, then normal approach/fire resumes. This is simple cover-and-reengage, **not** authored cover slots, crouch/peek animations, squad reservations or a recovered original-game behavior tree.
 - In open terrain a cover search may find nothing. That is preferable to pretending an exposed location is cover.
@@ -43,7 +43,7 @@ Validation in this workspace: `git diff --check` passes; all 11 changed/new C# f
 
 ## Remaining risks / limitations
 
-1. **Must compile and run tests before release.** The .NET 10 SDK is absent in this sandbox. Package restore also requires NuGet access, which this environment's outbound allowlist does not provide.
+1. **Automated validation is green; live behavior remains unverified.** CI compiles and passes all tests across six OS/SDK jobs. The sandbox lacks a local SDK and interactive client; real-zone movement and load testing are still required.
 2. **Must validate real zone assets.** Fragmented collision mesh, tight passages, overlapping floors, unusual spawn offsets and steep surfaces may still legitimately fail navigation. The new grid search is bounded and can fail on complex terrain; it does not guarantee every destination is reachable.
 3. **Physics budget requires load testing.** Approximate work units are conservative guards, not measured millisecond guarantees. Thousands of engaged NPCs may wait for queries. The rotating claimant avoids a fixed ordering monopoly but is not a full asynchronous path scheduler.
 4. **Ground NPCs only.** Flying, climbing, jump links and unavailable authored follow routes are not implemented by this patch.
@@ -51,7 +51,7 @@ Validation in this workspace: `git diff --check` passes; all 11 changed/new C# f
 6. **Target memory remains the existing policy.** Engaged NPCs path toward the tracked target position during the target-lost grace period, not a fully modeled last-seen-position investigation behavior.
 7. **Tactics are compatibility policy.** Species-specific cover eligibility, tactical animation/peek behavior and complex CAIS trees need authored data or further implementation.
 
-## Added regression coverage (not executed here)
+## Initial regression coverage (now passing in CI)
 
 - `AiBrainTests`: melee/ranged hidden targets inside standoff still chase; invalid standoff cannot exceed weapon reach.
 - `AiEngineTests`: intermediate detour continues after entering Attack; empty combat path never grants direct movement; moving unreachable targets respect failure backoff.
@@ -119,4 +119,17 @@ The initial PR CI run `37831771727` completed with failures across the six OS/SD
 
 The two slope failures exposed zero-initialized `Options`: the omitted/default struct kept `MaxStepHeight=0`. Omitted options now resolve to explicit shipped defaults (1.25 m steps), while an explicitly configured zero step remains valid. The long-distance aggro failure exposed a search horizon in the explicit collision-free development mode. That mode now returns a checked flat goal directly without the terrain search limit; zones with actual collision never take that shortcut.
 
-Additional regression tests cover authored chances and rejected-roll cooldowns, max-move detours, non-ground exclusion, multiplier pursuit, invalid values, offensive precedence, actual shipped monster invocations, and omitted versus explicit-zero step options. Local .NET execution remains unavailable. `git diff --check` and syntax parsing are useful checks but not test/compile substitutes. Follow-up GitHub CI results must be recorded once available.
+Additional regression tests cover authored chances and rejected-roll cooldowns, max-move detours, non-ground exclusion, multiplier pursuit, invalid values, offensive precedence, actual shipped monster invocations, and omitted versus explicit-zero step options. Local .NET execution remains unavailable. `git diff --check` and syntax parsing are useful checks but not test/compile substitutes. Follow-up GitHub CI results are recorded below.
+
+
+### Final automated validation for implementation `1843284`
+
+[CI run 37833360618](https://github.com/kasperfriend/PIN/actions/runs/37833360618) completed successfully:
+
+| Platform | .NET 10 | .NET 11 |
+| --- | --- | --- |
+| Linux | Build + 1,460/1,460 tests passed | Build + 1,460/1,460 tests passed |
+| macOS | Build + 1,460/1,460 tests passed | Build + 1,460/1,460 tests passed |
+| Windows | Build + 1,460/1,460 tests passed | Build + 1,460/1,460 tests passed |
+
+Windows .NET 10 additionally passed publishing, payload validation, GameServer startup (Bitter load) and WebHostManager smoke tests. Those smoke/publish steps are intentionally skipped in the other five jobs. Existing StyleCop warnings in account/character/certificate files remain; no test failures remain in this run. This is automated regression/startup validation, **not** proof of in-game AI parity, correct map traversal everywhere, or acceptable crowd performance. The real-zone checklist above is still required.
