@@ -3,6 +3,7 @@ using AeroMessages.GSS;
 using AeroMessages.GSS.Character.Event;
 using GameServer.Entities.Character;
 using GameServer.Entities.Deployable;
+using GameServer.Enums;
 using GameServer.StaticDB.Records.aptfs;
 
 namespace GameServer.Systems.Aptitude.Commands.Movement;
