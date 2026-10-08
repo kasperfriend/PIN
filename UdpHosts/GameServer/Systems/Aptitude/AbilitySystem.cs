@@ -55,6 +55,14 @@ public class AbilitySystem
     private readonly Dictionary<ulong, List<MovementEffectRegistration>> _movementEffectRegistrations = [];
 
     /// <summary>
+    /// Proximity triggers registered by <c>RegisterClientProximityCommand</c>, per owning entity. Polled on
+    /// the ability system's tick: the command's own name says the <em>client</em> detects the proximity, and
+    /// the AeroMessages tree carries no client-&gt;server "something entered my radius" message, so the
+    /// server answers the same question itself by scanning the shard on the row's retry interval.
+    /// </summary>
+    private readonly Dictionary<ulong, List<ClientProximityRegistration>> _proximityRegistrations = [];
+
+    /// <summary>
     ///     The displacement a database command (<c>aptfs::MovementSlideCommandDef</c>) asked each character to
     ///     make, per character. At most one slide per character: the command states a displacement, not a
     ///     queue, so a second slide that starts while one is running restarts the motion from wherever the
@@ -338,6 +346,7 @@ public class AbilitySystem
 
         ReevaluateMovementEffects(entity, currentTime);
         AdvanceMovementSlide(entity, currentTime);
+        EvaluateProximityRegistrations(entity, currentTime);
     }
 
     /// <summary>
@@ -446,6 +455,138 @@ public class AbilitySystem
             if (registrations.Count == 0)
             {
                 _movementEffectRegistrations.Remove(registration.CharacterEntityId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Registers a proximity trigger for an entity. Returns the registration, which
+    /// <c>RegisterClientProximityCommand</c> hands back to <see cref="UnregisterClientProximity" /> when the
+    /// carrying effect ends.
+    /// </summary>
+    public ClientProximityRegistration RegisterClientProximity(IAptitudeTarget owner, uint chain, uint abilityId, uint maxTargets, uint retryInterval, float radius)
+    {
+        if (owner == null)
+        {
+            return null;
+        }
+
+        var registration = new ClientProximityRegistration
+        {
+            OwnerEntityId = owner.EntityId,
+            Chain = chain,
+            AbilityId = abilityId,
+            MaxTargets = maxTargets,
+            RetryInterval = retryInterval,
+            Radius = radius,
+        };
+
+        if (!_proximityRegistrations.TryGetValue(owner.EntityId, out var registrations))
+        {
+            registrations = [];
+            _proximityRegistrations[owner.EntityId] = registrations;
+        }
+
+        registrations.Add(registration);
+
+        return registration;
+    }
+
+    /// <summary>Removes a proximity trigger.</summary>
+    public void UnregisterClientProximity(ClientProximityRegistration registration)
+    {
+        if (registration == null)
+        {
+            return;
+        }
+
+        if (_proximityRegistrations.TryGetValue(registration.OwnerEntityId, out var registrations))
+        {
+            registrations.Remove(registration);
+
+            if (registrations.Count == 0)
+            {
+                _proximityRegistrations.Remove(registration.OwnerEntityId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Runs the proximity triggers registered on an entity. Each fires on its own retry interval (500 ms in
+    /// 159 of the 239 rows, 1000 ms in 49), picks up to <c>MaxTargets</c> entities inside the radius, and runs
+    /// the row's <c>Chain</c> against each of them - or, when the row names an <c>AbilityId</c> instead (79
+    /// rows carry no chain at all), activates that ability on them.
+    /// <para>
+    /// The radius is resolved once, at registration, from the row's regop: the register is a property of the
+    /// activation that carried the command, and re-reading it here would find whatever the current tick's
+    /// chain happens to hold.
+    /// </para>
+    /// <para>
+    /// The row carries no hostility column, so the scan takes every entity in range except the registrant
+    /// itself and lets the fired chain do its own filtering - which is what those chains do: they open with
+    /// <c>TargetHostiles</c>/<c>TargetFriendlies</c> or a <c>Require*</c> gate.
+    /// </para>
+    /// </summary>
+    private void EvaluateProximityRegistrations(IAptitudeTarget entity, ulong currentTime)
+    {
+        if (entity == null || !_proximityRegistrations.TryGetValue(entity.EntityId, out var registrations))
+        {
+            return;
+        }
+
+        if (!_shard.Entities.ContainsKey(entity.EntityId))
+        {
+            return;
+        }
+
+        uint time = unchecked((uint)currentTime);
+
+        // Snapshot: a fired chain can remove the carrying effect, which unregisters from this very list.
+        foreach (var registration in new List<ClientProximityRegistration>(registrations))
+        {
+            if (registration.RetryInterval > 0 && currentTime < registration.LastRunTime + registration.RetryInterval)
+            {
+                continue;
+            }
+
+            registration.LastRunTime = currentTime;
+
+            uint maxTargets = registration.MaxTargets == 0 ? 1 : registration.MaxTargets;
+            int found = 0;
+
+            foreach (var pair in _shard.Entities)
+            {
+                if (found >= maxTargets)
+                {
+                    break;
+                }
+
+                if (pair.Key == entity.EntityId || pair.Value is not IAptitudeTarget candidate)
+                {
+                    continue;
+                }
+
+                if (Vector3.Distance(entity.Position, candidate.Position) > registration.Radius)
+                {
+                    continue;
+                }
+
+                found++;
+
+                if (registration.Chain != 0)
+                {
+                    var context = new Context(_shard, entity)
+                    {
+                        InitTime = time,
+                        Targets = new AptitudeTargets(candidate),
+                    };
+
+                    Factory.LoadChain(registration.Chain).Execute(context);
+                }
+                else if (registration.AbilityId != 0)
+                {
+                    HandleActivateAbility(_shard, entity, registration.AbilityId, time, new AptitudeTargets(candidate));
+                }
             }
         }
     }
