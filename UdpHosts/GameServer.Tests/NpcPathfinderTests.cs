@@ -91,6 +91,66 @@ public class NpcPathfinderTests
         Assert.Contains(path, point => MathF.Abs(point.Y) > 0.1f);
     }
 
+    [Fact]
+    public void DirectRouteMustNotCrossAnUnsampledHole()
+    {
+        Vector3? Ground(Vector3 point) => point.X is > 3f and < 7f && MathF.Abs(point.Y) < 1f
+            ? null : new Vector3(point.X, point.Y, 0f);
+        var path = NpcPathfinder.FindPath(Vector3.Zero, new Vector3(10f, 0f, 0f),
+            Ground, (_, _) => false);
+
+        Assert.NotEmpty(path);
+        Assert.Contains(path, point => MathF.Abs(point.Y) >= 1f);
+        var previous = Vector3.Zero;
+        foreach (var point in path)
+        {
+            Assert.True(NpcGroundMovement.TryStep(previous, point,
+                probe => Ground(probe) is { } ground ? new NpcGroundSurface(ground, Vector3.UnitZ) : null,
+                (_, _) => false, null, out previous));
+        }
+    }
+
+    [Fact]
+    public void GradualSlopeMayClimbMoreThanOneStepOverTheWholeJourney()
+    {
+        Vector3? Ground(Vector3 point) => new(point.X, point.Y, point.X * 0.3f);
+        var path = NpcPathfinder.FindPath(Vector3.Zero, new Vector3(10f, 0f, 3f),
+            Ground, (_, _) => false);
+
+        Assert.Equal(new Vector3(10f, 0f, 3f), Assert.Single(path));
+    }
+
+    [Fact]
+    public void SearchCarriesHeightForwardOnABoundedGroundProbe()
+    {
+        Vector3? Ground(Vector3 point)
+        {
+            float z = point.X * 0.3f;
+            return MathF.Abs(z - point.Z) <= 1.25f ? new Vector3(point.X, point.Y, z) : null;
+        }
+
+        var path = NpcPathfinder.FindPath(Vector3.Zero, new Vector3(12f, 0f, 3.6f),
+            Ground, WallBlocksCenterLine);
+        Assert.NotEmpty(path);
+        Assert.InRange(path[^1].Z, 3.59f, 3.61f);
+        Assert.Contains(path, point => MathF.Abs(point.Y) > 1f);
+    }
+
+    [Fact]
+    public void ACliffWithoutAValidStepNeverBecomesADirectShortcut()
+    {
+        Vector3? Ground(Vector3 point) => new(point.X, point.Y, point.X >= 4f ? 3f : 0f);
+        Assert.Empty(NpcPathfinder.FindPath(Vector3.Zero, new Vector3(10f, 0f, 3f),
+            Ground, (_, _) => false, new NpcPathfinder.Options(MaxSearchDistance: 20f)));
+    }
+
+    [Fact]
+    public void NonFiniteGroundIsRejected()
+    {
+        Assert.Empty(NpcPathfinder.FindPath(Vector3.Zero, Vector3.One,
+            point => new Vector3(point.X, point.Y, float.NaN), (_, _) => false));
+    }
+
     private static bool WallBlocksCenterLine(Vector3 from, Vector3 to)
     {
         // A four-metre-wide wall spanning the centre lane. The two-metre grid can route

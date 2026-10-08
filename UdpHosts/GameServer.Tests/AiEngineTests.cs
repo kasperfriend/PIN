@@ -28,10 +28,11 @@ public class AiEngineTests
         byte npcLevel = 0,
         IAiProjectileLauncher projectileLauncher = null,
         INpcAbilityActivator abilityActivator = null,
-        EmoteService emotes = null)
+        EmoteService emotes = null,
+        INpcNavigation navigation = null)
     {
         var shard = new FakeShard();
-        if (rules != null || monsterStats != null || projectileLauncher != null || abilityActivator != null || emotes != null)
+        if (rules != null || monsterStats != null || projectileLauncher != null || abilityActivator != null || emotes != null || navigation != null)
         {
             shard.AI = new AiEngine(
                 shard,
@@ -42,7 +43,7 @@ public class AiEngineTests
                 monsterStats ?? new FakeAiMonsterStats(),
                 projectileLauncher,
                 abilityActivator,
-                emotes);
+                emotes, navigation: navigation);
         }
 
         var npc = CreateLivingCharacter(shard, npcPosition);
@@ -82,6 +83,70 @@ public class AiEngineTests
     {
         shard.CurrentTimeLong = currentTime;
         shard.AI.Tick(Step, currentTime, CancellationToken.None);
+    }
+
+    [Fact]
+    public void VisibleTargetInsideStandoffDoesNotFreezeAnIntermediateDetour()
+    {
+        // Aggro starts Chase. The next tick reaches Attack, but the route still
+        // needs to go sideways before closing: clamp only its final approach.
+        var navigation = new DetourNavigation();
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(1.5f, 0f, 0f),
+            navigation: navigation);
+        Tick(shard, FirstTick);
+        var before = npc.Position;
+        Tick(shard, FirstTick + Step);
+        Assert.NotEqual(before, npc.Position);
+        Assert.True(npc.Position.Y > before.Y);
+        AssertState(shard, npc, AiBrainState.Attack);
+    }
+
+    [Fact]
+    public void RejectedCombatPathDoesNotAuthorizeDirectMovement()
+    {
+        var navigation = new DetourNavigation { Reachable = false };
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(10f, 0f, 0f),
+            navigation: navigation);
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.Equal(Vector3.Zero, npc.Position);
+        Assert.Equal((short)0x1000, npc.MovementState);
+        Assert.Equal(1, navigation.Queries);
+    }
+
+    [Fact]
+    public void MovingUnreachableTargetCannotBypassFailedPathBackoff()
+    {
+        var navigation = new DetourNavigation { Reachable = false };
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(10f, 0f, 0f),
+            navigation: navigation);
+        Tick(shard, FirstTick);
+        for (ulong i = 1; i <= 10; i++)
+        {
+            player.SetPosition(new Vector3(10f + i * 3f, 0f, 0f));
+            Tick(shard, FirstTick + i * Step);
+        }
+
+        Assert.Equal(1, navigation.Queries);
+        Assert.Equal(Vector3.Zero, npc.Position);
+    }
+
+    private sealed class DetourNavigation : INpcNavigation
+    {
+        public bool SupportsRoutines => false;
+        public bool Reachable { get; set; } = true;
+        public int Queries { get; private set; }
+        public IReadOnlyList<Vector3> FindPath(Vector3 start, Vector3 goal, NpcNavigationAgent agent)
+        {
+            Queries++;
+            return Reachable ? new[] { new Vector3(0f, 4f, 0f), goal } : System.Array.Empty<Vector3>();
+        }
+
+        public bool TryStep(Vector3 from, Vector3 desired, NpcNavigationAgent agent, out Vector3 position)
+        {
+            position = desired;
+            return true;
+        }
     }
 
     [Fact]

@@ -158,6 +158,37 @@ public class PhysicsGroundWindingTests
         Assert.Equal(1, twoWay);
     }
 
+    [Fact]
+    public void CollisionDerivedDisconnectedMeshCanRetryOnContinuousRealGround()
+    {
+        AddMesh(Ground(z: 0f, facesUp: true));
+        var mesh = new Shared.Collision.Navigation.NavigationMesh(
+            [
+                new(new Vector3(-10f, -10f, 0f), new Vector3(3f, -10f, 0f), new Vector3(-10f, 10f, 0f), 1),
+                new(new Vector3(7f, -10f, 0f), new Vector3(30f, -10f, 0f), new Vector3(7f, 10f, 0f), 1),
+            ], _ => 1f);
+        typeof(PhysicsEngine).GetField("_navigationMesh",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(_engine, mesh);
+        var start = new Vector3(-5f, -5f, 0f);
+        var goal = new Vector3(10f, -5f, 0f);
+        Assert.Empty(_engine.FindNavigationPath(start, goal, (_, _) => false, 1.25f));
+
+        var navigation = new PhysicsNpcNavigation(new FakeShard { Physics = _engine }, new StandardAiRules());
+        Assert.NotEmpty(navigation.FindPath(start, goal, new NpcNavigationAgent(1, 0.7f, 1.8f)));
+    }
+
+    [Fact]
+    public void AJumpingTargetsGoalProjectsOntoGroundWithoutDroppingTheAgent()
+    {
+        AddMesh(Ground(z: 0f, facesUp: true));
+        var navigation = new PhysicsNpcNavigation(new FakeShard { Physics = _engine }, new StandardAiRules());
+        var path = navigation.FindPath(Vector3.Zero, new Vector3(10f, 0f, 3f), new NpcNavigationAgent(1, 0.7f, 1.8f));
+        Assert.NotEmpty(path);
+        Assert.InRange(path[^1].Z, -0.01f, 0.01f);
+        Assert.Empty(navigation.FindPath(new Vector3(0f, 0f, 6f),
+            new Vector3(10f, 0f, 0f), new NpcNavigationAgent(1, 0.7f, 1.8f)));
+    }
+
     private void AddMesh(params Triangle[] triangles)
     {
         _pool.Take<Triangle>(triangles.Length, out var buffer);

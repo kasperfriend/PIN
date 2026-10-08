@@ -39,7 +39,8 @@ public class AiBrain
         // rules behaviour the tests and the docs describe.
         _attackRange = combat.AttackRange > 0f ? combat.AttackRange : _rules.AttackRange;
         _attackRangeExit = combat.AttackRangeExit > 0f ? combat.AttackRangeExit : _rules.AttackRangeExit;
-        _standoffRange = combat.StandoffRange > 0f ? combat.StandoffRange : _rules.StandoffRange;
+        _standoffRange = MathF.Min(combat.StandoffRange > 0f ? combat.StandoffRange : _rules.StandoffRange,
+            _attackRange * 0.9f);
         _attackCooldownMs = combat.AttackCooldownMs > 0 ? combat.AttackCooldownMs : _rules.AttackCooldownMs;
 
         // A melee swing cannot cross a floor, but a projectile weapon can shoot at anything it can
@@ -186,7 +187,7 @@ public class AiBrain
         bool wantsToClose = perception.DistanceToTarget > _standoffRange;
         var movement = State switch
         {
-            AiBrainState.Chase when wantsToClose => AiMovementIntent.TowardTarget,
+            AiBrainState.Chase when engaged => AiMovementIntent.TowardTarget,
             AiBrainState.Attack when wantsToClose => AiMovementIntent.TowardTarget,
             AiBrainState.Return => AiMovementIntent.TowardHome,
             _ => AiMovementIntent.None,

@@ -53,6 +53,36 @@ public class AiBrainTests
         => new(0, false, false, float.MaxValue, distanceToHome, now);
 
     [Fact]
+    public void HiddenTargetInsideStandoffStillRequestsAChase()
+    {
+        var brain = new AiBrain(MeleeRules, 0);
+        brain.Aggro(100);
+        var decision = brain.Decide(Hidden(1.5f, 0f, 200));
+        Assert.Equal(AiBrainState.Chase, decision.State);
+        Assert.Equal(AiMovementIntent.TowardTarget, decision.Movement);
+        Assert.False(decision.Attack);
+    }
+
+    [Fact]
+    public void RangedEnemyChasesHiddenTargetEvenInsideCombatDistance()
+    {
+        var brain = new AiBrain(MeleeRules, 0, new AiCombatTuning(50f, 55f, 30f, 1000, true));
+        brain.Aggro(100);
+        var decision = brain.Decide(Hidden(20f, 0f, 200));
+        Assert.Equal(AiMovementIntent.TowardTarget, decision.Movement);
+        Assert.False(decision.Attack);
+    }
+
+    [Fact]
+    public void StandoffCannotParkAnEnemyOutsideItsWeaponReach()
+    {
+        var brain = new AiBrain(MeleeRules, 0, new AiCombatTuning(10f, 12f, 30f, 1000, true));
+        Assert.True(brain.StandoffRange < brain.AttackRange);
+        brain.Aggro(100);
+        Assert.Equal(AiMovementIntent.TowardTarget, brain.Decide(Seen(20f, 0f, 200)).Movement);
+    }
+
+    [Fact]
     public void Idle_WithoutTarget_StaysIdle()
     {
         var brain = new AiBrain(Rules, 0);
