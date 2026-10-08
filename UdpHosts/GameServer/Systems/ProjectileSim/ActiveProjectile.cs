@@ -11,9 +11,6 @@ public struct ActiveProjectile
     public AmmoFlags.SimulationMode Type;
     public Ammo Ammo;
 
-    /// <summary>The <c>dbitems::Ammo</c> row this round was spawned from.</summary>
-    public uint AmmoId;
-
     /// <summary>Damage dealt when this projectile hits a kinematic (entity) pose shape.</summary>
     public int DamageAmount;
 

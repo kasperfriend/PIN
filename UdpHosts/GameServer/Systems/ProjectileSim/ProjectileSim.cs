@@ -145,7 +145,6 @@ public class ProjectileSim
             TraceId = trace,
             Type = ammoFlags.Simulation,
             Ammo = ammo,
-            AmmoId = ammoId,
             Origin = origin,
             Direction = direction,
             Velocity = velocity,
@@ -221,7 +220,7 @@ public class ProjectileSim
                 continue;
             }
 
-            if (ammoTypeId != 0 && projectile.AmmoId != ammoTypeId)
+            if (ammoTypeId != 0 && projectile.Ammo?.Id != ammoTypeId)
             {
                 continue;
             }
@@ -268,7 +267,7 @@ public class ProjectileSim
                 continue;
             }
 
-            if (ammoTypeId != 0 && projectile.AmmoId != ammoTypeId)
+            if (ammoTypeId != 0 && projectile.Ammo?.Id != ammoTypeId)
             {
                 continue;
             }
