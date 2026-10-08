@@ -89,6 +89,75 @@ a battleframe's passive group (sprint/jetpack/core triggers, e.g. core group
 32) cannot be enrolled from data. Button abilities are unaffected (they
 resolve through loadout modules).
 
+## Fourth audit round — transitive closure, and what it turned up
+
+The scoreboard above walks each ability's **linear** node list. That undercounts:
+a chain reaches more chains through `ConditionalBranch` (`if`/`then`/`else`),
+`LogicOrChain`, `LogicAndChain` and `Call`, and every `ImpactApplyEffect` pulls in
+the applied effect's `apply`/`remove`/`update`/`duration` chains. Following all of
+those edges, the 143 stock-kit ability seats reach **1304 chains**, and the gap
+count is materially different:
+
+| state | seats |
+|---|---|
+| reachable closure fully implemented | 41 |
+| closure holds at least one gap | 102 |
+
+The **Teleport Beacon** is the clearest case the linear walk missed: its recall
+lives in the `else` branch of a `ConditionalBranch`, and both nodes in it were
+broken — `TargetFromStatusEffect` ignored its only parameter, and `Teleport` was
+a `return true` placeholder. Neither appeared in any earlier table.
+
+### Closed this round
+
+- **Activation replication** — `AbilityActivated` was sent only to the acting
+  player's own channel. Every `apttf::` row of a chain (`tfPlayAnimation`,
+  `tfParticleEffectAsset`, `tfBeamEffect`, `tfCameraShakeEffect`,
+  `tfAbilityAnimation`) is `environment=client`, so the server no-ops it and the
+  client runs it — *for a client that heard the activation*. A client that never
+  heard it played no cast animation and drew no effect, so abilities were
+  invisible to everyone but their caster, and an NPC's ability (which activates
+  through `AbilitySystem` with no combat-controller echo at all) was invisible to
+  everyone. It is now announced from `ExecuteAbilityActivation`, the single
+  funnel every root activation passes through, on the same `SendToScoped` path
+  `TookHit` and `WeaponProjectileFired` use. The actor's own client is skipped:
+  it already gets the ReliableGss acknowledgement.
+- **`TargetFromStatusEffect`** — 72 rows, every one with a nonzero `StatusfxId`,
+  `AlsoInitiator` 0 in 67 of them. It pushed the initiator when that flag was set
+  and returned, so the 67 rows asking for the effect carriers produced an empty
+  target list and everything downstream ran against nothing. It now scans the
+  shard for the carriers, which is what the chain shapes ask for (they clear or
+  never populate the list first).
+- **`Teleport`** — id-only def, 42 rows. Moves the target list to
+  `Context.InitPosition`, the initiation position the other movement commands
+  read; every chain shape settles the list first and then teleports it. Follows
+  `TeleportServerCommand`: position write, fall-damage reset, then a
+  `ForcedMovement` type 1 so the client does not interpolate across the map.
+  *Documented limit:* a recall to a position recorded by an *earlier* activation
+  (the beacon's "back to where I threw it") needs the destination effect's stored
+  context, and an id-only def has no column to name it.
+- **`BattleFrameDuration`** — routed, but to a bare `return true`, so a gate
+  asking "still in the qualifying frame" always said yes. **73 nodes in the
+  stock kits** — the largest single silent no-op found. `Classtype` is
+  `dbitems::Battleframe.Archtype` (value sets 0/5/6/11/13 vs 0/2/5/6/7/8/9/11/13);
+  `Notchanged` compares the new `CharacterEntity.LastLoadoutChangeTime` with the
+  effect's own start time.
+
+### Still open, by size
+
+Remaining placeholders in the transitive closure, by node count:
+`ActivateAbilityTrigger` 56, `RegisterAbilityTrigger` 45, `SlotAmmo` 13,
+`Bullrush` 8, `DetonateProjectiles` 8, `RegisterTimedTrigger` 7,
+`ItemAttributeModifier` 6, `RegisterClientProximity` 5, `SetWeaponDamage` 5,
+`TinyObjectCreate` 4, then `TargetByNPC`, `ModifyHostility`,
+`TargetByDamageResponse`, `RequireAbilityPhysics`, `AddPhysics` (3 each) and a
+tail of 1–2. One routed command is still a no-op: `RequirementServer` (10 nodes).
+
+Note the shipped `verify_ability_chains.py --check` allowlist is keyed to the
+*linear* walk, so it does not see the branch-reachable rows above; it still passes
+unchanged (31 documented placeholder pairs). Extending it to the closure would
+add several new pairs and needs its allowlist rewritten in the same change.
+
 ## Per-frame detail
 
 #### Accord Assaultframe
