@@ -158,6 +158,97 @@ Note the shipped `verify_ability_chains.py --check` allowlist is keyed to the
 unchanged (31 documented placeholder pairs). Extending it to the closure would
 add several new pairs and needs its allowlist rewritten in the same change.
 
+## Fifth audit round — implementing what the data can actually specify
+
+Round four's scoreboard counts gaps; this round closes them where the definition
+carries enough information to close them honestly. The dividing line used
+throughout is **can the row say what it means?** A def with real columns can be
+implemented against its own data; a def that is nothing but an id cannot, and
+guessing at it makes abilities behave *wrongly*, which is worse than a documented
+no-op.
+
+`apt::CommandType` has 394 rows. **186** are routed to a command class in
+`Factory`; another **145** appear there only as commented-out cases, and the rest
+have no case at all. Of the unrouted, most are not ability machinery anyway
+(arc/mission control, matchmaking, the loot store, chat bubbles).
+
+### Implemented
+
+| command | rows | what it does now |
+|---|---|---|
+| `Bullrush` | 31 | Rhino/Dreadnaught *Charge*. Maps onto the protocol's own `ForcedMovementType.Bullrush` (6) block: `Speed`/`Duration` become its `Speed` and `StartTime`/`EndTime`, `Velocity` is the horizontal facing scaled by speed. |
+| `TargetByDamageResponse` | 243 | Target filter sibling of `RequireDamageResponse`; reads the target's own `DamageResponseId`, falling back to the def's column. |
+| `DropCarryable` | id only | Tail of the throw-the-object chains; same transition as `DropAllCarryable` today. |
+| `RegisterClientProximity` | 239 | **The proximity trigger.** `radius`/`max_targets`/`retry_interval`/`chain`/`ability_id` are all loadable, so this is implemented rather than documented away. |
+| `DetonateProjectiles` | 59 | Blows the caster's in-flight rounds early through the simulation's own expiry path. |
+| `SetProjectileTarget` | 52 | Redirects already-homing rounds onto the chain's target. |
+| `SlotAmmo` | 115 | Weapon ammo substitution — closes the `// TODO: Handle ammo overrides` in `WeaponSim`. |
+| `NamedVariableAssign` | 291 | The missing half of a matched pair (see below). |
+
+### Two of these were half-built features, not missing commands
+
+**`NamedVariableAssign` / `LoadRegisterFromNamedVar`.** The reader (type 240) was
+already implemented but could only ever take its `undecl_value` fallback, and said
+so in its own doc: nothing ever declared a variable. The two tables share one
+vocabulary — `WingFX`, `damage`, `FuseLength`, `teslacount`, `heat` — which is the
+evidence they address the same store, and both key on `name_id` (the string
+`member_name` is empty in 119 of 291 assign rows and 156 of 265 read rows). The
+store now exists, per entity, on the ability system. The glider pad keeps working
+exactly as before: chain 1001671 row 1001663 reads `WingFX` with fallback 1.0 and
+no chain in the pad's activation assigns it.
+
+**`SlotAmmo` / `WeaponSim`.** The weapon simulation carried the matching hole as
+an explicit `// TODO: Handle ammo overrides`. The substitution is held on the
+character rather than in the weapon-details cache, because that cache is rebuilt
+on every loadout change and an override stored in it would vanish mid-ability.
+
+### Adaptations, stated at the code site
+
+- `RegisterClientProximity` is named for the **client** detecting proximity, and
+  the AeroMessages tree carries no client→server "something entered my radius"
+  message. The server answers the same question by scanning the shard, which is
+  why the row's retry interval is honoured instead of firing every tick.
+- `Bullrush`'s `ImpactEffect` is nonzero in exactly 1 of 31 rows and needs a swept
+  collision test the server has no geometry for. Not applied; documented.
+- `TargetByDamageResponse`'s `UseWeaponDamageType` is 0 in all 243 rows, so it is
+  left alone rather than guessed. Same for `SetProjectileTarget`'s
+  `TargetingThis` (0 in 52) and `SlotAmmo`'s `CreditToAbility` (no representation
+  on the projectile path — guessing would attribute kills wrongly).
+- `NamedVariableAssign`'s `VarSrctype` has no enum anywhere in the codebase (1 in
+  279 of 291 rows, 0 in 12). Both sides key on the executing entity, which is what
+  makes the assign/read pair round-trip; modelling the column would only matter
+  for sharing a variable *across* entities.
+
+### Still genuinely blocked, and why
+
+- **`RegisterAbilityTrigger` (45), `ActivateAbilityTrigger` (56),
+  `RegisterTimedTrigger` (7)** — id-only defs, no `aptgss::` trigger table in the
+  clientdb, no `Trigger` message in AeroMessages, and no table with a `trigger`
+  column except `dbdialogdata::DialogScript`. There is nothing to read.
+- **`TargetSquadmates` (24), `RequireSquadLeader`** — there is no squad system in
+  this codebase: no squad membership on `CharacterEntity`, no squad service. The
+  command has nothing to read.
+- **`SetWeaponDamage` (79)** — `Dmgminvalue`/`Dmgmaxvalue` and `Multiply` are
+  unambiguous, but `Lerpminvalue`/`Lerpmaxvalue` are driven by
+  `Lerpfallheight`/`Lerpenergy` and which range each selects is not derivable.
+  Applying the unambiguous half alone would silently produce wrong damage on the
+  rows that use the lerp, so the whole command is left routed-out.
+- The `ModifyDamageBy*` family, `ItemAttributeModifier`, `SetDefaultDamageBonus`,
+  `AddAppendageHealthPool`, `ModifyHostility` — id-only defs.
+- Line of sight (no world raycast), headshot (no hit locations),
+  `RequireBulletHit`, `RequireItemDurability`, SIN acquisition.
+
+### Verification
+
+No .NET SDK exists in the sandbox this was developed in (no `dotnet`, `mono` or
+`csc` on the filesystem), so the build and the 1421-test suite run in CI only.
+Three pushes failed the build on missing `using` directives before that was
+addressed with a pre-flight resolver that indexes all 4015 types declared across
+`UdpHosts/` and the `Lib/` submodules and checks every type name a changed file
+mentions is reachable from its namespace and imports; it is self-tested by
+reintroducing the exact error CI reported. A separate check confirms all 186
+command classes `Factory` constructs are reachable from its imports.
+
 ## Per-frame detail
 
 #### Accord Assaultframe
