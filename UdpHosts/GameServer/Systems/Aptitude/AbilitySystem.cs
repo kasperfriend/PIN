@@ -63,6 +63,16 @@ public class AbilitySystem
     private readonly Dictionary<ulong, List<ClientProximityRegistration>> _proximityRegistrations = [];
 
     /// <summary>
+    /// Named scripting variables written by <c>NamedVariableAssignCommand</c> and read back by
+    /// <c>LoadRegisterFromNamedVarCommand</c>, keyed by owning entity then by variable name. The two
+    /// tables share one vocabulary ("WingFX", "damage", "FuseLength", "teslacount", "heat"), which is
+    /// what makes them a matched pair; before this store existed every read took the reader row's
+    /// <c>undecl_value</c> fallback, so a chain that set a variable and branched on it always took the
+    /// unset branch.
+    /// </summary>
+    private readonly Dictionary<ulong, Dictionary<string, float>> _namedVariables = [];
+
+    /// <summary>
     ///     The displacement a database command (<c>aptfs::MovementSlideCommandDef</c>) asked each character to
     ///     make, per character. At most one slide per character: the command states a displacement, not a
     ///     queue, so a second slide that starts while one is running restarts the motion from wherever the
@@ -509,6 +519,47 @@ public class AbilitySystem
                 _proximityRegistrations.Remove(registration.OwnerEntityId);
             }
         }
+    }
+
+    /// <summary>
+    ///     The store key for a named variable. Both the assign and the read table carry a numeric
+    ///     <c>name_id</c> and an optional string <c>member_name</c>, and the string is empty in 119 of
+    ///     the 291 assign rows and 156 of the 265 read rows, so the id is the only key both sides
+    ///     always have. The name is folded in when present purely so the log lines are readable.
+    /// </summary>
+    public static string NamedVariableKey(ushort nameId, string memberName)
+    {
+        return string.IsNullOrEmpty(memberName) ? nameId.ToString() : nameId + ":" + memberName;
+    }
+
+    /// <summary>Writes a named scripting variable on an entity.</summary>
+    public void SetNamedVariable(IAptitudeTarget owner, string key, float value)
+    {
+        if (owner == null || string.IsNullOrEmpty(key))
+        {
+            return;
+        }
+
+        if (!_namedVariables.TryGetValue(owner.EntityId, out var vars))
+        {
+            vars = [];
+            _namedVariables[owner.EntityId] = vars;
+        }
+
+        vars[key] = value;
+    }
+
+    /// <summary>Reads a named scripting variable, returning false when it has never been assigned.</summary>
+    public bool TryGetNamedVariable(IAptitudeTarget owner, string key, out float value)
+    {
+        value = 0f;
+
+        if (owner == null || string.IsNullOrEmpty(key))
+        {
+            return false;
+        }
+
+        return _namedVariables.TryGetValue(owner.EntityId, out var vars) && vars.TryGetValue(key, out value);
     }
 
     /// <summary>
