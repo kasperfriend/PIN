@@ -524,6 +524,10 @@ public class AiEngine
         if (!npc.Brain.WantsTarget)
         {
             npc.TargetId = 0;
+            target = null;
+            targetAlive = false;
+            npc.HasCheckedVisibility = false;
+            npc.Positioning.Reset();
         }
 
         npc.Routine.Update(currentTime, entity.Position, decision.State == AiBrainState.Idle,
@@ -943,6 +947,7 @@ public class AiEngine
         npc.TargetVisible = HasLineOfSight(npc.Entity, target);
         npc.VisibilityCheckedFor = target.EntityId;
         npc.HasCheckedVisibility = true;
+        npc.VisibilityCheckedAt = _shard.CurrentTimeLong;
         return npc.TargetVisible;
     }
 
@@ -1343,10 +1348,13 @@ public class AiEngine
             goal = target.Position;
         }
 
+        bool moduleOwnsApproach = target != null && npc.Navigation.NavModuleId != 0 &&
+            (npc.Navigation.NavDeadline == 0 || currentTime < npc.Navigation.NavDeadline) &&
+            navigationStopDistance < npc.Brain.StandoffRange && moduleWantsApproach;
         bool tacticalMovement = false;
         if (target != null && npc.Profile?.IsRanged == true && npc.CombatMovement.GroundTactics &&
             (decision.State is AiBrainState.Chase or AiBrainState.Attack) && !npc.Routine.Profile.FixedInPlace &&
-            !IsMovementRestricted(entity) && !IsSliding(entity))
+            !IsMovementRestricted(entity) && !IsSliding(entity) && !moduleOwnsApproach)
         {
             bool underFire = npc.LastDamagedAt != 0 && currentTime >= npc.LastDamagedAt &&
                 currentTime - npc.LastDamagedAt < 3000;
@@ -1368,7 +1376,14 @@ public class AiEngine
                     npc.CombatMovement, Random.Shared.NextSingle());
             }
 
-            var tacticalGoal = npc.Positioning.Goal(currentTime);
+            // Recheck the endpoint on perception passes: an opponent can walk around cover or
+            // out of weapon reach before the short goal expires. No extra path searches are needed.
+            var tacticalGoal = npc.HasCheckedVisibility && npc.VisibilityCheckedAt == currentTime
+                ? npc.Positioning.ValidatedGoal(currentTime, target.Position, npc.Brain.AttackRange,
+                    point => _shard.Physics?.HasStaticOcclusion(
+                        point + new Vector3(0f, 0f, _eyeHeight),
+                        target.Position + new Vector3(0f, 0f, _eyeHeight), entity.EntityId) == true)
+                : npc.Positioning.Goal(currentTime);
             if (tacticalGoal.HasValue)
             {
                 goal = tacticalGoal;
@@ -1377,7 +1392,14 @@ public class AiEngine
         }
         else
         {
-            npc.Positioning.Reset();
+            if (moduleOwnsApproach)
+            {
+                npc.Positioning.CancelGoal();
+            }
+            else
+            {
+                npc.Positioning.Reset();
+            }
         }
 
         bool routineMovement = decision.State == AiBrainState.Idle && npc.Routine.Goal.HasValue;
@@ -1898,6 +1920,8 @@ public class AiEngine
 
         /// <summary>The target the last line of sight verdict was cast against.</summary>
         public ulong VisibilityCheckedFor;
+
+        public ulong VisibilityCheckedAt;
 
         /// <summary>Whether <see cref="TargetVisible" /> is a cast result rather than the default.</summary>
         public bool HasCheckedVisibility;

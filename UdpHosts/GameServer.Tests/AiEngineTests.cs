@@ -86,6 +86,97 @@ public class AiEngineTests
     }
 
     [Fact]
+    public void DamageFromSameOrDifferentAttackerDoesNotGrantExtraAttacks()
+    {
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(1f, 0f, 0f));
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.Single(shard.AiAttackFeedback.Attacks);
+        shard.Damage.ApplyDamage(npc, 1, player);
+        Tick(shard, FirstTick + Step * 2);
+        var other = CreateLivingCharacter(shard, new Vector3(1f, 0f, 0f));
+        shard.Entities[other.EntityId] = other;
+        shard.Damage.ApplyDamage(npc, 1, other);
+        Tick(shard, FirstTick + Step * 3);
+        Assert.Single(shard.AiAttackFeedback.Attacks);
+        Tick(shard, FirstTick + Step + 1200);
+        Assert.Equal(2, shard.AiAttackFeedback.Attacks.Count);
+        Assert.Equal(other.EntityId, shard.AiAttackFeedback.Attacks[^1].TargetId);
+    }
+
+    [Fact]
+    public void DeadTargetCannotKeepARangedTacticalGoalMovingTheNpc()
+    {
+        var navigation = new TacticalNavigation();
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = "Unknown", AttackProfile = RangedProfile() },
+            projectileLauncher: new RecordingAiProjectileLauncher(), navigation: navigation);
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.True(navigation.Queries > 1, "tactical search must have occurred");
+        var before = npc.Position;
+        player.SetCharacterState(CharacterStateData.CharacterStatus.Dead, shard.CurrentTime);
+        Tick(shard, FirstTick + Step * 2);
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Equal(before, npc.Position);
+    }
+
+    [Fact]
+    public void LeashReturnCannotRetainCombatTargetForModuleMovement()
+    {
+        var navigation = new TacticalNavigation();
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            new StandardAiRules { LeashRadius = 5f },
+            new FakeAiMonsterStats { AttackProfile = RangedProfile() }, navigation: navigation);
+        Tick(shard, FirstTick);
+        npc.SetPosition(new Vector3(10f, 0f, 0f));
+        Tick(shard, FirstTick + Step);
+        AssertState(shard, npc, AiBrainState.Return);
+        Assert.Equal(Vector3.Zero, navigation.LastGoal);
+        Assert.True(npc.Position.X < 10f);
+    }
+
+    [Fact]
+    public void AuthoredModuleApproachPreemptsOptionalRepositioningUntilItsTimeout()
+    {
+        var navigation = new TacticalNavigation();
+        var stats = new FakeAiMonsterStats { Behavior = "ModuleApproach", AttackProfile = RangedProfile() };
+        stats.AbilityModulesByBehavior["ModuleApproach"] = new[]
+        {
+            new NpcAbilityModuleScan(new NpcAbilityModule(86132, 1f, 0, 0f, 50f, 6.5f, 2400),
+                1, true, false),
+        };
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: stats, projectileLauncher: new RecordingAiProjectileLauncher(), navigation: navigation);
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.Equal(1, navigation.Queries);
+        Assert.Equal(player.Position, navigation.LastGoal);
+        Assert.True(npc.Position.X > 0f);
+        Tick(shard, FirstTick + 2450);
+        Assert.True(navigation.Queries > 2, "after the watchdog, optional tactics can resume");
+    }
+
+    private sealed class TacticalNavigation : INpcNavigation
+    {
+        public bool SupportsRoutines => true;
+        public int Queries { get; private set; }
+        public Vector3 LastGoal { get; private set; }
+        public IReadOnlyList<Vector3> FindPath(Vector3 start, Vector3 goal, NpcNavigationAgent agent)
+        {
+            Queries++;
+            LastGoal = goal;
+            return new[] { goal };
+        }
+
+        public bool TryStep(Vector3 from, Vector3 desired, NpcNavigationAgent agent, out Vector3 position)
+        {
+            position = desired;
+            return true;
+        }
+    }
+
+    [Fact]
     public void AuthoredMeleeSpeedMultiplierChangesPursuitButMoveChanceZeroDoesNotStopIt()
     {
         var (normalShard, normalNpc, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),

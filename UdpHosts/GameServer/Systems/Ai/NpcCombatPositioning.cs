@@ -14,6 +14,7 @@ public sealed class NpcCombatPositioning
     private Vector3? _goal;
     private ulong _until;
     private ulong _nextSearch;
+    private bool _seekingCover;
 
     public void Reset()
     {
@@ -30,6 +31,30 @@ public sealed class NpcCombatPositioning
         }
 
         return _goal;
+    }
+
+    /// <summary>
+    ///     Validate a held goal against the current opponent, without spending new path queries.
+    ///     Cancel invalid goals but retain the search cooldown so movement cannot cause query storms.
+    /// </summary>
+    public Vector3? ValidatedGoal(ulong now, Vector3 target, float attackRange, Func<Vector3, bool> occluded)
+    {
+        var goal = Goal(now);
+        if (goal.HasValue && (!NpcGroundMovement.Finite(target) || !float.IsFinite(attackRange) ||
+            AiVectors.Distance(goal.Value, target) > attackRange * 0.95f ||
+            occluded(goal.Value) != _seekingCover))
+        {
+            CancelGoal();
+        }
+
+        return _goal;
+    }
+
+    /// <summary>Release a goal without bypassing the search cooldown.</summary>
+    public void CancelGoal()
+    {
+        _goal = null;
+        _until = 0;
     }
 
     public bool CanSearch(ulong now) => !Goal(now).HasValue && now >= _nextSearch;
@@ -50,6 +75,8 @@ public sealed class NpcCombatPositioning
         NpcCombatMovementProfile profile = null,
         float chanceRoll = 0f)
     {
+        CancelGoal();
+        _seekingCover = seekCover;
         _nextSearch = now + 4000;
         profile ??= NpcCombatMovementProfile.Default;
         // One roll per admitted search, including rejected rolls: a zero/low authored chance

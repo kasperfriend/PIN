@@ -89,7 +89,12 @@ public class AiBrain
         }
 
         LastTargetSeenAt = now;
-        NextAttackAt = now;
+        // Being hit refreshes engagement, not the weapon's already-spent cadence.
+        // Otherwise rapid player hits (or alternating attackers) grant an NPC a shot every tick.
+        if (State is AiBrainState.Idle or AiBrainState.Return)
+        {
+            NextAttackAt = Math.Max(NextAttackAt, now);
+        }
 
         if (State is AiBrainState.Idle or AiBrainState.Return)
         {

@@ -53,6 +53,21 @@ public class AiBrainTests
         => new(0, false, false, float.MaxValue, distanceToHome, now);
 
     [Fact]
+    public void RepeatedDamageCannotResetAnAttackCooldown()
+    {
+        var brain = new AiBrain(Rules, 0);
+        brain.Aggro(100);
+        Assert.True(brain.Decide(Seen(2f, 0f, 200)).Attack);
+        brain.Aggro(250);
+        Assert.False(brain.Decide(Seen(2f, 0f, 300)).Attack);
+        Assert.Equal(1200UL, brain.NextAttackAt);
+        brain.OnTargetLost();
+        brain.Aggro(400);
+        Assert.False(brain.Decide(Seen(2f, 0f, 500)).Attack);
+        Assert.True(brain.Decide(Seen(2f, 0f, 1200)).Attack);
+    }
+
+    [Fact]
     public void HiddenTargetInsideStandoffStillRequestsAChase()
     {
         var brain = new AiBrain(MeleeRules, 0);

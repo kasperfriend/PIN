@@ -8,6 +8,33 @@ namespace GameServer.Tests;
 public class NpcCombatPositioningTests
 {
     [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void OpponentMovingAroundCoverOrBlockingAFiringPositionCancelsGoal(bool cover, bool nowHidden)
+    {
+        var positioning = new NpcCombatPositioning();
+        positioning.Search(100, 1, Vector3.Zero, new Vector3(20f, 0f, 0f),
+            Vector3.Zero, 120f, 15f, 50f, cover, point => new[] { point }, _ => cover);
+        Assert.NotNull(positioning.Goal(200));
+        Assert.Null(positioning.ValidatedGoal(300, new Vector3(20f, 0f, 0f), 50f, _ => nowHidden));
+        Assert.False(positioning.CanSearch(300));
+        Assert.True(positioning.CanSearch(4100));
+    }
+
+    [Fact]
+    public void OutOfReachOpponentInvalidatesGoalWithoutBypassingCooldown()
+    {
+        var positioning = new NpcCombatPositioning();
+        positioning.Search(100, 1, Vector3.Zero, new Vector3(20f, 0f, 0f),
+            Vector3.Zero, 120f, 15f, 50f, false, point => new[] { point }, _ => false);
+        var goal = positioning.Goal(200);
+        Assert.NotNull(goal);
+        Assert.Equal(goal, positioning.ValidatedGoal(200, new Vector3(20f, 0f, 0f), 50f, _ => false));
+        Assert.Null(positioning.ValidatedGoal(300, new Vector3(100f, 0f, 0f), 50f, _ => false));
+        Assert.False(positioning.CanSearch(300));
+    }
+
+    [Theory]
     [InlineData(0f, 0f, false)]
     [InlineData(0.2f, 0.19f, true)]
     [InlineData(0.2f, 0.2f, false)]

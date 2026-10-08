@@ -133,3 +133,14 @@ Additional regression tests cover authored chances and rejected-roll cooldowns, 
 | Windows | Build + 1,460/1,460 tests passed | Build + 1,460/1,460 tests passed |
 
 Windows .NET 10 additionally passed publishing, payload validation, GameServer startup (Bitter load) and WebHostManager smoke tests. Those smoke/publish steps are intentionally skipped in the other five jobs. Existing StyleCop warnings in account/character/certificate files remain; no test failures remain in this run. This is automated regression/startup validation, **not** proof of in-game AI parity, correct map traversal everywhere, or acceptable crowd performance. The real-zone checklist above is still required.
+
+## Follow-up: engagement and tactical-goal lifecycle
+
+This revision fixes correctness issues in PIN's existing policy rather than inventing more CAIS defaults:
+
+- **Damage no longer grants free attacks.** `AiBrain.Aggro` previously reset `NextAttackAt` on every hit. Same-target hits, retargeting and a rapid drop/re-engage could therefore bypass the weapon's authored cadence. Engagement memory still refreshes immediately, but a spent attack deadline survives.
+- **Clear the resolved target when combat ends.** Clearing only `TargetId` left the local target/liveness inputs usable by tactical movement during the same update. Dead opponents could briefly retain a tactical goal; Return could retain module navigation inputs. Idle/Return now receive no combat target, and tactical/visibility state is cleared.
+- **Revalidate held tactical endpoints.** On perception passes, cover must still occlude the current opponent; a firing position must still have static line of fire; both must remain inside weapon reach. Invalidation releases the goal without resetting the four-second search cooldown. This adds at most one static occlusion check per held goal per perception pass, not eight new path searches. Moving geometry/corridor support is still checked by normal movement.
+- **Authored module approaches outrank optional tactics.** An active, closer `am*NavToDist` request cannot be displaced by optional strafing/cover until its `am*NavTimeout` expires or the approach is satisfied. Existing parser data supplies the request/watchdog; this priority is PIN integration policy, not proof of original tree ordering.
+
+New regressions cover repeated/alternate-attacker damage, rapid re-engagement cadence, dead-target goal cleanup, leash return, module approach/watchdog priority, opponent movement around cover, lost firing LOS and out-of-range tactical goals. Automated results for this revision are pending; no interactive live-zone validation has been performed.
