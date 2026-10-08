@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Threading;
 using AeroMessages.GSS.Character;
 using GameServer.Data;
+using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;
@@ -179,7 +180,7 @@ public class AiEngineTests
     private sealed class ChangingHostility : IAiHostility
     {
         public bool Hostile { get; set; } = true;
-        public bool IsHostile(GameServer.Entities.IEntity attacker, GameServer.Entities.IEntity target) => Hostile;
+        public bool IsHostile(IEntity attacker, IEntity target) => Hostile;
     }
 
     [Fact]
