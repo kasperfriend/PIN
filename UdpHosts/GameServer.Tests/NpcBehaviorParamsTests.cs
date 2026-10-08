@@ -5,6 +5,25 @@ namespace GameServer.Tests;
 
 public class NpcBehaviorParamsTests
 {
+    [Theory]
+    [InlineData("SandThresher(aggroDistance=15)", 15f)]
+    [InlineData("SandThresher(aggroDist=15)", 15f)]
+    [InlineData("EliteWanderer(aggroDistance=120)", 120f)]
+    [InlineData("Base(aggroDistance=0)", 0f)]
+    [InlineData("Base(aggroDistance=10,aggroDist=15)", 10f)]
+    public void AggroDistanceReadsOnlyExplicitCombatAggroKeys(string behavior, float expected)
+        => Assert.Equal(expected, NpcBehaviorParams.Parse(behavior).AggroDistance);
+
+    [Theory]
+    [InlineData("AlertAndInteractive(perceptionDist=4)")]
+    [InlineData("_instattack(targetSelectDist=50)")]
+    [InlineData("Base(aggroDistance=NaN)")]
+    [InlineData("Base(aggroDist=Infinity)")]
+    [InlineData("Base(aggroDist=-1)")]
+    [InlineData("Base(aggroDistance=bad,aggroDist=15)")]
+    public void InvalidOrUnrelatedRadiusIsNotAnAggroOverride(string behavior)
+        => Assert.Null(NpcBehaviorParams.Parse(behavior).AggroDistance);
+
     [Fact]
     public void Parse_ReadsTheNameAndItsParameters()
     {

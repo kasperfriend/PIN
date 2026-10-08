@@ -250,7 +250,7 @@ public class AiEngine
             EntityId = npc.EntityId,
             Entity = npc,
             Home = npc.Position,
-            Brain = new AiBrain(_rules, _shard.CurrentTimeLong, AiCombatTuning.FromProfile(attackProfile), routineProfile.LeashDistance),
+            Brain = new AiBrain(_rules, _shard.CurrentTimeLong, AiCombatTuning.FromProfile(attackProfile), routineProfile.LeashDistance, baseParams.AggroDistance),
             Routine = new NpcRoutine(npc.EntityId, npc.StaticInfo.CharacterTypeId, npc.Position,
                 routineProfile, _shard.CurrentTimeLong, _activities),
             MoveSpeed = AiSpeeds.Resolve(normalSpeed, _rules.DefaultMoveSpeed, _rules),
@@ -293,7 +293,10 @@ public class AiEngine
     /// <summary>Forces an NPC to engage whoever shot it.</summary>
     public void Aggro(ulong npcEntityId, ulong attackerEntityId)
     {
-        if (attackerEntityId == 0 || !_brains.TryGetValue(npcEntityId, out var npc))
+        if (attackerEntityId == 0 || !_brains.TryGetValue(npcEntityId, out var npc) ||
+            npc.Brain.State == AiBrainState.Dead ||
+            !_shard.Entities.TryGetValue(attackerEntityId, out var attacker) ||
+            attacker is not CharacterEntity character || !IsValidTarget(npc, character))
         {
             return;
         }
@@ -439,6 +442,8 @@ public class AiEngine
             npc.Brain.OnDeath();
             npc.Routine.Stop();
             npc.TargetId = 0;
+            npc.Positioning.Reset();
+            npc.Navigation.ClearModuleRequest();
         }
     }
 
@@ -464,6 +469,8 @@ public class AiEngine
             npc.Brain.OnDeath();
             npc.Routine.Stop();
             npc.TargetId = 0;
+            npc.Positioning.Reset();
+            npc.Navigation.ClearModuleRequest();
             npc.Navigation.Reset();
             SyncBehaviorEmote(npc, currentTime);
             return;
@@ -484,7 +491,7 @@ public class AiEngine
         bool targetAlive = false;
         if (npc.TargetId != 0 &&
             _shard.Entities.TryGetValue(npc.TargetId, out var targetEntity) &&
-            targetEntity is CharacterEntity targetCharacter)
+            targetEntity is CharacterEntity targetCharacter && IsValidTarget(npc, targetCharacter))
         {
             target = targetCharacter;
             targetAlive = targetCharacter.IsAlive;
@@ -528,6 +535,7 @@ public class AiEngine
             targetAlive = false;
             npc.HasCheckedVisibility = false;
             npc.Positioning.Reset();
+            npc.Navigation.ClearModuleRequest();
         }
 
         npc.Routine.Update(currentTime, entity.Position, decision.State == AiBrainState.Idle,
@@ -558,7 +566,8 @@ public class AiEngine
                 // weapon meanwhile, which the dodge pair's does for the 500 ms it runs.
                 bool windowSpent = UseAbilityModule(npc, currentTime, attackDistance);
 
-                if (!windowSpent && !IsWeaponRestricted(entity))
+                if (!windowSpent && !IsWeaponRestricted(entity) &&
+                    (profile?.IsRanged == true || !entity.HasCombatFlag(CharacterCombatFlags.restrict_melee)))
                 {
                     if (CanFire(npc, currentTime))
                     {
@@ -632,23 +641,21 @@ public class AiEngine
     }
 
     /// <summary>
-    ///     The ability modules a behaviour set configures, resolved into the ones the engine can run. The
-    ///     base <c>behavior</c> is the set an NPC spends its life in and the one 48 monster rows configure
-    ///     their modules in; 12 more configure them only in <c>behavior_offensive</c>, so that set is read
-    ///     when the base one names none. Modules whose chains carry nothing a client draws or plays are
-    ///     dropped, exactly like a weapon's (see <see cref="NpcAbilityModuleScan.Runnable" />): one of the
-    ///     build's 26 module ids (120937) is a server-side chain alone, and running it would change the
-    ///     fight without changing what a client shows.
+    ///     Combat runs the offensive invocation's module set when it configures one; otherwise
+    ///     fall back to the base invocation. The shipped columns differ in module ids and gates
+    ///     (e.g. monsters 1592, 1808 and 2241), so base-first silently discarded combat tuning.
+    ///     Select a whole set: missing offensive modules are not fabricated from the base tree.
+    ///     Client-visible chains and navigation-only requests retain their existing gates.
     /// </summary>
     /// <param name="baseBehavior">The monster's parsed base behaviour string.</param>
     /// <param name="offensiveBehavior">Its raw <c>behavior_offensive</c> string.</param>
-    /// <returns>The modules to run, in the order am1, am2; empty for the 3,049 rows that configure none.</returns>
+    /// <returns>The modules to run, in the order am1, am2.</returns>
     private List<NpcAbilityModuleState> ResolveAbilityModules(NpcBehaviorParams baseBehavior, string offensiveBehavior)
     {
-        var scans = _monsterStats.GetAbilityModules(baseBehavior);
+        var scans = _monsterStats.GetAbilityModules(NpcBehaviorParams.Parse(offensiveBehavior));
         if (scans.Count == 0)
         {
-            scans = _monsterStats.GetAbilityModules(NpcBehaviorParams.Parse(offensiveBehavior));
+            scans = _monsterStats.GetAbilityModules(baseBehavior);
         }
 
         var modules = new List<NpcAbilityModuleState>();
@@ -737,8 +744,7 @@ public class AiEngine
     /// <returns>Whether the roll passed: true for a <c>Chance</c> of 1, never for 0.</returns>
     private static bool RollModuleChance(NpcBrain npc, NpcAbilityModuleState module, ulong currentTime)
     {
-        uint seed = AiPrng.Trace((uint)currentTime, (byte)(npc.EntityId & 0xFF)) ^ module.AbilityId;
-        return AiPrng.Float(seed) < module.Params.Chance;
+        return NpcDecisionRandom.Roll(npc.EntityId, module.Params.ModuleId, currentTime) < module.Params.Chance;
     }
 
     /// <summary>
@@ -831,12 +837,10 @@ public class AiEngine
         // would make a mob ping pong between two players standing side by side. An idle
         // NPC is different: acquisition requires a sighting, so do not pin an unseen
         // candidate into the brain before it has ever engaged it.
-        if (npc.TargetId != 0 && _shard.Entities.TryGetValue(npc.TargetId, out var currentTarget))
+        if (npc.TargetId != 0 && _shard.Entities.TryGetValue(npc.TargetId, out var currentTarget) &&
+            currentTarget is CharacterEntity currentCharacter && IsValidTarget(npc, currentCharacter))
         {
-            if (npc.Brain.WantsTarget ||
-                (currentTarget is CharacterEntity currentCharacter &&
-                 currentCharacter.IsAlive &&
-                 HasLineOfSight(npc.Entity, currentCharacter)))
+            if (npc.Brain.WantsTarget || HasLineOfSight(npc.Entity, currentCharacter))
             {
                 return;
             }
@@ -844,7 +848,12 @@ public class AiEngine
 
         npc.TargetId = 0;
 
-        float radius = npc.Brain.WantsTarget ? _rules.AggroRadius * _chaseSlackMultiplier : _rules.AggroRadius;
+        float radius = npc.Brain.WantsTarget ? npc.Brain.AggroRadius * _chaseSlackMultiplier : npc.Brain.AggroRadius;
+        if (radius <= 0f)
+        {
+            return;
+        }
+
         var origin = npc.Entity.Position;
 
         ulong bestId = 0;
@@ -855,7 +864,7 @@ public class AiEngine
         // CollectAcquisitionCandidates; hostility is the per-NPC half and stays here.
         foreach (var candidate in candidates)
         {
-            if (!_hostility.IsHostile(npc.Entity, candidate))
+            if (!IsValidTarget(npc, candidate))
             {
                 continue;
             }
@@ -899,6 +908,15 @@ public class AiEngine
             _logger.Debug("{Name} acquired target {TargetId} at {Distance:F1}m, {HeightDelta:F1}m of height between them", npc.Entity, bestId, bestDistance, bestHeightDelta);
         }
     }
+
+    /// <summary>
+    ///     Acquired and damage-driven targets must remain live, hostile and in this simulation.
+    ///     Distance/LOS are acquisition gates, not grounds for dropping an established pursuit.
+    /// </summary>
+    private bool IsValidTarget(NpcBrain npc, CharacterEntity target)
+        => target.IsAlive && target.EntityId != npc.EntityId &&
+            (target.Player == null || ShardZone.IsPlayerInZone(_shard, target.Player)) &&
+            _hostility.IsHostile(npc.Entity, target);
 
     private bool HasLineOfSight(CharacterEntity source, CharacterEntity target)
     {
@@ -1373,7 +1391,7 @@ public class AiEngine
                     point => _shard.Physics?.HasStaticOcclusion(
                         point + new Vector3(0f, 0f, _eyeHeight),
                         target.Position + new Vector3(0f, 0f, _eyeHeight), entity.EntityId) == true,
-                    npc.CombatMovement, Random.Shared.NextSingle());
+                    npc.CombatMovement, NpcDecisionRandom.Roll(npc.EntityId, 0, currentTime));
             }
 
             // Recheck the endpoint on perception passes: an opponent can walk around cover or
@@ -1606,9 +1624,7 @@ public class AiEngine
     {
         if (npc.TargetId == 0 || npc.AbilityModules == null)
         {
-            npc.Navigation.NavModuleId = 0;
-            npc.Navigation.NavTargetId = 0;
-            npc.Navigation.NavDeadline = 0;
+            npc.Navigation.ClearModuleRequest();
             return npc.Brain.StandoffRange;
         }
 
@@ -1624,9 +1640,7 @@ public class AiEngine
 
         if (requested == null)
         {
-            npc.Navigation.NavModuleId = 0;
-            npc.Navigation.NavTargetId = 0;
-            npc.Navigation.NavDeadline = 0;
+            npc.Navigation.ClearModuleRequest();
             return npc.Brain.StandoffRange;
         }
 
@@ -1821,6 +1835,13 @@ public class AiEngine
         public bool HasWallProbeOrigin;
 
         public bool HasGoal => Intent != AiMovementIntent.None;
+
+        public void ClearModuleRequest()
+        {
+            NavModuleId = 0;
+            NavTargetId = 0;
+            NavDeadline = 0;
+        }
 
         public void Advance()
         {

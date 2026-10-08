@@ -158,7 +158,7 @@ public static class NpcAttackDamageMath
         uint msPerBurst,
         uint fallbackIntervalMs)
     {
-        long behavior = Math.Max(0, behaviorTriggerPullTimeMs) + Math.Max(0, behaviorFireRestDurationMs);
+        long behavior = (long)Math.Max(0, behaviorTriggerPullTimeMs) + Math.Max(0, behaviorFireRestDurationMs);
         if (behavior > 0)
         {
             return (uint)Math.Max(behavior, MinimumAttackIntervalMs);

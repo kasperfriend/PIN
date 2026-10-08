@@ -85,6 +85,181 @@ public class AiEngineTests
         shard.AI.Tick(Step, currentTime, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData("SandThresher(leashDistance=100,aggroDistance=15)")]
+    [InlineData("SandThresher(leashDist=100,aggroDist=15)")]
+    [InlineData("TorturedSoulMelee(aggroDist=15)")]
+    public void AuthoredAggroRadiusLimitsAcquisitionButNotDamageEngagement(string behavior)
+    {
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = behavior });
+        Tick(shard, FirstTick);
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Equal(Vector3.Zero, npc.Position);
+        shard.Damage.ApplyDamage(npc, 1, player);
+        Tick(shard, FirstTick + Step);
+        AssertState(shard, npc, AiBrainState.Chase);
+        Assert.True(npc.Position.X > 0f);
+    }
+
+    [Fact]
+    public void AuthoredAggroRadiusCanExtendBeyondTheRulesRadius()
+    {
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(100f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats
+            {
+                Behavior = "EliteWanderer(aggroDistance=120,wanderDistance=0)",
+            });
+        Tick(shard, FirstTick);
+        AssertState(shard, npc, AiBrainState.Chase);
+        Assert.True(npc.Position.X > 0f);
+    }
+
+    [Fact]
+    public void ZeroAggroRadiusDisablesProximityEvenForAnOverlappingPlayer()
+    {
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, Vector3.Zero,
+            monsterStats: new FakeAiMonsterStats { Behavior = "Base(aggroDistance=0)" });
+        Tick(shard, FirstTick);
+        AssertState(shard, npc, AiBrainState.Idle);
+        shard.AI.Aggro(npc.EntityId, player.EntityId);
+        Tick(shard, FirstTick + Step);
+        AssertState(shard, npc, AiBrainState.Attack);
+    }
+
+    [Fact]
+    public void RetainedTargetLeavingZoneIsDroppedBeforeTheNextPerceptionScan()
+    {
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(1f, 0f, 0f));
+        var client = (FakeNetworkPlayer)shard.Clients.Values.Single();
+        player.Player = client;
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        var before = npc.Position;
+        Assert.Single(shard.AiAttackFeedback.Attacks);
+        client.CurrentZone = new Zone { ID = 1030, Name = "Sertao" };
+        Tick(shard, FirstTick + Step * 2);
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Equal(before, npc.Position);
+        shard.AI.Aggro(npc.EntityId, player.EntityId);
+        Tick(shard, FirstTick + Step * 3);
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Single(shard.AiAttackFeedback.Attacks);
+    }
+
+    [Fact]
+    public void FriendlyDamageAndSelfDamageCannotForceEngagement()
+    {
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(1f, 0f, 0f));
+        shard.AI = new AiEngine(shard, shard.EventBus, hostility: new NeverHostileAiHostility(),
+            monsterStats: new FakeAiMonsterStats());
+        Assert.True(shard.AI.Register(npc));
+        shard.AI.Aggro(npc.EntityId, player.EntityId);
+        shard.AI.Aggro(npc.EntityId, npc.EntityId);
+        Tick(shard, FirstTick);
+        AssertState(shard, npc, AiBrainState.Idle);
+    }
+
+    [Fact]
+    public void ExistingTargetBecomingFriendlyIsDroppedImmediately()
+    {
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(1f, 0f, 0f));
+        var hostility = new ChangingHostility();
+        shard.AI = new AiEngine(shard, shard.EventBus, hostility: hostility,
+            feedback: shard.AiAttackFeedback, monsterStats: new FakeAiMonsterStats());
+        Assert.True(shard.AI.Register(npc));
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        hostility.Hostile = false;
+        Tick(shard, FirstTick + Step * 2);
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Single(shard.AiAttackFeedback.Attacks);
+    }
+
+    private sealed class ChangingHostility : IAiHostility
+    {
+        public bool Hostile { get; set; } = true;
+        public bool IsHostile(GameServer.Entities.IEntity attacker, GameServer.Entities.IEntity target) => Hostile;
+    }
+
+    [Fact]
+    public void ModuleNavigationDeadlineRestartsAfterLeavingAndReenteringCombatWithTheSameTarget()
+    {
+        var navigation = new TacticalNavigation();
+        var stats = new FakeAiMonsterStats { Behavior = "ModuleApproach", AttackProfile = RangedProfile() };
+        stats.AbilityModulesByBehavior["ModuleApproach"] = new[]
+        {
+            new NpcAbilityModuleScan(new NpcAbilityModule(86132, 1f, 0, 0f, 50f, 6.5f, 2400),
+                1, true, false),
+        };
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: stats, projectileLauncher: new RecordingAiProjectileLauncher(), navigation: navigation);
+        Tick(shard, FirstTick);
+        shard.Entities.Remove(player.EntityId);
+        Tick(shard, FirstTick + Step);
+        AssertState(shard, npc, AiBrainState.Idle);
+        shard.Entities[player.EntityId] = player;
+        shard.AI.Aggro(npc.EntityId, player.EntityId);
+        int before = navigation.Queries;
+        Tick(shard, FirstTick + 3000);
+        AssertState(shard, npc, AiBrainState.Attack);
+        Assert.Equal(before + 1, navigation.Queries);
+        Assert.Equal(player.Position, navigation.LastGoal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MeleeRestrictionBlocksSwingsButNotProjectileWeapons(bool ranged)
+    {
+        var shots = new RecordingAiProjectileLauncher();
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = ranged ? RangedProfile() : NpcAttackProfile.Unarmed,
+        };
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(1f, 0f, 0f),
+            monsterStats: stats, projectileLauncher: shots);
+        npc.SetCombatFlags(new CombatFlagsData { Value = CombatFlagsData.CharacterCombatFlags.restrict_melee });
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
+        Assert.Equal(ranged ? 3 : 0, shots.Shots.Count);
+        npc.SetCombatFlags(new CombatFlagsData { Value = 0 });
+        Tick(shard, FirstTick + 2500 + Step);
+        if (!ranged)
+        {
+            Assert.Single(shard.AiAttackFeedback.Attacks);
+        }
+    }
+
+    [Fact]
+    public void CombatUsesTheOffensiveModuleSetInsteadOfBaseIdsAndOmittedModules()
+    {
+        // prod-1962 monster 1808 names 96947/96949 in Base, but only 88159 in Attack.
+        var stats = new FakeAiMonsterStats
+        {
+            Behavior = "Arch_MedRangedAbilityUser_Base(am1Id=96947,am2Id=96949)",
+            OffensiveBehavior = "Arch_MedRangedAbilityUser_Attack(am1Id=88159)",
+            AttackProfile = FeedbackOnlyProfile(),
+        };
+        stats.AbilityModulesByBehavior["Arch_MedRangedAbilityUser_Base"] =
+            [BehaviorModule(96947, abilityId: 111, deliversDamage: true),
+             BehaviorModule(96949, abilityId: 112, deliversDamage: true)];
+        stats.AbilityModulesByBehavior[OffensiveSetName] =
+            [BehaviorModule(88159, abilityId: 113, cooldownMs: 3000, deliversDamage: true)];
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: stats, abilityActivator: abilities);
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.Equal(113u, Assert.Single(abilities.Activations).AbilityId);
+        Tick(shard, FirstTick + Step + 2500);
+        // Offensive cooldown excludes its module; neither base module is resurrected.
+        Assert.Equal(34894u, abilities.Activations[^1].AbilityId);
+        Assert.Equal(2, abilities.Activations.Count);
+        Assert.Equal(new[] { OffensiveSetName }, stats.AbilityModuleRequests.ToArray());
+    }
+
     [Fact]
     public void DamageFromSameOrDifferentAttackerDoesNotGrantExtraAttacks()
     {
@@ -1453,8 +1628,8 @@ public class AiEngineTests
     [Fact]
     public void BehaviorModulesSpelledOnlyOffensively_AreResolvedFromTheOffensiveSet()
     {
-        // 12 of the 60 module-bearing rows configure theirs only in behavior_offensive: the base set is
-        // read first, and only when it names no module does the offensive one supply them.
+        // The combat invocation is authoritative when it names modules, including the rows
+        // whose base invocation has none.
         var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
         stats.Behavior = "AggressiveWanderer";
         stats.OffensiveBehavior = "Arch_MedRangedAbilityUser_Attack(am2Id = 86100, am2Cooldown = 20000, am2MinDist = 1.5)";
@@ -1472,8 +1647,7 @@ public class AiEngineTests
 
         Assert.Equal(34_770u, Assert.Single(abilities.Activations).AbilityId);
 
-        // Both sets were asked, the base one first.
-        Assert.Equal(new[] { "AggressiveWanderer", OffensiveSetName }, stats.AbilityModuleRequests.ToArray());
+        Assert.Equal(new[] { OffensiveSetName }, stats.AbilityModuleRequests.ToArray());
     }
 
     /// <summary>

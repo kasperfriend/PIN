@@ -144,3 +144,49 @@ This revision fixes correctness issues in PIN's existing policy rather than inve
 - **Authored module approaches outrank optional tactics.** An active, closer `am*NavToDist` request cannot be displaced by optional strafing/cover until its `am*NavTimeout` expires or the approach is satisfied. Existing parser data supplies the request/watchdog; this priority is PIN integration policy, not proof of original tree ordering.
 
 New regressions cover repeated/alternate-attacker damage, rapid re-engagement cadence, dead-target goal cleanup, leash return, module approach/watchdog priority, opponent movement around cover, lost firing LOS and out-of-range tactical goals. Implementation `48f869f` passed [CI run 37841533365](https://github.com/kasperfriend/PIN/actions/runs/37841533365): all six OS/SDK jobs succeeded with **1,468/1,468 tests per job**. Windows .NET 10 also passed both startup smoke tests. The complete database movement census and `git diff --check` passed locally. No interactive live-zone validation has been performed.
+
+
+## Deep pass: authored acquisition, offensive selection and correctness
+
+### Evidence-backed additions
+
+The prod-1962 census was checked across **all three behavior columns of all 3,109 monsters**, not just counted for familiar key names. This revision implements the following bounded interpretations:
+
+| Source | Verified data | Runtime change / limit |
+| --- | --- | --- |
+| Monsters 390/416; 415 | `SandThresher(leashDistance=100,aggroDistance=15)`; `leashDist=100,aggroDist=15` | Both explicit aggro spellings now set a 15 m proximity radius, consistently in the scanner and brain. Existing leash aliases remain intact. |
+| Monsters 1045/1068 | `TorturedSoulMelee(aggroDist=15)` | Use the authored radius, rather than the generic 55 m rule. |
+| Monster 700 | `EliteWanderer(...aggroDistance=120,wanderDistance=0,...)` | Allow acquisition at its explicit 120 m radius; keep zero ambient wander distance. Terrain/height/LOS gates still apply. |
+| Monsters 923/2109/2115/2457/2462 | Base `am1Cooldown=3000`, offensive `am1Cooldown=8000` | Combat now selects the offensive module set if present; base-first previously discarded the authored combat cooldown. |
+| Monsters 1592/1808 | Different base/offensive `am1Id`; 1808's offensive invocation omits base `am2` | Select the whole offensive set, not a synthetic merge or resurrected base module when the offensive one is cooling down. |
+| Monster 2241 | Base `triggerPullTime=10000,fireRestDuration=7000`; offensive `triggerPullTime=40` (missing closing parenthesis) | The tolerant parser retains the authored offensive time. Prefer offensive timing when present, otherwise retain base timing. The existing PIN 250 ms floor still applies to the 40 ms cycle. No guessed inheritance of omitted rest from a different tree. |
+| `aptfs::CombatFlagsCommandDef` / `CombatFlagsCommand` | `restrict_melee` is a distinct replicated flag | Suppress the direct/weapon melee attack while set, without suppressing ranged shots solely because this bit is set. Existing ability/weapon restrictions remain unchanged. |
+
+Reading explicit aggro distances as proximity metres is supported by their names and paired leash values, but this does **not** recover the trees' detection senses or notice/alert transitions. Invalid/negative/non-finite values retain the rules fallback. A synthetic explicit zero disables proximity acquisition even at overlap; damage still bypasses proximity/LOS, but cannot bypass liveness, faction, self-target or zone checks. Offensive selection follows the engine's existing Chase/Attack mode; the original mode-switching tree remains unavailable. Module event timing, ability-facing/targeted semantics and weapon-range-independent module scheduling are **not** recovered by changing the selected invocation.
+
+### Existing-policy correctness fixes
+
+- **Validate retained and damage-driven targets**, not just acquisition candidates. A live player who leaves the shard's zone, or a target becoming friendly, is dropped before the next attack/movement tick, including between perception scans. Retaining a distant/occluded but still-valid target continues to use the existing pursuit/leash/lost-sight rules. Friendly/self/dead/absent damage sources cannot force combat. Non-character damage sources are not fabricated into combat targets.
+- **Clear module navigation ownership on combat exit/death.** Route replans intentionally retain watchdog ownership; combat exit now clears it separately. Re-engaging the *same* target after an expired request starts a fresh request instead of inheriting the old expired `am*NavTimeout`.
+- **Mix whole entity IDs for decision chance rolls.** The previous module seed used only the controller byte, so different NPCs could share all rolls at the same clock. A separate deterministic PIN decision-noise helper mixes the full body id, action id and 64-bit clock before the existing shared PRNG. Optional tactical searches use it too; probability/cooldown and mandatory pursuit behavior are unchanged. Projectile trace/spread encoding is untouched. This is PIN scheduling noise, not recovered CAIS randomness.
+- **Prevent timing overflow.** Widen before adding the two signed timing values; clamp the unsigned profile cadence when converting to the signed brain tuning. Malformed extreme values no longer wrap into a fast weapon/rules fallback. Normal shipped timings are unchanged except the explicit offensive selection above.
+
+### Investigated but not guessed
+
+| Parameter surface | Census outcome / reason not to add a new combat policy |
+| --- | --- |
+| `perceptionDist` (73 invocations) | Exclusively civilian/interaction/look-at trees: 22 BasicCivilian_Stationary, 21 BasicCivilian, 18 AlertAndInteractive, 10 AlertAndLookAtPlayer, 2 PeacetimeCityWanderer. Not evidence of a hostile aggro alias. Greeting/look-at range behavior remains a separate missing feature. |
+| `targetSelectDist` (7) | Special `_instattack`/`_instdefend`, OneOff_FireAtEnemy and EngineerTurretTeleporter scopes alongside one ranged base invocation. No proven shared acquisition semantics; preserved, not repurposed. |
+| `leashToSpawn` (32) | Already parsed; mostly AlertAndInteractive, whose named world interactions/routing are not supplied by this pass. Generic combat return already uses spawn home. No fabricated civilian route or arbitrary tighter radius. |
+| `alwaysLeashInCombat` (2) | Only monster 1600's offensive/defensive Move Then Fire; reference point and transition conditions unknown. Generic combat leash already remains enabled. |
+| `hurtAvoidance` (7) | One non-ground Mosquito false value and positive ranged variants; no recovered damage reaction event, timing or dodge sequence. Existing bounded cover policy is still an approximation. |
+| `pauseDuration` (14) | Eight ability-user base invocations say zero; monsters 1438/2562 say 500 in all three columns. Which action owns the pause is unknown: not silently added to attack cadence or ambient rest. |
+| `am*Facing`, `am*Targeted`, `useWeaponRange`, sniper bands, wide turns | Parameter values exist, but missing tree/action ownership makes a general new scheduler or locomotion state machine speculative. Current limitations are retained explicitly. |
+
+No additional original CAIS definitions or authored route assignments were recovered. Previously inspected public upstream PIN/SINner remain non-evidence of original tree semantics. This pass does not claim flight, climbing, cover animations, greeting parity, mission behavior, or full original-game AI parity.
+
+### Validation
+
+New regressions cover the six actual shipped aggro rows, key validation and non-aliasing, wider/zero radius acquisition, damage bypass, zone/faction invalidation between scans, offensive module selection/cooldown without base resurrection, actual monster 2241 timing (including its missing parenthesis), base timing fallback, melee restriction, same-target module watchdog renewal, whole-id decision noise, and extreme timing overflow. The ambient integration fixture now uses hostile test bodies for explicit combat interruptions instead of using a never-hostile policy while forcing combat.
+
+Local checks passed: database movement census, SdbDump synthetic round-trip, five Python unit tests, documented ability-chain placeholder audit, C# syntax parsing and `git diff --check`. The sandbox has no .NET SDK: build/test execution is delegated to the full GitHub Actions matrix. **CI for this implementation must complete before marking this revision green.** Interactive live-zone/crowd validation remains outstanding.

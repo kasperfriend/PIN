@@ -323,8 +323,10 @@ public class AiRoutineIntegrationTests
             shard.Entities[point.EntityId] = point;
         }
 
+        // No acquisition clients are installed here. Explicit combat interruptions still need
+        // hostile bodies now that Aggro enforces the same hostility gate as acquisition.
         shard.AI = new AiEngine(shard, shard.EventBus,
-            hostility: new NeverHostileAiHostility(), feedback: shard.AiAttackFeedback,
+            hostility: new AlwaysHostileAiHostility(), feedback: shard.AiAttackFeedback,
             monsterStats: new FakeAiMonsterStats(normalSpeed: 2f, fastSpeed: 10f) { Behavior = behavior, OffensiveBehavior = offensive },
             emotes: emotes, navigation: navigation, activities: activities, routineRules: Immediate);
         var npc = AddCharacter(shard, Vector3.Zero);

@@ -259,20 +259,14 @@ public sealed class NpcAttackResolver
     }
 
     /// <summary>
-    ///     The behaviour string the attack timing comes from: the row's <c>behavior</c> column when it
-    ///     carries trigger parameters, otherwise its <c>behavior_offensive</c> column (the two are
-    ///     separate columns and either can be the parametrised one).
+    ///     The attack invocation supplies combat timing when authored; otherwise retain the base
+    ///     invocation's timing. Select a whole invocation, not a guessed cross-tree parameter merge.
+    ///     Monster 2241 has different base/offensive trigger times in prod-1962.
     /// </summary>
     private static NpcBehaviorParams SelectBehavior(Monster monster)
     {
-        var primary = NpcBehaviorParams.Parse(monster.Behavior);
-        if (primary.HasAttackTiming)
-        {
-            return primary;
-        }
-
         var offensive = NpcBehaviorParams.Parse(monster.BehaviorOffensive);
-        return offensive.HasAttackTiming ? offensive : primary;
+        return offensive.HasAttackTiming ? offensive : NpcBehaviorParams.Parse(monster.Behavior);
     }
 
     /// <summary>

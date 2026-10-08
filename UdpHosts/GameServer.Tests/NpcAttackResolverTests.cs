@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Numerics;
 using GameServer.StaticDB;
 using GameServer.StaticDB.Records.dbcharacter;
@@ -71,6 +72,39 @@ public class NpcAttackResolverTests
         data.Scalings[45] = new MonsterScaling { Level = 45, Health = 27_869, Damage = 13_934 };
         data.Ammos[AmmoId] = new Ammo { Id = AmmoId, ProjectileSpeed = 40f, ImpactRadius = 0.5f, MaxRadius = 1.5f, Flags = 1 };
         return data;
+    }
+
+    [Fact]
+    public void Resolve_UsesShippedOffensiveTimingWhenBaseAndAttackDiffer()
+    {
+        using var stream = typeof(NpcAttackResolverTests).Assembly.GetManifestResourceStream("NpcMovementReference.json");
+        using var document = JsonDocument.Parse(stream);
+        var data = DataWith(RangedTemplate());
+        foreach (var row in document.RootElement.GetProperty("monsters").EnumerateArray())
+        {
+            if (row.GetProperty("id").GetUInt32() == 2241)
+            {
+                data.Monsters[MonsterId].Behavior = row.GetProperty("behavior").GetString();
+                data.Monsters[MonsterId].BehaviorOffensive = row.GetProperty("behavior_offensive").GetString();
+                break;
+            }
+        }
+
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+        Assert.Equal("Arch_MedRanged_Attack", profile.Behavior.Name);
+        Assert.Equal(40, profile.Behavior.TriggerPullTimeMs);
+        Assert.Equal(0, profile.Behavior.FireRestDurationMs);
+        Assert.Equal(250u, profile.AttackIntervalMs); // PIN's existing cadence safety floor, not a CAIS default
+    }
+
+    [Fact]
+    public void Resolve_OffensiveInvocationWithoutTimingRetainsBaseTiming()
+    {
+        var data = DataWith(RangedTemplate());
+        data.Monsters[MonsterId].BehaviorOffensive = "Attack(combatWalk=false)";
+        var profile = CreateResolver(data).Resolve(MonsterId, 45);
+        Assert.Equal(2500u, profile.AttackIntervalMs);
+        Assert.Equal(1500, profile.Behavior.TriggerPullTimeMs);
     }
 
     [Fact]
