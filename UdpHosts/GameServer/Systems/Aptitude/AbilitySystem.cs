@@ -9,6 +9,7 @@ using GameServer.Enums;
 using GameServer.Extensions;
 using GameServer.GRPC;
 using GameServer.StaticDB;
+using GameServer.Systems.Combat;
 using Serilog;
 
 namespace GameServer.Systems.Aptitude;
@@ -986,6 +987,14 @@ public class AbilitySystem
             else
             {
                 PersistUnlocks(context);
+
+                // Only a successful root activation is announced, and only the root: a `Call` node's
+                // sub-ability is part of the same activation the caster's client already predicted,
+                // so echoing it separately would play a second cast for the watchers. The client
+                // runs the apttf:: (animation/particle/beam/camera) rows of the chain itself, but
+                // only once it hears the activation - see AbilityActivationAnnouncement.
+                AbilityActivationAnnouncement.SendToWatchers(
+                    context.Shard, context.ActivationInitiator, abilityId, context.InitTime);
             }
         }
 
