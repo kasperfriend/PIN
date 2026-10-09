@@ -1089,6 +1089,12 @@ public sealed class WorldPopulationService
             attemptsSpent++;
 
             var position = attempt == 0 ? slot.Anchor : slot.Anchor + RetryJitter(slot, attempt);
+            // Sample within the assigned cell instead of repeatedly rejecting outward jitter
+            // from surface centroids near a cell edge. Bounds/chunk/terrain still validate it.
+            position.X = Math.Clamp(position.X, slot.Cell.X * _rules.CellSize,
+                MathF.BitDecrement((slot.Cell.X + 1) * _rules.CellSize));
+            position.Y = Math.Clamp(position.Y, slot.Cell.Y * _rules.CellSize,
+                MathF.BitDecrement((slot.Cell.Y + 1) * _rules.CellSize));
 
             if (!IsPlacementEligible(slot, position))
             {
