@@ -1,3 +1,4 @@
+using System;
 using GameServer.Entities.Character;
 using GameServer.Enums;
 using GameServer.StaticDB.Records.aptfs;

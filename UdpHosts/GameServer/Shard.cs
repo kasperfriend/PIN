@@ -24,6 +24,7 @@ using GameServer.Systems.NpcDeath;
 using GameServer.Systems.PlayerRespawn;
 using GameServer.Systems.ProjectileSim;
 using GameServer.Systems.Spawning.Population;
+using GameServer.Systems.Squad;
 using GameServer.Systems.SystemEvents;
 using GameServer.Systems.WeaponSim;
 using Shared.Common;
