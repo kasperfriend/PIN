@@ -73,6 +73,23 @@ public class AbilitySystem
     private readonly Dictionary<ulong, Dictionary<string, float>> _namedVariables = [];
 
     /// <summary>
+    /// Ability triggers installed by the <c>Register*TriggerCommand</c> family, per owning entity,
+    /// fired by <c>ActivateAbilityTriggerCommand</c>. See <see cref="AbilityTriggerRegistration" /> for
+    /// why a trigger's payload is the ability that installed it.
+    /// </summary>
+    private readonly Dictionary<ulong, List<AbilityTriggerRegistration>> _abilityTriggers = [];
+
+    /// <summary>
+    /// Firing a trigger runs an ability activation, and that ability can itself install and fire
+    /// triggers. The chain data has no depth limit in it, so the bound is here: four nested activations
+    /// is far past anything a stock chain reaches, and it turns a data loop into a dropped activation
+    /// instead of a stack overflow on the shard thread.
+    /// </summary>
+    private const int MaxTriggerActivationDepth = 4;
+
+    private int _triggerActivationDepth;
+
+    /// <summary>
     ///     The displacement a database command (<c>aptfs::MovementSlideCommandDef</c>) asked each character to
     ///     make, per character. At most one slide per character: the command states a displacement, not a
     ///     queue, so a second slide that starts while one is running restarts the motion from wherever the
@@ -560,6 +577,149 @@ public class AbilitySystem
         }
 
         return _namedVariables.TryGetValue(owner.EntityId, out var vars) && vars.TryGetValue(key, out value);
+    }
+
+    /// <summary>
+    ///     Installs an ability trigger on an entity. Returns the registration, which the registering
+    ///     command hands back to <see cref="UnregisterAbilityTrigger" /> when the carrying effect ends.
+    /// </summary>
+    public AbilityTriggerRegistration RegisterAbilityTrigger(IAptitudeTarget owner, uint abilityId, uint abilityModuleId, uint chainId, bool timed, uint tag)
+    {
+        if (owner == null)
+        {
+            return null;
+        }
+
+        var registration = new AbilityTriggerRegistration
+        {
+            OwnerEntityId = owner.EntityId,
+            AbilityId = abilityId,
+            AbilityModuleId = abilityModuleId,
+            ChainId = chainId,
+            Timed = timed,
+            Tag = tag,
+        };
+
+        if (!_abilityTriggers.TryGetValue(owner.EntityId, out var triggers))
+        {
+            triggers = [];
+            _abilityTriggers[owner.EntityId] = triggers;
+        }
+
+        triggers.Add(registration);
+
+        _logger.Debug("[Trigger] registered {Kind} trigger on {Entity} (ability {Ability}, chain {Chain}, tag {Tag})",
+            timed ? "timed" : "ability", owner.EntityId, abilityId, chainId, tag);
+
+        return registration;
+    }
+
+    /// <summary>
+    ///     Removes a trigger. When the carrying effect is going away, its timed triggers fire first: a
+    ///     timed trigger is a fuse, and the end of the effect that laid it is when it burns out.
+    /// </summary>
+    public void UnregisterAbilityTrigger(AbilityTriggerRegistration registration, Context context = null)
+    {
+        if (registration == null)
+        {
+            return;
+        }
+
+        if (registration.Timed && registration.AbilityId != 0 && context != null
+            && _shard.Entities.TryGetValue(registration.OwnerEntityId, out var ownerEntity)
+            && ownerEntity is IAptitudeTarget owner)
+        {
+            FireTrigger(registration, owner, context);
+        }
+
+        if (_abilityTriggers.TryGetValue(registration.OwnerEntityId, out var triggers))
+        {
+            triggers.Remove(registration);
+
+            if (triggers.Count == 0)
+            {
+                _abilityTriggers.Remove(registration.OwnerEntityId);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Fires every trigger installed on an entity — what <c>ActivateAbilityTriggerCommand</c> does.
+    ///     Each one starts the ability activation that installed it, aimed at the entity carrying the
+    ///     trigger. Returns how many fired.
+    /// </summary>
+    public int ActivateAbilityTriggers(IAptitudeTarget owner, Context context)
+    {
+        if (owner == null || context == null)
+        {
+            return 0;
+        }
+
+        if (!_abilityTriggers.TryGetValue(owner.EntityId, out var triggers) || triggers.Count == 0)
+        {
+            return 0;
+        }
+
+        int fired = 0;
+
+        // Snapshot: firing a trigger runs an activation that can register or unregister triggers on
+        // this same entity, mutating the list being iterated.
+        foreach (var registration in new List<AbilityTriggerRegistration>(triggers))
+        {
+            if (FireTrigger(registration, owner, context))
+            {
+                fired++;
+            }
+        }
+
+        return fired;
+    }
+
+    private bool FireTrigger(AbilityTriggerRegistration registration, IAptitudeTarget owner, Context context)
+    {
+        if (registration.AbilityId == 0)
+        {
+            return false;
+        }
+
+        if (_triggerActivationDepth >= MaxTriggerActivationDepth)
+        {
+            _logger.Warning("[Trigger] dropping activation of ability {Ability} on {Entity}: {Depth} triggers deep",
+                registration.AbilityId, owner.EntityId, _triggerActivationDepth);
+            return false;
+        }
+
+        if (!_shard.Entities.ContainsKey(owner.EntityId))
+        {
+            return false;
+        }
+
+        _triggerActivationDepth++;
+        try
+        {
+            // The activation that installed the trigger is the initiator where the data has one; an
+            // effect that was applied to a bystander installs its trigger on the bystander but keeps
+            // its caster as the initiator, which is what the ability's own gates expect to see.
+            var initiator = context.ActivationInitiator ?? owner;
+
+            _logger.Debug("[Trigger] firing trigger on {Entity}: activating ability {Ability} (module {Module})",
+                owner.EntityId, registration.AbilityId, registration.AbilityModuleId);
+
+            HandleActivateAbility(
+                _shard,
+                initiator,
+                registration.AbilityId,
+                _shard.CurrentTime,
+                new AptitudeTargets(owner),
+                null,
+                registration.AbilityModuleId);
+
+            return true;
+        }
+        finally
+        {
+            _triggerActivationDepth--;
+        }
     }
 
     /// <summary>

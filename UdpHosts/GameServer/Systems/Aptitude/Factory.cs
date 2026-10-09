@@ -587,11 +587,12 @@ public class Factory
                 return new ApplyPermanentEffectCommand(CustomDBInterface.GetApplyPermanentEffectCommandDef(commandId) ?? new ApplyPermanentEffectCommandDef { Id = commandId });
             // case CommandType.ModifyHostility:
             //     return new ModifyHostilityCommand(CustomDBInterface.GetModifyHostilityCommandDef(commandId));
-            // Id-only def, and AeroMessages has no client<->server ability-trigger message, so what a
-            // "trigger" is at runtime isn't derivable; the frame-passive registers (Ambush, Conduit,
-            // Rally, E-Tank, Incinerator, ...) wait on that evidence. Docs/BATTLEFRAME_ABILITIES.md.
-            // case CommandType.RegisterAbilityTrigger:
-            //     return new RegisterAbilityTriggerCommand(CustomDBInterface.GetRegisterAbilityTriggerCommandDef(commandId));
+            // Id-only def: the row says only that a trigger exists, never what it does. What it does is
+            // taken from the activation that installs it, and the trigger lives as long as the effect
+            // that carries it - see AbilityTriggerRegistration for the chain evidence. This is the
+            // frame-passive register (Ambush, Conduit, Rally, E-Tank, Incinerator, ...).
+            case CommandType.RegisterAbilityTrigger:
+                return new RegisterAbilityTriggerCommand(CustomDBInterface.GetRegisterAbilityTriggerCommandDef(commandId));
             // case CommandType.SetWeaponDamageType:
             //     return new SetWeaponDamageTypeCommand(SDBInterface.GetSetWeaponDamageTypeCommandDef(commandId));
             // The def carries no time window and its target reading (dead / respawned / one-spawn
@@ -632,8 +633,8 @@ public class Factory
                 return new TargetByEffectTagCommand(SDBInterface.GetTargetByEffectTagCommandDef(commandId));
             case CommandType.RemoveEffectByTag:
                 return new RemoveEffectByTagCommand(CustomDBInterface.GetRemoveEffectByTagCommandDef(commandId));
-            // case CommandType.RegisterEffectTagTrigger:
-            //     return new RegisterEffectTagTriggerCommand(CustomDBInterface.GetRegisterEffectTagTriggerCommandDef(commandId));
+            case CommandType.RegisterEffectTagTrigger:
+                return new RegisterEffectTagTriggerCommand(CustomDBInterface.GetRegisterEffectTagTriggerCommandDef(commandId));
             case CommandType.ReplenishableDuration:
             {
                 // The def table for this type carries no decoded fields, so an id that is not listed is still
@@ -654,15 +655,14 @@ public class Factory
             // (SuperChargePerDamageDealt/Taken), so gating on the gauge is safe now.
             case CommandType.RequireSuperCharge:
                 return new RequireSuperChargeCommand(SDBInterface.GetRequireSuperChargeCommandDef(commandId));
-            // Same trigger-subsystem gap as RegisterAbilityTrigger above; the charged/accel actives
-            // (Overcharge, Shockwave, Absorption Bomb, Afterburner, Heavy Turret, melee auxiliaries,
-            // ...) route through this node. Docs/BATTLEFRAME_ABILITIES.md.
-            // case CommandType.ActivateAbilityTrigger:
-            //     return new ActivateAbilityTriggerCommand(CustomDBInterface.GetActivateAbilityTriggerCommandDef(commandId));
+            // The charged/accel actives (Overcharge, Shockwave, Absorption Bomb, Afterburner, Heavy
+            // Turret, melee auxiliaries, ...) route through this node.
+            case CommandType.ActivateAbilityTrigger:
+                return new ActivateAbilityTriggerCommand(CustomDBInterface.GetActivateAbilityTriggerCommandDef(commandId));
             case CommandType.TargetByHealth:
                 return new TargetByHealthCommand(SDBInterface.GetTargetByHealthCommandDef(commandId));
-            // case CommandType.RegisterHitTagTypeTrigger:
-            //     return new RegisterHitTagTypeTriggerCommand(CustomDBInterface.GetRegisterHitTagTypeTriggerCommandDef(commandId));
+            case CommandType.RegisterHitTagTypeTrigger:
+                return new RegisterHitTagTypeTriggerCommand(CustomDBInterface.GetRegisterHitTagTypeTriggerCommandDef(commandId));
             case CommandType.LogicOrChain:
                 return new LogicOrChainCommand(SDBInterface.GetLogicOrChainCommandDef(commandId));
             case CommandType.LogicAndChain:
@@ -758,9 +758,8 @@ public class Factory
                 return new AddAccountGroupCommand(CustomDBInterface.GetAddAccountGroupCommandDef(commandId) ?? new AddAccountGroupCommandDef { Id = commandId });
             case CommandType.RequireInitiatorExists:
                 return new RequireInitiatorExistsCommand(CustomDBInterface.GetRequireInitiatorExistsCommandDef(commandId));
-            // Same trigger-subsystem gap as the ability triggers above.
-            // case CommandType.RegisterTimedTrigger:
-            //     return new RegisterTimedTriggerCommand(CustomDBInterface.GetRegisterTimedTriggerCommandDef(commandId));
+            case CommandType.RegisterTimedTrigger:
+                return new RegisterTimedTriggerCommand(CustomDBInterface.GetRegisterTimedTriggerCommandDef(commandId));
             // case CommandType.Taunt:
             //     return new TauntCommand(CustomDBInterface.GetTauntCommandDef(commandId));
             // case CommandType.StartArc:
