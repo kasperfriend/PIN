@@ -21,7 +21,7 @@ Generated with `python3 Tools/SdbDump/friendly_npc_audit.py`; use `--check` to v
 | `AlertAndLookAtPlayer` | 137 | 0 | No inferred patrol; look-at tree not recovered |
 | `(empty)` | 438 | 2 | PIN bounded-roaming fallback, NOT authored route evidence |
 
-## Actual friendly placements
+## Static JSON friendly placements (not total runtime population)
 
 | Spawn id | Zone id | Monster id | Base invocation | Result |
 |---|---:|---:|---|---|
@@ -49,6 +49,7 @@ Base invocations only; offensive/defensive references remain in the full movemen
 
 ## Verified boundary
 
+- The four placements above cover **only `character_spawn.json`**. `SdbWorldPopulationDataSource` and `MonsterHabitatClassifier` also admit represented settlement templates; `WorldPopulationPlanner` generates cells/slots around settlement anchors, and `EntityManagerWorldPopulationSpawner` registers them through the same spawn path. Population is enabled by default but constrained by terrain, streaming and caps. Hard-coded/debug/ability spawns are also outside this count. No total live-zone NPC count is asserted.
 - `EntityManager.SpawnCharacter` registers NPCs irrespective of faction. `AiEngine` runs ambient routines while Idle; friendly player proximity does not require a combat target to make them walk.
 - `NpcRoutineProfile` honors explicit stationary/zero-distance settings; named route, climbing, spawn-volume and non-ground requirements do not acquire invented ground patrols.
 - `NpcRoutine` requests destinations, pauses on arrival, chooses subsequent legs and can visit a matching placed work deployable. `PhysicsNpcNavigation.SupportsRoutines` requires loaded collision; rejected paths/steps do not move the body.
