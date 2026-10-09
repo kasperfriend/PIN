@@ -167,9 +167,9 @@ implemented against its own data; a def that is nothing but an id cannot, and
 guessing at it makes abilities behave *wrongly*, which is worse than a documented
 no-op.
 
-`apt::CommandType` has 394 rows. **186** are routed to a command class in
-`Factory`; another **145** appear there only as commented-out cases, and the rest
-have no case at all. Of the unrouted, most are not ability machinery anyway
+`apt::CommandType` has 394 rows. **186** were routed to a command class in
+`Factory` at the end of round five (196 after round six); another 145 appear there
+only as commented-out cases, and the rest have no case at all. Of the unrouted, most are not ability machinery anyway
 (arc/mission control, matchmaking, the loot store, chat bubbles).
 
 ### Implemented
@@ -219,24 +219,10 @@ on every loadout change and an override stored in it would vanish mid-ability.
   makes the assign/read pair round-trip; modelling the column would only matter
   for sharing a variable *across* entities.
 
-### Still genuinely blocked, and why
+### What round five called blocked, and what round six did about it
 
-- **`RegisterAbilityTrigger` (45), `ActivateAbilityTrigger` (56),
-  `RegisterTimedTrigger` (7)** — id-only defs, no `aptgss::` trigger table in the
-  clientdb, no `Trigger` message in AeroMessages, and no table with a `trigger`
-  column except `dbdialogdata::DialogScript`. There is nothing to read.
-- **`TargetSquadmates` (24), `RequireSquadLeader`** — there is no squad system in
-  this codebase: no squad membership on `CharacterEntity`, no squad service. The
-  command has nothing to read.
-- **`SetWeaponDamage` (79)** — `Dmgminvalue`/`Dmgmaxvalue` and `Multiply` are
-  unambiguous, but `Lerpminvalue`/`Lerpmaxvalue` are driven by
-  `Lerpfallheight`/`Lerpenergy` and which range each selects is not derivable.
-  Applying the unambiguous half alone would silently produce wrong damage on the
-  rows that use the lerp, so the whole command is left routed-out.
-- The `ModifyDamageBy*` family, `ItemAttributeModifier`, `SetDefaultDamageBonus`,
-  `AddAppendageHealthPool`, `ModifyHostility` — id-only defs.
-- Line of sight (no world raycast), headshot (no hit locations),
-  `RequireBulletHit`, `RequireItemDurability`, SIN acquisition.
+Three entries in the list above were wrong. They were not "nothing to read"; they
+were "nothing read yet". See the sixth round below.
 
 ### Verification
 
@@ -248,6 +234,105 @@ addressed with a pre-flight resolver that indexes all 4015 types declared across
 mentions is reachable from its namespace and imports; it is self-tested by
 reintroducing the exact error CI reported. A separate check confirms all 186
 command classes `Factory` constructs are reachable from its imports.
+
+## Sixth audit round — the three "blockers" were not
+
+Round five left three things as genuinely blocked. All three were implementable;
+in each case what was missing was a *reading* of the data, not the data.
+
+### The ability trigger subsystem (108 stock nodes — the largest gap in the file)
+
+`RegisterAbilityTrigger` (492 rows), `ActivateAbilityTrigger` (169),
+`RegisterTimedTrigger` (250), and the two tagged variants. Every def is id-only —
+there is no trigger table in the clientdb at all, and PIN's own `customdata`
+records carry nothing but an id — so a row can say only *that* a trigger exists.
+Two facts from the chain shapes settle what one does:
+
+- `RegisterAbilityTrigger` is **terminal** in 343 of its 492 rows, and 58 rows
+  follow another `RegisterAbilityTrigger`. A registration ends a chain; it does
+  not continue one, and one chain can lay several.
+- `ActivateAbilityTrigger` follows `TimeCooldown` in 42 of its 169 rows. A
+  cooldown only makes sense guarding an **ability activation**.
+
+So a trigger's payload is the ability activation that installed it: firing the
+trigger runs that ability. `RegisterTimedTrigger` also fires by itself when the
+effect that laid it ends — a fuse — and 108 of its 250 rows sit directly inside an
+`ImpactApplyEffect` chain, i.e. inside an applied effect where there is a duration
+to burn. Triggers live as long as the carrying effect, on the same
+`OnApply`/`OnRemove` plumbing `RegisterMovementEffect` and
+`RegisterClientProximity` use. Firing runs an activation, and that activation can
+install and fire triggers, so there is a depth bound of four: the data carries no
+limit, and this turns a loop into a dropped activation instead of a stack overflow
+on the shard thread.
+
+This is what the `Factory` comments named as waiting on evidence: the frame-passive
+registers (Ambush, Conduit, Rally, E-Tank, Incinerator) and the charged/accel
+actives (Overcharge, Shockwave, Absorption Bomb, Afterburner, Heavy Turret, melee
+auxiliaries).
+
+The two tagged variants record the command's own id as their tag, since the
+id-only defs cannot supply a real one, and fire with the entity's other triggers
+rather than only for a particular tag. Inventing a tag value would make them fire
+for the wrong hits, so that part is narrowed and documented rather than guessed.
+
+### `SetWeaponDamage` (79 rows)
+
+Round five said the `Lerpfallheight`/`Lerpenergy` lerp was not derivable. Reading
+the row's own numbers settles it: `lerpmaxvalue` is nonzero in all 79 rows and runs
+to 250 — metres of drop, not a millisecond count — and `dmgminvalue`/`dmgmaxvalue`
+carry negative and fractional values, so they are the ends of a damage range the
+lerp interpolates. `set` (52) and `multiply` (28) pick the mode, `damage_regop` the
+combination, `clamplerp` (32) clamps the factor.
+
+`FallDamageSystem` gained real fall-height tracking to feed the 22
+`lerpfallheight` rows: it records the Z of the first airborne sample and the
+greatest drop below it. Air time, which the tracker already had, cannot stand in —
+the rows scale to 250 and a millisecond count would saturate the lerp at 1 on
+every fall, which is precisely the wrong-damage outcome that made round five leave
+this command out.
+
+### `TargetSquadmates` (24) and `RequireSquadLeader` (4)
+
+Round five said there was no squad system. Correct — and that was a missing
+feature, not a missing fact. `SquadService` now supplies the roster: squads of up
+to five with a leader, invited/promoted/left/disbanded, hanging off `IShard` as a
+default interface member returning null (the arrangement `WorldPopulation` already
+uses) so the minimal test shards keep working.
+
+`TargetSquadmates` replaces the target list with the caster's other squad members;
+`fail_none` (1 in 11 of the 24 rows) fails the chain when there are none.
+`filter` is 1 in only 2 rows and its predicate is not decodable from the columns,
+so it is read as the narrowing it plainly is — keep only squadmates that are alive
+— and that judgement is recorded in the command's doc as the one place in it where
+one was needed. `RequireSquadLeader` reads the initiator, which is what a gate on
+the caster means.
+
+Squad chat is routed to the roster, replacing the old "This channel is not
+available", and a `squad` admin command forms and manages squads through the
+command's target — the convention the other admin commands use. The protocol's own
+squad path stays undecoded (`ChallengeInvitationSquadInfo` is `Unk1`..`Unk4`), so
+that command is how a squad comes into being today; when the invitation protocol is
+decoded, membership should come from the client instead.
+
+### What is still genuinely blocked
+
+- The `ModifyDamageBy*` family, `ItemAttributeModifier`,
+  `SetDefaultDamageBonus`, `AddAppendageHealthPool`, `ModifyHostility` — id-only
+  defs with no column that says what the modification is.
+- Line of sight (no world raycast), headshot (no hit locations),
+  `RequireBulletHit`, `RequireItemDurability`, SIN acquisition.
+- Arc/mission control, matchmaking, the loot store, chat bubbles — not ability
+  machinery.
+
+### Verification
+
+Same arrangement as round five: no .NET SDK in the sandbox, so the build and the
+**1430**-test suite run in CI only — all 6 jobs green (master: 1411; the delta is 5
+activation-announcement tests, 5 named-variable round-trip tests and 9 squad
+tests). The pre-flight resolver was extended after it missed two of its own: it
+now maps allowlisted BCL types to their namespaces and reports one whose namespace
+is not imported, which is how `Shard.cs` using `SquadService` without importing
+`GameServer.Systems.Squad` was caught before the build saw it.
 
 ## Per-frame detail
 
