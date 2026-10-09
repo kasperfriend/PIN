@@ -10,6 +10,7 @@ using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.Enums;
 using GameServer.StaticDB;
+using GameServer.Systems.Aptitude;
 using GameServer.Systems.Combat;
 using GameServer.Systems.ProjectileSim;
 using Serilog;
@@ -87,6 +88,20 @@ public class WeaponSim
         // GameServer.Systems.* the sibling namespace GameServer.Systems.ProjectileSim
         // shadows the using-imported class of the same name.
         int roundDamage = WeaponDamageMath.ResolveRoundDamage(attrsDict, weapon.DamagePerRound, ProjectileSim.ProjectileSim.LegacyPlaceholderDamage, entity.FrameProgressionLevel);
+
+        // A SetWeaponDamageCommand substitution replaces or scales the weapon's own resolved damage.
+        // Applied before the ammo override below so a row that also swaps rounds has its damage
+        // addend and multiplier work on the substituted value rather than the stock one.
+        var damageOverride = entity.GetActiveWeaponDamageOverride();
+        if (damageOverride != null)
+        {
+            float substituted = damageOverride.Multiply
+                ? roundDamage * damageOverride.Damage
+                : AbilitySystem.RegistryOp(roundDamage, damageOverride.Damage, (Operand)damageOverride.Regop);
+            _logger.Debug("OnFireWeaponProjectile: weapon damage override in force, {Base} -> {Substituted} ({Mode})",
+                roundDamage, substituted, damageOverride.Multiply ? "multiply" : "set");
+            roundDamage = Math.Max(0, (int)MathF.Round(substituted));
+        }
 
         // Weapon Sim State
         var weaponSimState = GetOrCreateState(entity, activeWeaponDetails, time);

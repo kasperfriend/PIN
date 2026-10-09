@@ -55,6 +55,13 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     /// lived in it would vanish mid-ability.
     /// </summary>
     private readonly Dictionary<(byte Slot, byte Mode), AmmoSlotOverride> _ammoOverrides = [];
+
+    /// <summary>
+    /// Damage substitution installed by <c>SetWeaponDamageCommand</c> for the active weapon. The def
+    /// has no slot column, so unlike the ammo override there is nothing to key it by; the weapon being
+    /// held when the command runs is the one it applies to.
+    /// </summary>
+    private WeaponDamageOverride _weaponDamageOverride;
     private byte? _monsterDamageResponseOverride;
 
     // Effects can overlap while a glider is handed from one stage to another (or while a pad
@@ -2342,6 +2349,18 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         }
 
         return overrideInfo;
+    }
+
+    /// <summary>Installs (or, with null, clears) a damage substitution for the active weapon.</summary>
+    public void SetWeaponDamageOverride(WeaponDamageOverride overrideInfo)
+    {
+        _weaponDamageOverride = overrideInfo;
+    }
+
+    /// <summary>The damage substitution in force for the weapon currently held, or null.</summary>
+    public WeaponDamageOverride? GetActiveWeaponDamageOverride()
+    {
+        return _weaponDamageOverride;
     }
 
     public ActiveWeaponDetails? GetWeaponDetails(byte modeIndex)
