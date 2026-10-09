@@ -320,7 +320,9 @@ decoded, membership should come from the client instead.
   `SetDefaultDamageBonus`, `AddAppendageHealthPool`, `ModifyHostility` — id-only
   defs with no column that says what the modification is.
 - Line of sight (no world raycast), headshot (no hit locations),
-  `RequireBulletHit`, `RequireItemDurability`, SIN acquisition.
+  `RequireBulletHit`, SIN acquisition. (`RequireItemDurability` was listed here
+  too; round seven implemented it — the columns were there, the item's durability
+  field was already on `Item`, only the slot lookup was missing.)
 - Arc/mission control, matchmaking, the loot store, chat bubbles — not ability
   machinery.
 
@@ -333,6 +335,116 @@ tests). The pre-flight resolver was extended after it missed two of its own: it
 now maps allowlisted BCL types to their namespaces and reports one whose namespace
 is not imported, which is how `Shard.cs` using `SquadService` without importing
 `GameServer.Systems.Squad` was caught before the build saw it.
+
+## Seventh audit round — the closure walk, and what the data does not contain
+
+Round six's census was still built on `next` alone. Round seven replaced it with a
+real transitive closure: the walk now also follows `ConditionalBranch`'s
+`if`/`then`/`else`, `or_chain`, `and_chain`, `Call`'s `chain`, and every
+`ImpactApplyEffect`'s `apply_chain`, `remove_chain`, `update_chain` and
+`duration_chain`. The repo's own `Tools/SdbDump/verify_ability_chains.py` follows
+`next` only, which is why it reports 3 placeholder nodes where the closure finds
+95 modules with a gap. The closure is the number to trust.
+
+On that census the stock kit is 124 modules with a chain, of which 28 were fully
+routed. Of the 96 gapped, `ActiveInitiation` accounts for 26 frames and is a
+documented by-design no-op (the combat controller sends the `AbilityActivated` ack
+itself; it is in `verify_ability_chains.py`'s `BY_DESIGN_NOOP`). Round seven took
+four of the rest.
+
+### Implemented
+
+**`TargetByNPC`** (385 rows) — the def is id-only, but the chain shape is not
+ambiguous: `TargetClear → TargetPBAE → TargetByNPC → TargetByCharacterState →
+HasTargetsDuration → ImpactApplyEffect` in 385 rows. It runs *after* a selector,
+not as one, so it narrows rather than selects — take the area, keep only the NPCs —
+with `TargetByCharacterState` sitting beside it doing exactly that kind of
+narrowing. This codebase has no separate NPC entity type; monsters are
+`CharacterEntity` instances with no controlling player, which is the test
+`ForcePushCommand` already uses to skip them.
+
+**`AddPhysics`** (63 rows) — puts a destructible body on a character, the
+frame-borne barrier family. Its position gives the usage: `AbilityToggled →
+AddPhysics → ParticleEffectAsset → AudioFeedback → SetAnimCtrlParam`, so a toggled
+ability raises it alongside its visuals and it stands for as long as the carrying
+effect does. `posetype` names the same `PoseType` record the character's own
+collision component carries. Installed on `OnApply`, taken off on `OnRemove`, and
+only if it is still the body this command installed — a later `AddPhysics` on the
+same character must not be undone by an earlier effect ending.
+
+**`RequireAbilityPhysics`** (51 rows) — its gate. The data shows it used both ways
+round (`RequireCState → BattleFrameDuration → RequireAbilityPhysics`, and
+`RequireAbilityPhysics → RequireCState → TimeDuration` as the first node), so it
+simply reports whether a body is installed.
+
+**`RequireItemDurability`** (9 rows) — the gate that stops an ability being used
+through worn-out gear, and it is the first thing checked, before the ability
+commits its cooldown. Its three comparison columns are **OR**ed, not ANDed, and the
+table is what settles it: `greater_than` is set in all 9 rows while `equal_to` is
+set in 5 of them, all with `durability_amount` 400. Read as a conjunction those 5
+would ask for a durability both equal to 400 and greater than 400 — impossible, so
+the ability could never be used. Read as a disjunction they ask for "at least 400",
+and the other 4 rows (`greater_than` with amount 0) ask for "any durability left".
+Only one reading makes the table consistent. An empty slot fails: there is no item
+whose durability could satisfy the row.
+
+`DamageSystem.ApplyDamage` now absorbs into an installed body before the character
+takes the hit. A body flagged `block_enemies_only` lets friendly fire straight
+through, which is the point of the flag; friendliness is read the way
+`TargetHostilesCommand`'s own fallback reads it (same faction, or self-inflicted)
+and that choice is recorded at the call site. When the pool is spent only the body
+goes away — the effect keeps running, which is what `RequireAbilityPhysics` then
+reports.
+
+### What the remaining eight are actually blocked on
+
+The useful finding of this round is not a command, it is where the other eight sit.
+For every one of them there is **no client table in the SDB at all**. `grep` of the
+database finds no `TemporaryEquipment`, `RewardAssist`, `AppendageHealth`,
+`DeployableUpgrade` or `TinyObject*` command table — only
+`aptfs::RequireSinAcquiredCommandDef` and `dbcharacter::TinyObject` survive, and
+neither is the command row. What the repo has instead are placeholder JSON files
+under `StaticDB/CustomData/Todo/` that are bare id lists:
+`aptgss_ItemAttributeModifierCommandDef.json` is 18 entries, each `{"id": ..., "comment": ""}`,
+with no columns behind them.
+
+So `ItemAttributeModifier` (4 frames), `TinyObjectCreate` (3), `TemporaryEquipment`,
+`TargetMyTinyObjects`, `RewardAssist`, `AddAppendageHealthPool` and
+`DeployableUpgrade` are not blocked on judgement. Their ids are real and their
+chains reference them, so the command exists in the client data — the parameter
+columns were simply never extracted into this repository. Naming an attribute id or
+a health-pool amount here would be invention that *looks* like implementation, and
+there is nothing to check it against.
+
+`RequireSinAcquired` (1 frame, Nighthawk) is the one with a real table
+(`negate`, `allow_prediction`) and is still unimplemented for a different reason:
+there is nothing on the server for it to read. SIN acquisition means "this player's
+SIN has locked onto that entity", and the server keeps no such record — there is no
+interest or area-of-interest system, no per-character stealth state, and no
+detection-range stat to check a radius against. Building the acquisition registry
+would mean writing a subsystem whose behaviour could not be derived from any data
+in the repository, and its sibling `TargetFilterBySinAcquired` shares exactly the
+same gap, as the commented-out Factory cases already say.
+
+### A pre-flight that was reporting clean without looking
+
+The static resolver has been the only local gate for four rounds, and it had a hole
+in the place that mattered most: its default file list came from
+`master...HEAD` plus untracked files, so anything **modified but not yet
+committed** — which is precisely the state it is run in, before committing — was
+skipped. `DamageSystem.cs` reached a clean run using `Math.Min` with no
+`using System;`. The list now includes unstaged and staged changes as well, and the
+fix was self-tested by reintroducing that exact error and confirming the default
+run catches it.
+
+### Verification
+
+Still no .NET SDK in the sandbox, so the build and the test suite run in CI only.
+Tip `cb09aad`: **all 6 jobs green, 1430 passed / 0 failed** (master: 1411). The
+StyleCop warnings in that run are all pre-existing in `Lib/Shared.Common`; none
+come from this round's files. The pre-flight resolver reports 48 changed files, 0
+unresolved names, 0 duplicate `(namespace, class)` pairs, and 200 command classes
+constructed by the Factory with 0 unreachable.
 
 ## Per-frame detail
 

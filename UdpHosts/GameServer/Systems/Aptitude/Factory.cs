@@ -837,8 +837,8 @@ public class Factory
             case CommandType.RemoveClientStatusEffect:
                 return new RemoveClientStatusEffectCommand(SDBInterface.GetRemoveClientStatusEffectCommandDef(commandId));
             // Only a static char-level CurrentDurabilityPctProp (= 100) exists; per-slot item wear isn't modeled, so the answer would be fabricated.
-            // case CommandType.RequireItemDurability:
-            //     return new RequireItemDurabilityCommand(SDBInterface.GetRequireItemDurabilityCommandDef(commandId));
+            case CommandType.RequireItemDurability:
+                return new RequireItemDurabilityCommand(SDBInterface.GetRequireItemDurabilityCommandDef(commandId));
             case CommandType.RequireEliteLevel:
                 return new RequireEliteLevelCommand(SDBInterface.GetRequireEliteLevelCommandDef(commandId));
             case CommandType.RequireCAISState:
