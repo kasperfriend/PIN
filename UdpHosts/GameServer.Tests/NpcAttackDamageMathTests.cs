@@ -70,6 +70,18 @@ public class NpcAttackDamageMathTests
     }
 
     [Fact]
+    public void ExtremeTimingCannotOverflowIntoAFastFallbackAttack()
+    {
+        Assert.Equal(4294967294u, NpcAttackDamageMath.ResolveAttackIntervalMs(
+            int.MaxValue, int.MaxValue, 0, 100, 1200));
+        var tuning = AiCombatTuning.FromProfile(new NpcAttackProfile
+        {
+            Mode = NpcAttackMode.Melee, AttackRange = 3.5f, AttackIntervalMs = uint.MaxValue,
+        });
+        Assert.Equal(int.MaxValue, tuning.AttackCooldownMs);
+    }
+
+    [Fact]
     public void ResolveAttackIntervalMs_BehaviourTimingWins()
     {
         uint interval = NpcAttackDamageMath.ResolveAttackIntervalMs(1500, 1000, 0u, 100u, 1200u);

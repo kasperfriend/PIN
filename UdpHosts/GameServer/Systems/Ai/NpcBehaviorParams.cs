@@ -59,6 +59,21 @@ public sealed class NpcBehaviorParams
     /// <summary>Distance in metres the behaviour prefers to keep from its target, or 0 when it does not say.</summary>
     public float PreferredMinimumCombatDistance => TryGetFloat("preferredMinCombatDist", out float value) ? value : 0f;
 
+    /// <summary>
+    ///     Explicit proximity-aggro radius from the base invocation. prod-1962 spells this
+    ///     <c>aggroDistance</c> and <c>aggroDist</c> (six rows). Civilian <c>perceptionDist</c>
+    ///     and tree-specific <c>targetSelectDist</c> are NOT aliases for combat aggro.
+    ///     Zero disables proximity acquisition, but does not prevent damage-driven engagement.
+    /// </summary>
+    public float? AggroDistance
+    {
+        get
+        {
+            string key = _values.ContainsKey("aggroDistance") ? "aggroDistance" : "aggroDist";
+            return TryGetFloat(key, out float value) && float.IsFinite(value) && value >= 0f ? value : null;
+        }
+    }
+
     /// <summary>Whether the behaviour carries any of the parameters that drive a ranged attack cycle.</summary>
     public bool HasAttackTiming => TriggerPullTimeMs > 0 || FireRestDurationMs > 0;
 

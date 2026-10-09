@@ -37,7 +37,7 @@ public static class NpcPathfinder
         float WaypointTolerance = 0.35f)
     {
         /// <summary>The shipped navigation values.</summary>
-        public static Options Default => new();
+        public static Options Default => new(2f, 1.25f, 64f, 4096, 0.35f);
     }
 
     /// <summary>
@@ -87,12 +87,24 @@ public static class NpcPathfinder
             throw new ArgumentNullException(nameof(blocked));
         }
 
+        if (!NpcGroundMovement.Finite(start) || !NpcGroundMovement.Finite(goal))
+        {
+            return Array.Empty<Vector3>();
+        }
+
         options = Sanitize(options);
+        var sampleGround = groundAt;
+        groundAt = point =>
+        {
+            var surface = sampleGround(point);
+            return surface.HasValue && !IsExcluded(surface.Value, excludedAt) ? surface : null;
+        };
         bool weighted = pathingCostAt != null || excludedAt != null;
 
         var startGround = groundAt(start);
         var goalGround = groundAt(goal);
-        if (!startGround.HasValue || !goalGround.HasValue)
+        if (!startGround.HasValue || !goalGround.HasValue ||
+            !NpcGroundMovement.Finite(startGround.Value) || !NpcGroundMovement.Finite(goalGround.Value))
         {
             return Array.Empty<Vector3>();
         }
@@ -112,15 +124,19 @@ public static class NpcPathfinder
 
         // A weighted query must be searched even when the direct segment is clear. Returning it
         // immediately would make AIPathingCost have no effect on route selection.
-        if (!weighted && CanTraverse(startPoint, goalPoint, blocked, options))
+        if (!weighted && CanTraverse(startPoint, goalPoint, groundAt, blocked, options))
         {
             return [goalPoint];
         }
 
         var goalOffset = goalPoint - startPoint;
+        if (MathF.Abs(goalOffset.X) > options.MaxSearchDistance || MathF.Abs(goalOffset.Y) > options.MaxSearchDistance)
+        {
+            return Array.Empty<Vector3>();
+        }
         var goalKey = new GridKey(
             RoundToCell(goalOffset.X, options.CellSize),
-            RoundToCell(goalOffset.Y, options.CellSize));
+            RoundToCell(goalOffset.Y, options.CellSize), HeightKey(goalPoint.Z));
         int maxCells = (int)MathF.Ceiling(options.MaxSearchDistance / options.CellSize);
         if (Math.Abs(goalKey.X) > maxCells || Math.Abs(goalKey.Y) > maxCells)
         {
@@ -128,7 +144,7 @@ public static class NpcPathfinder
         }
 
         var groundCache = new Dictionary<GridKey, Vector3?>();
-        var startKey = new GridKey(0, 0);
+        var startKey = new GridKey(0, 0, HeightKey(startPoint.Z));
         groundCache[startKey] = startPoint;
 
         float CostFor(Vector3 point)
@@ -157,7 +173,7 @@ public static class NpcPathfinder
             var sample = new Vector3(
                 startPoint.X + (key.X * options.CellSize),
                 startPoint.Y + (key.Y * options.CellSize),
-                startPoint.Z);
+                key.Height * HeightResolution);
             if (IsExcluded(sample, excludedAt))
             {
                 groundCache[key] = null;
@@ -190,25 +206,33 @@ public static class NpcPathfinder
                 continue;
             }
 
-            if (current == goalKey)
+            if (current.X == goalKey.X && current.Y == goalKey.Y &&
+                GroundFor(current) is { } arrival && CanTraverse(arrival, goalPoint, groundAt, blocked, options))
             {
+                goalKey = current;
                 reached = true;
                 break;
             }
 
-            foreach (var (neighbor, diagonal) in Neighbors(current))
+            foreach (var (candidateKey, diagonal) in Neighbors(current))
             {
-                if (closed.Contains(neighbor) ||
-                    Math.Abs(neighbor.X) > maxCells ||
-                    Math.Abs(neighbor.Y) > maxCells)
+                if (Math.Abs(candidateKey.X) > maxCells ||
+                    Math.Abs(candidateKey.Y) > maxCells)
                 {
                     continue;
                 }
 
                 var from = GroundFor(current);
-                var to = GroundFor(neighbor);
+                var to = GroundFor(candidateKey);
                 if (!from.HasValue || !to.HasValue ||
-                    !CanTraverse(from.Value, to.Value, blocked, options))
+                    !CanTraverse(from.Value, to.Value, groundAt, blocked, options))
+                {
+                    continue;
+                }
+
+                var neighbor = candidateKey with { Height = HeightKey(to.Value.Z) };
+                groundCache[neighbor] = to;
+                if (closed.Contains(neighbor))
                 {
                     continue;
                 }
@@ -218,10 +242,10 @@ public static class NpcPathfinder
                 // not just a point moving through a tile corner.
                 if (diagonal)
                 {
-                    var horizontal = new GridKey(neighbor.X, current.Y);
-                    var vertical = new GridKey(current.X, neighbor.Y);
-                    if (!CanTraverseKeys(current, horizontal, GroundFor, blocked, options) ||
-                        !CanTraverseKeys(current, vertical, GroundFor, blocked, options))
+                    var horizontal = new GridKey(neighbor.X, current.Y, current.Height);
+                    var vertical = new GridKey(current.X, neighbor.Y, current.Height);
+                    if (!CanTraverseKeys(current, horizontal, GroundFor, groundAt, blocked, options) ||
+                        !CanTraverseKeys(current, vertical, GroundFor, groundAt, blocked, options))
                     {
                         continue;
                     }
@@ -278,9 +302,9 @@ public static class NpcPathfinder
 
         raw.Reverse();
         var finalGridPoint = raw.Count > 0 ? raw[^1] : startPoint;
-        if (CanTraverse(finalGridPoint, goalPoint, blocked, options))
+        if (CanTraverse(finalGridPoint, goalPoint, groundAt, blocked, options))
         {
-            if (AiVectors.HorizontalDistance(finalGridPoint, goalPoint) > options.WaypointTolerance)
+            if (raw.Count == 0 || AiVectors.HorizontalDistance(finalGridPoint, goalPoint) > options.WaypointTolerance)
             {
                 raw.Add(goalPoint);
             }
@@ -293,7 +317,7 @@ public static class NpcPathfinder
         // A shortcut is safe for an unweighted collision query. In the weighted/original-data
         // mode it could cut across a high-cost surface and silently discard the route the
         // pathing-cost field selected, so preserve the searched route.
-        return weighted ? raw : Simplify(raw, blocked, options);
+        return weighted ? raw : Simplify(startPoint, raw, groundAt, blocked, options);
     }
 
     private static bool IsExcluded(Vector3 point, Func<Vector3, bool>? excludedAt)
@@ -303,6 +327,11 @@ public static class NpcPathfinder
 
     private static Options Sanitize(Options options)
     {
+        if (options == default)
+        {
+            options = Options.Default;
+        }
+
         float cellSize = float.IsFinite(options.CellSize) && options.CellSize >= 0.5f ? options.CellSize : 2f;
         float maxStep = float.IsFinite(options.MaxStepHeight) && options.MaxStepHeight >= 0f ? options.MaxStepHeight : 1.25f;
         float maxDistance = float.IsFinite(options.MaxSearchDistance) && options.MaxSearchDistance >= cellSize
@@ -330,60 +359,84 @@ public static class NpcPathfinder
 
     private static IEnumerable<(GridKey Key, bool Diagonal)> Neighbors(GridKey key)
     {
-        yield return (new GridKey(key.X - 1, key.Y), false);
-        yield return (new GridKey(key.X + 1, key.Y), false);
-        yield return (new GridKey(key.X, key.Y - 1), false);
-        yield return (new GridKey(key.X, key.Y + 1), false);
-        yield return (new GridKey(key.X - 1, key.Y - 1), true);
-        yield return (new GridKey(key.X - 1, key.Y + 1), true);
-        yield return (new GridKey(key.X + 1, key.Y - 1), true);
-        yield return (new GridKey(key.X + 1, key.Y + 1), true);
+        yield return (new GridKey(key.X - 1, key.Y, key.Height), false);
+        yield return (new GridKey(key.X + 1, key.Y, key.Height), false);
+        yield return (new GridKey(key.X, key.Y - 1, key.Height), false);
+        yield return (new GridKey(key.X, key.Y + 1, key.Height), false);
+        yield return (new GridKey(key.X - 1, key.Y - 1, key.Height), true);
+        yield return (new GridKey(key.X - 1, key.Y + 1, key.Height), true);
+        yield return (new GridKey(key.X + 1, key.Y - 1, key.Height), true);
+        yield return (new GridKey(key.X + 1, key.Y + 1, key.Height), true);
     }
 
     private static bool CanTraverseKeys(
         GridKey fromKey,
         GridKey toKey,
         Func<GridKey, Vector3?> groundFor,
+        Func<Vector3, Vector3?> groundAt,
         Func<Vector3, Vector3, bool> blocked,
         Options options)
     {
         var from = groundFor(fromKey);
         var to = groundFor(toKey);
-        return from.HasValue && to.HasValue && CanTraverse(from.Value, to.Value, blocked, options);
+        return from.HasValue && to.HasValue && CanTraverse(from.Value, to.Value, groundAt, blocked, options);
     }
 
     private static bool CanTraverse(
         Vector3 from,
         Vector3 to,
+        Func<Vector3, Vector3?> groundAt,
         Func<Vector3, Vector3, bool> blocked,
         Options options)
     {
-        if (AiVectors.HeightDelta(from, to) > options.MaxStepHeight)
+        if (!NpcGroundMovement.Finite(from) || !NpcGroundMovement.Finite(to))
         {
             return false;
         }
 
-        return !blocked(from, to);
+        float distance = AiVectors.HorizontalDistance(from, to);
+        if (!float.IsFinite(distance) || distance > options.MaxSearchDistance * 2f)
+        {
+            return false;
+        }
+
+        int samples = Math.Max(1, (int)MathF.Ceiling(distance / 0.5f));
+        var previous = from;
+        for (int i = 1; i <= samples; i++)
+        {
+            var probe = Vector3.Lerp(from, to, i / (float)samples);
+            probe.Z = previous.Z;
+            var ground = groundAt(probe);
+            if (!ground.HasValue || !NpcGroundMovement.Finite(ground.Value) ||
+                AiVectors.HeightDelta(previous, ground.Value) > options.MaxStepHeight ||
+                blocked(previous, ground.Value))
+            {
+                return false;
+            }
+
+            previous = ground.Value;
+        }
+
+        // Do not silently switch to a different floor at the destination.
+        return AiVectors.HeightDelta(previous, to) <= 0.1f;
     }
 
     private static IReadOnlyList<Vector3> Simplify(
+        Vector3 start,
         IReadOnlyList<Vector3> raw,
+        Func<Vector3, Vector3?> groundAt,
         Func<Vector3, Vector3, bool> blocked,
         Options options)
     {
-        if (raw.Count < 3)
-        {
-            return raw;
-        }
-
-        var result = new List<Vector3> { raw[0] };
+        var result = new List<Vector3>();
+        var anchorPoint = start;
         int anchor = 0;
-        while (anchor < raw.Count - 1)
+        while (anchor < raw.Count)
         {
-            int furthest = anchor + 1;
-            for (int candidate = furthest + 1; candidate < raw.Count; candidate++)
+            int furthest = anchor;
+            for (int candidate = anchor + 1; candidate < raw.Count; candidate++)
             {
-                if (!CanTraverse(raw[anchor], raw[candidate], blocked, options))
+                if (!CanTraverse(anchorPoint, raw[candidate], groundAt, blocked, options))
                 {
                     break;
                 }
@@ -391,23 +444,16 @@ public static class NpcPathfinder
                 furthest = candidate;
             }
 
-            if (furthest == anchor)
-            {
-                // Defensive only: furthest starts at anchor + 1, but retaining the guard keeps
-                // this loop safe if the simplifier is changed later.
-                furthest = anchor + 1;
-            }
-
-            if (result[^1] != raw[furthest])
-            {
-                result.Add(raw[furthest]);
-            }
-
-            anchor = furthest;
+            result.Add(raw[furthest]);
+            anchorPoint = raw[furthest];
+            anchor = furthest + 1;
         }
 
         return result;
     }
 
-    private readonly record struct GridKey(int X, int Y);
+    private const float HeightResolution = 0.25f;
+    private static int HeightKey(float height) => (int)MathF.Round(height / HeightResolution);
+
+    private readonly record struct GridKey(int X, int Y, int Height);
 }

@@ -2,6 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Threading;
+using System.Text.Json;
+using AeroMessages.GSS;
+using GameServer.Entities;
+using GameServer.Systems.Combat;
 using AeroMessages.GSS.Character;
 using GameServer.Entities.Character;
 using GameServer.Entities.Deployable;
@@ -33,6 +37,143 @@ public class AiRoutineIntegrationTests
         Assert.Equal(state, npc.MovementState);
         Assert.Equal(NpcRoutineState.Walking, shard.AI.GetRoutineState(npc.EntityId));
         Assert.Single(navigation.Requests);
+    }
+
+    [Theory]
+    [InlineData(785u)] // GuardCityWanderer
+    [InlineData(2587u)] // BasicCivilian
+    [InlineData(769u)] // city Work visitor, no station placed
+    public void ShippedFriendlyWalkersReachOneDestinationAndStartAnotherWithoutAggro(uint monsterId)
+    {
+        var (shard, npc, navigation) = Create(ShippedBehavior(monsterId), hostility: new AccordFriendlyHostility());
+        AddFriendlyPlayer(shard, npc);
+        Tick(shard, Start);
+        Assert.Equal(AiBrainState.Idle, shard.AI.GetState(npc.EntityId));
+        Assert.Equal(NpcRoutineState.Walking, shard.AI.GetRoutineState(npc.EntityId));
+        Assert.Equal((short)0x5004, npc.MovementState);
+        Assert.True(npc.Position.Length() > 0f);
+        var firstGoal = Assert.Single(navigation.Requests).Goal;
+        bool arrived = false;
+        for (ulong now = Start + 50; now < Start + 20_000; now += 50)
+        {
+            Tick(shard, now);
+            Assert.Equal(AiBrainState.Idle, shard.AI.GetState(npc.EntityId));
+            Assert.Empty(shard.AiAttackFeedback.Attacks);
+            if (navigation.Requests.Count > 1)
+            {
+                Assert.True(arrived);
+                Assert.NotEqual(firstGoal, navigation.Requests[1].Goal);
+                return;
+            }
+
+            if (shard.AI.GetRoutineState(npc.EntityId) == NpcRoutineState.Waiting)
+            {
+                arrived = true;
+                Assert.InRange(Vector3.Distance(npc.Position, firstGoal), 0f, NpcRoutine.ArrivalRadius);
+            }
+        }
+
+        Assert.Fail("The friendly walker did not finish its first leg and begin a second one.");
+    }
+
+    [Theory]
+    [InlineData(1015u, NpcRoutineState.Inactive)] // explicitly stationary civilian
+    [InlineData(459u, NpcRoutineState.MissingRoute)] // named world points unavailable
+    [InlineData(551u, NpcRoutineState.MissingRoute)]
+    [InlineData(1059u, NpcRoutineState.MissingRoute)] // authored route unavailable
+    [InlineData(290u, NpcRoutineState.Inactive)] // currently placed, unknown ambient archetype
+    public void ShippedFriendlyStationaryOrUnresolvedBodiesDoNotReceiveInventedPatrols(
+        uint monsterId, NpcRoutineState expected)
+    {
+        var (shard, npc, navigation) = Create(ShippedBehavior(monsterId), hostility: new AccordFriendlyHostility());
+        AddFriendlyPlayer(shard, npc);
+        Tick(shard, Start);
+        Tick(shard, Start + 5000);
+        Assert.Equal(expected, shard.AI.GetRoutineState(npc.EntityId));
+        Assert.Equal(AiBrainState.Idle, shard.AI.GetState(npc.EntityId));
+        Assert.Equal(Vector3.Zero, npc.Position);
+        Assert.Empty(navigation.Requests);
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
+    }
+
+    [Fact]
+    public void ShippedFriendlyWalkerWaitsWithoutGroundAndResumesWhenNavigationBecomesAvailable()
+    {
+        var (shard, npc, navigation) = Create(ShippedBehavior(785), hostility: new AccordFriendlyHostility());
+        AddFriendlyPlayer(shard, npc);
+        navigation.SupportsRoutines = false;
+        Tick(shard, Start);
+        Tick(shard, Start + 1000);
+        Assert.Equal(Vector3.Zero, npc.Position);
+        Assert.Empty(navigation.Requests);
+        navigation.SupportsRoutines = true;
+        Tick(shard, Start + 1500);
+        Assert.Equal(NpcRoutineState.Walking, shard.AI.GetRoutineState(npc.EntityId));
+        Assert.True(npc.Position.Length() > 0f);
+    }
+
+    [Fact]
+    public void ShippedFriendlyWorkVisitorWalksToAPlacedStationAndLeavesAfterItsAuthoredDuration()
+    {
+        var (shard, npc, navigation) = Create(ShippedBehavior(769), station: true,
+            hostility: new AccordFriendlyHostility());
+        AddFriendlyPlayer(shard, npc);
+        for (ulong now = Start; now < Start + 2000; now += 50)
+        {
+            Tick(shard, now);
+            if (shard.AI.GetRoutineState(npc.EntityId) == NpcRoutineState.Working)
+            {
+                break;
+            }
+        }
+
+        Assert.Equal(new Vector3(2f, 0f, 0f), Assert.Single(navigation.Requests).Goal);
+        Assert.Equal(NpcRoutineState.Working, shard.AI.GetRoutineState(npc.EntityId));
+        Assert.InRange(Vector3.Distance(npc.Position, new Vector3(2f, 0f, 0f)), 0f, NpcRoutine.ArrivalRadius);
+        Assert.Equal((ushort)60, npc.Emote.Id);
+        Tick(shard, shard.CurrentTimeLong + 3000);
+        Assert.Equal(NpcRoutineState.Waiting, shard.AI.GetRoutineState(npc.EntityId));
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
+    }
+
+    private static string ShippedBehavior(uint monsterId)
+    {
+        using var stream = typeof(AiRoutineIntegrationTests).Assembly.GetManifestResourceStream("NpcMovementReference.json");
+        using var document = JsonDocument.Parse(stream);
+        foreach (var row in document.RootElement.GetProperty("monsters").EnumerateArray())
+        {
+            if (row.GetProperty("id").GetUInt32() == monsterId)
+            {
+                return row.GetProperty("behavior").GetString();
+            }
+        }
+
+        throw new InvalidOperationException($"Missing shipped monster {monsterId}");
+    }
+
+    private static void AddFriendlyPlayer(FakeShard shard, CharacterEntity npc)
+    {
+        var info = new HostilityInfoData { Flags = HostilityInfoData.HostilityFlags.Faction, FactionId = 1 };
+        npc.SetHostilityInfo(info);
+        var player = AddCharacter(shard, new Vector3(1f, 0f, 0f));
+        player.SetHostilityInfo(info);
+        var client = new FakeNetworkPlayer(shard) { CharacterEntity = player };
+        player.Player = client;
+        shard.Clients[client.SocketId] = client;
+        shard.AI.Aggro(npc.EntityId, player.EntityId); // friendly damage/forced aggro must not suspend walking
+    }
+
+    private sealed class AccordFriendlyHostility : IAiHostility
+    {
+        // The shipped faction 1 and explicit wildcard alliance to faction 1, not an always-friendly stub.
+        private readonly FactionHostility _factions = new(
+            new[] { new Faction { Id = 1, DefaultStance = 0 } },
+            new[] { new FactionRelations { FactionA = 0, FactionB = 1, HostilityStance = 1 } });
+
+        public bool IsHostile(IEntity source, IEntity target)
+            => source.EntityId != target.EntityId &&
+               _factions.GetFactionStance(source.HostilityInfo.FactionId, target.HostilityInfo.FactionId)
+                   is not (HostilityStance.Friendly or HostilityStance.Self);
     }
 
     [Fact]
@@ -304,7 +445,7 @@ public class AiRoutineIntegrationTests
     }
 
     private static (FakeShard Shard, CharacterEntity Npc, Navigation Navigation) Create(
-        string behavior, string offensive = "", bool station = false)
+        string behavior, string offensive = "", bool station = false, IAiHostility hostility = null)
     {
         var shard = new FakeShard();
         var navigation = new Navigation();
@@ -323,8 +464,10 @@ public class AiRoutineIntegrationTests
             shard.Entities[point.EntityId] = point;
         }
 
+        // No acquisition clients are installed here. Explicit combat interruptions still need
+        // hostile bodies now that Aggro enforces the same hostility gate as acquisition.
         shard.AI = new AiEngine(shard, shard.EventBus,
-            hostility: new NeverHostileAiHostility(), feedback: shard.AiAttackFeedback,
+            hostility: hostility ?? new AlwaysHostileAiHostility(), feedback: shard.AiAttackFeedback,
             monsterStats: new FakeAiMonsterStats(normalSpeed: 2f, fastSpeed: 10f) { Behavior = behavior, OffensiveBehavior = offensive },
             emotes: emotes, navigation: navigation, activities: activities, routineRules: Immediate);
         var npc = AddCharacter(shard, Vector3.Zero);
@@ -351,7 +494,7 @@ public class AiRoutineIntegrationTests
 
     private sealed class Navigation : INpcNavigation
     {
-        public bool SupportsRoutines => true;
+        public bool SupportsRoutines { get; set; } = true;
         public bool Reachable { get; set; } = true;
         public bool StepAllowed { get; set; } = true;
         public List<(Vector3 Start, Vector3 Goal)> Requests { get; } = [];

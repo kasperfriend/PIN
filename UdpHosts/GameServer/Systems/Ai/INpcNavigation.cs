@@ -30,6 +30,12 @@ public interface INpcNavigation
     /// <summary>Whether there is real ground on which to generate ambient destinations.</summary>
     bool SupportsRoutines { get; }
 
+    /// <summary>Resets the shared physics-query budget before processing a shard movement tick.</summary>
+    void BeginTick() { }
+
+    /// <summary>False when a query must wait for the next tick, not be reported as unreachable.</summary>
+    bool CanFindPath => true;
+
     IReadOnlyList<Vector3> FindPath(Vector3 start, Vector3 goal, NpcNavigationAgent agent);
 
     /// <summary>Checks the whole step, including terrain support, before any entity state is written.</summary>

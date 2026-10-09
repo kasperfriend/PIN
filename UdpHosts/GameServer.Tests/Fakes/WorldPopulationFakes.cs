@@ -90,6 +90,9 @@ public sealed class FakeWorldPopulationTerrain : IWorldPopulationTerrain
     /// <summary>The height every accepted placement is snapped to.</summary>
     public float GroundHeight { get; set; }
 
+    /// <summary>Test adapter for a terrain resolver that shifts or corrupts its endpoint.</summary>
+    public Func<Vector3, Vector3> ResolvePosition { get; set; }
+
     /// <summary>Refuses individual placements: return false for a spot a body may not stand on.</summary>
     public Func<Vector3, float, float, bool> RefusePlacement { get; set; }
 
@@ -176,7 +179,7 @@ public sealed class FakeWorldPopulationTerrain : IWorldPopulationTerrain
             return false;
         }
 
-        position = new Vector3(candidate.X, candidate.Y, GroundHeight);
+        position = ResolvePosition?.Invoke(candidate) ?? new Vector3(candidate.X, candidate.Y, GroundHeight);
         return true;
     }
 }

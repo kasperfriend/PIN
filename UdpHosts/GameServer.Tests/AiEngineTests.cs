@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Threading;
 using AeroMessages.GSS.Character;
 using GameServer.Data;
+using GameServer.Entities;
 using GameServer.Entities.Character;
 using GameServer.StaticDB.Records.dbitems;
 using GameServer.Systems.Ai;
@@ -28,10 +29,11 @@ public class AiEngineTests
         byte npcLevel = 0,
         IAiProjectileLauncher projectileLauncher = null,
         INpcAbilityActivator abilityActivator = null,
-        EmoteService emotes = null)
+        EmoteService emotes = null,
+        INpcNavigation navigation = null)
     {
         var shard = new FakeShard();
-        if (rules != null || monsterStats != null || projectileLauncher != null || abilityActivator != null || emotes != null)
+        if (rules != null || monsterStats != null || projectileLauncher != null || abilityActivator != null || emotes != null || navigation != null)
         {
             shard.AI = new AiEngine(
                 shard,
@@ -42,7 +44,7 @@ public class AiEngineTests
                 monsterStats ?? new FakeAiMonsterStats(),
                 projectileLauncher,
                 abilityActivator,
-                emotes);
+                emotes, navigation: navigation);
         }
 
         var npc = CreateLivingCharacter(shard, npcPosition);
@@ -82,6 +84,349 @@ public class AiEngineTests
     {
         shard.CurrentTimeLong = currentTime;
         shard.AI.Tick(Step, currentTime, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData("SandThresher(leashDistance=100,aggroDistance=15)")]
+    [InlineData("SandThresher(leashDist=100,aggroDist=15)")]
+    [InlineData("TorturedSoulMelee(aggroDist=15)")]
+    public void AuthoredAggroRadiusLimitsAcquisitionButNotDamageEngagement(string behavior)
+    {
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = behavior });
+        Tick(shard, FirstTick);
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Equal(Vector3.Zero, npc.Position);
+        shard.Damage.ApplyDamage(npc, 1, player);
+        Tick(shard, FirstTick + Step);
+        AssertState(shard, npc, AiBrainState.Chase);
+        Assert.True(npc.Position.X > 0f);
+    }
+
+    [Fact]
+    public void AuthoredAggroRadiusCanExtendBeyondTheRulesRadius()
+    {
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(100f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats
+            {
+                Behavior = "EliteWanderer(aggroDistance=120,wanderDistance=0)",
+            });
+        Tick(shard, FirstTick);
+        AssertState(shard, npc, AiBrainState.Chase);
+        Assert.True(npc.Position.X > 0f);
+    }
+
+    [Fact]
+    public void ZeroAggroRadiusDisablesProximityEvenForAnOverlappingPlayer()
+    {
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, Vector3.Zero,
+            monsterStats: new FakeAiMonsterStats { Behavior = "Base(aggroDistance=0)" });
+        Tick(shard, FirstTick);
+        AssertState(shard, npc, AiBrainState.Idle);
+        shard.AI.Aggro(npc.EntityId, player.EntityId);
+        Tick(shard, FirstTick + Step);
+        AssertState(shard, npc, AiBrainState.Attack);
+    }
+
+    [Fact]
+    public void RetainedTargetLeavingZoneIsDroppedBeforeTheNextPerceptionScan()
+    {
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(1f, 0f, 0f));
+        var client = (FakeNetworkPlayer)shard.Clients.Values.Single();
+        player.Player = client;
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        var before = npc.Position;
+        Assert.Single(shard.AiAttackFeedback.Attacks);
+        client.CurrentZone = new Zone { ID = 1030, Name = "Sertao" };
+        Tick(shard, FirstTick + Step * 2);
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Equal(before, npc.Position);
+        shard.AI.Aggro(npc.EntityId, player.EntityId);
+        Tick(shard, FirstTick + Step * 3);
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Single(shard.AiAttackFeedback.Attacks);
+    }
+
+    [Fact]
+    public void FriendlyDamageAndSelfDamageCannotForceEngagement()
+    {
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(1f, 0f, 0f));
+        shard.AI = new AiEngine(shard, shard.EventBus, hostility: new NeverHostileAiHostility(),
+            monsterStats: new FakeAiMonsterStats());
+        Assert.True(shard.AI.Register(npc));
+        shard.AI.Aggro(npc.EntityId, player.EntityId);
+        shard.AI.Aggro(npc.EntityId, npc.EntityId);
+        Tick(shard, FirstTick);
+        AssertState(shard, npc, AiBrainState.Idle);
+    }
+
+    [Fact]
+    public void ExistingTargetBecomingFriendlyIsDroppedImmediately()
+    {
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(1f, 0f, 0f));
+        var hostility = new ChangingHostility();
+        shard.AI = new AiEngine(shard, shard.EventBus, hostility: hostility,
+            feedback: shard.AiAttackFeedback, monsterStats: new FakeAiMonsterStats());
+        Assert.True(shard.AI.Register(npc));
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        hostility.Hostile = false;
+        Tick(shard, FirstTick + Step * 2);
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Single(shard.AiAttackFeedback.Attacks);
+    }
+
+    private sealed class ChangingHostility : IAiHostility
+    {
+        public bool Hostile { get; set; } = true;
+        public bool IsHostile(IEntity attacker, IEntity target) => Hostile;
+    }
+
+    [Fact]
+    public void ModuleNavigationDeadlineRestartsAfterLeavingAndReenteringCombatWithTheSameTarget()
+    {
+        var navigation = new TacticalNavigation();
+        var stats = new FakeAiMonsterStats { Behavior = "ModuleApproach", AttackProfile = RangedProfile() };
+        stats.AbilityModulesByBehavior["ModuleApproach"] = new[]
+        {
+            new NpcAbilityModuleScan(new NpcAbilityModule(86132, 1f, 0, 0f, 50f, 6.5f, 2400),
+                1, true, false),
+        };
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: stats, projectileLauncher: new RecordingAiProjectileLauncher(), navigation: navigation);
+        Tick(shard, FirstTick);
+        shard.Entities.Remove(player.EntityId);
+        Tick(shard, FirstTick + Step);
+        AssertState(shard, npc, AiBrainState.Idle);
+        shard.Entities[player.EntityId] = player;
+        shard.AI.Aggro(npc.EntityId, player.EntityId);
+        int before = navigation.Queries;
+        Tick(shard, FirstTick + 3000);
+        AssertState(shard, npc, AiBrainState.Attack);
+        Assert.Equal(before + 1, navigation.Queries);
+        Assert.Equal(player.Position, navigation.LastGoal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MeleeRestrictionBlocksSwingsButNotProjectileWeapons(bool ranged)
+    {
+        var shots = new RecordingAiProjectileLauncher();
+        var stats = new FakeAiMonsterStats
+        {
+            AttackProfile = ranged ? RangedProfile() : NpcAttackProfile.Unarmed,
+        };
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(1f, 0f, 0f),
+            monsterStats: stats, projectileLauncher: shots);
+        npc.SetCombatFlags(new CombatFlagsData { Value = CombatFlagsData.CharacterCombatFlags.restrict_melee });
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.Empty(shard.AiAttackFeedback.Attacks);
+        Assert.Equal(ranged ? 3 : 0, shots.Shots.Count);
+        npc.SetCombatFlags(new CombatFlagsData { Value = 0 });
+        Tick(shard, FirstTick + 2500 + Step);
+        if (!ranged)
+        {
+            Assert.Single(shard.AiAttackFeedback.Attacks);
+        }
+    }
+
+    [Fact]
+    public void CombatUsesTheOffensiveModuleSetInsteadOfBaseIdsAndOmittedModules()
+    {
+        // prod-1962 monster 1808 names 96947/96949 in Base, but only 88159 in Attack.
+        var stats = new FakeAiMonsterStats
+        {
+            Behavior = "Arch_MedRangedAbilityUser_Base(am1Id=96947,am2Id=96949)",
+            OffensiveBehavior = "Arch_MedRangedAbilityUser_Attack(am1Id=88159)",
+            AttackProfile = FeedbackOnlyProfile(),
+        };
+        stats.AbilityModulesByBehavior["Arch_MedRangedAbilityUser_Base"] =
+            [BehaviorModule(96947, abilityId: 111, deliversDamage: true),
+             BehaviorModule(96949, abilityId: 112, deliversDamage: true)];
+        stats.AbilityModulesByBehavior[OffensiveSetName] =
+            [BehaviorModule(88159, abilityId: 113, cooldownMs: 3000, deliversDamage: true)];
+        var abilities = new FakeNpcAbilityActivator();
+        var (shard, _, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: stats, abilityActivator: abilities);
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.Equal(113u, Assert.Single(abilities.Activations).AbilityId);
+        Tick(shard, FirstTick + Step + 2500);
+        // Offensive cooldown excludes its module; neither base module is resurrected.
+        Assert.Equal(34894u, abilities.Activations[^1].AbilityId);
+        Assert.Equal(2, abilities.Activations.Count);
+        Assert.Equal(new[] { OffensiveSetName }, stats.AbilityModuleRequests.ToArray());
+    }
+
+    [Fact]
+    public void DamageFromSameOrDifferentAttackerDoesNotGrantExtraAttacks()
+    {
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(1f, 0f, 0f));
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.Single(shard.AiAttackFeedback.Attacks);
+        shard.Damage.ApplyDamage(npc, 1, player);
+        Tick(shard, FirstTick + Step * 2);
+        var other = CreateLivingCharacter(shard, new Vector3(1f, 0f, 0f));
+        shard.Entities[other.EntityId] = other;
+        shard.Damage.ApplyDamage(npc, 1, other);
+        Tick(shard, FirstTick + Step * 3);
+        Assert.Single(shard.AiAttackFeedback.Attacks);
+        Tick(shard, FirstTick + Step + 1200);
+        Assert.Equal(2, shard.AiAttackFeedback.Attacks.Count);
+        Assert.Equal(other.EntityId, shard.AiAttackFeedback.Attacks[^1].TargetId);
+    }
+
+    [Fact]
+    public void DeadTargetCannotKeepARangedTacticalGoalMovingTheNpc()
+    {
+        var navigation = new TacticalNavigation();
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = "Unknown", AttackProfile = RangedProfile() },
+            projectileLauncher: new RecordingAiProjectileLauncher(), navigation: navigation);
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.True(navigation.Queries > 1, "tactical search must have occurred");
+        var before = npc.Position;
+        player.SetCharacterState(CharacterStateData.CharacterStatus.Dead, shard.CurrentTime);
+        Tick(shard, FirstTick + Step * 2);
+        AssertState(shard, npc, AiBrainState.Idle);
+        Assert.Equal(before, npc.Position);
+    }
+
+    [Fact]
+    public void LeashReturnCannotRetainCombatTargetForModuleMovement()
+    {
+        var navigation = new TacticalNavigation();
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            new StandardAiRules { LeashRadius = 5f },
+            new FakeAiMonsterStats { AttackProfile = RangedProfile() }, navigation: navigation);
+        Tick(shard, FirstTick);
+        npc.SetPosition(new Vector3(10f, 0f, 0f));
+        Tick(shard, FirstTick + Step);
+        AssertState(shard, npc, AiBrainState.Return);
+        Assert.Equal(Vector3.Zero, navigation.LastGoal);
+        Assert.True(npc.Position.X < 10f);
+    }
+
+    [Fact]
+    public void AuthoredModuleApproachPreemptsOptionalRepositioningUntilItsTimeout()
+    {
+        var navigation = new TacticalNavigation();
+        var stats = new FakeAiMonsterStats { Behavior = "ModuleApproach", AttackProfile = RangedProfile() };
+        stats.AbilityModulesByBehavior["ModuleApproach"] = new[]
+        {
+            new NpcAbilityModuleScan(new NpcAbilityModule(86132, 1f, 0, 0f, 50f, 6.5f, 2400),
+                1, true, false),
+        };
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: stats, projectileLauncher: new RecordingAiProjectileLauncher(), navigation: navigation);
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.Equal(1, navigation.Queries);
+        Assert.Equal(player.Position, navigation.LastGoal);
+        Assert.True(npc.Position.X > 0f);
+        Tick(shard, FirstTick + 2450);
+        Assert.True(navigation.Queries > 2, "after the watchdog, optional tactics can resume");
+    }
+
+    private sealed class TacticalNavigation : INpcNavigation
+    {
+        public bool SupportsRoutines => true;
+        public int Queries { get; private set; }
+        public Vector3 LastGoal { get; private set; }
+        public IReadOnlyList<Vector3> FindPath(Vector3 start, Vector3 goal, NpcNavigationAgent agent)
+        {
+            Queries++;
+            LastGoal = goal;
+            return new[] { goal };
+        }
+
+        public bool TryStep(Vector3 from, Vector3 desired, NpcNavigationAgent agent, out Vector3 position)
+        {
+            position = desired;
+            return true;
+        }
+    }
+
+    [Fact]
+    public void AuthoredMeleeSpeedMultiplierChangesPursuitButMoveChanceZeroDoesNotStopIt()
+    {
+        var (normalShard, normalNpc, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = "StockMelee(speedMultiplier=1)" });
+        var (fastShard, fastNpc, _) = CreateWorld(Vector3.Zero, new Vector3(20f, 0f, 0f),
+            monsterStats: new FakeAiMonsterStats { Behavior = "StockMelee(speedMultiplier=1.5,moveChance=0)" });
+        Tick(normalShard, FirstTick);
+        Tick(fastShard, FirstTick);
+        Assert.True(normalNpc.Position.X > 0f);
+        Assert.InRange(fastNpc.Position.X / normalNpc.Position.X, 1.49f, 1.51f);
+    }
+
+    [Fact]
+    public void VisibleTargetInsideStandoffDoesNotFreezeAnIntermediateDetour()
+    {
+        // Aggro starts Chase. The next tick reaches Attack, but the route still
+        // needs to go sideways before closing: clamp only its final approach.
+        var navigation = new DetourNavigation();
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(1.5f, 0f, 0f),
+            navigation: navigation);
+        Tick(shard, FirstTick);
+        var before = npc.Position;
+        Tick(shard, FirstTick + Step);
+        Assert.NotEqual(before, npc.Position);
+        Assert.True(npc.Position.Y > before.Y);
+        AssertState(shard, npc, AiBrainState.Attack);
+    }
+
+    [Fact]
+    public void RejectedCombatPathDoesNotAuthorizeDirectMovement()
+    {
+        var navigation = new DetourNavigation { Reachable = false };
+        var (shard, npc, _) = CreateWorld(Vector3.Zero, new Vector3(10f, 0f, 0f),
+            navigation: navigation);
+        Tick(shard, FirstTick);
+        Tick(shard, FirstTick + Step);
+        Assert.Equal(Vector3.Zero, npc.Position);
+        Assert.Equal((short)0x1000, npc.MovementState);
+        Assert.Equal(1, navigation.Queries);
+    }
+
+    [Fact]
+    public void MovingUnreachableTargetCannotBypassFailedPathBackoff()
+    {
+        var navigation = new DetourNavigation { Reachable = false };
+        var (shard, npc, player) = CreateWorld(Vector3.Zero, new Vector3(10f, 0f, 0f),
+            navigation: navigation);
+        Tick(shard, FirstTick);
+        for (ulong i = 1; i <= 10; i++)
+        {
+            player.SetPosition(new Vector3(10f + i * 3f, 0f, 0f));
+            Tick(shard, FirstTick + i * Step);
+        }
+
+        Assert.Equal(1, navigation.Queries);
+        Assert.Equal(Vector3.Zero, npc.Position);
+    }
+
+    private sealed class DetourNavigation : INpcNavigation
+    {
+        public bool SupportsRoutines => false;
+        public bool Reachable { get; set; } = true;
+        public int Queries { get; private set; }
+        public IReadOnlyList<Vector3> FindPath(Vector3 start, Vector3 goal, NpcNavigationAgent agent)
+        {
+            Queries++;
+            return Reachable ? new[] { new Vector3(0f, 4f, 0f), goal } : System.Array.Empty<Vector3>();
+        }
+
+        public bool TryStep(Vector3 from, Vector3 desired, NpcNavigationAgent agent, out Vector3 position)
+        {
+            position = desired;
+            return true;
+        }
     }
 
     [Fact]
@@ -1284,8 +1629,8 @@ public class AiEngineTests
     [Fact]
     public void BehaviorModulesSpelledOnlyOffensively_AreResolvedFromTheOffensiveSet()
     {
-        // 12 of the 60 module-bearing rows configure theirs only in behavior_offensive: the base set is
-        // read first, and only when it names no module does the offensive one supply them.
+        // The combat invocation is authoritative when it names modules, including the rows
+        // whose base invocation has none.
         var stats = new FakeAiMonsterStats { AttackProfile = FeedbackOnlyProfile() };
         stats.Behavior = "AggressiveWanderer";
         stats.OffensiveBehavior = "Arch_MedRangedAbilityUser_Attack(am2Id = 86100, am2Cooldown = 20000, am2MinDist = 1.5)";
@@ -1303,8 +1648,7 @@ public class AiEngineTests
 
         Assert.Equal(34_770u, Assert.Single(abilities.Activations).AbilityId);
 
-        // Both sets were asked, the base one first.
-        Assert.Equal(new[] { "AggressiveWanderer", OffensiveSetName }, stats.AbilityModuleRequests.ToArray());
+        Assert.Equal(new[] { OffensiveSetName }, stats.AbilityModuleRequests.ToArray());
     }
 
     /// <summary>

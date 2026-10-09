@@ -13,6 +13,34 @@ namespace GameServer.Tests;
 public class NpcMovementCensusTests
 {
     [Fact]
+    public void AllSixAuthoredAggroOverridesResolveFromTheShippedBaseInvocations()
+    {
+        using var stream = typeof(NpcMovementCensusTests).Assembly.GetManifestResourceStream("NpcMovementReference.json");
+        using var document = JsonDocument.Parse(stream);
+        var expected = new Dictionary<uint, float>
+        {
+            [390] = 15f, [416] = 15f, [700] = 120f, [415] = 15f, [1045] = 15f, [1068] = 15f,
+        };
+        int count = 0;
+        foreach (var row in document.RootElement.GetProperty("monsters").EnumerateArray())
+        {
+            var behavior = NpcBehaviorParams.Parse(row.GetProperty("behavior").GetString());
+            uint id = row.GetProperty("id").GetUInt32();
+            if (expected.TryGetValue(id, out float radius))
+            {
+                Assert.Equal(radius, behavior.AggroDistance);
+                count++;
+            }
+            else
+            {
+                Assert.Null(behavior.AggroDistance);
+            }
+        }
+
+        Assert.Equal(6, count);
+    }
+
+    [Fact]
     public void EveryMonsterAndAllThreeBehaviorColumnsResolveWithoutInventingRoutes()
     {
         using var stream = typeof(NpcMovementCensusTests).Assembly.GetManifestResourceStream("NpcMovementReference.json");

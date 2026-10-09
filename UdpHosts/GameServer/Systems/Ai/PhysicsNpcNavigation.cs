@@ -20,7 +20,7 @@ public sealed class PhysicsNpcNavigation : INpcNavigation
 
     private static readonly NpcPathfinder.Options Options = new(
         CellSize: 2f, MaxStepHeight: NpcGroundMovement.MaximumStepHeight,
-        MaxSearchDistance: 64f, MaxExpandedNodes: 4096, WaypointTolerance: 0.35f);
+        MaxSearchDistance: 128f, MaxExpandedNodes: 4096, WaypointTolerance: 0.35f);
 
     private static readonly ILogger _logger = Log.ForContext<PhysicsNpcNavigation>();
 
@@ -31,6 +31,13 @@ public sealed class PhysicsNpcNavigation : INpcNavigation
     ///     id is worth less than the memory.
     /// </summary>
     private readonly Dictionary<ulong, ulong> _missingGroundWarnedAt = [];
+
+    // Approximate ray-work units: a ground probe can cast both windings and a wall
+    // clearance probe can cast twelve rays. Shared by all searches, not per NPC.
+    private const int TickQueryBudget = 24_000;
+    private int _queriesLeft = TickQueryBudget;
+    public void BeginTick() => _queriesLeft = TickQueryBudget;
+    public bool CanFindPath => _queriesLeft >= 64;
 
     private readonly IShard _shard;
     private readonly IAiRules _rules;
@@ -51,14 +58,28 @@ public sealed class PhysicsNpcNavigation : INpcNavigation
         }
 
         var physics = _shard.Physics;
-        bool Blocked(Vector3 from, Vector3 to) => IsBlocked(from, to, agent);
-        if (physics?.HasNavigationMesh == true)
+        if (physics?.HasZoneCollision != true)
         {
-            // Disconnected mesh endpoints are a failure, not an excuse to switch to a flat grid.
-            return physics.FindNavigationPath(start, goal, Blocked, Options.MaxStepHeight, Options.MaxSearchDistance)
-                ?? Array.Empty<Vector3>();
+            // Explicit collision-free development mode has no terrain/search horizon.
+            // Never use this shortcut on a zone with actual ground assets.
+            var flatGoal = new Vector3(goal.X, goal.Y, start.Z);
+            return IsBlocked(start, flatGoal, agent) ? Array.Empty<Vector3>() : new[] { flatGoal };
         }
 
+        int clearanceQueries = 0;
+        int groundQueries = 0;
+        var groundCache = new Dictionary<Vector3, Vector3?>();
+        int clearanceLimit = 2048;
+        bool ClearanceBlocked(Vector3 from, Vector3 to)
+        {
+            if (++clearanceQueries > clearanceLimit || _queriesLeft < 12)
+            {
+                return true;
+            }
+
+            _queriesLeft -= 12;
+            return IsBlocked(from, to, agent);
+        }
         Vector3? Ground(Vector3 point)
         {
             if (physics?.HasZoneCollision != true)
@@ -68,10 +89,91 @@ public sealed class PhysicsNpcNavigation : INpcNavigation
                 return new Vector3(point.X, point.Y, start.Z);
             }
 
-            return GroundAt(point)?.Position;
+            if (!groundCache.TryGetValue(point, out var ground))
+            {
+                ground = ++groundQueries <= 8192 && _queriesLeft >= 5 ? GroundAt(point)?.Position : null;
+                _queriesLeft = Math.Max(0, _queriesLeft - 5);
+                groundCache[point] = ground;
+            }
+
+            return ground;
         }
 
-        return NpcPathfinder.FindPath(start, goal, Ground, Blocked, Options,
+        // Use the locomotion support rules during planning too. A mesh shortcut across a
+        // hole or a steep incline otherwise gets selected again after every refused step.
+        bool Blocked(Vector3 from, Vector3 to)
+        {
+            if (physics?.HasZoneCollision != true)
+            {
+                return ClearanceBlocked(from, to);
+            }
+
+            float distance = AiVectors.HorizontalDistance(from, to);
+            int segments = Math.Max(1, (int)MathF.Ceiling(distance / 16f));
+            var previous = from;
+            for (int i = 1; i <= segments; i++)
+            {
+                var next = Vector3.Lerp(from, to, i / (float)segments);
+                if (!NpcGroundMovement.TryStep(previous, next,
+                    point => Ground(point) is { } surface ? new NpcGroundSurface(surface, Vector3.UnitZ) : null,
+                    ClearanceBlocked, physics.IsNavigationExcluded, out previous))
+                {
+                    return true;
+                }
+            }
+
+            return AiVectors.HeightDelta(previous, to) > 0.1f;
+        }
+
+        if (physics?.HasZoneCollision == true)
+        {
+            // Targets may jump or stand on a low prop. Project the destination onto a
+            // walkable surface; the traversability checks still forbid jumping floors.
+            float offset = float.IsFinite(_rules.GroundOffset) ? _rules.GroundOffset : 0f;
+            var probe = goal - new Vector3(0f, 0f, offset);
+            if (physics.TryGetGroundSurface(probe, out var ground, out var normal,
+                searchUp: NpcGroundMovement.MaximumStepHeight, searchDown: _rules.MaxAcquisitionHeightDelta) &&
+                MathF.Abs(normal.Z) >= NpcGroundMovement.MinimumNormalZ)
+            {
+                goal = ground + new Vector3(0f, 0f, offset);
+            }
+        }
+
+        if (physics?.HasNavigationMesh == true)
+        {
+            // Reserve work for the ground-grid retry; an exhausted mesh search must
+            // not consume the entire query allowance before that retry even starts.
+            clearanceLimit = 256;
+            var path = physics.FindNavigationPath(start, goal, Blocked, Options.MaxStepHeight, Options.MaxSearchDistance);
+            if (path is { Count: > 0 })
+            {
+                var previous = start;
+                bool valid = true;
+                foreach (var waypoint in path)
+                {
+                    if (!NpcGroundMovement.Finite(waypoint) || Blocked(previous, waypoint))
+                    {
+                        valid = false;
+                        break;
+                    }
+
+                    previous = waypoint;
+                }
+
+                if (valid)
+                {
+                    return path;
+                }
+            }
+
+            // Collision triangles are not an authored navmesh: shared-edge adjacency can
+            // disconnect otherwise traversable terrain. Retry using real ground and static
+            // clearance, never a flat/direct fallback through walls or across missing ground.
+        }
+
+        clearanceQueries = 0;
+        clearanceLimit = 2048;
+        return NpcPathfinder.FindPath(start, goal, Ground, ClearanceBlocked, Options,
             pathingCostAt: null,
             excludedAt: physics?.HasNavigationExclusions == true ? physics.IsNavigationExcluded : null);
     }

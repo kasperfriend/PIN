@@ -13,6 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="..\..\Docs\NpcMovement\monsters.json" LogicalName="NpcMovementReference.json" />
+    <EmbeddedResource Include="..\..\Docs\NpcPlacement\classification.json" LogicalName="NpcPlacementReference.json" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\GameServer\GameServer.csproj"/>

@@ -108,6 +108,9 @@ public class AiEngine
     private readonly INpcActivityWorld _activities;
     private readonly NpcRoutineRules _routineRules;
     private int _routinePathQueriesLeft;
+    private int _combatPathQueriesLeft;
+    private int _tacticalSearchesLeft;
+    private int _firstBrain;
     private const int RoutinePathQueriesPerTick = 16;
     private ulong _lastPerceptionAt;
     private ulong _lastMovementAt;
@@ -247,7 +250,7 @@ public class AiEngine
             EntityId = npc.EntityId,
             Entity = npc,
             Home = npc.Position,
-            Brain = new AiBrain(_rules, _shard.CurrentTimeLong, AiCombatTuning.FromProfile(attackProfile), routineProfile.LeashDistance),
+            Brain = new AiBrain(_rules, _shard.CurrentTimeLong, AiCombatTuning.FromProfile(attackProfile), routineProfile.LeashDistance, baseParams.AggroDistance),
             Routine = new NpcRoutine(npc.EntityId, npc.StaticInfo.CharacterTypeId, npc.Position,
                 routineProfile, _shard.CurrentTimeLong, _activities),
             MoveSpeed = AiSpeeds.Resolve(normalSpeed, _rules.DefaultMoveSpeed, _rules),
@@ -260,6 +263,7 @@ public class AiEngine
                 : _navigationAgentHeight,
             AttackDamage = attackDamage,
             Profile = attackProfile,
+            CombatMovement = NpcCombatMovementProfile.Resolve(baseParams, offensiveParams),
             // A weapon the database gives a magazine and a reload time fires from that magazine; everything
             // else (every melee row) has none and fires forever, exactly as before.
             Magazine = attackProfile.Reloads
@@ -289,11 +293,22 @@ public class AiEngine
     /// <summary>Forces an NPC to engage whoever shot it.</summary>
     public void Aggro(ulong npcEntityId, ulong attackerEntityId)
     {
-        if (attackerEntityId == 0 || !_brains.TryGetValue(npcEntityId, out var npc))
+        if (attackerEntityId == 0 || !_brains.TryGetValue(npcEntityId, out var npc) ||
+            npc.Brain.State == AiBrainState.Dead ||
+            !_shard.Entities.TryGetValue(attackerEntityId, out var attacker) ||
+            attacker is not CharacterEntity character || !IsValidTarget(npc, character))
         {
             return;
         }
 
+        if (npc.TargetId != attackerEntityId)
+        {
+            npc.HasCheckedVisibility = false;
+            npc.Navigation.Reset();
+            npc.Positioning.Reset();
+        }
+
+        npc.LastDamagedAt = _shard.CurrentTimeLong;
         npc.TargetId = attackerEntityId;
         npc.Brain.Aggro(_shard.CurrentTimeLong);
     }
@@ -344,6 +359,9 @@ public class AiEngine
         elapsedMs = Math.Min(elapsedMs, 250UL);
         _lastMovementAt = currentTime;
         _routinePathQueriesLeft = RoutinePathQueriesPerTick;
+        _navigation.BeginTick();
+        _combatPathQueriesLeft = 16;
+        _tacticalSearchesLeft = 1;
 
         bool perceive = currentTime >= _lastPerceptionAt + (ulong)_rules.PerceptionIntervalMs;
         if (perceive)
@@ -357,9 +375,17 @@ public class AiEngine
         // and zone) 150 times on every perception tick.
         List<CharacterEntity> acquisitionCandidates = perceive ? CollectAcquisitionCandidates() : null;
 
-        foreach (var entry in _brains)
+        // Rotate the first claimant so a shard-wide navigation budget cannot leave
+        // the same later NPCs standing indefinitely behind early route queries.
+        var brains = _brains.Values.ToArray();
+        if (brains.Length > 0)
         {
-            UpdateBrain(entry.Value, elapsedMs, currentTime, perceive, acquisitionCandidates);
+            int first = _firstBrain % brains.Length;
+            _firstBrain = (first + 1) % brains.Length;
+            for (int i = 0; i < brains.Length && !ct.IsCancellationRequested; i++)
+            {
+                UpdateBrain(brains[(first + i) % brains.Length], elapsedMs, currentTime, perceive, acquisitionCandidates);
+            }
         }
     }
 
@@ -416,6 +442,8 @@ public class AiEngine
             npc.Brain.OnDeath();
             npc.Routine.Stop();
             npc.TargetId = 0;
+            npc.Positioning.Reset();
+            npc.Navigation.ClearModuleRequest();
         }
     }
 
@@ -441,6 +469,8 @@ public class AiEngine
             npc.Brain.OnDeath();
             npc.Routine.Stop();
             npc.TargetId = 0;
+            npc.Positioning.Reset();
+            npc.Navigation.ClearModuleRequest();
             npc.Navigation.Reset();
             SyncBehaviorEmote(npc, currentTime);
             return;
@@ -461,7 +491,7 @@ public class AiEngine
         bool targetAlive = false;
         if (npc.TargetId != 0 &&
             _shard.Entities.TryGetValue(npc.TargetId, out var targetEntity) &&
-            targetEntity is CharacterEntity targetCharacter)
+            targetEntity is CharacterEntity targetCharacter && IsValidTarget(npc, targetCharacter))
         {
             target = targetCharacter;
             targetAlive = targetCharacter.IsAlive;
@@ -501,6 +531,11 @@ public class AiEngine
         if (!npc.Brain.WantsTarget)
         {
             npc.TargetId = 0;
+            target = null;
+            targetAlive = false;
+            npc.HasCheckedVisibility = false;
+            npc.Positioning.Reset();
+            npc.Navigation.ClearModuleRequest();
         }
 
         npc.Routine.Update(currentTime, entity.Position, decision.State == AiBrainState.Idle,
@@ -531,7 +566,8 @@ public class AiEngine
                 // weapon meanwhile, which the dodge pair's does for the 500 ms it runs.
                 bool windowSpent = UseAbilityModule(npc, currentTime, attackDistance);
 
-                if (!windowSpent && !IsWeaponRestricted(entity))
+                if (!windowSpent && !IsWeaponRestricted(entity) &&
+                    (profile?.IsRanged == true || !entity.HasCombatFlag(CharacterCombatFlags.restrict_melee)))
                 {
                     if (CanFire(npc, currentTime))
                     {
@@ -605,23 +641,21 @@ public class AiEngine
     }
 
     /// <summary>
-    ///     The ability modules a behaviour set configures, resolved into the ones the engine can run. The
-    ///     base <c>behavior</c> is the set an NPC spends its life in and the one 48 monster rows configure
-    ///     their modules in; 12 more configure them only in <c>behavior_offensive</c>, so that set is read
-    ///     when the base one names none. Modules whose chains carry nothing a client draws or plays are
-    ///     dropped, exactly like a weapon's (see <see cref="NpcAbilityModuleScan.Runnable" />): one of the
-    ///     build's 26 module ids (120937) is a server-side chain alone, and running it would change the
-    ///     fight without changing what a client shows.
+    ///     Combat runs the offensive invocation's module set when it configures one; otherwise
+    ///     fall back to the base invocation. The shipped columns differ in module ids and gates
+    ///     (e.g. monsters 1592, 1808 and 2241), so base-first silently discarded combat tuning.
+    ///     Select a whole set: missing offensive modules are not fabricated from the base tree.
+    ///     Client-visible chains and navigation-only requests retain their existing gates.
     /// </summary>
     /// <param name="baseBehavior">The monster's parsed base behaviour string.</param>
     /// <param name="offensiveBehavior">Its raw <c>behavior_offensive</c> string.</param>
-    /// <returns>The modules to run, in the order am1, am2; empty for the 3,049 rows that configure none.</returns>
+    /// <returns>The modules to run, in the order am1, am2.</returns>
     private List<NpcAbilityModuleState> ResolveAbilityModules(NpcBehaviorParams baseBehavior, string offensiveBehavior)
     {
-        var scans = _monsterStats.GetAbilityModules(baseBehavior);
+        var scans = _monsterStats.GetAbilityModules(NpcBehaviorParams.Parse(offensiveBehavior));
         if (scans.Count == 0)
         {
-            scans = _monsterStats.GetAbilityModules(NpcBehaviorParams.Parse(offensiveBehavior));
+            scans = _monsterStats.GetAbilityModules(baseBehavior);
         }
 
         var modules = new List<NpcAbilityModuleState>();
@@ -710,8 +744,7 @@ public class AiEngine
     /// <returns>Whether the roll passed: true for a <c>Chance</c> of 1, never for 0.</returns>
     private static bool RollModuleChance(NpcBrain npc, NpcAbilityModuleState module, ulong currentTime)
     {
-        uint seed = AiPrng.Trace((uint)currentTime, (byte)(npc.EntityId & 0xFF)) ^ module.AbilityId;
-        return AiPrng.Float(seed) < module.Params.Chance;
+        return NpcDecisionRandom.Roll(npc.EntityId, module.Params.ModuleId, currentTime) < module.Params.Chance;
     }
 
     /// <summary>
@@ -804,12 +837,10 @@ public class AiEngine
         // would make a mob ping pong between two players standing side by side. An idle
         // NPC is different: acquisition requires a sighting, so do not pin an unseen
         // candidate into the brain before it has ever engaged it.
-        if (npc.TargetId != 0 && _shard.Entities.TryGetValue(npc.TargetId, out var currentTarget))
+        if (npc.TargetId != 0 && _shard.Entities.TryGetValue(npc.TargetId, out var currentTarget) &&
+            currentTarget is CharacterEntity currentCharacter && IsValidTarget(npc, currentCharacter))
         {
-            if (npc.Brain.WantsTarget ||
-                (currentTarget is CharacterEntity currentCharacter &&
-                 currentCharacter.IsAlive &&
-                 HasLineOfSight(npc.Entity, currentCharacter)))
+            if (npc.Brain.WantsTarget || HasLineOfSight(npc.Entity, currentCharacter))
             {
                 return;
             }
@@ -817,7 +848,12 @@ public class AiEngine
 
         npc.TargetId = 0;
 
-        float radius = npc.Brain.WantsTarget ? _rules.AggroRadius * _chaseSlackMultiplier : _rules.AggroRadius;
+        float radius = npc.Brain.WantsTarget ? npc.Brain.AggroRadius * _chaseSlackMultiplier : npc.Brain.AggroRadius;
+        if (radius <= 0f)
+        {
+            return;
+        }
+
         var origin = npc.Entity.Position;
 
         ulong bestId = 0;
@@ -828,7 +864,7 @@ public class AiEngine
         // CollectAcquisitionCandidates; hostility is the per-NPC half and stays here.
         foreach (var candidate in candidates)
         {
-            if (!_hostility.IsHostile(npc.Entity, candidate))
+            if (!IsValidTarget(npc, candidate))
             {
                 continue;
             }
@@ -872,6 +908,15 @@ public class AiEngine
             _logger.Debug("{Name} acquired target {TargetId} at {Distance:F1}m, {HeightDelta:F1}m of height between them", npc.Entity, bestId, bestDistance, bestHeightDelta);
         }
     }
+
+    /// <summary>
+    ///     Acquired and damage-driven targets must remain live, hostile and in this simulation.
+    ///     Distance/LOS are acquisition gates, not grounds for dropping an established pursuit.
+    /// </summary>
+    private bool IsValidTarget(NpcBrain npc, CharacterEntity target)
+        => target.IsAlive && target.EntityId != npc.EntityId &&
+            (target.Player == null || ShardZone.IsPlayerInZone(_shard, target.Player)) &&
+            _hostility.IsHostile(npc.Entity, target);
 
     private bool HasLineOfSight(CharacterEntity source, CharacterEntity target)
     {
@@ -920,6 +965,7 @@ public class AiEngine
         npc.TargetVisible = HasLineOfSight(npc.Entity, target);
         npc.VisibilityCheckedFor = target.EntityId;
         npc.HasCheckedVisibility = true;
+        npc.VisibilityCheckedAt = _shard.CurrentTimeLong;
         return npc.TargetVisible;
     }
 
@@ -1310,6 +1356,70 @@ public class AiEngine
                 AiMovementIntent.TowardHome => new Vector3?(npc.Home),
                 _ => decision.State == AiBrainState.Idle ? npc.Routine.Goal : null,
             };
+        // Attack may have entered its standoff band while a corridor is still
+        // going around an obstacle. Finish intermediate waypoints rather than
+        // clearing that route just because the Euclidean distance is small.
+        if (!goal.HasValue && target != null && decision.State == AiBrainState.Attack &&
+            npc.Navigation.Intent == AiMovementIntent.TowardTarget &&
+            npc.Navigation.WaypointIndex < npc.Navigation.Waypoints.Count - 1)
+        {
+            goal = target.Position;
+        }
+
+        bool moduleOwnsApproach = target != null && npc.Navigation.NavModuleId != 0 &&
+            (npc.Navigation.NavDeadline == 0 || currentTime < npc.Navigation.NavDeadline) &&
+            navigationStopDistance < npc.Brain.StandoffRange && moduleWantsApproach;
+        bool tacticalMovement = false;
+        if (target != null && npc.Profile?.IsRanged == true && npc.CombatMovement.GroundTactics &&
+            (decision.State is AiBrainState.Chase or AiBrainState.Attack) && !npc.Routine.Profile.FixedInPlace &&
+            !IsMovementRestricted(entity) && !IsSliding(entity) && !moduleOwnsApproach)
+        {
+            bool underFire = npc.LastDamagedAt != 0 && currentTime >= npc.LastDamagedAt &&
+                currentTime - npc.LastDamagedAt < 3000;
+            bool seekCover = underFire || npc.Magazine.IsReloading(currentTime);
+            if (_navigation.SupportsRoutines && _navigation.CanFindPath && decision.State == AiBrainState.Attack &&
+                (seekCover || AiVectors.HorizontalDistance(entity.Position, target.Position) <= npc.Brain.StandoffRange + 2f) &&
+                npc.Positioning.CanSearch(currentTime) && _tacticalSearchesLeft > 0 && _combatPathQueriesLeft >= 8)
+            {
+                _tacticalSearchesLeft--;
+                _combatPathQueriesLeft -= 8;
+                var agent = new NpcNavigationAgent(entity.EntityId, npc.NavigationRadius, npc.NavigationHeight);
+                npc.Positioning.Search(currentTime, entity.EntityId, entity.Position, target.Position,
+                    npc.Home, npc.Routine.Profile.LeashDistance ?? _rules.LeashRadius,
+                    npc.Brain.StandoffRange, npc.Brain.AttackRange, seekCover,
+                    point => _navigation.FindPath(entity.Position, point, agent),
+                    point => _shard.Physics?.HasStaticOcclusion(
+                        point + new Vector3(0f, 0f, _eyeHeight),
+                        target.Position + new Vector3(0f, 0f, _eyeHeight), entity.EntityId) == true,
+                    npc.CombatMovement, NpcDecisionRandom.Roll(npc.EntityId, 0, currentTime));
+            }
+
+            // Recheck the endpoint on perception passes: an opponent can walk around cover or
+            // out of weapon reach before the short goal expires. No extra path searches are needed.
+            var tacticalGoal = npc.HasCheckedVisibility && npc.VisibilityCheckedAt == currentTime
+                ? npc.Positioning.ValidatedGoal(currentTime, target.Position, npc.Brain.AttackRange,
+                    point => _shard.Physics?.HasStaticOcclusion(
+                        point + new Vector3(0f, 0f, _eyeHeight),
+                        target.Position + new Vector3(0f, 0f, _eyeHeight), entity.EntityId) == true)
+                : npc.Positioning.Goal(currentTime);
+            if (tacticalGoal.HasValue)
+            {
+                goal = tacticalGoal;
+                tacticalMovement = true;
+            }
+        }
+        else
+        {
+            if (moduleOwnsApproach)
+            {
+                npc.Positioning.CancelGoal();
+            }
+            else
+            {
+                npc.Positioning.Reset();
+            }
+        }
+
         bool routineMovement = decision.State == AiBrainState.Idle && npc.Routine.Goal.HasValue;
         if (npc.Routine.Profile.FixedInPlace)
         {
@@ -1325,7 +1435,7 @@ public class AiEngine
         // against 500 ms), so this reads the ability system's own slide state rather than a combat flag.
         if (goal.HasValue && !IsMovementRestricted(entity) && !IsSliding(entity))
         {
-            moved = MoveToward(npc, goal.Value, decision.State, elapsedMs, currentTime, routineMovement);
+            moved = MoveToward(npc, goal.Value, decision.State, elapsedMs, currentTime, routineMovement, tacticalMovement);
         }
         else if (!goal.HasValue)
         {
@@ -1383,7 +1493,7 @@ public class AiEngine
         BroadcastPoseIfChanged(npc, entity, movementState);
     }
 
-    private bool MoveToward(NpcBrain npc, Vector3 goal, AiBrainState state, ulong elapsedMs, ulong currentTime, bool routineMovement)
+    private bool MoveToward(NpcBrain npc, Vector3 goal, AiBrainState state, ulong elapsedMs, ulong currentTime, bool routineMovement, bool tacticalMovement)
     {
         var entity = npc.Entity;
         var waypoint = GetNavigationWaypoint(npc, goal, state, currentTime, routineMovement);
@@ -1420,12 +1530,22 @@ public class AiEngine
 
         var direction = delta / horizontal;
         float speed = UsesWalking(npc, state, routineMovement) ? npc.MoveSpeed : npc.ChaseSpeed;
+        if (!routineMovement && (state is AiBrainState.Chase or AiBrainState.Attack))
+        {
+            // speedMultiplier is authored by StockMelee / GiantAranhaMiniBoss. Its missing
+            // CAIS scope is approximated only in combat, never ambient work or leash return.
+            speed *= npc.CombatMovement.SpeedMultiplier;
+        }
+
         float step = speed * (elapsedMs / 1000f);
 
-        // The path ends at the target's ground point, but combat movement must stop at the
-        // weapon's standoff distance. Clamping here avoids stepping through a target on the
-        // final tick and keeps ranged NPCs at their database-defined combat distance.
-        if (!routineMovement && state != AiBrainState.Return)
+        // Only the final, visible, attackable approach stops at weapon distance.
+        // Applying this to intermediate waypoints or an occluded target freezes wall
+        // detours; applying it to a tactical goal prevents retreat/cover movement.
+        if (!routineMovement && !tacticalMovement && (state is AiBrainState.Chase or AiBrainState.Attack) &&
+            npc.TargetVisible && AiVectors.Distance(entity.Position, goal) <= npc.Brain.AttackRange &&
+            (npc.Profile?.IsRanged == true || AiVectors.HeightDelta(entity.Position, goal) <= _rules.MaxAttackHeightDelta) &&
+            npc.Navigation.WaypointIndex == npc.Navigation.Waypoints.Count - 1)
         {
             float targetDistance = AiVectors.HorizontalDistance(entity.Position, goal);
             float stopDistance = ResolveNavigationStopDistance(npc, currentTime);
@@ -1472,10 +1592,10 @@ public class AiEngine
         entity.AimDirection = direction;
         _shard.Physics?.UpdateEntity(entity);
 
-        npc.Navigation.WallProbeOrigin = candidate;
-        npc.Navigation.HasWallProbeOrigin = true;
         if (probeWalls)
         {
+            npc.Navigation.WallProbeOrigin = candidate;
+            npc.Navigation.HasWallProbeOrigin = true;
             npc.Navigation.NextWallProbeAt = currentTime + WallProbeIntervalMs;
         }
 
@@ -1504,9 +1624,7 @@ public class AiEngine
     {
         if (npc.TargetId == 0 || npc.AbilityModules == null)
         {
-            npc.Navigation.NavModuleId = 0;
-            npc.Navigation.NavTargetId = 0;
-            npc.Navigation.NavDeadline = 0;
+            npc.Navigation.ClearModuleRequest();
             return npc.Brain.StandoffRange;
         }
 
@@ -1522,9 +1640,7 @@ public class AiEngine
 
         if (requested == null)
         {
-            npc.Navigation.NavModuleId = 0;
-            npc.Navigation.NavTargetId = 0;
-            npc.Navigation.NavDeadline = 0;
+            npc.Navigation.ClearModuleRequest();
             return npc.Brain.StandoffRange;
         }
 
@@ -1543,7 +1659,7 @@ public class AiEngine
             return npc.Brain.StandoffRange;
         }
 
-        return requested.Params.NavToDistance;
+        return MathF.Min(requested.Params.NavToDistance, npc.Brain.AttackRange * 0.9f);
     }
 
     private Vector3? GetNavigationWaypoint(
@@ -1562,11 +1678,16 @@ public class AiEngine
         // does not need the moving combat target's 750 ms replan loop.
         bool expired = currentTime >= navigation.NextReplanAt &&
             (!routineMovement || navigation.Waypoints.Count == 0);
-        if (!navigation.HasAttempted || navigation.Intent != intent || goalMoved || expired)
+        if (!navigation.HasAttempted || navigation.Intent != intent ||
+            (goalMoved && navigation.Waypoints.Count > 0) || expired)
         {
-            if (routineMovement && _routinePathQueriesLeft-- <= 0)
+            if (!_navigation.CanFindPath || (routineMovement && _routinePathQueriesLeft-- <= 0) ||
+                (!routineMovement && _combatPathQueriesLeft-- <= 0))
             {
-                return null;
+                // Keep following a previously validated corridor while a refresh waits
+                // for budget. Empty routes wait without authorizing direct movement.
+                return navigation.WaypointIndex < navigation.Waypoints.Count
+                    ? navigation.Waypoints[navigation.WaypointIndex] : null;
             }
 
             navigation.Reset();
@@ -1579,8 +1700,14 @@ public class AiEngine
 
             if (path.Count == 0 || path.Any(point => !NpcGroundMovement.Finite(point)))
             {
-                navigation.NextReplanAt = currentTime + _navigationReplanIntervalMs;
-                if (routineMovement)
+                navigation.NextReplanAt = currentTime + (_navigation.CanFindPath ? 2000UL : (ulong)_rules.MovementIntervalMs);
+                if (_navigation.CanFindPath && currentTime >= npc.NextNavigationWarningAt)
+                {
+                    npc.NextNavigationWarningAt = currentTime + 10_000;
+                    _logger.Debug("NPC {EntityId}: no supported route from {From} to {Goal}; retrying after backoff",
+                        npc.EntityId, npc.Entity.Position, goal);
+                }
+                if (routineMovement && _navigation.CanFindPath)
                 {
                     npc.Routine.Blocked(currentTime);
                 }
@@ -1709,6 +1836,13 @@ public class AiEngine
 
         public bool HasGoal => Intent != AiMovementIntent.None;
 
+        public void ClearModuleRequest()
+        {
+            NavModuleId = 0;
+            NavTargetId = 0;
+            NavDeadline = 0;
+        }
+
         public void Advance()
         {
             if (WaypointIndex < Waypoints.Count)
@@ -1741,6 +1875,10 @@ public class AiEngine
         public NpcRoutine Routine;
         public AeroMessages.GSS.Character.WeaponIndexData? RoutineWeapon;
         public ulong TargetId;
+        public ulong LastDamagedAt;
+        public ulong NextNavigationWarningAt;
+        public NpcCombatPositioning Positioning = new();
+        public NpcCombatMovementProfile CombatMovement = NpcCombatMovementProfile.Default;
         public Vector3 Home;
         public float MoveSpeed;
         public float ChaseSpeed;
@@ -1803,6 +1941,8 @@ public class AiEngine
 
         /// <summary>The target the last line of sight verdict was cast against.</summary>
         public ulong VisibilityCheckedFor;
+
+        public ulong VisibilityCheckedAt;
 
         /// <summary>Whether <see cref="TargetVisible" /> is a cast result rather than the default.</summary>
         public bool HasCheckedVisibility;

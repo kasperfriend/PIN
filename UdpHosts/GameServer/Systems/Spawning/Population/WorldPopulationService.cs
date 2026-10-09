@@ -92,6 +92,7 @@ public sealed class WorldPopulationService
     private readonly ILogger _logger;
     private readonly IWorldPopulationRules _rules;
     private readonly IWorldPopulationTerrain _terrain;
+    private readonly IWorldPopulationDataSource _data;
     private readonly IWorldPopulationSpawner _spawner;
     private readonly SpawnOccupancyGrid _occupancy;
     private readonly WorldPopulationPlanner _planner;
@@ -184,6 +185,7 @@ public sealed class WorldPopulationService
         _shard = shard;
         _logger = shard.Logger.ForContext<WorldPopulationService>();
         _rules = rules;
+        _data = data;
         _terrain = terrain;
         _spawner = spawner;
         _planThreads = Math.Max(0, planWorkerThreads);
@@ -1087,6 +1089,18 @@ public sealed class WorldPopulationService
             attemptsSpent++;
 
             var position = attempt == 0 ? slot.Anchor : slot.Anchor + RetryJitter(slot, attempt);
+            // Sample within the assigned cell instead of repeatedly rejecting outward jitter
+            // from surface centroids near a cell edge. Bounds/chunk/terrain still validate it.
+            position.X = Math.Clamp(position.X, slot.Cell.X * _rules.CellSize,
+                MathF.BitDecrement((slot.Cell.X + 1) * _rules.CellSize));
+            position.Y = Math.Clamp(position.Y, slot.Cell.Y * _rules.CellSize,
+                MathF.BitDecrement((slot.Cell.Y + 1) * _rules.CellSize));
+
+            if (!IsPlacementEligible(slot, position))
+            {
+                slot.RoundRefusedByGround = true;
+                continue;
+            }
 
             if (IsTooCloseToAPlayer(position) ||
                 !_occupancy.IsAreaFree(position, radius, _rules.MinSeparation))
@@ -1096,6 +1110,12 @@ public sealed class WorldPopulationService
             }
 
             if (!_terrain.TryResolveStandingSpot(position, radius, height, out var resolved))
+            {
+                slot.RoundRefusedByGround = true;
+                continue;
+            }
+
+            if (!IsPlacementEligible(slot, resolved))
             {
                 slot.RoundRefusedByGround = true;
                 continue;
@@ -1192,6 +1212,24 @@ public sealed class WorldPopulationService
             slot.Anchor,
             _shard.ZoneId,
             slot.Failures);
+    }
+
+    /// <summary>
+    ///     A cell's eligibility is not a certificate for a jittered/resolved point. Keep its
+    ///     habitat/level ownership, check actual zone bounds and re-read the final chunk rules.
+    ///     Unknown chunks retain the data source's existing explicit fallback policy.
+    /// </summary>
+    private bool IsPlacementEligible(WorldPopulationSlot slot, Vector3 position)
+    {
+        if (!float.IsFinite(position.X) || !float.IsFinite(position.Y) || !float.IsFinite(position.Z) ||
+            !_terrain.IsInsideZoneBounds(position))
+        {
+            return false;
+        }
+
+        var (x, y) = WorldPopulationCell.CellIndexOf(position, _rules.CellSize);
+        return x == slot.Cell.X && y == slot.Cell.Y &&
+               _data.IsChunkSpawnable(_shard.ZoneId, _terrain.GetChunkRecordId(position));
     }
 
     private Vector3 RetryJitter(WorldPopulationSlot slot, int attempt)

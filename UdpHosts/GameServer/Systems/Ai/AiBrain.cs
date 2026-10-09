@@ -29,9 +29,10 @@ public class AiBrain
     ///     The NPC's own weapon reach, cadence and standoff (see <see cref="AiCombatTuning" />), or
     ///     <see cref="AiCombatTuning.None" /> to fight on the rules values alone.
     /// </param>
-    public AiBrain(IAiRules rules, ulong now, AiCombatTuning combat = default, float? leashRadius = null)
+    public AiBrain(IAiRules rules, ulong now, AiCombatTuning combat = default, float? leashRadius = null, float? aggroRadius = null)
     {
         _rules = rules ?? throw new ArgumentNullException(nameof(rules));
+        AggroRadius = aggroRadius is >= 0f && float.IsFinite(aggroRadius.Value) ? aggroRadius.Value : rules.AggroRadius;
         _leashRadius = leashRadius is > 0f && float.IsFinite(leashRadius.Value) ? leashRadius.Value : rules.LeashRadius;
 
         // A mob whose weapon row resolves fights with that weapon's reach and cadence instead of the
@@ -39,7 +40,8 @@ public class AiBrain
         // rules behaviour the tests and the docs describe.
         _attackRange = combat.AttackRange > 0f ? combat.AttackRange : _rules.AttackRange;
         _attackRangeExit = combat.AttackRangeExit > 0f ? combat.AttackRangeExit : _rules.AttackRangeExit;
-        _standoffRange = combat.StandoffRange > 0f ? combat.StandoffRange : _rules.StandoffRange;
+        _standoffRange = MathF.Min(combat.StandoffRange > 0f ? combat.StandoffRange : _rules.StandoffRange,
+            _attackRange * 0.9f);
         _attackCooldownMs = combat.AttackCooldownMs > 0 ? combat.AttackCooldownMs : _rules.AttackCooldownMs;
 
         // A melee swing cannot cross a floor, but a projectile weapon can shoot at anything it can
@@ -51,6 +53,9 @@ public class AiBrain
         LastTargetSeenAt = now;
         NextAttackAt = now;
     }
+
+    /// <summary>Proximity acquisition radius, authored by the base invocation or supplied by rules.</summary>
+    public float AggroRadius { get; }
 
     /// <summary>Reach in metres this NPC attacks at (its weapon's, or the rules value).</summary>
     public float AttackRange => _attackRange;
@@ -88,7 +93,12 @@ public class AiBrain
         }
 
         LastTargetSeenAt = now;
-        NextAttackAt = now;
+        // Being hit refreshes engagement, not the weapon's already-spent cadence.
+        // Otherwise rapid player hits (or alternating attackers) grant an NPC a shot every tick.
+        if (State is AiBrainState.Idle or AiBrainState.Return)
+        {
+            NextAttackAt = Math.Max(NextAttackAt, now);
+        }
 
         if (State is AiBrainState.Idle or AiBrainState.Return)
         {
@@ -168,7 +178,7 @@ public class AiBrain
             // the visibility check the give-up path above would drop the target and this arm
             // would immediately re-adopt it, so a mob would "forget and rediscover" a player
             // standing behind cover every TargetLostTimeoutMs instead of ever giving up.
-            AiBrainState.Idle when engaged && perception.TargetVisible && perception.DistanceToTarget <= _rules.AggroRadius
+            AiBrainState.Idle when engaged && perception.TargetVisible && AggroRadius > 0f && perception.DistanceToTarget <= AggroRadius
                 => AiBrainState.Chase,
             // An attack is measured over the straight-line distance, so a target standing on the
             // ledge above the NPC is not "in range" because it is over its head. The reach itself is
@@ -186,7 +196,7 @@ public class AiBrain
         bool wantsToClose = perception.DistanceToTarget > _standoffRange;
         var movement = State switch
         {
-            AiBrainState.Chase when wantsToClose => AiMovementIntent.TowardTarget,
+            AiBrainState.Chase when engaged => AiMovementIntent.TowardTarget,
             AiBrainState.Attack when wantsToClose => AiMovementIntent.TowardTarget,
             AiBrainState.Return => AiMovementIntent.TowardHome,
             _ => AiMovementIntent.None,

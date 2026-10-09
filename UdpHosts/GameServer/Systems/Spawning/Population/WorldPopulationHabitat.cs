@@ -9,11 +9,9 @@ namespace GameServer.Systems.Spawning.Population;
 ///     fits more than one kind of ground can appear in any of them.
 /// </summary>
 /// <remarks>
-///     The client database has no per-zone spawn table (that lived in the live server's spawn
-///     groups, which never shipped in <c>clientdb.sd2</c>), so the habitats are the placement
-///     signal that *is* in the data: what a monster's AI behaviour and faction say about where
-///     the game put it. City wanderers and civilians only ever appear inside an outpost;
-///     Melding creatures only ever appear at the Melding; everything else is field content.
+///     These are coarse PIN compatibility categories, not original zone or encounter assignments.
+///     The procedural classifier first rejects unmet route/prop/vendor/locomotion requirements.
+///     Being admitted to a category does not prove an NPC belongs in every zone with that ground.
 /// </remarks>
 [Flags]
 public enum WorldPopulationHabitat

@@ -1,3 +1,5 @@
+using System;
+
 namespace GameServer.Systems.Ai;
 
 /// <summary>
@@ -33,7 +35,7 @@ public readonly record struct AiCombatTuning(
             profile.AttackRange,
             profile.AttackRangeExit,
             profile.StandoffRange,
-            (int)profile.AttackIntervalMs,
+            (int)Math.Min(profile.AttackIntervalMs, (uint)int.MaxValue),
             profile.IsRanged);
     }
 }
