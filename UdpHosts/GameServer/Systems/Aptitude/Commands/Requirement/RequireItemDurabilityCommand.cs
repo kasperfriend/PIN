@@ -45,8 +45,8 @@ public class RequireItemDurabilityCommand : Command, ICommand
             return false;
         }
 
-        var item = character.Player?.Inventory?.GetEquippedItemInSlot((LoadoutSlotType)Params.SlotType);
-        if (item == null)
+        if (character.Player?.Inventory == null
+            || !character.Player.Inventory.TryGetEquippedItemInSlot((LoadoutSlotType)Params.SlotType, out var item))
         {
             Logger.Debug("RequireItemDurability {CommandId}: nothing equipped in slot {Slot}", Params.Id, Params.SlotType);
             return false;

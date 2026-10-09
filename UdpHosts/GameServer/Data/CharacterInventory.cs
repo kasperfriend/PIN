@@ -142,23 +142,31 @@ public class CharacterInventory
     ///     to be found among the carried items — items are not stackable, so at most one equipped
     ///     entry can match.
     /// </summary>
-    public Item GetEquippedItemInSlot(LoadoutSlotType slot)
+    /// <remarks>
+    ///     A <c>TryGet</c> rather than a nullable return because <see cref="Item" /> is a struct:
+    ///     <c>Item?</c> is a <c>Nullable&lt;Item&gt;</c>, which neither returns null nor exposes the
+    ///     fields through the question mark.
+    /// </remarks>
+    public bool TryGetEquippedItemInSlot(LoadoutSlotType slot, out Item item)
     {
+        item = default;
+
         uint sdbId = _character.CurrentLoadout?.SlottedItems.GetValueOrDefault(slot) ?? 0;
         if (sdbId == 0)
         {
-            return null;
+            return false;
         }
 
-        foreach (var item in _items.Values)
+        foreach (var carried in _items.Values)
         {
-            if (item.SdbId == sdbId && (item.DynamicFlags & (byte)ItemDynamicFlags.IsEquipped) != 0)
+            if (carried.SdbId == sdbId && (carried.DynamicFlags & (byte)ItemDynamicFlags.IsEquipped) != 0)
             {
-                return item;
+                item = carried;
+                return true;
             }
         }
 
-        return null;
+        return false;
     }
 
     public bool HasItemEquipped(uint sdbId) =>
