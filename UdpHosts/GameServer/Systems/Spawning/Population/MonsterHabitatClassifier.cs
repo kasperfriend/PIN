@@ -11,21 +11,11 @@ namespace GameServer.Systems.Spawning.Population;
 ///     database; <see cref="SdbWorldPopulationDataSource"/> supplies the row fields.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Every rule here is derived from columns that exist in the shipped database. What the
-///         database does <b>not</b> contain is which zone a given monster was meant for: the live
-///         server's spawn groups held that, and they never shipped in <c>clientdb.sd2</c> (there is
-///         no table with per-zone monster positions, and the faction tables carry no zone link).
-///         So the zone filter is what the data can answer for: the habitat a cell has (does this
-///         zone contain outposts / Melding at all?) and the level band the area carries. A monster
-///         that only belongs to settlements is therefore only placed in zones that have settlements.
-///     </para>
-///     <para>
-///         Against the 3,109 monster rows of the shipped database this admits 2,853: 89 rows carry
-///         neither a chassis nor a posetype (there is nothing to render or collide), and 167 rows
-///         ask for behaviour that is not a free roaming world entity. Of the admitted rows 1,023
-///         fit settlements, 1,731 the wilderness and 351 the Melding.
-///     </para>
+///     This is PIN's conservative procedural-placement policy, not recovered spawn assignments.
+///     The client database names behaviors and requirements but provides no per-zone roster.
+///     A template with an unsatisfied route, prop, locomotion or vendor assignment must not gain
+///     random coverage/density slots. Explicit entity/ability/debug spawning does not use this gate.
+///     See Docs/NPC_PLACEMENT_AUDIT.md for the current full census and remaining limits.
 /// </remarks>
 public static class MonsterHabitatClassifier
 {
@@ -88,11 +78,27 @@ public static class MonsterHabitatClassifier
         "_inst",
     };
 
+    // Explicit sets, not substring matches on arbitrary tree/emote names. These requests need
+    // context that the procedural planner does not supply. This does not disable explicit spawns.
+    private static readonly HashSet<string> _assignedRouteBehaviors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "StockShootAndFollowRoute", "OneOff_FollowRoute", "NavigateToLocation", "Arch_Follower",
+        "ProtectVehicle", "TestFollowPlayer",
+    };
+
+    // Reviewed prod-1962 base poses: seat, chair, console and leaning placement. Do not infer
+    // arbitrary emotes containing these words; unknown emotes remain an audit gap.
+    private static readonly HashSet<string> _propDependentEmotes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "controlseat", "sittingchair01", "sittingchair03", "sittingchair05",
+        "townlean1", "townlean2", "townlean4M", "typing", "typing01",
+    };
+
     /// <summary>
     ///     Behaviour names the game gives to settlement inhabitants: civilians and their city
     ///     wander sets, guards, the interactive NPCs a player talks to or uses, and the NPCs that
-    ///     stand, pose or emote where they were put. Together with the vendor rule below these are
-    ///     1,023 of the 3,109 rows.
+    ///     stand or emote. This coarse habitat heuristic applies only after the assignment gate;
+    ///     a settlement classification is not an original NPC location.
     /// </summary>
     private static readonly HashSet<string> _settlementBehaviors = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -137,10 +143,10 @@ public static class MonsterHabitatClassifier
     ///     its arguments are understood identically everywhere.
     /// </param>
     /// <param name="vendorId">
-    ///     <c>dbcharacter::Monster.vendor_id</c>. A row that sells something is a settlement NPC:
-    ///     vendors stand behind their counter in a POI, never in the field. 102 rows carry one.
-    ///     (<c>terminal_type_name</c> is not usable as a signal on its own: 3,087 of the 3,109
-    ///     rows carry its <c>VENDOR</c> default, including the wildlife.)
+    ///     Nonzero means the template exposes a vendor role. Procedural coverage/density has no
+    ///     vendor placement or uniqueness assignment, so it must not scatter copies of that role.
+    ///     Explicit spawns remain available. The near-universal terminal_type_name=VENDOR default
+    ///     is deliberately not used: it would exclude ordinary wildlife as well.
     /// </param>
     /// <param name="factionInternalName">
     ///     <c>dbcharacter::Faction.internal_name</c> of the row's <c>faction_id</c>, or null when
@@ -172,16 +178,46 @@ public static class MonsterHabitatClassifier
             return false;
         }
 
-        string behaviorName = NpcBehaviorParams.Parse(behavior).Name;
+        var parameters = NpcBehaviorParams.Parse(behavior);
+        string behaviorName = parameters.Name;
         if (behaviorName.Length > 0 && _neverWorldSpawned.Contains(behaviorName))
         {
             exclusion = $"behaviour {behaviorName}";
             return false;
         }
 
+        if (_assignedRouteBehaviors.Contains(behaviorName) ||
+            (parameters.Values.TryGetValue("city_prefix", out string prefix) && !string.IsNullOrWhiteSpace(prefix)))
+        {
+            exclusion = "requires route, named points or follow target";
+            return false;
+        }
+
+        if ((parameters.TryGetBool("climber", out bool climber) && climber) ||
+            (parameters.TryGetBool("grounded", out bool grounded) && !grounded) ||
+            (parameters.TryGetBool("inSpawnVolume", out bool inVolume) && inVolume) ||
+            (parameters.TryGetFloat("groundOffset", out float offset) && float.IsFinite(offset) && offset > 0f))
+        {
+            exclusion = "requires unsupported locomotion or spawn volume";
+            return false;
+        }
+
+        if (behaviorName.Equals("PerformEmoteNoPhysics", StringComparison.OrdinalIgnoreCase) ||
+            _propDependentEmotes.Contains(parameters.EmoteName))
+        {
+            exclusion = "requires assigned prop or pose placement";
+            return false;
+        }
+
+        if (vendorId != 0)
+        {
+            exclusion = "requires vendor placement assignment";
+            return false;
+        }
+
         WorldPopulationHabitat result = WorldPopulationHabitat.None;
 
-        if ((behaviorName.Length > 0 && _settlementBehaviors.Contains(behaviorName)) || vendorId != 0)
+        if (behaviorName.Length > 0 && _settlementBehaviors.Contains(behaviorName))
         {
             result |= WorldPopulationHabitat.Settlement;
         }

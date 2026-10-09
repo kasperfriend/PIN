@@ -14,13 +14,41 @@ Every monster template and static JSON spawn was inspected. The runtime has a **
 
 | Habitat policy | Templates |
 |---|---:|
-| Excluded | 256 |
+| Excluded | 398 |
 | Melding | 103 |
-| Melding&#124;Wilderness | 243 |
-| Settlement | 1018 |
+| Melding&#124;Wilderness | 241 |
+| Settlement | 889 |
 | Settlement&#124;Melding | 1 |
-| Settlement&#124;Melding&#124;Wilderness | 4 |
-| Wilderness | 1484 |
+| Settlement&#124;Melding&#124;Wilderness | 3 |
+| Wilderness | 1474 |
+
+## Procedural exclusions by first reason
+
+| Reason | Templates |
+|---|---:|
+| behaviour AvoidMatt | 1 |
+| behaviour Config | 2 |
+| behaviour CraterTest | 1 |
+| behaviour DoorUpInteract | 1 |
+| behaviour Elevator | 1 |
+| behaviour EngineerTurret | 14 |
+| behaviour EngineerTurretTeleporter | 2 |
+| behaviour MRU | 1 |
+| behaviour Meta | 1 |
+| behaviour Null | 115 |
+| behaviour PassivePet | 7 |
+| behaviour Pet_Earthbreaker | 6 |
+| behaviour PlayerPet | 8 |
+| behaviour TestElfPet | 2 |
+| behaviour TestFollowPlayer | 1 |
+| behaviour TurretTeleporterDropshipCannon | 2 |
+| behaviour TurretTeleporterTarget | 1 |
+| behaviour _inst | 1 |
+| no chassis and no posetype | 89 |
+| requires assigned prop or pose placement | 28 |
+| requires route, named points or follow target | 10 |
+| requires unsupported locomotion or spawn volume | 4 |
+| requires vendor placement assignment | 100 |
 
 These categories are reproduced from `MonsterHabitatClassifier`, **not original biome/zone assignments**. The coverage phase tries to give every admitted row a slot in available compatible cells; density can repeat those rows.
 
@@ -28,12 +56,8 @@ These categories are reproduced from `MonsterHabitatClassifier`, **not original 
 
 | Risk | Admitted templates |
 |---|---:|
-| empty invocation has unresolved CAIS instance | 751 |
-| pose may require an assigned prop | 28 |
-| route/follow/named-point assignment missing | 10 |
-| unsupported locomotion/spawn volume | 2 |
-| vendor location/uniqueness not assigned | 101 |
-| work destination requires placed station | 120 |
+| empty invocation has unresolved CAIS instance | 747 |
+| work destination requires placed station | 118 |
 
 Flags identify missing evidence, not automatic proof a template is misplaced. For example, a vendor needs a location/role assignment; a seated pose needs a matching prop. Neither should be assigned invented original coordinates.
 
@@ -64,7 +88,7 @@ Flags identify missing evidence, not automatic proof a template is misplaced. Fo
 ## Remaining placement gaps
 
 1. **Global rather than per-zone roster:** no zone/subzone/encounter restriction on a template, so region-specific creatures and bosses can be assigned to any zone with suitable generic ground.
-2. **Special actors admitted:** route/follow requests, seated poses, unsupported climbers and unique vendors are not comprehensively excluded from procedural coverage. CSV flags make this visible. No unrequested blanket removal was made.
+2. **Conservative assignment gate added:** explicit route/follow/named-point requests, unsupported locomotion parameters, reviewed prop-dependent base poses and nonzero vendor roles are excluded from automatic population. This is a PIN safety policy, not recovered original placement. Unknown special trees/poses, bosses and unresolved CAIS instances still need assignment data. Explicit static/debug/ability spawns bypass this gate.
 3. **Settlement is a proximity heuristic:** all outposts and clustered deployables paint settlement cells without original NPC ownership/role assignments. Cell-center classification does not guarantee exact camp borders.
 4. **Static/hard-coded spawns use a separate path:** they do not inherit every procedural placement check. The static faction lineup is intentional debug content, not a misplaced production population to silently relocate.
 5. **No live map validation in this sandbox:** configured client map assets and an interactive game client are unavailable. Bounds, floor support, prop alignment and spawn composition across actual zones cannot be certified from template rows.

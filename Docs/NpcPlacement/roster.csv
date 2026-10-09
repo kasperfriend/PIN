@@ -1,8 +1,8 @@
 monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assignment_risks,original_zone_assignment
 1,6,melding,,Melding,,0,empty invocation has unresolved CAIS instance,not recovered
-2,1,accord,,Excluded,no representation,0,,not recovered
+2,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
 3,1,accord,,Wilderness,,0,,not recovered
-4,1,accord,PlayerPet,Excluded,explicit classifier exclusion,0,,not recovered
+4,1,accord,PlayerPet,Excluded,behaviour PlayerPet,0,,not recovered
 5,2,chosen,EliteWanderer(preferredMinCombatDist=20),Melding|Wilderness,,0,,not recovered
 6,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 7,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
@@ -15,45 +15,45 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 14,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 19,6,melding,"GiantMeldingSalamander(maxFlameDuration=2000,maxDurationFromEgg=15000)",Melding,,0,,not recovered
 20,1,accord,,Wilderness,,0,,not recovered
-21,1,accord,,Excluded,no representation,0,,not recovered
+21,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
 22,2,chosen,,Melding|Wilderness,,0,,not recovered
-23,1,accord,,Excluded,no representation,0,,not recovered
-24,1,accord,,Excluded,no representation,0,,not recovered
-25,1,accord,,Excluded,no representation,0,,not recovered
-26,2,chosen,Null,Excluded,explicit classifier exclusion,0,,not recovered
+23,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
+24,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
+25,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
+26,2,chosen,Null,Excluded,behaviour Null,0,,not recovered
 27,1,accord,"AlertAndInteractive(helloScript=""MRU - Sonar On"")",Settlement,,0,,not recovered
-28,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-29,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-30,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-31,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-32,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-33,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-34,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-35,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-36,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-37,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-38,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-39,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-40,1,accord,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
-41,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-42,2,chosen,Null,Excluded,explicit classifier exclusion,0,,not recovered
-43,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-44,2,chosen,Null,Excluded,explicit classifier exclusion,0,,not recovered
-47,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-48,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-49,2,chosen,Null,Excluded,explicit classifier exclusion,0,,not recovered
-52,7,gaea,Null,Excluded,explicit classifier exclusion,0,,not recovered
-53,7,gaea,Null,Excluded,explicit classifier exclusion,0,,not recovered
-54,7,gaea,Null,Excluded,explicit classifier exclusion,0,,not recovered
-55,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-57,7,gaea,Null,Excluded,explicit classifier exclusion,0,,not recovered
-58,1,accord,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
-59,2,chosen,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
-61,4,friendly,Null,Excluded,explicit classifier exclusion,0,,not recovered
-63,2,chosen,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
-65,1,accord,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
-66,2,chosen,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
-68,6,melding,MeldingTornado(abilityWaitTime=3000),Excluded,no representation,0,,not recovered
+28,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+29,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+30,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+31,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+32,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+33,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+34,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+35,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+36,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+37,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+38,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+39,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+40,1,accord,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
+41,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+42,2,chosen,Null,Excluded,behaviour Null,0,,not recovered
+43,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+44,2,chosen,Null,Excluded,behaviour Null,0,,not recovered
+47,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+48,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+49,2,chosen,Null,Excluded,behaviour Null,0,,not recovered
+52,7,gaea,Null,Excluded,behaviour Null,0,,not recovered
+53,7,gaea,Null,Excluded,behaviour Null,0,,not recovered
+54,7,gaea,Null,Excluded,behaviour Null,0,,not recovered
+55,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+57,7,gaea,Null,Excluded,behaviour Null,0,,not recovered
+58,1,accord,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
+59,2,chosen,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
+61,4,friendly,Null,Excluded,behaviour Null,0,,not recovered
+63,2,chosen,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
+65,1,accord,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
+66,2,chosen,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
+68,6,melding,MeldingTornado(abilityWaitTime=3000),Excluded,no chassis and no posetype,0,,not recovered
 69,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 70,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 72,2,chosen,AggressiveWanderer,Melding|Wilderness,,0,,not recovered
@@ -74,16 +74,16 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 87,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 88,2,chosen,AggressiveWanderer,Melding|Wilderness,,0,,not recovered
 89,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
-90,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-91,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-92,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-93,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-94,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-95,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-96,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-97,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-98,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-99,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+90,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+91,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+92,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+93,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+94,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+95,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+96,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+97,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+98,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+99,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 100,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 101,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 102,2,chosen,AggressiveWanderer,Melding|Wilderness,,0,,not recovered
@@ -92,10 +92,10 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 105,2,chosen,AggressiveWanderer,Melding|Wilderness,,0,,not recovered
 106,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 107,2,chosen,AggressiveWanderer,Melding|Wilderness,,0,,not recovered
-108,1,accord,"EngineerTurret(interact=1,interactAbility=""Turret I : Interact to Upgrade"")",Excluded,explicit classifier exclusion,0,,not recovered
-109,2,chosen,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
-110,1,accord,TraumaDoc,Settlement,,1,vendor location/uniqueness not assigned,not recovered
-111,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+108,1,accord,"EngineerTurret(interact=1,interactAbility=""Turret I : Interact to Upgrade"")",Excluded,behaviour EngineerTurret,0,,not recovered
+109,2,chosen,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
+110,1,accord,TraumaDoc,Excluded,requires vendor placement assignment,1,,not recovered
+111,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 112,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
 113,2,chosen,TraumaDoc,Settlement|Melding|Wilderness,,0,,not recovered
 114,1,accord,TraumaDoc,Settlement,,0,,not recovered
@@ -106,95 +106,95 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 119,1,accord,TraumaDoc,Settlement,,0,,not recovered
 120,1,accord,TraumaDoc,Settlement,,0,,not recovered
 121,1,accord,TraumaDoc,Settlement,,0,,not recovered
-122,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+122,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 123,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
-124,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+124,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 125,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 126,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 127,1,accord,TraumaDoc,Settlement,,0,,not recovered
 128,1,accord,TraumaDoc,Settlement,,0,,not recovered
-129,1,accord,MRU,Excluded,explicit classifier exclusion,0,,not recovered
+129,1,accord,MRU,Excluded,behaviour MRU,0,,not recovered
 130,6,melding,,Melding,,0,,not recovered
 131,6,melding,AggressiveWanderer,Melding,,0,,not recovered
-132,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+132,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 133,6,melding,,Melding,,0,,not recovered
 134,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 135,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 136,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
-137,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+137,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 138,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 139,6,melding,AggressiveWanderer,Melding,,0,,not recovered
-140,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+140,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 141,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 142,1,accord,TraumaDoc,Settlement,,0,,not recovered
-143,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+143,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 144,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 145,6,melding,AggressiveWanderer,Melding,,0,,not recovered
-146,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-147,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
-148,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-149,2,chosen,Null,Excluded,explicit classifier exclusion,0,,not recovered
+146,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+147,6,melding,Null,Excluded,behaviour Null,0,,not recovered
+148,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+149,2,chosen,Null,Excluded,behaviour Null,0,,not recovered
 150,2,chosen,MeldingPuker,Melding|Wilderness,,0,,not recovered
 151,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
-152,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-153,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
-154,6,melding,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
-155,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+152,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+153,6,melding,Null,Excluded,behaviour Null,0,,not recovered
+154,6,melding,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
+155,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 156,6,melding,,Melding,,0,,not recovered
-157,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+157,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 158,1,accord,TraumaDoc,Settlement,,0,,not recovered
 159,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 160,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 161,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 162,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 163,6,melding,AggressiveWanderer,Melding,,0,,not recovered
-164,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+164,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 165,6,melding,AggressiveWanderer,Melding,,0,,not recovered
-166,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+166,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 167,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 168,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 169,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 170,1,accord,,Wilderness,,0,,not recovered
 171,6,melding,AggressiveWanderer,Melding,,0,,not recovered
-172,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-173,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+172,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+173,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 174,1,accord,,Wilderness,,0,,not recovered
 175,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 176,6,melding,AggressiveWanderer,Melding,,0,,not recovered
-177,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+177,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 178,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 179,7,gaea,"SwarmWanderer(ability=""Leap"", chanceAbilityAttack=0.00, maxDistFromSpawn=30, maxDistJitter=5, swarmRadiusMax=10, swarmRadiusMin=8, maxMeleeCombatBursts=3, attackLimit=3, idleEmoteMinTime=7000, idleEmoteMaxTime=12000, wanderDistance=10)",Wilderness,,0,,not recovered
-180,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+180,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 181,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 182,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 183,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 184,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 185,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
-186,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+186,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 187,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
-188,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-189,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+188,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+189,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 190,9,neutral,PassiveAttacker,Wilderness,,0,,not recovered
-191,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-192,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+191,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+192,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 193,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
-194,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-195,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+194,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+195,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 196,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 197,9,neutral,AggressiveWanderer,Wilderness,,0,,not recovered
 198,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 199,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 200,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
-201,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+201,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 202,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 203,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 204,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 205,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 206,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 207,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""guard"")",Settlement,,0,,not recovered
-208,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""townlean1"")",Settlement,,0,pose may require an assigned prop,not recovered
-209,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-210,1,accord,"EngineerTurret(interact=1,interactAbility=""Turret II : Interact to Upgrade"")",Excluded,explicit classifier exclusion,0,,not recovered
+208,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""townlean1"")",Excluded,requires assigned prop or pose placement,0,,not recovered
+209,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+210,1,accord,"EngineerTurret(interact=1,interactAbility=""Turret II : Interact to Upgrade"")",Excluded,behaviour EngineerTurret,0,,not recovered
 211,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 212,2,chosen,ShotGruntWanderer,Melding|Wilderness,,0,,not recovered
 213,6,melding,AggressiveWanderer,Melding,,0,,not recovered
@@ -202,24 +202,24 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 215,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 216,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 217,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
-218,7,gaea,Null,Excluded,explicit classifier exclusion,0,,not recovered
-219,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+218,7,gaea,Null,Excluded,behaviour Null,0,,not recovered
+219,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 220,6,melding,AggressiveWanderer,Melding,,0,,not recovered
-221,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-222,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+221,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+222,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 223,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 224,5,monster,AggressiveWanderer,Wilderness,,0,,not recovered
 225,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
-226,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-227,7,gaea,Null,Excluded,explicit classifier exclusion,0,,not recovered
-228,7,gaea,Null,Excluded,explicit classifier exclusion,0,,not recovered
-229,7,gaea,Null,Excluded,explicit classifier exclusion,0,,not recovered
-230,7,gaea,Null,Excluded,explicit classifier exclusion,0,,not recovered
-231,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-232,4,friendly,Null,Excluded,explicit classifier exclusion,0,,not recovered
+226,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+227,7,gaea,Null,Excluded,behaviour Null,0,,not recovered
+228,7,gaea,Null,Excluded,behaviour Null,0,,not recovered
+229,7,gaea,Null,Excluded,behaviour Null,0,,not recovered
+230,7,gaea,Null,Excluded,behaviour Null,0,,not recovered
+231,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+232,4,friendly,Null,Excluded,behaviour Null,0,,not recovered
 233,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
-234,4,friendly,Null,Excluded,explicit classifier exclusion,0,,not recovered
-235,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+234,4,friendly,Null,Excluded,behaviour Null,0,,not recovered
+235,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 236,1,accord,TraumaDoc,Settlement,,0,,not recovered
 237,7,gaea,"SwarmWanderer(ability=""Roach Leap"", chanceAbilityAttack=0.33, maxDistFromSpawn=45, maxDistJitter=5, swarmRadiusMax=10, swarmRadiusMin=8, maxMeleeCombatBursts=3, attackLimit=3, idleEmoteMinTime=7000, idleEmoteMaxTime=12000, wanderDistance=10) ",Wilderness,,0,,not recovered
 238,7,gaea,"SwarmWanderer(ability=""Roach Leap"", chanceAbilityAttack=0.33, maxDistFromSpawn=45, maxDistJitter=5, swarmRadiusMax=10, swarmRadiusMin=8, maxMeleeCombatBursts=3, attackLimit=3, idleEmoteMinTime=7000, idleEmoteMaxTime=12000, wanderDistance=10)",Wilderness,,0,,not recovered
@@ -235,7 +235,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 248,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 249,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 250,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
-251,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+251,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 252,7,gaea,"SwarmWanderer(ability=""Roach Leap"", chanceAbilityAttack=0.33, maxDistFromSpawn=45, maxDistJitter=5, swarmRadiusMax=10, swarmRadiusMin=8, maxMeleeCombatBursts=3, attackLimit=3, idleEmoteMinTime=7000, idleEmoteMaxTime=12000, wanderDistance=10)",Wilderness,,0,,not recovered
 253,7,gaea,"SwarmWanderer(ability=""Leap"", chanceAbilityAttack=0.33, maxDistFromSpawn=30, maxDistJitter=5, swarmRadiusMax=10, swarmRadiusMin=8, maxMeleeCombatBursts=3, attackLimit=3, idleEmoteMinTime=7000, idleEmoteMaxTime=12000, wanderDistance=10)",Wilderness,,0,,not recovered
 254,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
@@ -246,7 +246,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 259,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 260,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 261,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
-262,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+262,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 263,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 264,7,gaea,"SwarmWanderer(ability=""Roach Leap"", chanceAbilityAttack=0.33, maxDistFromSpawn=45, maxDistJitter=5, swarmRadiusMax=10, swarmRadiusMin=8, maxMeleeCombatBursts=3, attackLimit=3, idleEmoteMinTime=7000, idleEmoteMaxTime=12000, wanderDistance=10)",Wilderness,,0,,not recovered
 265,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
@@ -256,10 +256,10 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 269,7,gaea,"SwarmWanderer(ability=""Roach Leap"", chanceAbilityAttack=0.33, maxDistFromSpawn=45, maxDistJitter=5, swarmRadiusMax=10, swarmRadiusMin=8, maxMeleeCombatBursts=3, attackLimit=3, idleEmoteMinTime=7000, idleEmoteMaxTime=12000, wanderDistance=10)",Wilderness,,0,,not recovered
 270,6,melding,,Melding,,0,empty invocation has unresolved CAIS instance,not recovered
 271,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
-272,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+272,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 273,6,melding,AggressiveWanderer,Melding,,0,,not recovered
-274,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
-275,1,accord,DoorUpInteract,Excluded,explicit classifier exclusion,0,,not recovered
+274,6,melding,Null,Excluded,behaviour Null,0,,not recovered
+275,1,accord,DoorUpInteract,Excluded,behaviour DoorUpInteract,0,,not recovered
 276,7,gaea,EliteWanderer,Wilderness,,0,,not recovered
 277,7,gaea,GruntWanderer,Wilderness,,0,,not recovered
 278,6,melding,MedicWanderer,Melding,,0,,not recovered
@@ -294,7 +294,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 307,1,accord,,Wilderness,,0,,not recovered
 308,1,accord,,Wilderness,,0,,not recovered
 309,1,accord,,Wilderness,,0,,not recovered
-310,1,accord,PlayerPet,Excluded,explicit classifier exclusion,0,,not recovered
+310,1,accord,PlayerPet,Excluded,behaviour PlayerPet,0,,not recovered
 311,1,accord,,Wilderness,,0,,not recovered
 312,1,accord,,Wilderness,,0,,not recovered
 313,1,accord,,Wilderness,,0,,not recovered
@@ -305,41 +305,41 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 318,1,accord,,Wilderness,,0,,not recovered
 319,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
 320,1,accord,,Wilderness,,0,,not recovered
-321,1,accord,,Excluded,no representation,0,,not recovered
-322,1,accord,,Excluded,no representation,0,,not recovered
-323,1,accord,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
+321,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
+322,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
+323,1,accord,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
 324,1,accord,,Wilderness,,0,,not recovered
 325,2,chosen,EliteWanderer,Melding|Wilderness,,0,,not recovered
 326,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 327,2,chosen,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=2500,combatDist=30)",Melding|Wilderness,,0,,not recovered
 328,2,chosen,GruntWanderer,Melding|Wilderness,,0,,not recovered
 329,2,chosen,EliteWanderer(preferredMinCombatDist=22),Melding|Wilderness,,0,,not recovered
-330,1,accord,,Excluded,no representation,0,,not recovered
+330,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
 331,6,melding,GruntWanderer,Melding,,0,,not recovered
 332,2,chosen,EliteBaseSieger,Melding|Wilderness,,0,,not recovered
 333,2,chosen,EliteWanderer,Melding|Wilderness,,0,,not recovered
-334,2,chosen,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
-335,4,friendly,Elevator,Excluded,explicit classifier exclusion,0,,not recovered
-336,1,accord,,Excluded,no representation,0,,not recovered
-337,1,accord,,Excluded,no representation,0,,not recovered
+334,2,chosen,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
+335,4,friendly,Elevator,Excluded,behaviour Elevator,0,,not recovered
+336,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
+337,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
 338,2,chosen,EliteWanderer,Melding|Wilderness,,0,,not recovered
-339,1,accord,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
+339,1,accord,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
 340,2,chosen,EliteWanderer,Melding|Wilderness,,0,,not recovered
 341,7,gaea,SwarmQueen,Wilderness,,0,,not recovered
 342,2,chosen,"EliteWanderer(preferredMinCombatDist=40,deployableBias=3)",Melding|Wilderness,,0,,not recovered
-343,1,accord,,Excluded,no representation,0,,not recovered
+343,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
 344,1,accord,CivilianDialog,Settlement,,0,,not recovered
 345,4,friendly,PassiveAttacker,Wilderness,,0,,not recovered
-346,1,accord,,Excluded,no representation,0,,not recovered
+346,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
 347,7,gaea,ThresherTailWhipper,Wilderness,,0,,not recovered
 348,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-349,1,accord,,Excluded,no representation,0,,not recovered
+349,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
 350,6,melding,EliteWanderer(preferredMinCombatDist=20),Melding,,0,,not recovered
-351,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+351,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 352,2,chosen,EliteWanderer(preferredMinCombatDist=5),Melding|Wilderness,,0,,not recovered
 353,7,gaea,,Wilderness,,0,,not recovered
-354,1,accord,,Excluded,no representation,0,,not recovered
-355,1,accord,,Excluded,no representation,0,,not recovered
+354,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
+355,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
 356,1,accord,"AlertAndInteractive(emote=""gesture1"",emoteDuration=-1)",Settlement,,0,,not recovered
 357,1,accord,CivilianDialog(private_id=10474),Settlement,,0,,not recovered
 358,1,accord,"AlertAndInteractive(factions=""Accord"", interactionType=""GENERIC"" )",Settlement,,0,,not recovered
@@ -366,14 +366,14 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 379,1,accord,,Wilderness,,0,,not recovered
 380,1,accord,,Wilderness,,0,,not recovered
 381,1,accord,,Wilderness,,0,,not recovered
-382,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-383,1,accord,,Excluded,no representation,0,,not recovered
+382,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+383,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
 384,7,gaea,BetaAranha,Wilderness,,0,,not recovered
-385,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+385,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 386,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 387,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 388,7,gaea,Wander,Wilderness,,0,,not recovered
-389,1,accord,EngineerTurret,Excluded,explicit classifier exclusion,0,,not recovered
+389,1,accord,EngineerTurret,Excluded,behaviour EngineerTurret,0,,not recovered
 390,7,gaea,"SandThresher(leashDistance=100, aggroDistance=15)",Wilderness,,0,,not recovered
 391,2,chosen,ChosenTrooper,Melding|Wilderness,,0,,not recovered
 392,2,chosen,ChosenJuggernaut,Melding|Wilderness,,0,,not recovered
@@ -383,18 +383,18 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 396,1,accord,,Wilderness,,0,,not recovered
 397,1,accord,,Wilderness,,0,,not recovered
 398,1,accord,,Wilderness,,0,,not recovered
-399,4,friendly,Null,Excluded,explicit classifier exclusion,0,,not recovered
-400,1,accord,,Excluded,no representation,0,,not recovered
+399,4,friendly,Null,Excluded,behaviour Null,0,,not recovered
+400,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
 401,4,friendly,SwarmWanderer,Wilderness,,0,,not recovered
-402,1,accord,,Excluded,no representation,0,,not recovered
-403,1,accord,PassivePet,Excluded,explicit classifier exclusion,0,,not recovered
+402,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
+403,1,accord,PassivePet,Excluded,behaviour PassivePet,0,,not recovered
 404,1,accord,CivilianDialog,Settlement,,0,,not recovered
-405,1,accord,AggressiveWanderer,Excluded,no representation,0,,not recovered
-406,2,chosen,CraterTest,Excluded,explicit classifier exclusion,0,,not recovered
+405,1,accord,AggressiveWanderer,Excluded,no chassis and no posetype,0,,not recovered
+406,2,chosen,CraterTest,Excluded,behaviour CraterTest,0,,not recovered
 407,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 408,6,melding,AggressiveWanderer,Melding,,0,,not recovered
 409,2,chosen,Arch_AdditiveMelee_Base,Melding|Wilderness,,0,,not recovered
-410,7,gaea,AvoidMatt,Excluded,explicit classifier exclusion,0,,not recovered
+410,7,gaea,AvoidMatt,Excluded,behaviour AvoidMatt,0,,not recovered
 411,7,gaea,AlphaAranha,Wilderness,,0,,not recovered
 412,7,gaea,AlphaAranha,Wilderness,,0,,not recovered
 413,7,gaea,SwarmWanderer,Wilderness,,0,,not recovered
@@ -438,12 +438,12 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 451,1,accord,,Wilderness,,0,,not recovered
 452,7,gaea,"Scarab(rollChance=1, rollCooldown=6000, rollDuration=3000, rollSpeedMult=4, shockwaveAbilityId=85161, shockwaveChance=0.0, meleeChance=0.5, meleeDist=12, meleeDuration=3000, meleeCooldown=3000, meleeSpeedMult=1.25, rangedChance=1.0)",Wilderness,,0,,not recovered
 453,2,chosen,MeleeGruntWanderer,Melding|Wilderness,,0,,not recovered
-454,1,accord,PassivePet,Excluded,explicit classifier exclusion,0,,not recovered
+454,1,accord,PassivePet,Excluded,behaviour PassivePet,0,,not recovered
 455,2,chosen,EliteWanderer(preferredMinCombatDist=20),Melding|Wilderness,,0,,not recovered
 456,1,accord,,Wilderness,,0,,not recovered
 457,1,accord,,Wilderness,,0,,not recovered
 458,1,accord,,Wilderness,,0,,not recovered
-459,1,accord,"PeacetimeCityWanderer(city_prefix=""WanderPoint"", flee_prefix=""Flee City"")",Settlement,,0,route/follow/named-point assignment missing,not recovered
+459,1,accord,"PeacetimeCityWanderer(city_prefix=""WanderPoint"", flee_prefix=""Flee City"")",Excluded,"requires route, named points or follow target",0,,not recovered
 460,1,accord,,Wilderness,,0,,not recovered
 461,1,accord,,Wilderness,,0,,not recovered
 462,1,accord,,Wilderness,,0,,not recovered
@@ -472,11 +472,11 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 485,2,chosen,EliteWanderer,Melding|Wilderness,,0,,not recovered
 486,7,gaea,BetaAranha,Wilderness,,0,,not recovered
 487,6,melding,"Arch_FullbodyMelee_Base(combatDist=2,makesWideTurns=true,wideTurnRadius=5)",Melding,,0,,not recovered
-488,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-489,1,accord,Null,Excluded,explicit classifier exclusion,10001,,not recovered
-490,4,friendly,"Mosquito(grounded=false, hurtAvoidance=false)",Wilderness,,0,unsupported locomotion/spawn volume,not recovered
-491,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-492,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+488,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+489,1,accord,Null,Excluded,behaviour Null,10001,,not recovered
+490,4,friendly,"Mosquito(grounded=false, hurtAvoidance=false)",Excluded,requires unsupported locomotion or spawn volume,0,,not recovered
+491,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+492,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 493,7,gaea,BetaAranha,Wilderness,,0,,not recovered
 494,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
 495,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
@@ -493,7 +493,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 506,7,gaea,ThresherSpitter,Wilderness,,0,,not recovered
 507,7,gaea,"Arch_Charger_Base(chargeEffect=1385,chargeSpeedMultiplier=4,chargeWindupDuration=1200,chargeRestDuration=1200)",Wilderness,,0,,not recovered
 508,1,accord,CivilianDialog(private_id=10474),Settlement,,0,,not recovered
-509,1,accord, ,Excluded,no representation,0,,not recovered
+509,1,accord, ,Excluded,no chassis and no posetype,0,,not recovered
 510,1,accord,StationaryCivilianDialog(private_id=10474),Settlement,,0,,not recovered
 511,1,accord,,Wilderness,,0,,not recovered
 512,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -524,7 +524,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 537,1,accord,CivilianDialog(private_id=10790),Settlement,,0,,not recovered
 538,6,melding,"StockMelee(speedMultiplier=1.5, maxDist=0.8)",Melding,,0,,not recovered
 539,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
-540,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+540,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 541,2,chosen,AggressiveWanderer,Melding|Wilderness,,0,,not recovered
 542,6,melding,PassiveWanderer,Melding,,0,,not recovered
 543,2,chosen,ChosenEngineerDrone,Melding|Wilderness,,0,,not recovered
@@ -535,32 +535,32 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 548,2,chosen,"Arch_MoveThenFire_Base(am1Id=86132,am1Timeout=6000,am1Facing=true,am1Targeted=true,am1Cooldown=8000,combatWalk=true,combatDist=30)",Melding|Wilderness,,0,,not recovered
 549,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 550,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
-551,1,accord,"PeacetimeCityWanderer(city_prefix=""WanderPoint"", flee_prefix=""Flee City"")",Settlement,,0,route/follow/named-point assignment missing,not recovered
+551,1,accord,"PeacetimeCityWanderer(city_prefix=""WanderPoint"", flee_prefix=""Flee City"")",Excluded,"requires route, named points or follow target",0,,not recovered
 552,6,melding,"MeldingTornadoMoveStage2(type1=415, type2=19,abilityWaitTime=500,startWaitDuration=5000,aimChance=0.66)",Melding,,0,,not recovered
-553,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+553,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 554,6,melding,,Melding,,0,empty invocation has unresolved CAIS instance,not recovered
 555,6,melding,SmallMeldingSalamander(meleeRange=2),Melding,,0,,not recovered
 556,1,accord,,Wilderness,,0,,not recovered
-557,1,accord,ProtectVehicle(vehicleType=35),Wilderness,,0,route/follow/named-point assignment missing,not recovered
+557,1,accord,ProtectVehicle(vehicleType=35),Excluded,"requires route, named points or follow target",0,,not recovered
 558,4,friendly,PassiveAttacker,Wilderness,,0,,not recovered
-559,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
-560,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
-561,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+559,6,melding,Null,Excluded,behaviour Null,0,,not recovered
+560,6,melding,Null,Excluded,behaviour Null,0,,not recovered
+561,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 562,6,melding,,Melding,,0,empty invocation has unresolved CAIS instance,not recovered
 563,1,accord,,Wilderness,,0,,not recovered
 564,2,chosen,AggressiveWanderer,Melding|Wilderness,,0,,not recovered
-565,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+565,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 566,1,accord,,Wilderness,,0,,not recovered
-567,4,friendly,PassivePet,Excluded,explicit classifier exclusion,0,,not recovered
-568,4,friendly,PassivePet,Excluded,explicit classifier exclusion,0,,not recovered
+567,4,friendly,PassivePet,Excluded,behaviour PassivePet,0,,not recovered
+568,4,friendly,PassivePet,Excluded,behaviour PassivePet,0,,not recovered
 569,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 570,1,accord,AlertAndInteractive,Settlement,,0,,not recovered
 571,2,chosen,EliteWanderer(preferredMinCombatDist=20),Melding|Wilderness,,0,,not recovered
 572,2,chosen,"Arch_MedRangedHumanoid_Base(am1Id=77721,am1Cooldown=10000,am1Chance=0.7,am1Timeout=2000,triggerPullTime=800,fireRestDuration=1500)",Melding|Wilderness,,0,,not recovered
 573,2,chosen,EliteWanderer,Melding|Wilderness,,0,,not recovered
-574,5,monster,Null,Excluded,explicit classifier exclusion,0,,not recovered
+574,5,monster,Null,Excluded,behaviour Null,0,,not recovered
 575,5,monster,EliteWanderer(preferredMinCombatDist=20),Wilderness,,0,,not recovered
-576,5,monster,Null,Excluded,explicit classifier exclusion,0,,not recovered
+576,5,monster,Null,Excluded,behaviour Null,0,,not recovered
 577,1,accord,,Wilderness,,0,,not recovered
 578,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 579,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -592,27 +592,27 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 605,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 606,1,accord,StationaryCivilianDialog(private_id=10474),Settlement,,0,,not recovered
 607,1,accord,"AlertAndInteractive(interactionType=""GENERIC"")",Settlement,,0,,not recovered
-608,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,17,vendor location/uniqueness not assigned,not recovered
+608,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,17,,not recovered
 609,9,neutral,Brontodon,Wilderness,,0,,not recovered
 610,1,accord,,Wilderness,,0,,not recovered
 611,8,bandit,EliteWanderer(preferredMinCombatDist=5),Wilderness,,0,,not recovered
-612,1,accord,AlertAndInteractive(dialogScript=10551),Settlement,,11,vendor location/uniqueness not assigned,not recovered
+612,1,accord,AlertAndInteractive(dialogScript=10551),Excluded,requires vendor placement assignment,11,,not recovered
 613,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 614,4,friendly,"AlertAndInteractive(interactionType=""GENERIC"")",Settlement,,0,,not recovered
 615,9,neutral,Squawwk(baseSpeedMult=1.35),Wilderness,,0,,not recovered
 616,7,gaea,FeralCanineSquad,Wilderness,,0,,not recovered
 617,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 618,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-619,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
-620,1,accord,AlertAndInteractive(dialogScript=10551'),Settlement,,11,vendor location/uniqueness not assigned,not recovered
-621,1,accord,AlertAndInteractive(dialogScript=10551'),Settlement,,11,vendor location/uniqueness not assigned,not recovered
-622,9,neutral,AlertAndInteractive(dialogScript=10551'),Settlement,,11,vendor location/uniqueness not assigned,not recovered
-623,4,friendly,AlertAndInteractive,Settlement,,51,vendor location/uniqueness not assigned,not recovered
-624,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,52,vendor location/uniqueness not assigned,not recovered
-625,8,bandit,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Settlement,,53,vendor location/uniqueness not assigned,not recovered
+619,1,accord,Null,Excluded,behaviour Null,0,,not recovered
+620,1,accord,AlertAndInteractive(dialogScript=10551'),Excluded,requires vendor placement assignment,11,,not recovered
+621,1,accord,AlertAndInteractive(dialogScript=10551'),Excluded,requires vendor placement assignment,11,,not recovered
+622,9,neutral,AlertAndInteractive(dialogScript=10551'),Excluded,requires vendor placement assignment,11,,not recovered
+623,4,friendly,AlertAndInteractive,Excluded,requires vendor placement assignment,51,,not recovered
+624,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Excluded,requires vendor placement assignment,52,,not recovered
+625,8,bandit,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Excluded,requires vendor placement assignment,53,,not recovered
 626,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 627,6,melding,SwarmWanderer,Melding,,0,,not recovered
-628,9,neutral,Null,Excluded,no representation,0,,not recovered
+628,9,neutral,Null,Excluded,no chassis and no posetype,0,,not recovered
 629,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""guard"",emoteDuration=-1)",Settlement,,0,,not recovered
 630,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""lounge02"",emoteDuration=-1))",Settlement,,0,,not recovered
 631,1,accord,,Wilderness,,0,,not recovered
@@ -629,49 +629,49 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 642,7,gaea,Brontodon,Wilderness,,0,,not recovered
 643,2,chosen,EliteWanderer(preferredMinCombatDist=20),Melding|Wilderness,,0,,not recovered
 644,7,gaea,ThresherCharger,Wilderness,,0,,not recovered
-645,4,friendly,"TestElfPet(maxDist=5, runToWalkDist=8, walkToRunDist=15, despawnDist=30, idleVoSet1=20336, idleVoSet2=20338, idleVoMs2=2000, idleVoCooldown=60000, vehicleVoSet1=20337, vehicleVoCooldown=60000, followVoSet=20336, followVoFrequency=30000)",Excluded,explicit classifier exclusion,0,,not recovered
-646,1,accord,Null,Excluded,no representation,0,,not recovered
-647,1,accord,Null,Excluded,no representation,0,,not recovered
-648,1,accord,,Excluded,no representation,0,,not recovered
-649,1,accord,Null,Excluded,no representation,0,,not recovered
-650,1,accord,Null,Excluded,no representation,0,,not recovered
-651,1,accord,Null,Excluded,no representation,0,,not recovered
-652,1,accord,Null,Excluded,no representation,0,,not recovered
-653,1,accord,Null,Excluded,no representation,0,,not recovered
-654,1,accord,Null,Excluded,no representation,0,,not recovered
-655,1,accord,Null,Excluded,no representation,0,,not recovered
-656,1,accord,Null,Excluded,no representation,0,,not recovered
-657,1,accord,Null,Excluded,no representation,0,,not recovered
-658,1,accord,Null,Excluded,no representation,0,,not recovered
-659,1,accord,Null,Excluded,no representation,0,,not recovered
-660,1,accord,Null,Excluded,no representation,0,,not recovered
-661,1,accord,Null,Excluded,no representation,0,,not recovered
-662,1,accord,Null,Excluded,no representation,0,,not recovered
-663,1,accord,Null,Excluded,no representation,0,,not recovered
-664,1,accord,Null,Excluded,no representation,0,,not recovered
-665,1,accord,Null,Excluded,no representation,0,,not recovered
-666,1,accord,Null,Excluded,no representation,0,,not recovered
-667,1,accord,Null,Excluded,no representation,0,,not recovered
-668,1,accord,Null,Excluded,no representation,0,,not recovered
-669,1,accord,Null,Excluded,no representation,0,,not recovered
-670,1,accord,Null,Excluded,no representation,0,,not recovered
-671,1,accord,Null,Excluded,no representation,0,,not recovered
-672,1,accord,Null,Excluded,no representation,0,,not recovered
-673,1,accord,Null,Excluded,no representation,0,,not recovered
-674,1,accord,Null,Excluded,no representation,0,,not recovered
-675,1,accord,Null,Excluded,no representation,0,,not recovered
-676,1,accord,Null,Excluded,no representation,0,,not recovered
-677,1,accord,Null,Excluded,no representation,0,,not recovered
-678,1,accord,Null,Excluded,no representation,0,,not recovered
-679,1,accord,Null,Excluded,no representation,0,,not recovered
-680,1,accord,Null,Excluded,no representation,0,,not recovered
-681,1,accord,Null,Excluded,no representation,0,,not recovered
-682,1,accord,Null,Excluded,no representation,0,,not recovered
-683,1,accord,Null,Excluded,no representation,0,,not recovered
-684,1,accord,Null,Excluded,no representation,0,,not recovered
-685,1,accord,Null,Excluded,no representation,0,,not recovered
-686,1,accord,Null,Excluded,no representation,0,,not recovered
-687,1,accord,Null,Excluded,no representation,0,,not recovered
+645,4,friendly,"TestElfPet(maxDist=5, runToWalkDist=8, walkToRunDist=15, despawnDist=30, idleVoSet1=20336, idleVoSet2=20338, idleVoMs2=2000, idleVoCooldown=60000, vehicleVoSet1=20337, vehicleVoCooldown=60000, followVoSet=20336, followVoFrequency=30000)",Excluded,behaviour TestElfPet,0,,not recovered
+646,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+647,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+648,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
+649,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+650,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+651,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+652,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+653,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+654,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+655,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+656,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+657,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+658,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+659,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+660,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+661,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+662,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+663,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+664,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+665,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+666,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+667,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+668,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+669,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+670,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+671,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+672,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+673,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+674,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+675,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+676,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+677,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+678,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+679,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+680,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+681,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+682,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+683,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+684,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+685,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+686,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+687,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
 688,1,accord,,Wilderness,,0,,not recovered
 689,7,gaea,Nautilus,Wilderness,,0,,not recovered
 690,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -697,16 +697,16 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 710,2,chosen,EliteWanderer(preferredMinCombatDist=20),Melding|Wilderness,,0,,not recovered
 711,1,accord,,Wilderness,,0,,not recovered
 712,1,accord,,Wilderness,,0,,not recovered
-713,1,accord,PlayerPet,Excluded,explicit classifier exclusion,0,,not recovered
+713,1,accord,PlayerPet,Excluded,behaviour PlayerPet,0,,not recovered
 714,2,chosen,"StockMoveAndShootGuy(triggerPullTime=2500, walk=false)",Melding|Wilderness,,0,,not recovered
-715,5,monster,Null,Excluded,explicit classifier exclusion,0,,not recovered
+715,5,monster,Null,Excluded,behaviour Null,0,,not recovered
 716,2,chosen,ChosenEngineerDrone,Melding|Wilderness,,0,,not recovered
 717,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 718,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 719,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 720,2,chosen,EliteWanderer(preferredMinCombatDist=20),Melding|Wilderness,,0,,not recovered
-721,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""controlseat"",emoteDuration=-1)",Settlement,,0,pose may require an assigned prop,not recovered
-722,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""controlseat"",emoteDuration=-1)",Settlement,,0,pose may require an assigned prop,not recovered
+721,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""controlseat"",emoteDuration=-1)",Excluded,requires assigned prop or pose placement,0,,not recovered
+722,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""controlseat"",emoteDuration=-1)",Excluded,requires assigned prop or pose placement,0,,not recovered
 723,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""guard"",emoteDuration=-1)",Settlement,,0,,not recovered
 724,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""kioskviewer1"",emoteDuration=-1)",Settlement,,0,,not recovered
 725,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""kioskviewer1"",emoteDuration=-1)",Settlement,,0,,not recovered
@@ -734,14 +734,14 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 747,1,accord,"PerformEmote(emote=""calm"")",Settlement,,0,,not recovered
 748,1,accord,,Wilderness,,0,,not recovered
 749,1,accord,,Wilderness,,0,,not recovered
-750,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""typing"",emoteDuration=-1)",Settlement,,0,pose may require an assigned prop,not recovered
+750,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""typing"",emoteDuration=-1)",Excluded,requires assigned prop or pose placement,0,,not recovered
 751,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""kioskviewer3"",emoteDuration=-1)",Settlement,,0,,not recovered
 752,4,friendly,"InteractiveWithEmote(emote = ""calm"", interactionType=""GENERIC"")",Settlement,,0,,not recovered
 753,7,gaea,AggressiveWanderer,Wilderness,,0,,not recovered
 754,2,chosen,ChosenTrooper,Melding|Wilderness,,0,,not recovered
 755,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""gesture2"",emoteDuration=-1)",Settlement,,0,,not recovered
 756,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""gesture2"",emoteDuration=-1)",Settlement,,0,,not recovered
-757,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""typing"",emoteDuration=-1)",Settlement,,0,pose may require an assigned prop,not recovered
+757,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""typing"",emoteDuration=-1)",Excluded,requires assigned prop or pose placement,0,,not recovered
 758,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""lazyengineer"",emoteDuration=-1)",Settlement,,0,,not recovered
 759,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 760,8,bandit,EliteWanderer,Wilderness,,0,,not recovered
@@ -751,20 +751,20 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 764,1,accord,,Wilderness,,0,,not recovered
 765,1,accord,,Wilderness,,0,,not recovered
 766,1,accord,"AlertAndInteractive(interactionType = ""HolsterTalk"")",Settlement,,0,,not recovered
-767,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,18,vendor location/uniqueness not assigned,not recovered
+767,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,18,,not recovered
 768,1,accord,"PeacetimeCityWanderer(restFunction=""Repair Work"", greetingSet=1197)",Settlement,,0,work destination requires placed station,not recovered
 769,1,accord,"PeacetimeCityWanderer(restFunction=""Work"", greetingSet=1197)",Settlement,,0,work destination requires placed station,not recovered
 770,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 771,1,accord,"PeacetimeCityWanderer(restFunction=""Repair Work"", greetingSet=1197)",Settlement,,0,work destination requires placed station,not recovered
 772,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 773,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
-774,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,14,vendor location/uniqueness not assigned,not recovered
+774,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,14,,not recovered
 775,1,accord,"PeacetimeCityWanderer(restFunction=""Work"", greetingSet=1197)",Settlement,,0,work destination requires placed station,not recovered
-776,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"", perceptionDist=4, greetingSet=1197)",Settlement,,23,vendor location/uniqueness not assigned; work destination requires placed station,not recovered
+776,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"", perceptionDist=4, greetingSet=1197)",Excluded,requires vendor placement assignment,23,,not recovered
 777,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"", greetingSet=1197)",Settlement,,0,work destination requires placed station,not recovered
 778,1,accord,"AlertAndInteractive(interactionType = ""GENERIC"")",Settlement,,0,,not recovered
-779,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,22,vendor location/uniqueness not assigned,not recovered
-780,1,accord,AlertAndInteractive(greetingSet=310),Settlement,,11,vendor location/uniqueness not assigned,not recovered
+779,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,22,,not recovered
+780,1,accord,AlertAndInteractive(greetingSet=310),Excluded,requires vendor placement assignment,11,,not recovered
 781,1,accord,"PeacetimeCityWanderer(restFunction=""Rummage"", greetingSet=1197)",Settlement,,0,work destination requires placed station,not recovered
 782,1,accord,"PeacetimeCityWanderer(restFunction=""Rummage"", greetingSet=1197)",Settlement,,0,work destination requires placed station,not recovered
 783,1,accord,"PeacetimeCityWanderer(restFunction=""Rummage"", greetingSet=1197)",Settlement,,0,work destination requires placed station,not recovered
@@ -773,14 +773,14 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 786,1,accord,GuardCityWanderer(greetingSet=1197),Settlement,,0,,not recovered
 787,1,accord,"AlertAndInteractive(emote=""calm"", interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 788,1,accord,GuardCityWanderer(greetingSet=1197),Settlement,,0,,not recovered
-789,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,13,vendor location/uniqueness not assigned,not recovered
+789,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,13,,not recovered
 790,1,accord,"PeacetimeCityWanderer(restFunction=""Repair Work"")",Settlement,,0,work destination requires placed station,not recovered
 791,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 792,1,accord,"PeacetimeCityWanderer(restFunction=""Work"")",Settlement,,0,work destination requires placed station,not recovered
-793,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,22,vendor location/uniqueness not assigned,not recovered
+793,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,22,,not recovered
 794,1,accord,"PeacetimeCityWanderer(restFunction=""Medical Aid"")",Settlement,,0,work destination requires placed station,not recovered
 795,1,accord,"PeacetimeCityWanderer(restFunction=""Medical Aid"")",Settlement,,0,work destination requires placed station,not recovered
-796,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,13,vendor location/uniqueness not assigned,not recovered
+796,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,13,,not recovered
 797,1,accord,"PeacetimeCityWanderer(restFunction=""Repair Work"")",Settlement,,0,work destination requires placed station,not recovered
 798,1,accord,"PeacetimeCityWanderer(restFunction=""Repair Work"")",Settlement,,0,work destination requires placed station,not recovered
 799,1,accord,"PeacetimeCityWanderer(restFunction=""Work"")",Settlement,,0,work destination requires placed station,not recovered
@@ -789,12 +789,12 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 802,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 803,1,accord,AlertAndInteractive,Settlement,,0,,not recovered
 804,1,accord,AlertAndInteractive,Settlement,,0,,not recovered
-805,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,20,vendor location/uniqueness not assigned,not recovered
-806,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"", perceptionDist=4)",Settlement,,23,vendor location/uniqueness not assigned; work destination requires placed station,not recovered
+805,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,20,,not recovered
+806,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"", perceptionDist=4)",Excluded,requires vendor placement assignment,23,,not recovered
 807,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 808,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
 809,1,accord,"PeacetimeCityWanderer(restFunction=""Market"")",Settlement,,0,work destination requires placed station,not recovered
-810,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,15,vendor location/uniqueness not assigned,not recovered
+810,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,15,,not recovered
 811,1,accord,"PeacetimeCityWanderer(restFunction=""Market"")",Settlement,,0,work destination requires placed station,not recovered
 812,1,accord,"PeacetimeCityWanderer(restFunction=""Market"")",Settlement,,0,work destination requires placed station,not recovered
 813,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
@@ -808,57 +808,57 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 821,0,,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
 822,1,accord,PeacetimeCityWanderer,Settlement,,0,,not recovered
 823,0,,"PeacetimeCityWanderer(greetingSet=240, restFunction=""Market"")",Settlement,,0,work destination requires placed station,not recovered
-824,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,19,vendor location/uniqueness not assigned,not recovered
+824,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,19,,not recovered
 825,0,,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
 826,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,0,,not recovered
 827,0,,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
 828,0,,"PeacetimeCityWanderer(restFunction=""Work"")",Settlement,,0,work destination requires placed station,not recovered
-829,1,accord,"PerformEmoteNoPhysics(emote=""controlseat"",emoteDuration=-1)",Settlement,,0,pose may require an assigned prop,not recovered
-830,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,11,vendor location/uniqueness not assigned,not recovered
+829,1,accord,"PerformEmoteNoPhysics(emote=""controlseat"",emoteDuration=-1)",Excluded,requires assigned prop or pose placement,0,,not recovered
+830,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,11,,not recovered
 831,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 832,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 833,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 834,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 835,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 836,1,accord,"AlertAndInteractive(perceptionDist=6,interactionType=""HolsterTalk"",greetingSet=236)",Settlement,,0,,not recovered
-837,1,accord,"PerformEmoteNoPhysics(emote=""controlseat"",emoteDuration=-1)",Settlement,,0,pose may require an assigned prop,not recovered
-838,1,accord,"PerformEmoteNoPhysics(emote=""controlseat"",emoteDuration=-1)",Settlement,,0,pose may require an assigned prop,not recovered
-839,1,accord,"PerformEmoteNoPhysics(emote=""controlseat"",emoteDuration=-1)",Settlement,,0,pose may require an assigned prop,not recovered
-840,1,accord,"PerformEmoteNoPhysics(emote=""controlseat"",emoteDuration=-1)",Settlement,,0,pose may require an assigned prop,not recovered
-841,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,11,vendor location/uniqueness not assigned,not recovered
+837,1,accord,"PerformEmoteNoPhysics(emote=""controlseat"",emoteDuration=-1)",Excluded,requires assigned prop or pose placement,0,,not recovered
+838,1,accord,"PerformEmoteNoPhysics(emote=""controlseat"",emoteDuration=-1)",Excluded,requires assigned prop or pose placement,0,,not recovered
+839,1,accord,"PerformEmoteNoPhysics(emote=""controlseat"",emoteDuration=-1)",Excluded,requires assigned prop or pose placement,0,,not recovered
+840,1,accord,"PerformEmoteNoPhysics(emote=""controlseat"",emoteDuration=-1)",Excluded,requires assigned prop or pose placement,0,,not recovered
+841,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,11,,not recovered
 842,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 843,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
-844,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,13,vendor location/uniqueness not assigned,not recovered
+844,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,13,,not recovered
 845,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 846,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 847,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
-848,1,accord,"AlertAndInteractive(greetingSet=310, goodbyeScript=""Util: Working (Client Side only)"", leashToSpawn=true, despawnWhenStuck=true)",Settlement,,16,vendor location/uniqueness not assigned,not recovered
+848,1,accord,"AlertAndInteractive(greetingSet=310, goodbyeScript=""Util: Working (Client Side only)"", leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,16,,not recovered
 849,1,accord,AlertAndInteractive,Settlement,,0,,not recovered
 850,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 851,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 852,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
-853,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,22,vendor location/uniqueness not assigned,not recovered
+853,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,22,,not recovered
 854,1,accord,"GuardCityWanderer(restFunction=""Guard Stance"")",Settlement,,0,work destination requires placed station,not recovered
 855,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
-856,1,accord,AlertAndInteractive(perceptionDist=4),Settlement,,23,vendor location/uniqueness not assigned,not recovered
+856,1,accord,AlertAndInteractive(perceptionDist=4),Excluded,requires vendor placement assignment,23,,not recovered
 857,1,accord,"PeacetimeCityWanderer(restFunction=""Recreation"")",Settlement,,0,work destination requires placed station,not recovered
-858,1,accord,"AlertAndInteractive(perceptionDist=8, greetingSet=244)",Settlement,,29,vendor location/uniqueness not assigned,not recovered
+858,1,accord,"AlertAndInteractive(perceptionDist=8, greetingSet=244)",Excluded,requires vendor placement assignment,29,,not recovered
 859,1,accord,"PeacetimeCityWanderer(restFunction=""Recreation"")",Settlement,,0,work destination requires placed station,not recovered
 860,1,accord,"PeacetimeCityWanderer(restFunction=""Recreation"")",Settlement,,0,work destination requires placed station,not recovered
 861,1,accord,"PeacetimeCityWanderer(restFunction=""Recreation"")",Settlement,,0,work destination requires placed station,not recovered
-862,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,21,vendor location/uniqueness not assigned,not recovered
+862,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,21,,not recovered
 863,1,accord,"PeacetimeCityWanderer(restFunction=""Rummage"")",Settlement,,0,work destination requires placed station,not recovered
 864,1,accord,"PeacetimeCityWanderer(restFunction=""Rummage"")",Settlement,,0,work destination requires placed station,not recovered
 865,1,accord,"PeacetimeCityWanderer(restFunction=""Work"")",Settlement,,0,work destination requires placed station,not recovered
 866,1,accord,"PeacetimeCityWanderer(restFunction=""Work"")",Settlement,,0,work destination requires placed station,not recovered
 867,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
-868,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,13,vendor location/uniqueness not assigned,not recovered
+868,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,13,,not recovered
 869,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
 870,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
 871,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 872,1,accord,"PeacetimeCityWanderer(restFunction=""Market"")",Settlement,,0,work destination requires placed station,not recovered
 873,1,accord,"PeacetimeCityWanderer(restFunction=""Market"")",Settlement,,0,work destination requires placed station,not recovered
-874,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,11,vendor location/uniqueness not assigned,not recovered
+874,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,11,,not recovered
 875,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 876,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 877,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
@@ -866,7 +866,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 879,1,accord,"PeacetimeCityWanderer(restFunction=""Market"")",Settlement,,0,work destination requires placed station,not recovered
 880,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 881,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
-882,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,22,vendor location/uniqueness not assigned,not recovered
+882,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,22,,not recovered
 883,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 884,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 885,1,accord,GuardCityWanderer(greetingSet=1197),Settlement,,0,,not recovered
@@ -884,7 +884,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 897,7,gaea,"CrystalAranhaMiniBoss(combatDist =3.0, attackDuration =1, initialSpawnWait =1000, crystalAbilityCooldown =1000, rangedAbilityDuration =2000, meleeDist =0.0, spawnAbilityCooldown = 6000, maxAwayFromCrystalDist =20.0, minCrystalDist =6.0)",Wilderness,,0,,not recovered
 898,7,gaea,"CrystalAranhaCrystal(abilityId =81952, lineAbilityId =82000, cooldown =0)",Wilderness,,0,,not recovered
 899,7,gaea,Wander,Wilderness,,0,,not recovered
-900,1,accord,,Excluded,no representation,0,,not recovered
+900,1,accord,,Excluded,no chassis and no posetype,0,,not recovered
 901,1,accord,"PeacetimeCityWanderer(restFunction=""Work"", energyDecayFactor=100)",Settlement,,0,work destination requires placed station,not recovered
 902,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 903,8,bandit,EliteWanderer(preferredMinCombatDist=20),Wilderness,,0,,not recovered
@@ -893,15 +893,15 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 906,2,chosen,"Arch_MedRangedHumanoid_Base(triggerPullTime=2000,fireRestDuration=9000,combatDist=30)",Melding|Wilderness,,0,,not recovered
 907,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 908,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
-909,1,accord,GuardCityWanderer,Excluded,no representation,0,,not recovered
+909,1,accord,GuardCityWanderer,Excluded,no chassis and no posetype,0,,not recovered
 910,2,chosen,"Arch_MoveThenFire_Base(am1Id=86132,am1Timeout=6000,am1Facing=true,am1Targeted=true,am1Cooldown=8000,combatWalk=true,combatDist=30)",Melding|Wilderness,,0,,not recovered
-911,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+911,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 912,2,chosen,EliteWanderer(preferredMinCombatDist=20),Melding|Wilderness,,0,,not recovered
 913,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 914,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 915,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 916,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
-917,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair05"")",Settlement,,0,pose may require an assigned prop,not recovered
+917,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair05"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 918,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 919,1,accord,AlertAndInteractive(greetingSet=1416),Settlement,,0,,not recovered
 920,1,accord,"AlertAndLookAtPlayer(emote=""sittingstairs03"")",Settlement,,0,,not recovered
@@ -937,22 +937,22 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 950,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 951,1,accord,"AlertAndInteractive(helloScript=""Ambient_SunkenHarbor_GenBark_Generic_001_Shady_Male_01"")",Settlement,,0,,not recovered
 952,6,melding,Done,Melding,,0,,not recovered
-953,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,67,vendor location/uniqueness not assigned,not recovered
-954,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,65,vendor location/uniqueness not assigned,not recovered
+953,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,67,,not recovered
+954,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,65,,not recovered
 955,7,gaea,BetaAranha,Wilderness,,0,,not recovered
-956,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Settlement,,60,vendor location/uniqueness not assigned,not recovered
-957,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,62,vendor location/uniqueness not assigned,not recovered
-958,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Settlement,,67,vendor location/uniqueness not assigned,not recovered
+956,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Excluded,requires vendor placement assignment,60,,not recovered
+957,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,62,,not recovered
+958,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Excluded,requires vendor placement assignment,67,,not recovered
 959,4,friendly,,Wilderness,,0,,not recovered
-960,1,accord,Null,Excluded,no representation,0,,not recovered
+960,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
 961,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 962,1,accord,,Wilderness,,0,,not recovered
 963,7,gaea,Arch_FullbodyMelee_Base(combatDist=2.5),Wilderness,,0,,not recovered
-964,2,chosen,Null,Excluded,no representation,0,,not recovered
-965,2,chosen,Null,Excluded,no representation,0,,not recovered
+964,2,chosen,Null,Excluded,no chassis and no posetype,0,,not recovered
+965,2,chosen,Null,Excluded,no chassis and no posetype,0,,not recovered
 966,1,accord,"PerformEmote(emote=""calm"")",Settlement,,0,,not recovered
 967,6,melding,AggressiveWanderer,Melding,,0,,not recovered
-968,1,accord,AlertAndInteractive(perceptionDist=4),Settlement,,23,vendor location/uniqueness not assigned,not recovered
+968,1,accord,AlertAndInteractive(perceptionDist=4),Excluded,requires vendor placement assignment,23,,not recovered
 969,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 970,8,bandit,"Arch_MedRangedHumanoid_Base(combatDist=28,triggerPullTime=1000)",Wilderness,,0,,not recovered
 971,1,accord,Wander,Wilderness,,0,,not recovered
@@ -979,7 +979,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 992,1,accord,Wander,Wilderness,,0,,not recovered
 993,1,accord,ChosenJuggernaut,Wilderness,,0,,not recovered
 994,1,accord,"AlertAndLookAtPlayer(emote=""workingtech01"", greetingSet=1197)",Settlement,,0,,not recovered
-995,1,accord,"AlertAndLookAtPlayer(emote=""typing01"", greetingSet=1197)",Settlement,,0,pose may require an assigned prop,not recovered
+995,1,accord,"AlertAndLookAtPlayer(emote=""typing01"", greetingSet=1197)",Excluded,requires assigned prop or pose placement,0,,not recovered
 996,1,accord,"AlertAndLookAtPlayer(emote=""curious02"", greetingSet=1197)",Settlement,,0,,not recovered
 997,1,accord,"AlertAndLookAtPlayer(emote=""sittingstairs03"", greetingSet=1197)",Settlement,,0,,not recovered
 998,1,accord,"AlertAndLookAtPlayer(emote=""trash01"", greetingSet=1197)",Settlement,,0,,not recovered
@@ -998,7 +998,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1011,7,gaea,"Arch_Relocator_Rageclaw_Base(weaponSlot=""secondary"",relocateEffect=6258,relocateSpeedOverride=15)",Wilderness,,0,,not recovered
 1012,2,chosen,"Arch_MoveThenFire_Base(triggerPullTime=4000, fireRestDuration = 1000, combatDist = 30, calmWalk=false, combatWalk=true)",Melding|Wilderness,,0,,not recovered
 1013,2,chosen,ChosenTrooper,Melding|Wilderness,,0,,not recovered
-1014,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair01"")",Settlement,,0,pose may require an assigned prop,not recovered
+1014,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair01"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 1015,1,accord,"BasicCivilian_Stationary(greetingSet=1197, perceptionDist=10)",Settlement,,0,,not recovered
 1016,8,bandit,EliteWanderer(preferredMinCombatDist=20),Wilderness,,0,,not recovered
 1018,1,accord,"AlertAndInteractive(perceptionDist=4, greetingSet=242)",Settlement,,0,,not recovered
@@ -1031,7 +1031,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1045,2,chosen,TorturedSoulMelee(aggroDist=15),Melding|Wilderness,,0,,not recovered
 1046,2,chosen,ChosenTrooper(useSpawner = false),Melding|Wilderness,,0,,not recovered
 1047,2,chosen,"StockMoveAndShootGuy(triggerPullTime=2000, walk=true)",Melding|Wilderness,,0,,not recovered
-1048,7,gaea,_inst,Excluded,explicit classifier exclusion,0,,not recovered
+1048,7,gaea,_inst,Excluded,behaviour _inst,0,,not recovered
 1049,1,accord,GuardCityWanderer(greetingSet=412),Settlement,,0,,not recovered
 1050,1,accord,GuardCityWanderer(greetingSet=412),Settlement,,0,,not recovered
 1051,1,accord,GuardCityWanderer(greetingSet=412),Settlement,,0,,not recovered
@@ -1042,24 +1042,24 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1056,1,accord,GuardCityWanderer(greetingSet=412),Settlement,,0,,not recovered
 1057,1,accord,GuardCityWanderer(greetingSet=412),Settlement,,0,,not recovered
 1058,1,accord,GuardCityWanderer(greetingSet=412),Settlement,,0,,not recovered
-1059,1,accord,StockShootAndFollowRoute,Wilderness,,0,route/follow/named-point assignment missing,not recovered
-1060,2,chosen,Null,Excluded,explicit classifier exclusion,0,,not recovered
-1061,2,chosen,Null,Excluded,explicit classifier exclusion,0,,not recovered
+1059,1,accord,StockShootAndFollowRoute,Excluded,"requires route, named points or follow target",0,,not recovered
+1060,2,chosen,Null,Excluded,behaviour Null,0,,not recovered
+1061,2,chosen,Null,Excluded,behaviour Null,0,,not recovered
 1062,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 1063,8,bandit,EliteWanderer(preferredMinCombatDist=20),Wilderness,,0,,not recovered
 1064,4,friendly,"InteractiveWithEmote(emote = ""calm"", interactionType=""GENERIC"")",Settlement,,0,,not recovered
 1065,2,chosen,ChosenTrooper(useSpawner = false),Melding|Wilderness,,0,,not recovered
-1066,2,chosen,"Meta(behavior=""MeleeGruntWanderer"",maxAngleBeforeInitialMovement=120)",Excluded,explicit classifier exclusion,0,,not recovered
+1066,2,chosen,"Meta(behavior=""MeleeGruntWanderer"",maxAngleBeforeInitialMovement=120)",Excluded,behaviour Meta,0,,not recovered
 1067,1,accord,,Wilderness,,0,,not recovered
 1068,2,chosen,TorturedSoulMelee(aggroDist=15),Melding|Wilderness,,0,,not recovered
 1069,2,chosen,ChosenSniper,Melding|Wilderness,,0,,not recovered
 1070,1,accord,,Wilderness,,0,,not recovered
 1071,2,chosen,ChosenEngineerDrone,Melding|Wilderness,,0,,not recovered
-1173,1,accord,AggressiveWanderer,Excluded,no representation,0,,not recovered
-1174,1,accord,,Settlement,,5,vendor location/uniqueness not assigned; empty invocation has unresolved CAIS instance,not recovered
-1175,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""officer"",emoteDuration=-1)",Settlement,,5,vendor location/uniqueness not assigned,not recovered
-1176,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""officer"",emoteDuration=-1)",Settlement,,5,vendor location/uniqueness not assigned,not recovered
-1177,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""officer"",emoteDuration=-1)",Settlement,,5,vendor location/uniqueness not assigned,not recovered
+1173,1,accord,AggressiveWanderer,Excluded,no chassis and no posetype,0,,not recovered
+1174,1,accord,,Excluded,requires vendor placement assignment,5,,not recovered
+1175,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""officer"",emoteDuration=-1)",Excluded,requires vendor placement assignment,5,,not recovered
+1176,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""officer"",emoteDuration=-1)",Excluded,requires vendor placement assignment,5,,not recovered
+1177,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""officer"",emoteDuration=-1)",Excluded,requires vendor placement assignment,5,,not recovered
 1178,2,chosen,,Melding|Wilderness,,0,,not recovered
 1179,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 1180,8,bandit,"ChainWithPush(behaviorA=""Crouch"",behaviorB=""LookAtNearestPlayer(maxDistance=15)"")",Wilderness,,0,,not recovered
@@ -1085,7 +1085,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1200,2,chosen,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000) ",Melding|Wilderness,,0,,not recovered
 1201,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 1202,6,melding,"MeldingWyrm(burrowAbilityId=85186, burrowCooldown=20000, meleeSpeedMult=1.5)",Melding,,0,,not recovered
-1203,2,chosen,PlayerPet,Excluded,explicit classifier exclusion,0,,not recovered
+1203,2,chosen,PlayerPet,Excluded,behaviour PlayerPet,0,,not recovered
 1204,2,chosen,,Melding|Wilderness,,0,,not recovered
 1205,1,accord,"Arch_MedRangedHumanoid_Base(combatDist=20,triggerPullTime=1000)",Wilderness,,0,,not recovered
 1206,1,accord,,Wilderness,,0,,not recovered
@@ -1097,7 +1097,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1215,1,accord,Stand,Settlement,,0,,not recovered
 1216,1,accord,Stand,Settlement,,0,,not recovered
 1217,1,accord,Stand,Settlement,,0,,not recovered
-1218,1,accord,StockShootAndFollowRoute,Wilderness,,0,route/follow/named-point assignment missing,not recovered
+1218,1,accord,StockShootAndFollowRoute,Excluded,"requires route, named points or follow target",0,,not recovered
 1219,2,chosen,"Arch_MedRangedAbilityUser_Base(am1Id=77721,am1Cooldown=10000,am1Chance=0.7,am1Timeout=2000,triggerPullTime=800,fireRestDuration=1500)",Melding|Wilderness,,0,,not recovered
 1220,2,chosen,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1500,combatDist=30)",Melding|Wilderness,,0,,not recovered
 1221,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
@@ -1128,7 +1128,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1246,8,bandit,"Arch_MedRangedHumanoid_Base(triggerPullTime=1000,fireRestDuration=1500)",Wilderness,,0,,not recovered
 1247,8,bandit,"Arch_MedRangedHumanoid_Base(triggerPullTime=1000,fireRestDuration=1500)",Wilderness,,0,,not recovered
 1248,22,Black Hills Bandits,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-1249,4,friendly,"UseWorkDeployables(function=""Rummage"",groundOffset=1.6, inSpawnVolume=true, climber=true) ",Wilderness,,0,unsupported locomotion/spawn volume,not recovered
+1249,4,friendly,"UseWorkDeployables(function=""Rummage"",groundOffset=1.6, inSpawnVolume=true, climber=true) ",Excluded,requires unsupported locomotion or spawn volume,0,,not recovered
 1250,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=3000,fireRestDuration=1000)",Wilderness,,0,,not recovered
 1251,1,accord,"AlertAndInteractive(interactionType = ""HolsterTalk"")",Settlement,,0,,not recovered
 1252,8,bandit,"SiegebreakerWithCharge(walk=false,abilityRate=0,triggerPullTime=5000)",Wilderness,,0,,not recovered
@@ -1150,7 +1150,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1268,1,accord,,Wilderness,,0,,not recovered
 1269,1,accord,StationaryCivilianDialog(private_id=10474),Settlement,,0,,not recovered
 1270,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""gesture2"",emoteDuration=-1)",Settlement,,0,,not recovered
-1271,7,gaea,"Config(grounded=false,timeToMaxRotationSpeed=3000,environmentCollision=false,entityCollision=false) ",Excluded,explicit classifier exclusion,0,,not recovered
+1271,7,gaea,"Config(grounded=false,timeToMaxRotationSpeed=3000,environmentCollision=false,entityCollision=false) ",Excluded,behaviour Config,0,,not recovered
 1272,1,accord,,Wilderness,,0,,not recovered
 1273,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,0,,not recovered
 1274,1,accord,"FireBurst(fireOnce=false,useScope=true,minBurst=0,maxBurst=0)",Wilderness,,0,,not recovered
@@ -1185,14 +1185,14 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1303,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,0,,not recovered
 1304,22,Black Hills Bandits,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 1305,2,chosen,ChosenEngineerDrone,Melding|Wilderness,,0,,not recovered
-1306,2,chosen,Null,Excluded,no representation,0,,not recovered
+1306,2,chosen,Null,Excluded,no chassis and no posetype,0,,not recovered
 1307,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 1313,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 1314,9,neutral,Brontodon,Wilderness,,0,,not recovered
 1315,1,accord,,Wilderness,,0,,not recovered
 1316,8,bandit,Arch_MedRangedHumanoid_Base(combatDist=10),Wilderness,,0,,not recovered
-1317,4,friendly,PassivePet,Excluded,explicit classifier exclusion,0,,not recovered
-1318,1,accord,"TurretTeleporterDropshipCannon(shortRange=700, longRange=750, targetExcludedFactions=""chosen"", targetNegateFactionFlag = true)",Excluded,explicit classifier exclusion,0,,not recovered
+1317,4,friendly,PassivePet,Excluded,behaviour PassivePet,0,,not recovered
+1318,1,accord,"TurretTeleporterDropshipCannon(shortRange=700, longRange=750, targetExcludedFactions=""chosen"", targetNegateFactionFlag = true)",Excluded,behaviour TurretTeleporterDropshipCannon,0,,not recovered
 1319,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 1320,1,accord,"PeacetimeCityWanderer(restFunction=""Market"")",Settlement,,0,work destination requires placed station,not recovered
 1321,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
@@ -1224,8 +1224,8 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1347,1,accord,GuardCityWanderer(greetingSet=412),Settlement,,0,,not recovered
 1348,1,accord,GuardCityWanderer(greetingSet=412),Settlement,,0,,not recovered
 1349,1,accord,GuardCityWanderer(greetingSet=412),Settlement,,0,,not recovered
-1350,1,accord,StockShootAndFollowRoute,Wilderness,,0,route/follow/named-point assignment missing,not recovered
-1351,1,accord,"AlertAndInteractive(leashToSpawn=true, despawnWhenStuck=true)",Settlement,,54,vendor location/uniqueness not assigned,not recovered
+1350,1,accord,StockShootAndFollowRoute,Excluded,"requires route, named points or follow target",0,,not recovered
+1351,1,accord,"AlertAndInteractive(leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,54,,not recovered
 1352,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
 1353,1,accord,"AlertAndInteractive(interactionType = ""HolsterTalk"")",Settlement,,0,,not recovered
 1354,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
@@ -1234,7 +1234,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1357,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 1358,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""kioskviewer1"",emoteDuration=-1)",Settlement,,0,,not recovered
 1359,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
-1360,4,friendly,TestFollowPlayer(maxSpeedChange=100),Excluded,explicit classifier exclusion,0,,not recovered
+1360,4,friendly,TestFollowPlayer(maxSpeedChange=100),Excluded,behaviour TestFollowPlayer,0,,not recovered
 1361,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 1362,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 1363,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
@@ -1321,7 +1321,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1444,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 1445,1,accord,,Wilderness,,0,,not recovered
 1446,8,bandit,StationaryCivilianDialog(private_id=10474),Settlement,,0,,not recovered
-1447,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+1447,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 1448,8,bandit,AlertAndInteractive,Settlement,,0,,not recovered
 1449,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 1450,22,Black Hills Bandits,Arch_MedRangedHumanoid_Base(combatDist=10),Wilderness,,0,,not recovered
@@ -1352,8 +1352,8 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1475,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 1476,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 1477,8,bandit,Arch_AdditiveMelee_Base,Wilderness,,0,,not recovered
-1478,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair01"")",Settlement,,0,pose may require an assigned prop,not recovered
-1479,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair01"")",Settlement,,0,pose may require an assigned prop,not recovered
+1478,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair01"")",Excluded,requires assigned prop or pose placement,0,,not recovered
+1479,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair01"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 1480,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 1481,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
 1482,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
@@ -1366,7 +1366,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1489,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,0,,not recovered
 1490,7,gaea,"CrystalAranhaMiniBoss(combatDist =3.0, attackDuration =1, initialSpawnWait =1000, crystalAbilityCooldown =1000, rangedAbilityDuration =2000, meleeDist =0.0, spawnAbilityCooldown = 6000, maxAwayFromCrystalDist =20.0, minCrystalDist =6.0)",Wilderness,,0,,not recovered
 1491,7,gaea,"LandSharkMiniBoss(requireCritHit=false, critHitAbilityId =95100, critHitAbilitySlot = 1, combatDist =4.0, rangedAbilityId =95102)",Wilderness,,0,,not recovered
-1492,7,gaea,"GiantAranhaMiniBoss(eggSackCooldown =15000,eggSackAbilityId=85827,groundOffset=4,combatDist=15)",Wilderness,,0,,not recovered
+1492,7,gaea,"GiantAranhaMiniBoss(eggSackCooldown =15000,eggSackAbilityId=85827,groundOffset=4,combatDist=15)",Excluded,requires unsupported locomotion or spawn volume,0,,not recovered
 1493,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 1494,7,gaea,"CrystalAranhaMiniBoss(combatDist =3.0, attackDuration =1, initialSpawnWait =1000, crystalAbilityCooldown =1000, rangedAbilityDuration =2000, meleeDist =0.0, spawnAbilityCooldown = 6000, maxAwayFromCrystalDist =20.0, minCrystalDist =6.0)",Wilderness,,0,,not recovered
 1495,8,bandit,"Arch_MedRangedHumanoid_Base(triggerPullTime=5000,fireRestDuration=0,combatDist=40,hurtAvoidance=1)",Wilderness,,0,,not recovered
@@ -1458,7 +1458,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1581,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,0,,not recovered
 1582,45,Rebels,"Arch_MoveThenFire_Base(triggerPullTime=5000,combatWalk=false,combatDist=27)",Wilderness,,0,,not recovered
 1583,1,accord,Arch_MedRangedHumanoid_Base,Wilderness,,0,,not recovered
-1584,1,accord,PlayerPet,Excluded,explicit classifier exclusion,0,,not recovered
+1584,1,accord,PlayerPet,Excluded,behaviour PlayerPet,0,,not recovered
 1585,45,Rebels,"Arch_MoveThenFire_Base(triggerPullTime=4000,combatWalk=false,combatDist=27, am1Id = 33833, am1Cooldown = 1700, am1Chance = 0.65, am1Timeout = 1000, am2Id = 33812, am2Cooldown = 1700, am2Chance = 0.65,  am2Timeout = 1000)",Wilderness,,0,,not recovered
 1586,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
 1587,1,accord,"Arch_MedRangedHumanoid_Attack(hurtAvoidance=1,moveChance=.75,maxMove=10,enterCombatDiveRollChance=.75)",Wilderness,,0,,not recovered
@@ -1474,14 +1474,14 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1600,1,accord,"Arch_MoveThenFire_Base(triggerPullTime=4000,combatWalk=false,combatDist=27)",Wilderness,,0,,not recovered
 1601,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
 1602,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
-1603,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair01"")",Settlement,,0,pose may require an assigned prop,not recovered
+1603,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair01"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 1604,1,accord,"PeacetimeCityWanderer(restFunction=""Bar"")",Settlement,,0,work destination requires placed station,not recovered
 1605,4,friendly,Arch_MedRangedHumanoid_Base(combatDist=10),Wilderness,,0,,not recovered
 1606,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""smoking01"")",Settlement,,0,,not recovered
-1607,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""sittingchair03"")",Settlement,,0,pose may require an assigned prop,not recovered
+1607,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""sittingchair03"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 1608,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 1609,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-1610,1,accord,"AlertAndInteractive(emote=""sittingchair05"", interactionType=""HolsterTalk"")",Settlement,,0,pose may require an assigned prop,not recovered
+1610,1,accord,"AlertAndInteractive(emote=""sittingchair05"", interactionType=""HolsterTalk"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 1611,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 1612,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 1613,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 140662)",Settlement,,0,,not recovered
@@ -1517,7 +1517,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1643,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""kioskviewer2"",emoteDuration=-1)",Settlement,,0,,not recovered
 1644,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""gesture3"",emoteDuration=-1)",Settlement,,0,,not recovered
 1645,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""kioskviewer3"",emoteDuration=-1)",Settlement,,0,,not recovered
-1646,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""sittingchair05"")",Settlement,,0,pose may require an assigned prop,not recovered
+1646,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""sittingchair05"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 1647,1,accord,"AlertAndInteractive(helloScript=""Util: Look At Target (Client Side only)"",goodbyescript="""",emote=""kioskviewer1"",emoteDuration=-1)",Settlement,,0,,not recovered
 1648,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=225)",Settlement,,0,,not recovered
 1649,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
@@ -1579,8 +1579,8 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1706,1,accord,AlertAndLookAtPlayer,Settlement,,0,,not recovered
 1707,1,accord,"OneOff_FireAtEnemy(triggerPullTime=2500, targetSelectDist=25)",Wilderness,,0,,not recovered
 1708,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
-1709,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,61,vendor location/uniqueness not assigned,not recovered
-1710,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Settlement,,63,vendor location/uniqueness not assigned,not recovered
+1709,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,61,,not recovered
+1710,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Excluded,requires vendor placement assignment,63,,not recovered
 1711,1,accord,"OneOff_FireAtEnemy(triggerPullTime=2500, targetSelectDist=25)",Wilderness,,0,,not recovered
 1712,1,accord,"OneOff_FireAtEnemy(triggerPullTime=2500, targetSelectDist=25)",Wilderness,,0,,not recovered
 1713,4,friendly,Arch_AdditiveMelee_Base,Wilderness,,0,,not recovered
@@ -1691,9 +1691,9 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1818,8,bandit,Arch_MedRangedHumanoid_Base(combatDist=10),Wilderness,,0,,not recovered
 1819,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 1820,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-1821,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,64,vendor location/uniqueness not assigned,not recovered
-1822,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Settlement,,66,vendor location/uniqueness not assigned,not recovered
-1823,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,68,vendor location/uniqueness not assigned,not recovered
+1821,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,64,,not recovered
+1822,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Excluded,requires vendor placement assignment,66,,not recovered
+1823,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,68,,not recovered
 1824,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 1825,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,0,,not recovered
 1826,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,0,,not recovered
@@ -1739,7 +1739,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1866,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 1867,1,accord,PeacetimeCityWanderer,Settlement,,0,,not recovered
 1868,1,accord,PeacetimeCityWanderer,Settlement,,0,,not recovered
-1869,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+1869,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 1870,1,accord,PeacetimeCityWanderer,Settlement,,0,,not recovered
 1871,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 1872,1,accord,"Arch_MedRangedHumanoid_Attack(triggerPullTime=5000,fireRestDuration=1000)",Wilderness,,0,,not recovered
@@ -1761,16 +1761,16 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1888,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""officer"")",Settlement,,0,,not recovered
 1889,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""calm"")",Settlement,,0,,not recovered
 1890,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""guard"")",Settlement,,0,,not recovered
-1891,1,accord,PlayerPet,Excluded,explicit classifier exclusion,0,,not recovered
+1891,1,accord,PlayerPet,Excluded,behaviour PlayerPet,0,,not recovered
 1892,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""officer"",emoteDuration=-1)",Settlement,,0,,not recovered
 1893,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 1894,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
-1895,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,69,vendor location/uniqueness not assigned,not recovered
+1895,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true)",Excluded,requires vendor placement assignment,69,,not recovered
 1896,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 1897,1,accord,"Arch_MoveThenFire_Base(triggerPullTime=3000, fireRestDuration = 1000, combatDist = 30, calmWalk=false, combatWalk=true)",Wilderness,,0,,not recovered
 1898,1,accord,"Arch_MoveThenFire_Base(triggerPullTime=4000,combatWalk=false,combatDist=27, am1Id = 33833, am1Cooldown = 1700, am1Chance = 0.65, am1Timeout = 1000, am2Id = 33812, am2Cooldown = 1700, am2Chance = 0.65,  am2Timeout = 1000)",Wilderness,,0,,not recovered
 1899,1,accord,Arch_MedRangedHumanoid_Base,Wilderness,,0,,not recovered
-1900,1,accord,Null,Excluded,no representation,0,,not recovered
+1900,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
 1901,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 1902,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""officer"")",Settlement,,0,,not recovered
 1903,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""officer"")",Settlement,,0,,not recovered
@@ -1803,30 +1803,30 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1930,1,accord,"PerformEmote(emote=""statuepose03"")",Settlement,,0,,not recovered
 1931,1,accord,"PerformEmote(emote=""statuepose02"")",Settlement,,0,,not recovered
 1932,1,accord,HolsterWeapon,Wilderness,,0,,not recovered
-1933,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,70,vendor location/uniqueness not assigned,not recovered
-1934,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Settlement,,71,vendor location/uniqueness not assigned,not recovered
-1935,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,72,vendor location/uniqueness not assigned,not recovered
-1936,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,73,vendor location/uniqueness not assigned,not recovered
-1937,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,74,vendor location/uniqueness not assigned,not recovered
+1933,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,70,,not recovered
+1934,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Excluded,requires vendor placement assignment,71,,not recovered
+1935,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,72,,not recovered
+1936,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,73,,not recovered
+1937,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,74,,not recovered
 1938,1,accord,OneOff_FireAtEnemy,Wilderness,,0,,not recovered
-1939,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Settlement,,75,vendor location/uniqueness not assigned,not recovered
-1940,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,76,vendor location/uniqueness not assigned,not recovered
-1941,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Settlement,,78,vendor location/uniqueness not assigned,not recovered
-1942,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,77,vendor location/uniqueness not assigned,not recovered
-1943,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,79,vendor location/uniqueness not assigned,not recovered
-1944,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Settlement,,80,vendor location/uniqueness not assigned,not recovered
-1945,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,81,vendor location/uniqueness not assigned,not recovered
+1939,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Excluded,requires vendor placement assignment,75,,not recovered
+1940,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,76,,not recovered
+1941,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Excluded,requires vendor placement assignment,78,,not recovered
+1942,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,77,,not recovered
+1943,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,79,,not recovered
+1944,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=311)",Excluded,requires vendor placement assignment,80,,not recovered
+1945,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,81,,not recovered
 1946,1,accord,"AlertAndInteractive(perceptionDist=6,interactionType=""none"",greetingSet=236, lookAtTarget=1,longRange=1, restoreOnExit=1)",Settlement,,0,,not recovered
 1947,1,accord,"AlertAndLookAtPlayer(emote=""curious01"")",Settlement,,0,,not recovered
 1948,1,accord,"AlertAndLookAtPlayer(emote=""townstool1"")",Settlement,,0,,not recovered
 1949,1,accord,"AlertAndLookAtPlayer(emote=""townbar4"")",Settlement,,0,,not recovered
 1950,1,accord,"AlertAndLookAtPlayer(emote=""curious02"")",Settlement,,0,,not recovered
 1951,1,accord,"AlertAndLookAtPlayer(emote=""sittingstairs01"")",Settlement,,0,,not recovered
-1952,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair05"")",Settlement,,0,pose may require an assigned prop,not recovered
+1952,1,accord,"AlertAndLookAtPlayer(emote=""sittingchair05"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 1953,1,accord,"AlertAndLookAtPlayer(emote=""kioskviewer3"")",Settlement,,0,,not recovered
 1954,1,accord,"AlertAndLookAtPlayer(emote=""kioskviewer2"")",Settlement,,0,,not recovered
 1955,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
-1956,1,accord,"AlertAndLookAtPlayer(emote=""townlean4M"")",Settlement,,0,pose may require an assigned prop,not recovered
+1956,1,accord,"AlertAndLookAtPlayer(emote=""townlean4M"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 1957,1,accord,"AlertAndLookAtPlayer(emote=""townbar1"")",Settlement,,0,,not recovered
 1958,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,0,,not recovered
 1959,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true)",Settlement,,0,,not recovered
@@ -1853,13 +1853,13 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 1980,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 1981,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 1982,1,accord,Arch_MedRangedHumanoid_Base,Wilderness,,0,,not recovered
-1983,4,friendly,PassivePet,Excluded,explicit classifier exclusion,0,,not recovered
+1983,4,friendly,PassivePet,Excluded,behaviour PassivePet,0,,not recovered
 1984,2,chosen,"Arch_MoveThenFire_Base(triggerPullTime=4000, fireRestDuration = 1000, combatDist = 30, am1Id = 33833, am1Cooldown = 1700, am1Chance = 0.65, am1Timeout = 1000, am2Id = 33812, am2Cooldown = 1700, am2Chance = 0.65,  am2Timeout = 1000)",Melding|Wilderness,,0,,not recovered
 1985,1,accord,,Wilderness,,0,,not recovered
 1986,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 1987,1,accord,AggressiveWanderer,Wilderness,,0,,not recovered
 1988,1,accord,,Wilderness,,0,,not recovered
-1989,4,friendly,Null,Excluded,explicit classifier exclusion,0,,not recovered
+1989,4,friendly,Null,Excluded,behaviour Null,0,,not recovered
 1990,1,accord,"BasicCivilian_Stationary(greetingSet=1197, perceptionDist=10)",Settlement,,0,,not recovered
 1991,1,accord,AlertAndLookAtPlayer,Settlement,,0,,not recovered
 1992,1,accord,,Wilderness,,0,,not recovered
@@ -1909,13 +1909,13 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2038,1,accord,AlertAndLookAtPlayer,Settlement,,0,,not recovered
 2040,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2041,1,accord,,Wilderness,,0,,not recovered
-2043,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Settlement,,9,vendor location/uniqueness not assigned,not recovered
+2043,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Excluded,requires vendor placement assignment,9,,not recovered
 2044,2,chosen,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1500)",Melding|Wilderness,,0,,not recovered
 2045,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2046,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2047,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Settlement,,9,vendor location/uniqueness not assigned,not recovered
+2047,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Excluded,requires vendor placement assignment,9,,not recovered
 2048,2,chosen,Arch_MoveThenFire_Base(combatDist=20),Melding|Wilderness,,0,,not recovered
-2049,7,gaea,Null,Excluded,explicit classifier exclusion,0,,not recovered
+2049,7,gaea,Null,Excluded,behaviour Null,0,,not recovered
 2050,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2051,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2052,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -1928,12 +1928,12 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2059,2,chosen,OneOff_FireAtEnemy(grounded = 1),Melding|Wilderness,,0,,not recovered
 2060,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2061,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,0,,not recovered
-2062,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,82,vendor location/uniqueness not assigned,not recovered
+2062,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,82,,not recovered
 2063,8,bandit,"AlertAndInteractive(emote=""tikidance"")",Settlement,,0,,not recovered
 2064,9,neutral,Wyrm(threatDist=50),Wilderness,,0,,not recovered
 2065,7,gaea,,Wilderness,,0,,not recovered
 2066,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2067,7,gaea,"Config(grounded=false,timeToMaxRotationSpeed=3000,environmentCollision=false,entityCollision=false) ",Excluded,explicit classifier exclusion,0,,not recovered
+2067,7,gaea,"Config(grounded=false,timeToMaxRotationSpeed=3000,environmentCollision=false,entityCollision=false) ",Excluded,behaviour Config,0,,not recovered
 2068,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2069,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2070,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -1947,7 +1947,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2078,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Generic"")",Settlement,,0,,not recovered
 2079,0,,,Wilderness,,0,,not recovered
 2086,2,chosen,EliteWanderer(preferredMinCombatDist=20),Melding|Wilderness,,0,,not recovered
-2087,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Settlement,,9,vendor location/uniqueness not assigned,not recovered
+2087,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Excluded,requires vendor placement assignment,9,,not recovered
 2088,1,accord,StationaryCivilianDialog(private_id=10474),Settlement,,0,,not recovered
 2089,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=2500,fireRestDuration=1500)",Wilderness,,0,,not recovered
 2090,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=2500,fireRestDuration=1500)",Wilderness,,0,,not recovered
@@ -1958,7 +1958,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2095,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2096,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 2097,2,chosen,"Arch_MoveThenFire_Base(triggerPullTime=5000, fireRestDuration = 1500, combatDist = 30, calmWalk=false, combatWalk=true)",Melding|Wilderness,,0,,not recovered
-2098,5,monster,Null,Excluded,explicit classifier exclusion,0,,not recovered
+2098,5,monster,Null,Excluded,behaviour Null,0,,not recovered
 2099,1,accord,PeacetimeCityWanderer,Settlement,,0,,not recovered
 2100,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2101,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,0,,not recovered
@@ -1978,7 +1978,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2115,7,gaea,"Arch_FullbodyMelee_Base(combatDist=4,am1Id=82621,am1Facing=true,am1MaxDist=15,am1NavToDist=5.0,am1Cooldown=3000,headLook=true,makesWideTurns=true,wideTurnRadius=10)",Wilderness,,0,,not recovered
 2116,7,gaea,FeralCanineSquad(pounceChance=0.00),Wilderness,,0,,not recovered
 2117,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2118,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"", dialogScript=39340)",Settlement,,85,vendor location/uniqueness not assigned,not recovered
+2118,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"", dialogScript=39340)",Excluded,requires vendor placement assignment,85,,not recovered
 2119,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2120,8,bandit,"RaiderBaronMiniBoss(grenadeAbilityId = 118680,missileAbilityId=118680,strafeChance=1.0,jukeChance=0,useDiveRoll=false)",Wilderness,,0,,not recovered
 2121,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -1991,17 +1991,17 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2128,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2129,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2130,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2131,1,accord,"TurretTeleporterTarget(targetPcBias=0,targetDeployableBias=0,targetNpcBias=0,targetObjectiveBias=0,targetResourceNodeBias=0,targetVehicleBias=1000)",Excluded,explicit classifier exclusion,0,,not recovered
+2131,1,accord,"TurretTeleporterTarget(targetPcBias=0,targetDeployableBias=0,targetNpcBias=0,targetObjectiveBias=0,targetResourceNodeBias=0,targetVehicleBias=1000)",Excluded,behaviour TurretTeleporterTarget,0,,not recovered
 2132,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2133,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2135,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2136,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2137,4,friendly,,Wilderness,,0,,not recovered
-2138,1,accord,Null,Excluded,no representation,0,,not recovered
-2139,1,accord,Null,Excluded,no representation,0,,not recovered
-2140,1,accord,Null,Excluded,no representation,0,,not recovered
-2141,1,accord,Null,Excluded,no representation,0,,not recovered
-2142,1,accord,Null,Excluded,no representation,0,,not recovered
+2138,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+2139,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+2140,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+2141,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+2142,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
 2143,9,neutral,Wyrm,Wilderness,,0,,not recovered
 2144,9,neutral,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2145,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -2032,10 +2032,10 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2171,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2172,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2173,2,chosen,,Melding|Wilderness,,0,,not recovered
-2174,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Settlement,,201,vendor location/uniqueness not assigned,not recovered
+2174,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Excluded,requires vendor placement assignment,201,,not recovered
 2175,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2176,1,accord,"AlertAndInteractive(emote=""gesture1"",emoteDuration=-1)",Settlement,,0,,not recovered
-2177,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,84,vendor location/uniqueness not assigned,not recovered
+2177,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,84,,not recovered
 2178,9,neutral,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2179,2,chosen,Arch_AdditiveMelee_Base,Melding|Wilderness,,0,,not recovered
 2180,9,neutral,Wyrm(threatDist=50),Wilderness,,0,,not recovered
@@ -2072,7 +2072,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2213,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2214,1,accord,PeacetimeCityWanderer,Settlement,,0,,not recovered
 2215,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
-2216,2,chosen,"EngineerTurretTeleporter(targetMinDist=10, targetLostDelay=1)",Excluded,explicit classifier exclusion,0,,not recovered
+2216,2,chosen,"EngineerTurretTeleporter(targetMinDist=10, targetLostDelay=1)",Excluded,behaviour EngineerTurretTeleporter,0,,not recovered
 2217,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2218,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2219,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -2123,20 +2123,20 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2264,1,accord,,Wilderness,,0,,not recovered
 2265,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2266,2,chosen,"FastWander(nearSpawn=1, distance=10.0)",Melding|Wilderness,,0,,not recovered
-2267,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand4"")",Settlement,,104,vendor location/uniqueness not assigned,not recovered
+2267,1,accord,"AlertAndInteractive(greetingSet=310, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand4"")",Excluded,requires vendor placement assignment,104,,not recovered
 2268,4,friendly,,Wilderness,,0,,not recovered
-2269,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand3"")",Settlement,,100,vendor location/uniqueness not assigned,not recovered
-2270,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand1"")",Settlement,,101,vendor location/uniqueness not assigned,not recovered
-2271,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand2"")",Settlement,,102,vendor location/uniqueness not assigned,not recovered
+2269,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand3"")",Excluded,requires vendor placement assignment,100,,not recovered
+2270,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand1"")",Excluded,requires vendor placement assignment,101,,not recovered
+2271,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand2"")",Excluded,requires vendor placement assignment,102,,not recovered
 2272,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2273,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2274,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Settlement,,200,vendor location/uniqueness not assigned,not recovered
+2274,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Excluded,requires vendor placement assignment,200,,not recovered
 2275,1,accord,Arch_AdditiveMelee_Base,Wilderness,,0,,not recovered
 2276,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2277,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=2000)",Wilderness,,0,,not recovered
 2278,1,accord,"Arch_MoveThenFire_Base(triggerPullTime=3000, fireRestDuration = 1000, combatDist = 30, calmWalk=false, combatWalk=true)",Wilderness,,0,,not recovered
 2279,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=2000)",Wilderness,,0,,not recovered
-2280,4,friendly,"TestElfPet(maxDist=5, runToWalkDist=8, walkToRunDist=15, despawnDist=30, idleVoSet1=20336, idleVoSet2=20338, idleVoMs2=2000, idleVoCooldown=60000, vehicleVoSet1=20337, vehicleVoCooldown=60000, followVoSet=20336, followVoFrequency=30000)",Excluded,explicit classifier exclusion,0,,not recovered
+2280,4,friendly,"TestElfPet(maxDist=5, runToWalkDist=8, walkToRunDist=15, despawnDist=30, idleVoSet1=20336, idleVoSet2=20338, idleVoMs2=2000, idleVoCooldown=60000, vehicleVoSet1=20337, vehicleVoCooldown=60000, followVoSet=20336, followVoFrequency=30000)",Excluded,behaviour TestElfPet,0,,not recovered
 2281,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500, fireRestDuration = 2000, combatDist = 30, calmWalk=false, combatWalk=true)",Wilderness,,0,,not recovered
 2282,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=100, fireRestDuration = 1900, combatDist = 30, calmWalk=false, combatWalk=true)",Wilderness,,0,,not recovered
 2283,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -2157,7 +2157,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2298,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2299,46,Reapers,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2300,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2301,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand3"")",Settlement,,103,vendor location/uniqueness not assigned,not recovered
+2301,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand3"")",Excluded,requires vendor placement assignment,103,,not recovered
 2302,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500, fireRestDuration = 2000, combatDist = 30, calmWalk=false, combatWalk=true)",Wilderness,,0,,not recovered
 2303,6,melding,"Arch_AdditiveMelee_Base(groundOffsetChangeRate=15,groundOffsetGoal=15,noRotationWhenAiming=1)",Melding,,0,,not recovered
 2304,46,Reapers,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -2215,7 +2215,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2356,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2357,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2358,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2359,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Settlement,,201,vendor location/uniqueness not assigned,not recovered
+2359,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"")",Excluded,requires vendor placement assignment,201,,not recovered
 2360,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2361,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2362,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -2254,14 +2254,14 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2395,46,Reapers,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2396,22,Black Hills Bandits,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2397,45,Rebels,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2398,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""calm"")",Settlement,,1,vendor location/uniqueness not assigned,not recovered
+2398,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",emote=""calm"")",Excluded,requires vendor placement assignment,1,,not recovered
 2399,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2400,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2401,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2402,7,gaea,"Arch_FullbodyMelee_Base(combatDist=3, am1Id=95025,am1Coodown=3000,am1Targeted=1,am1Facing=1,am1FacingDuring=1)",Wilderness,,0,,not recovered
 2403,46,Reapers,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2404,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2405,7,gaea,"TurretTeleporterDropshipCannon(shortRange=700, longRange=750, targetExcludedFactions=""gaea"", targetNegateFactionFlag = true)",Excluded,explicit classifier exclusion,0,,not recovered
+2405,7,gaea,"TurretTeleporterDropshipCannon(shortRange=700, longRange=750, targetExcludedFactions=""gaea"", targetNegateFactionFlag = true)",Excluded,behaviour TurretTeleporterDropshipCannon,0,,not recovered
 2406,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2407,17,Tanken,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2408,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -2275,12 +2275,12 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2416,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2417,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2418,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2419,46,Reapers,"Arch_Follower(offset=[0,0,-.1])",Wilderness,,0,route/follow/named-point assignment missing,not recovered
+2419,46,Reapers,"Arch_Follower(offset=[0,0,-.1])",Excluded,"requires route, named points or follow target",0,,not recovered
 2420,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2421,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2422,1,accord,,Wilderness,,0,,not recovered
 2423,2,chosen,"Arch_MoveThenFire_Base(am1Id=86132,am1Timeout=6000,am1Facing=true,am1Targeted=true,am1Cooldown=8000,combatWalk=true,combatDist=30)",Melding|Wilderness,,0,,not recovered
-2424,2,chosen,"Arch_Follower(offset=[0,0,-.1])",Melding|Wilderness,,0,route/follow/named-point assignment missing,not recovered
+2424,2,chosen,"Arch_Follower(offset=[0,0,-.1])",Excluded,"requires route, named points or follow target",0,,not recovered
 2425,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2426,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2427,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -2332,7 +2332,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2473,1,accord,"AlertAndLookAtPlayer(greetingSet=1325,greetingChance=.5,perceptionDist=5)",Settlement,,0,,not recovered
 2474,1,accord,"AlertAndLookAtPlayer(greetingSet=1325,greetingChance=.5,perceptionDist=5)",Settlement,,0,,not recovered
 2475,1,accord,,Wilderness,,0,,not recovered
-2476,0,,,Excluded,no representation,0,,not recovered
+2476,0,,,Excluded,no chassis and no posetype,0,,not recovered
 2477,1,accord,"AlertAndLookAtPlayer(greetingSet=1325,greetingChance=.5,perceptionDist=5)",Settlement,,0,,not recovered
 2478,1,accord,"AlertAndInteractive(emote=""calm"", interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 2479,1,accord,"AlertAndInteractive(emote=""calm"", interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
@@ -2348,13 +2348,13 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2489,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2490,1,accord,AlertAndLookAtPlayer,Settlement,,0,,not recovered
 2491,1,accord,AlertAndLookAtPlayer(greetingSet=1197),Settlement,,0,,not recovered
-2492,1,accord,Null,Excluded,explicit classifier exclusion,0,,not recovered
+2492,1,accord,Null,Excluded,behaviour Null,0,,not recovered
 2493,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
 2494,1,accord,,Wilderness,,0,,not recovered
 2495,1,accord,"AlertAndInteractive(interactionType=""none"")",Settlement,,0,,not recovered
-2496,1,accord,Null,Excluded,no representation,0,,not recovered
-2497,1,accord,Null,Excluded,no representation,0,,not recovered
-2498,1,accord,Null,Excluded,no representation,0,,not recovered
+2496,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+2497,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
+2498,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
 2499,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2500,1,accord,"AlertAndInteractive(greetingSet=1416, perceptionDist=25, emote=""sergeantguide"")",Settlement,,0,,not recovered
 2501,1,accord,"AlertAndInteractive(emote=""calm"", interactionType=""none"", lookAtTarget=""true"")",Settlement,,0,,not recovered
@@ -2411,8 +2411,8 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2552,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2553,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2554,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2555,2,chosen,Null,Excluded,explicit classifier exclusion,0,,not recovered
-2556,2,chosen,Null,Excluded,explicit classifier exclusion,0,,not recovered
+2555,2,chosen,Null,Excluded,behaviour Null,0,,not recovered
+2556,2,chosen,Null,Excluded,behaviour Null,0,,not recovered
 2557,1,accord,"AlertAndInteractive(emote=""townstand4"", interactionType=""none"", lookAtTarget=""true"")",Settlement,,0,,not recovered
 2558,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2559,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -2488,7 +2488,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2629,1,accord,"AlertAndLookAtPlayer(greetingSet=1197, perceptionDist=10)",Settlement,,0,,not recovered
 2630,1,accord,"Arch_MedRangedHumanoid_Base(reviveOn=true,triggerPullTime=1500,fireRestDuration=500,entityCollision=false)",Wilderness,,0,,not recovered
 2631,1,accord,"BasicCivilian_Stationary(greetingSet=1197, perceptionDist=10)",Settlement,,0,,not recovered
-2632,1,accord,NavigateToLocation,Wilderness,,0,route/follow/named-point assignment missing,not recovered
+2632,1,accord,NavigateToLocation,Excluded,"requires route, named points or follow target",0,,not recovered
 2633,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2634,1,accord,,Wilderness,,0,,not recovered
 2635,1,accord,,Wilderness,,0,,not recovered
@@ -2557,7 +2557,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2701,1,accord,,Wilderness,,0,,not recovered
 2702,46,Reapers,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2703,46,Reapers,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2704,1,accord,PlayerPet,Excluded,explicit classifier exclusion,0,,not recovered
+2704,1,accord,PlayerPet,Excluded,behaviour PlayerPet,0,,not recovered
 2705,1,accord,,Wilderness,,0,,not recovered
 2707,1,accord,,Wilderness,,0,,not recovered
 2708,1,accord,,Wilderness,,0,,not recovered
@@ -2567,7 +2567,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2712,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2713,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2714,1,accord,,Wilderness,,0,,not recovered
-2715,1,accord,PlayerPet,Excluded,explicit classifier exclusion,0,,not recovered
+2715,1,accord,PlayerPet,Excluded,behaviour PlayerPet,0,,not recovered
 2716,1,accord,,Wilderness,,0,,not recovered
 2717,1,accord,,Wilderness,,0,,not recovered
 2718,1,accord,,Wilderness,,0,,not recovered
@@ -2583,7 +2583,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2728,2,chosen,,Melding|Wilderness,,0,,not recovered
 2729,2,chosen,,Melding|Wilderness,,0,,not recovered
 2730,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
-2731,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,68,vendor location/uniqueness not assigned,not recovered
+2731,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,68,,not recovered
 2732,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2733,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 125266)",Settlement,,0,,not recovered
 2734,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 125268)",Settlement,,0,,not recovered
@@ -2607,13 +2607,13 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2752,1,accord,,Wilderness,,0,,not recovered
 2753,1,accord,,Wilderness,,0,,not recovered
 2754,1,accord,,Wilderness,,0,,not recovered
-2755,1,accord,"AlertAndLookAtPlayer(emote=""typing01"")",Settlement,,0,pose may require an assigned prop,not recovered
+2755,1,accord,"AlertAndLookAtPlayer(emote=""typing01"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 2756,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 133051)",Settlement,,0,,not recovered
 2757,1,accord,AlertAndInteractive,Settlement,,0,,not recovered
 2758,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 133052)",Settlement,,0,,not recovered
 2759,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 133053)",Settlement,,0,,not recovered
-2760,1,accord,Pet_Earthbreaker,Excluded,explicit classifier exclusion,0,,not recovered
-2761,1,accord,Pet_Earthbreaker,Excluded,explicit classifier exclusion,0,,not recovered
+2760,1,accord,Pet_Earthbreaker,Excluded,behaviour Pet_Earthbreaker,0,,not recovered
+2761,1,accord,Pet_Earthbreaker,Excluded,behaviour Pet_Earthbreaker,0,,not recovered
 2762,46,Reapers,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2763,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 2764,15,Civilian,AlertAndInteractive,Settlement,,0,,not recovered
@@ -2683,22 +2683,22 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2828,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 137141)",Settlement,,0,,not recovered
 2829,1,accord,"AlertAndLookAtPlayer(helloScript="""", emote=""townstand6"")",Settlement,,0,,not recovered
 2830,1,accord,"AlertAndLookAtPlayer(helloScript="""", emote=""townstand4"")",Settlement,,0,,not recovered
-2831,1,accord,"AlertAndLookAtPlayer(helloScript="""", emote=""townlean2"")",Settlement,,0,pose may require an assigned prop,not recovered
+2831,1,accord,"AlertAndLookAtPlayer(helloScript="""", emote=""townlean2"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 2832,1,accord,"Arch_MedRangedRifleman_Base(stationary=true,calmWanderChance=0)",Wilderness,,0,,not recovered
 2833,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 137215)",Settlement,,0,,not recovered
 2834,1,accord,"Arch_MedRangedHumanoid_Base(reviveOn=true,triggerPullTime=1500,fireRestDuration=500,entityCollision=false)",Wilderness,,0,,not recovered
 2835,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 137217)",Settlement,,0,,not recovered
 2836,2,chosen,,Melding|Wilderness,,0,,not recovered
-2837,1,accord,Pet_Earthbreaker,Excluded,explicit classifier exclusion,0,,not recovered
+2837,1,accord,Pet_Earthbreaker,Excluded,behaviour Pet_Earthbreaker,0,,not recovered
 2838,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2839,1,accord,"AlertAndInteractive(interactionType=""holsterTalk"")",Settlement,,0,,not recovered
 2840,6,melding,,Melding,,0,empty invocation has unresolved CAIS instance,not recovered
 2841,45,Rebels,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2842,1,accord,Pet_Earthbreaker,Excluded,explicit classifier exclusion,0,,not recovered
+2842,1,accord,Pet_Earthbreaker,Excluded,behaviour Pet_Earthbreaker,0,,not recovered
 2843,4,friendly,,Wilderness,,0,,not recovered
 2844,1,accord,"Arch_MedRangedHumanoid_Base(reviveOn=true,triggerPullTime=1500,fireRestDuration=500,entityCollision=false)",Wilderness,,0,,not recovered
 2845,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 138335)",Settlement,,0,,not recovered
-2846,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 138336, emote = ""townlean2"")",Settlement,,0,pose may require an assigned prop,not recovered
+2846,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 138336, emote = ""townlean2"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 2847,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 138337, emote = ""townstand4"")",Settlement,,0,,not recovered
 2848,1,accord,,Wilderness,,0,,not recovered
 2849,1,accord,"AlertAndInteractive(interactionType=""holsterTalk"")",Settlement,,0,,not recovered
@@ -2725,10 +2725,10 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2870,1,accord,"Arch_MedRangedHumanoid_Base(reviveOn=true,triggerPullTime=1500,fireRestDuration=500,entityCollision=false)",Wilderness,,0,,not recovered
 2871,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2872,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-2873,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,86,vendor location/uniqueness not assigned,not recovered
-2874,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townlean2"")",Settlement,,102,vendor location/uniqueness not assigned; pose may require an assigned prop,not recovered
-2875,1,accord,,Settlement,,101,vendor location/uniqueness not assigned; empty invocation has unresolved CAIS instance,not recovered
-2876,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand3"")",Settlement,,100,vendor location/uniqueness not assigned,not recovered
+2873,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,86,,not recovered
+2874,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townlean2"")",Excluded,requires assigned prop or pose placement,102,,not recovered
+2875,1,accord,,Excluded,requires vendor placement assignment,101,,not recovered
+2876,1,accord,"AlertAndInteractive(greetingSet=311, leashToSpawn=true, despawnWhenStuck=true, emote=""townstand3"")",Excluded,requires vendor placement assignment,100,,not recovered
 2877,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 138747)",Settlement,,0,,not recovered
 2878,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 138749)",Settlement,,0,,not recovered
 2879,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 138750)",Settlement,,0,,not recovered
@@ -2736,11 +2736,11 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2881,1,accord,"BasicCivilian_Stationary(greetingSet=1197, perceptionDist=10)",Settlement,,0,,not recovered
 2882,1,accord,"BasicCivilian_Stationary(greetingSet=1197, perceptionDist=10)",Settlement,,0,,not recovered
 2883,1,accord,"BasicCivilian_Stationary(greetingSet=1197, perceptionDist=10)",Settlement,,0,,not recovered
-2884,0,,,Excluded,no representation,0,,not recovered
-2885,0,,,Excluded,no representation,0,,not recovered
-2886,0,,,Excluded,no representation,0,,not recovered
-2887,0,,,Excluded,no representation,0,,not recovered
-2888,0,,,Excluded,no representation,0,,not recovered
+2884,0,,,Excluded,no chassis and no posetype,0,,not recovered
+2885,0,,,Excluded,no chassis and no posetype,0,,not recovered
+2886,0,,,Excluded,no chassis and no posetype,0,,not recovered
+2887,0,,,Excluded,no chassis and no posetype,0,,not recovered
+2888,0,,,Excluded,no chassis and no posetype,0,,not recovered
 2889,1,accord,"BasicCivilian_Stationary(greetingSet=1197, perceptionDist=10)",Settlement,,0,,not recovered
 2890,1,accord,"BasicCivilian_Stationary(greetingSet=1197, perceptionDist=10)",Settlement,,0,,not recovered
 2891,1,accord,Arch_MedRangedHumanoid_Base,Wilderness,,0,,not recovered
@@ -2749,13 +2749,13 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2894,2,chosen,,Melding|Wilderness,,0,,not recovered
 2895,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2896,6,melding,,Melding,,0,empty invocation has unresolved CAIS instance,not recovered
-2899,1,accord,,Settlement,,40,vendor location/uniqueness not assigned; empty invocation has unresolved CAIS instance,not recovered
+2899,1,accord,,Excluded,requires vendor placement assignment,40,,not recovered
 2900,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2901,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2902,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2903,1,accord,,Wilderness,,0,,not recovered
 2904,2,chosen,,Melding|Wilderness,,0,,not recovered
-2905,2,chosen,"EngineerTurretTeleporter(targetMinDist=10, targetLostDelay=1,targetSelectDist=60,triggerPullTime=5000)",Excluded,explicit classifier exclusion,0,,not recovered
+2905,2,chosen,"EngineerTurretTeleporter(targetMinDist=10, targetLostDelay=1,targetSelectDist=60,triggerPullTime=5000)",Excluded,behaviour EngineerTurretTeleporter,0,,not recovered
 2906,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2907,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
 2908,1,accord,GuardCityWanderer,Settlement,,0,,not recovered
@@ -2785,8 +2785,8 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2932,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2933,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
 2934,1,accord,"Arch_MedRangedRifleman_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
-2935,1,accord,Pet_Earthbreaker,Excluded,explicit classifier exclusion,0,,not recovered
-2936,1,accord,Pet_Earthbreaker,Excluded,explicit classifier exclusion,0,,not recovered
+2935,1,accord,Pet_Earthbreaker,Excluded,behaviour Pet_Earthbreaker,0,,not recovered
+2936,1,accord,Pet_Earthbreaker,Excluded,behaviour Pet_Earthbreaker,0,,not recovered
 2937,1,accord,,Wilderness,,0,,not recovered
 2938,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2939,0,,"PeacetimeCityWanderer(restFunction=""Work"")",Settlement,,0,work destination requires placed station,not recovered
@@ -2820,9 +2820,9 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2969,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 140020)",Settlement,,0,,not recovered
 2970,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 140021)",Settlement,,0,,not recovered
 2971,1,accord,Arch_MedRangedHumanoid_Base,Wilderness,,0,,not recovered
-2972,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 140051, emote = ""sittingchair03"")",Settlement,,0,pose may require an assigned prop,not recovered
+2972,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 140051, emote = ""sittingchair03"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 2973,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 140052, emote = ""lounge01"")",Settlement,,0,,not recovered
-2974,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 140053, emote = ""sittingchair05"", lookAtTarget=1)",Settlement,,0,pose may require an assigned prop,not recovered
+2974,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 140053, emote = ""sittingchair05"", lookAtTarget=1)",Excluded,requires assigned prop or pose placement,0,,not recovered
 2975,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 140054, emote = """")",Settlement,,0,,not recovered
 2976,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 140055, emote = """")",Settlement,,0,,not recovered
 2977,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 140056, emote = """")",Settlement,,0,,not recovered
@@ -2848,20 +2848,20 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 2997,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2998,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 2999,10,Corporation - Omnidyne-M,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 142086)",Settlement,,0,,not recovered
-3000,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,87,vendor location/uniqueness not assigned,not recovered
+3000,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Excluded,requires vendor placement assignment,87,,not recovered
 3001,1,accord,StayAtSpawn,Wilderness,,0,,not recovered
-3002,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,88,vendor location/uniqueness not assigned,not recovered
-3003,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,89,vendor location/uniqueness not assigned,not recovered
-3004,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,90,vendor location/uniqueness not assigned,not recovered
-3005,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,91,vendor location/uniqueness not assigned,not recovered
+3002,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Excluded,requires vendor placement assignment,88,,not recovered
+3003,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Excluded,requires vendor placement assignment,89,,not recovered
+3004,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Excluded,requires vendor placement assignment,90,,not recovered
+3005,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Excluded,requires vendor placement assignment,91,,not recovered
 3006,1,accord,"AlertAndInteractive(emote=""calm"", interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
-3007,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,92,vendor location/uniqueness not assigned,not recovered
+3007,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Excluded,requires vendor placement assignment,92,,not recovered
 3008,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-3009,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,93,vendor location/uniqueness not assigned,not recovered
-3010,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,94,vendor location/uniqueness not assigned,not recovered
-3011,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,95,vendor location/uniqueness not assigned,not recovered
-3012,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,96,vendor location/uniqueness not assigned,not recovered
-3013,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"", dialogScript=39340)",Settlement,,85,vendor location/uniqueness not assigned,not recovered
+3009,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Excluded,requires vendor placement assignment,93,,not recovered
+3010,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Excluded,requires vendor placement assignment,94,,not recovered
+3011,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Excluded,requires vendor placement assignment,95,,not recovered
+3012,1,accord,"AlertAndInteractive(interactionType=""Generic"")",Excluded,requires vendor placement assignment,96,,not recovered
+3013,1,accord,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"", dialogScript=39340)",Excluded,requires vendor placement assignment,85,,not recovered
 3014,1,accord,"AlertAndInteractive(emote=""calm"", interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 3015,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 140502)",Settlement,,0,,not recovered
 3016,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 140503)",Settlement,,0,,not recovered
@@ -2882,10 +2882,10 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 3031,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3032,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3033,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 140367, emote=""waiting02"")",Settlement,,0,,not recovered
-3034,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 140657, emote = ""townlean1"")",Settlement,,0,pose may require an assigned prop,not recovered
+3034,1,accord,"UseAbilityOnInteract_Dialog(interactionType=""HolsterTalk"", abilityId = 140657, emote = ""townlean1"")",Excluded,requires assigned prop or pose placement,0,,not recovered
 3035,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 140658)",Settlement,,0,,not recovered
 3036,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 140659)",Settlement,,0,,not recovered
-3037,1,accord,Null,Excluded,no representation,0,,not recovered
+3037,1,accord,Null,Excluded,no chassis and no posetype,0,,not recovered
 3038,1,accord,"AlertAndLookAtPlayer(helloScript="""", emote=""curious02"")",Settlement,,0,,not recovered
 3039,1,accord,Arch_MedRangedHumanoid_Base,Wilderness,,0,,not recovered
 3040,1,accord,,Wilderness,,0,,not recovered
@@ -2906,8 +2906,8 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 3056,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 3057,1,accord,Arch_MedRangedHumanoid_Base,Wilderness,,0,,not recovered
 3058,8,bandit,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-3059,9,neutral,Null,Excluded,no representation,0,,not recovered
-3060,9,neutral,Null,Excluded,no representation,0,,not recovered
+3059,9,neutral,Null,Excluded,no chassis and no posetype,0,,not recovered
+3060,9,neutral,Null,Excluded,no chassis and no posetype,0,,not recovered
 3061,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3062,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3063,1,accord,Arch_MedRangedHumanoid_Base,Wilderness,,0,,not recovered
@@ -2943,10 +2943,10 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 3093,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3094,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3095,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-3096,11,Corporation - Kisuton,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"", dialogScript=39340)",Settlement,,97,vendor location/uniqueness not assigned,not recovered
+3096,11,Corporation - Kisuton,"AlertAndInteractive(factions=""Accord"",interactionType=""Vendor"", dialogScript=39340)",Excluded,requires vendor placement assignment,97,,not recovered
 3097,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-3098,12,Corporation - Astrek Association,"AlertAndInteractive(interactionType=""Generic"")",Settlement,,98,vendor location/uniqueness not assigned,not recovered
-3099,10,Corporation - Omnidyne-M,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,99,vendor location/uniqueness not assigned,not recovered
+3098,12,Corporation - Astrek Association,"AlertAndInteractive(interactionType=""Generic"")",Excluded,requires vendor placement assignment,98,,not recovered
+3099,10,Corporation - Omnidyne-M,"AlertAndInteractive(interactionType=""HolsterTalk"")",Excluded,requires vendor placement assignment,99,,not recovered
 3100,1,accord,AlertAndLookAtPlayer,Settlement,,0,,not recovered
 3101,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3102,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 140661)",Settlement,,0,,not recovered
@@ -2964,7 +2964,7 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 3114,1,accord,BasicCivilian_Stationary(greetingSet=1197),Settlement,,0,,not recovered
 3115,1,accord,"AlertAndInteractive(interactionType = ""GENERIC"")",Settlement,,0,,not recovered
 3116,1,accord,"AlertAndInteractive(interactionType = ""GENERIC"")",Settlement,,0,,not recovered
-3117,1,accord,"AlertAndInteractive(greetingSet=310,  leashToSpawn=true, despawnWhenStuck=true, emote=""townstand4"")",Settlement,,104,vendor location/uniqueness not assigned,not recovered
+3117,1,accord,"AlertAndInteractive(greetingSet=310,  leashToSpawn=true, despawnWhenStuck=true, emote=""townstand4"")",Excluded,requires vendor placement assignment,104,,not recovered
 3118,1,accord,"AlertAndInteractive(interactionType = ""GENERIC"")",Settlement,,0,,not recovered
 3119,1,accord,"AlertAndInteractive(interactionType = ""GENERIC"")",Settlement,,0,,not recovered
 3120,1,accord,"AlertAndInteractive(interactionType = ""GENERIC"")",Settlement,,0,,not recovered
@@ -2984,13 +2984,13 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 3135,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3136,1,accord,,Wilderness,,0,,not recovered
 3137,1,accord,EliteWanderer,Wilderness,,0,,not recovered
-3138,2,chosen,Null,Excluded,explicit classifier exclusion,0,,not recovered
+3138,2,chosen,Null,Excluded,behaviour Null,0,,not recovered
 3139,1,accord,"Arch_MedRangedHumanoid_Base(triggerPullTime=1500,fireRestDuration=1000)",Wilderness,,0,,not recovered
 3140,1,accord,"PeacetimeCityWanderer(restFunction=""Repair Work"")",Settlement,,0,work destination requires placed station,not recovered
 3141,1,accord,,Wilderness,,0,,not recovered
 3142,7,gaea,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3143,1,accord,"PeacetimeCityWanderer(restFunction=""Work"")",Settlement,,0,work destination requires placed station,not recovered
-3144,6,melding,Null,Excluded,explicit classifier exclusion,0,,not recovered
+3144,6,melding,Null,Excluded,behaviour Null,0,,not recovered
 3145,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3146,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3147,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
@@ -3050,15 +3050,15 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 3201,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3202,1,accord,,Wilderness,,0,,not recovered
 3203,1,accord,,Wilderness,,0,,not recovered
-3204,1,accord,"OneOff_StandStill(groundOffset=0.2,groundOffsetChangeRate=2,groundOffsetGoal=0.2,groundOffsetMinGoal=0.2)",Wilderness,,0,,not recovered
-3205,5,monster,Null,Excluded,explicit classifier exclusion,0,,not recovered
+3204,1,accord,"OneOff_StandStill(groundOffset=0.2,groundOffsetChangeRate=2,groundOffsetGoal=0.2,groundOffsetMinGoal=0.2)",Excluded,requires unsupported locomotion or spawn volume,0,,not recovered
+3205,5,monster,Null,Excluded,behaviour Null,0,,not recovered
 3206,1,accord,,Wilderness,,0,,not recovered
 3207,1,accord,"AlertAndInteractive(interactionType = ""GENERIC"")",Settlement,,0,,not recovered
 3208,1,accord,"AlertAndInteractive(interactionType = ""GENERIC"")",Settlement,,0,,not recovered
 3209,1,accord,"AlertAndInteractive(interactionType = ""GENERIC"")",Settlement,,0,,not recovered
 3210,1,accord,"AlertAndInteractive(interactionType = ""GENERIC"")",Settlement,,0,,not recovered
 3211,1,accord,"AlertAndInteractive(interactionType = ""GENERIC"")",Settlement,,0,,not recovered
-3212,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Settlement,,105,vendor location/uniqueness not assigned,not recovered
+3212,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=310)",Excluded,requires vendor placement assignment,105,,not recovered
 3213,1,accord,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3214,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 143054)",Settlement,,0,,not recovered
 3215,1,accord,"UseAbilityOnInteract(interactionType=""HolsterTalk"", abilityId = 143055)",Settlement,,0,,not recovered
@@ -3068,11 +3068,11 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 3219,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3220,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3221,4,friendly,,Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
-3222,2,chosen,OneOff_FollowRoute,Melding|Wilderness,,0,route/follow/named-point assignment missing,not recovered
+3222,2,chosen,OneOff_FollowRoute,Excluded,"requires route, named points or follow target",0,,not recovered
 3223,1,accord,,Wilderness,,0,,not recovered
 3224,1,accord,,Wilderness,,0,,not recovered
 3225,1,accord,Arch_MedRangedHumanoid_Base,Wilderness,,0,,not recovered
-3226,4,friendly,PassivePet,Excluded,explicit classifier exclusion,0,,not recovered
+3226,4,friendly,PassivePet,Excluded,behaviour PassivePet,0,,not recovered
 3227,2,chosen,,Melding|Wilderness,,0,empty invocation has unresolved CAIS instance,not recovered
 3228,2,chosen,,Melding|Wilderness,,0,,not recovered
 3229,6,melding,,Melding,,0,,not recovered
@@ -3099,12 +3099,12 @@ monster_id,faction_id,faction,behavior,habitat_policy,exclusion,vendor_id,assign
 3250,4,friendly,,Wilderness,,0,,not recovered
 3251,2,chosen,,Melding|Wilderness,,0,,not recovered
 3252,2,chosen,,Melding|Wilderness,,0,,not recovered
-3253,4,friendly,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=225)",Settlement,,204,vendor location/uniqueness not assigned,not recovered
+3253,4,friendly,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=225)",Excluded,requires vendor placement assignment,204,,not recovered
 3254,2,chosen,,Melding|Wilderness,,0,,not recovered
 3255,2,chosen,,Melding|Wilderness,,0,,not recovered
 3256,2,chosen,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=225)",Settlement|Melding|Wilderness,,0,,not recovered
-3257,2,chosen,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=225)",Settlement|Melding|Wilderness,,205,vendor location/uniqueness not assigned,not recovered
+3257,2,chosen,"AlertAndInteractive(interactionType=""HolsterTalk"",greetingSet=225)",Excluded,requires vendor placement assignment,205,,not recovered
 3258,1,accord,"AlertAndInteractive(emote=""calm"", interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
 3259,1,accord,"AlertAndInteractive(emote=""calm"", interactionType=""HolsterTalk"")",Settlement,,0,,not recovered
-3261,1,accord,,Settlement,,2000,vendor location/uniqueness not assigned; empty invocation has unresolved CAIS instance,not recovered
+3261,1,accord,,Excluded,requires vendor placement assignment,2000,,not recovered
 3262,1,accord,"AlertAndInteractive(interactionType=""HolsterTalk"")",Settlement,,0,,not recovered

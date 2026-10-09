@@ -54,7 +54,7 @@ def report(path):
     monsters = rows("dbcharacter::Monster")
     # CharacterEntity.LoadMonster replicates faction as a byte.
     friendly = [r for r in monsters if stances.get((r["faction_id"] & 255, 1)) == "Friendly"]
-    placements = json.loads((game / "StaticDB/CustomData/character_spawn.json").read_text())
+    placements = json.loads((game / "StaticDB/CustomData/character_spawn.json").read_text(encoding="utf-8"))
     placed = collections.Counter(p["type"] for p in placements)
     groups = collections.defaultdict(list)
     for row in friendly:
@@ -104,7 +104,7 @@ def report(path):
             params.get("grounded", "").lower() in ("false", "0")):
             lines.append(f"| {r['id']} | `{r['behavior'].replace('|', '&#124;')}` |")
     lines += ["", "## Verified boundary", "",
-              "- The four placements above cover **only `character_spawn.json`**. `SdbWorldPopulationDataSource` and `MonsterHabitatClassifier` also admit represented settlement templates; `WorldPopulationPlanner` generates cells/slots around settlement anchors, and `EntityManagerWorldPopulationSpawner` registers them through the same spawn path. Population is enabled by default but constrained by terrain, streaming and caps. Hard-coded/debug/ability spawns are also outside this count. No total live-zone NPC count is asserted.",
+              "- The four placements above cover **only `character_spawn.json`**. `SdbWorldPopulationDataSource` and `MonsterHabitatClassifier` also admit eligible represented settlement templates (vendors and explicit route/prop/unsupported-locomotion requirements are filtered from automatic population); `WorldPopulationPlanner` generates cells/slots around settlement anchors, and `EntityManagerWorldPopulationSpawner` registers them through the same spawn path. Population is enabled by default but constrained by terrain, streaming and caps. Hard-coded/debug/ability spawns are also outside this count. No total live-zone NPC count is asserted.",
               "- `EntityManager.SpawnCharacter` registers NPCs irrespective of faction. `AiEngine` runs ambient routines while Idle; friendly player proximity does not require a combat target to make them walk.",
               "- `NpcRoutineProfile` honors explicit stationary/zero-distance settings; named route, climbing, spawn-volume and non-ground requirements do not acquire invented ground patrols.",
               "- `NpcRoutine` requests destinations, pauses on arrival, chooses subsequent legs and can visit a matching placed work deployable. `PhysicsNpcNavigation.SupportsRoutines` requires loaded collision; rejected paths/steps do not move the body.",
@@ -129,7 +129,7 @@ def main():
         content = report(path)
     target = ROOT / "Docs/FRIENDLY_NPC_MOVEMENT_VERIFICATION.md"
     if args.check:
-        if not target.exists() or target.read_text() != content:
+        if not target.exists() or target.read_text(encoding="utf-8") != content:
             raise SystemExit(f"Stale friendly NPC report: {target}")
     else:
         target.write_text(content, encoding="utf-8")

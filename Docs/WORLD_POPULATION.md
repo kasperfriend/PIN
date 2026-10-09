@@ -145,31 +145,30 @@ Tests: `UdpHosts/GameServer.Tests/MonsterHabitatClassifierTests.cs`,
 `dbcharacter::Monster` row and answers two questions - *may this row be spawned as
 ambient world content at all*, and *which kinds of ground does it belong to*.
 
-**Refused** (not world population):
+**Refused from automatic population** (explicit static/debug/ability spawns remain available):
 
-| Rule | Why | Rows |
-|------|-----|------|
-| no `chassis_id` **and** no `posetype_id` | nothing to render and nothing to collide with; `CharacterEntity.LoadMonster` keeps such a row alive with a synthesized sphere, which is a debug affordance | 89 |
-| `behavior` is one of the exclusion set | see below | 167 |
+- No chassis and no posetype, or an existing no-AI/pet/turret/fixture exclusion.
+- Explicit route/follow behavior or nonempty `city_prefix`: the planner supplies no assignment.
+- `climber=true`, `grounded=false`, `inSpawnVolume=true`, or a finite positive
+  `groundOffset`: the ground spawner cannot fulfill those requests. These apply
+  even to stationary templates; standing still does not supply a spawn volume.
+- `PerformEmoteNoPhysics`, or one of the reviewed base poses `controlseat`,
+  `sittingchair01/03/05`, `townlean1/2/4M`, `typing`, `typing01`: no prop placement is supplied.
+- Nonzero `vendor_id`: no original vendor location or uniqueness assignment is supplied.
+  This prevents random copies of vendor roles; it does not place replacement shops.
 
-The exclusion set is behaviours the game attaches to something that is *not* an
-inhabitant of the zone: `Null` (173 rows ask for no AI at all), the pets
-(`PlayerPet`, `PassivePet`, `Pet_Earthbreaker`, `TestElfPet`, `TestFollowPlayer` -
-created by their owner's ability, not by the world), the turret/teleporter props
-(`EngineerTurret`, `EngineerTurretTeleporter`, `TurretTeleporterDropshipCannon`,
-`TurretTeleporterTarget`), level fixtures (`Elevator`, `DoorUpInteract`) and
-development leftovers (`AvoidMatt`, `CraterTest`, `Config`, `Meta`, `MRU`,
-`_inst`). The behaviour name is the part before the first `(` and is read with
-`NpcBehaviorParams.Parse`, the same parser the AI uses, so
-`PeacetimeCityWanderer(wanderRadius=30)` and `PeacetimeCityWanderer` classify
-identically.
+These are **conservative PIN placement safeguards**, not recovered original spawn
+rules. Matching is case-insensitive and uses top-level arguments, never substrings
+or nested child parameters. The ordinary stationary/guard/wander/work-visitor
+routines remain eligible when none of the requirements above apply. The generic
+`terminal_type_name=VENDOR` default is not an exclusion. Unknown special poses,
+mission trees, bosses and unresolved CAIS instance references remain audit gaps.
 
 **Habitat** of an admitted row:
 
 | Signal | Habitat |
 |--------|---------|
 | `behavior` in the settlement set (`BasicCivilian`, `PeacetimeCityWanderer*`, `GuardCityWanderer`, `*Dialog`, `Stand`, `PerformEmote`, `UseAbilityOnInteract*`, `TraumaDoc`, ...) | `Settlement` |
-| `vendor_id != 0` (102 rows) | `Settlement` |
 | `faction_id`'s `internal_name` is `melding`, **or** `behavior` starts with `Melding` | `Melding` |
 | `faction_id`'s `internal_name` is `chosen` | `Melding \| Wilderness` |
 | none of the above (including an empty behaviour - 1,068 rows) | `Wilderness` |
@@ -177,12 +176,12 @@ identically.
 Two of those rules exist because the data is not tidy: a couple of the Melding's
 own creatures are filed under other factions (`MeldingAcolyte` under gaea,
 `MeldingPuker` under chosen), and the Chosen are the Melding's army - they come
-through it and patrol the field around it, so their rows fit both. `vendor_id` is
-used rather than `terminal_type_name` because the latter carries its `VENDOR`
-default on 3,087 of the 3,109 rows, wildlife included.
+through it and patrol the field around it, so PIN's coarse habitat policy allows both.
 
-Against the shipped database this admits **2,853 of 3,109** rows: 1,023 fit
-settlements, 1,731 the wilderness, 351 the Melding.
+The assignment guard admits **2,711 of 3,109** templates (398 excluded), down from
+2,853 before this guard. The [generated census](NPC_PLACEMENT_AUDIT.md) records
+first exclusion reasons and all remaining placement risk flags. These counts
+are template eligibility, not live NPC counts or original zone rosters.
 
 Every admitted row also carries four columns the plan uses:
 
@@ -572,8 +571,8 @@ Example:
 
 ```
 \population
-World population: on (live 124/150 NPCs of 2853 monster rows, 82 kinds in the world)
-Plan: 9841 cells, 20000 slots, 2853 rows placed, 214 cells refused by chunk rules
+World population: on (live 124/150 NPCs of 2711 monster rows, 82 kinds in the world)
+Plan: 9841 cells, 20000 slots, 2711 rows placed, 214 cells refused by chunk rules
 Streaming: 68 active cells, 213 slots queued, 1 players, activate 150 m / deactivate 225 m
 Lifetime: 422 spawned, 298 despawned, 17 lost, 214 placements refused, 9 slots parked, 46 placement deferrals, 143 bodies in the placement grid
 Cover: 61 spots refused as covered
