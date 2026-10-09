@@ -358,8 +358,8 @@ public class Factory
                 return new RequireAimModeCommand(SDBInterface.GetRequireAimModeCommandDef(commandId));
             case CommandType.SlotAmmo:
                 return new SlotAmmoCommand(SDBInterface.GetSlotAmmoCommandDef(commandId));
-            // case CommandType.AddPhysics:
-            //     return new AddPhysicsCommand(SDBInterface.GetAddPhysicsCommandDef(commandId));
+            case CommandType.AddPhysics:
+                return new AddPhysicsCommand(SDBInterface.GetAddPhysicsCommandDef(commandId));
             case CommandType.RequireReload:
                 return new RequireReloadCommand(SDBInterface.GetRequireReloadCommandDef(commandId));
             case CommandType.TargetByExists:
@@ -416,8 +416,8 @@ public class Factory
             //     return new LoadRegisterFromBonusCommand(SDBInterface.GetLoadRegisterFromBonusCommandDef(commandId));
             // case CommandType.BonusGreaterThan:
             //     SDB has zero instances of this command
-            // case CommandType.TargetByNPC:
-            //     return new TargetByNPCCommand(CustomDBInterface.GetTargetByNPCCommandDef(commandId));
+            case CommandType.TargetByNPC:
+                return new TargetByNPCCommand(CustomDBInterface.GetTargetByNPCCommandDef(commandId));
             case CommandType.ImpactToggleEffect:
                 return new ImpactToggleEffectCommand(SDBInterface.GetImpactToggleEffectCommandDef(commandId));
             case CommandType.DeployableCalldown:
@@ -600,14 +600,13 @@ public class Factory
             // case CommandType.RequireNotRespawned:
             //     return new RequireNotRespawnedCommand(SDBInterface.GetRequireNotRespawnedCommandDef(commandId));
             // Id-only def (customdata Todo record ships no parameters), so there is nothing to evaluate.
-            // case CommandType.RequireAbilityPhysics:
-            //     return new RequireAbilityPhysicsCommand(CustomDBInterface.GetRequireAbilityPhysicsCommandDef(commandId));
+            case CommandType.RequireAbilityPhysics:
+                return new RequireAbilityPhysicsCommand(CustomDBInterface.GetRequireAbilityPhysicsCommandDef(commandId));
             // case CommandType.AbilityFinished:
             //     return new AbilityFinishedCommand(CustomDBInterface.GetAbilityFinishedCommandDef(commandId));
             case CommandType.TargetFilterMovestate:
                 return new TargetFilterMovestateCommand(SDBInterface.GetTargetFilterMovestateCommandDef(commandId));
-            // case CommandType.RequireAbilityPhysics:
-            //     return new RequireAbilityPhysicsCommand(CustomDBInterface.GetRequireAbilityPhysicsCommandDef(commandId));
+
             // case CommandType.ClearHostility:
             //     return new ClearHostilityCommand(CustomDBInterface.GetClearHostilityCommandDef(commandId));
             // case CommandType.UpdateSpawnTable:

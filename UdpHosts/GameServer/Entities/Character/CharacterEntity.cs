@@ -62,6 +62,13 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     /// held when the command runs is the one it applies to.
     /// </summary>
     private WeaponDamageOverride _weaponDamageOverride;
+
+    /// <summary>
+    /// The destructible body installed by <see cref="AbilityPhysicsBody" />'s installing command, or
+    /// null when the character has none. <c>RequireAbilityPhysicsCommand</c> gates on this and the
+    /// damage system absorbs into it.
+    /// </summary>
+    public AbilityPhysicsBody? AbilityPhysics { get; set; }
     private byte? _monsterDamageResponseOverride;
 
     // Effects can overlap while a glider is handed from one stage to another (or while a pad
