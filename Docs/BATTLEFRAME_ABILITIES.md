@@ -440,9 +440,27 @@ run catches it.
 ### Verification
 
 Still no .NET SDK in the sandbox, so the build and the test suite run in CI only.
-Tip `cb09aad`: **all 6 jobs green, 1430 passed / 0 failed** (master: 1411). The
-StyleCop warnings in that run are all pre-existing in `Lib/Shared.Common`; none
-come from this round's files. The pre-flight resolver reports 48 changed files, 0
+`cb09aad` (the physics and `TargetByNPC` work) was green on all 6 jobs with 1430
+passed / 0 failed (master: 1411).
+
+The commit after it, `196fe8b`, which carried `RequireItemDurability`, **failed all
+three .NET legs** with `CS0037`: `Cannot convert null to 'Item' because it is a
+non-nullable value type`. `Item` is `public struct Item`
+(`Lib/AeroMessages/AeroMessages/GSS/Character/Event/InventoryUpdate.cs:61`), so a
+method typed `Item` cannot return null, and typing the caller's local `Item?` made
+it a `Nullable<Item>` whose fields are not reachable through the question mark. Both
+sites now use a `TryGet`/`out` pattern, the shape the rest of `CharacterInventory`
+already uses. Fixed in `b162967`.
+
+That failure was invisible to the pre-flight resolver, which knows whether a name is
+declared but not whether that name is a value type. It now indexes every `struct`
+declaration across `UdpHosts/` and `Lib/` — `Item` itself lives in the AeroMessages
+submodule while the method returning it lives in `UdpHosts/` — and reports
+`return null;` under a method whose return type is a bare struct. Self-tested by
+reintroducing the same method and confirming the default run reports it.
+
+The StyleCop warnings in the green runs are all pre-existing in `Lib/Shared.Common`;
+none come from this round's files. The resolver reports 48 changed files, 0
 unresolved names, 0 duplicate `(namespace, class)` pairs, and 200 command classes
 constructed by the Factory with 0 unreachable.
 
