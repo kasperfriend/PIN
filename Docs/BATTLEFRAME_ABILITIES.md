@@ -168,8 +168,8 @@ guessing at it makes abilities behave *wrongly*, which is worse than a documente
 no-op.
 
 `apt::CommandType` has 394 rows. **186** were routed to a command class in
-`Factory` at the end of round five (196 after round six); another 145 appear there
-only as commented-out cases, and the rest have no case at all. Of the unrouted, most are not ability machinery anyway
+`Factory` at the end of round five, and **194** after round six; 136 more appear
+there only as commented-out cases, and the rest have no case at all. Of the unrouted, most are not ability machinery anyway
 (arc/mission control, matchmaking, the loot store, chat bubbles).
 
 ### Implemented
