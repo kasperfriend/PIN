@@ -120,6 +120,72 @@ public class WorldPopulationServiceTests
     }
 
     [Fact]
+    public void Tick_FinalPositionsStayInTheirAssignedCellAndEligibleChunks()
+    {
+        var world = CreateWorld();
+        AddGroundAndRoster(world);
+        world.Data.UnspawnableChunks.Add(99);
+        // Cell centers have x mod 32 = 8 and are eligible. Jitter reaches forbidden strips.
+        world.Terrain.ChunkOf = p => p.X % 32 > 12 ? 99u : 1u;
+        Tick(world, 80);
+        Assert.NotEmpty(world.Spawner.Spawned);
+        foreach (var spawn in world.Spawner.Spawned)
+        {
+            Assert.Equal(1u, world.Terrain.GetChunkRecordId(spawn.Position));
+            var cell = WorldPopulationCell.CellIndexOf(spawn.Position, world.Rules.CellSize);
+            Assert.InRange(cell.X, 0, 3);
+            Assert.InRange(cell.Y, 0, 3);
+        }
+    }
+
+    [Theory]
+    [InlineData("bounds")]
+    [InlineData("chunk")]
+    [InlineData("cell")]
+    [InlineData("nonfinite")]
+    public void Tick_RejectsResolvedEndpointsThatLoseTheirPlacementEligibility(string failure)
+    {
+        var world = CreateWorld();
+        AddGroundAndRoster(world);
+        world.Terrain.ZoneBoundsMin = new Vector3(-1, -1, -1);
+        world.Terrain.ZoneBoundsMax = new Vector3(129, 129, 1);
+        if (failure == "bounds")
+        {
+            world.Terrain.ResolvePosition = p => new Vector3(p.X, p.Y, 2);
+        }
+        else if (failure == "chunk")
+        {
+            world.Data.UnspawnableChunks.Add(99);
+            world.Terrain.ChunkOf = p => p.Z > 0 ? 99u : 1u;
+            world.Terrain.ResolvePosition = p => new Vector3(p.X, p.Y, 0.5f);
+        }
+        else if (failure == "cell")
+        {
+            world.Terrain.ResolvePosition = p => p + new Vector3(32, 0, 0);
+        }
+        else
+        {
+            world.Terrain.ResolvePosition = p => new Vector3(float.NaN, p.Y, p.Z);
+        }
+
+        Tick(world, 30);
+        Assert.True(world.Terrain.PlacementCalls > 0);
+        Assert.Empty(world.Spawner.Spawned);
+    }
+
+    [Fact]
+    public void Tick_ChecksActualSpawnBoundsEvenWhenTheCellCenterIsInside()
+    {
+        var world = CreateWorld();
+        AddGroundAndRoster(world);
+        world.Terrain.ZoneBoundsMin = new Vector3(8, 8, -1);
+        world.Terrain.ZoneBoundsMax = new Vector3(104, 104, 1);
+        Tick(world, 80);
+        Assert.NotEmpty(world.Spawner.Spawned);
+        Assert.All(world.Spawner.Spawned, spawn => Assert.True(world.Terrain.IsInsideZoneBounds(spawn.Position)));
+    }
+
+    [Fact]
     public void Tick_WithoutPlayersDoesNothingAtAll()
     {
         var world = CreateWorld(withPlayer: false);

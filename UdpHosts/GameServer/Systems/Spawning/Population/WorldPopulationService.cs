@@ -1088,6 +1088,12 @@ public sealed class WorldPopulationService
 
             var position = attempt == 0 ? slot.Anchor : slot.Anchor + RetryJitter(slot, attempt);
 
+            if (!IsPlacementEligible(slot, position))
+            {
+                slot.RoundRefusedByGround = true;
+                continue;
+            }
+
             if (IsTooCloseToAPlayer(position) ||
                 !_occupancy.IsAreaFree(position, radius, _rules.MinSeparation))
             {
@@ -1096,6 +1102,12 @@ public sealed class WorldPopulationService
             }
 
             if (!_terrain.TryResolveStandingSpot(position, radius, height, out var resolved))
+            {
+                slot.RoundRefusedByGround = true;
+                continue;
+            }
+
+            if (!IsPlacementEligible(slot, resolved))
             {
                 slot.RoundRefusedByGround = true;
                 continue;
@@ -1192,6 +1204,24 @@ public sealed class WorldPopulationService
             slot.Anchor,
             _shard.ZoneId,
             slot.Failures);
+    }
+
+    /// <summary>
+    ///     A cell's eligibility is not a certificate for a jittered/resolved point. Keep its
+    ///     habitat/level ownership, check actual zone bounds and re-read the final chunk rules.
+    ///     Unknown chunks retain the data source's existing explicit fallback policy.
+    /// </summary>
+    private bool IsPlacementEligible(WorldPopulationSlot slot, Vector3 position)
+    {
+        if (!float.IsFinite(position.X) || !float.IsFinite(position.Y) || !float.IsFinite(position.Z) ||
+            !_terrain.IsInsideZoneBounds(position))
+        {
+            return false;
+        }
+
+        var (x, y) = WorldPopulationCell.CellIndexOf(position, _rules.CellSize);
+        return x == slot.Cell.X && y == slot.Cell.Y &&
+               _data.IsChunkSpawnable(_shard.ZoneId, _terrain.GetChunkRecordId(position));
     }
 
     private Vector3 RetryJitter(WorldPopulationSlot slot, int attempt)

@@ -6,9 +6,12 @@ from, what keeps it from costing the server anything it should not, and how to
 inspect or turn it off at runtime.
 
 It is the answer to "the zone is empty except for the handful of entities
-`character_spawn.json` authors". The server now spawns **every
-`dbcharacter::Monster` row that belongs to the loaded zone**, on ground the zone
-itself says an NPC can stand on, around the players who are in it.
+`character_spawn.json` authors". The server uses a **global `dbcharacter::Monster` candidate roster** and broad
+habitat classification to generate slots on the loaded zone's ground around
+players. This does **not** establish that every admitted template belongs in
+that zone: original per-zone/encounter spawn assignments are not recovered.
+See [the complete placement audit](NPC_PLACEMENT_AUDIT.md) for template risk flags,
+static test fixtures and placement-policy limits.
 
 > **Placement is a reconstruction from database/collision inputs, not recovered original spawn assignments.** The shipped `clientdb.sd2` has
 > no per-zone spawn table - that lived in the live server's spawn groups, which
