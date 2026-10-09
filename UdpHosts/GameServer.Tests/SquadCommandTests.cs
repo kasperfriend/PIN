@@ -91,11 +91,20 @@ public class SquadCommandTests
         Assert.True(new TargetSquadmatesCommand(new TargetSquadmatesCommandDef { Id = 1 }).Execute(unfiltered));
         Assert.Equal(1, unfiltered.Targets.Count);
 
+        // With fail_none unset the chain carries on, but the dead squadmate is gone from the list -
+        // which is what the filter is for, and what distinguishes it from the unfiltered run above.
         var filtered = new Context(shard, leader);
         var command = new TargetSquadmatesCommand(new TargetSquadmatesCommandDef { Id = 1, Filter = 1 });
 
-        Assert.False(command.Execute(filtered)); // nothing survives the filter, so fail_none governs
+        Assert.True(command.Execute(filtered));
         Assert.Equal(0, filtered.Targets.Count);
+
+        // And with fail_none set, the same empty list fails the chain instead.
+        var failing = new Context(shard, leader);
+        var strict = new TargetSquadmatesCommand(new TargetSquadmatesCommandDef { Id = 1, Filter = 1, FailNone = 1 });
+
+        Assert.False(strict.Execute(failing));
+        Assert.Equal(0, failing.Targets.Count);
     }
 
     [Fact]
