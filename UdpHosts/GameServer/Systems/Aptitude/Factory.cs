@@ -394,8 +394,8 @@ public class Factory
                 return new RequirePermissionCommand(SDBInterface.GetRequirePermissionCommandDef(commandId));
             // case CommandType.TargetPassengers:
             //     return new TargetPassengersCommand(SDBInterface.GetTargetPassengersCommandDef(commandId));
-            // case CommandType.TargetSquadmates:
-            //     return new TargetSquadmatesCommand(SDBInterface.GetTargetSquadmatesCommandDef(commandId));
+            case CommandType.TargetSquadmates:
+                return new TargetSquadmatesCommand(SDBInterface.GetTargetSquadmatesCommandDef(commandId));
             // case CommandType.SlotAbility:
             //     return new SlotAbilityCommand(CustomDBInterface.GetSlotAbilityCommandDef(commandId));
             case CommandType.TargetTrim:
@@ -770,8 +770,8 @@ public class Factory
             // case CommandType.AddAppendageHealthPool:
             //     return new AddAppendageHealthPoolCommand(CustomDBInterface.GetAddAppendageHealthPoolCommandDef(commandId));
             // No squad system exists server-side, so there is no leader lookup to answer the gate with.
-            // case CommandType.RequireSquadLeader:
-            //     return new RequireSquadLeaderCommand(SDBInterface.GetRequireSquadLeaderCommandDef(commandId));
+            case CommandType.RequireSquadLeader:
+                return new RequireSquadLeaderCommand(SDBInterface.GetRequireSquadLeaderCommandDef(commandId));
             case CommandType.RequireHasCertificate:
                 return new RequireHasCertificateCommand(SDBInterface.GetRequireHasCertificateCommandDef(commandId));
             // Id-only def: the carryable inventory is the three replicated slots on the

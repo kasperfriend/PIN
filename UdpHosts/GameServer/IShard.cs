@@ -17,6 +17,7 @@ using GameServer.Systems.EntityManager;
 using GameServer.Systems.MovementRelay;
 using GameServer.Systems.PlayerRespawn;
 using GameServer.Systems.ProjectileSim;
+using GameServer.Systems.Squad;
 using GameServer.Systems.Spawning.Population;
 using GameServer.Systems.WeaponSim;
 using Serilog;
@@ -56,6 +57,13 @@ public interface IShard : IPacketSender
     ///     before they use it.
     /// </summary>
     WorldPopulationService WorldPopulation { get; }
+
+    /// <summary>
+    ///     The shard's squad roster, which <c>TargetSquadmates</c> and <c>RequireSquadLeader</c> read.
+    ///     Null on a shard that runs without one (the minimal test shards), so callers ask before they
+    ///     use it — the same arrangement as <see cref="WorldPopulation" />.
+    /// </summary>
+    SquadService? Squad => null;
     uint ZoneId { get; }
     ILogger Logger { get; }
     GameServerSettings Settings { get; }
