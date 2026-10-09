@@ -92,6 +92,7 @@ public sealed class WorldPopulationService
     private readonly ILogger _logger;
     private readonly IWorldPopulationRules _rules;
     private readonly IWorldPopulationTerrain _terrain;
+    private readonly IWorldPopulationDataSource _data;
     private readonly IWorldPopulationSpawner _spawner;
     private readonly SpawnOccupancyGrid _occupancy;
     private readonly WorldPopulationPlanner _planner;
@@ -184,6 +185,7 @@ public sealed class WorldPopulationService
         _shard = shard;
         _logger = shard.Logger.ForContext<WorldPopulationService>();
         _rules = rules;
+        _data = data;
         _terrain = terrain;
         _spawner = spawner;
         _planThreads = Math.Max(0, planWorkerThreads);
