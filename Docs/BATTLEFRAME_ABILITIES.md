@@ -89,6 +89,381 @@ a battleframe's passive group (sprint/jetpack/core triggers, e.g. core group
 32) cannot be enrolled from data. Button abilities are unaffected (they
 resolve through loadout modules).
 
+## Fourth audit round — transitive closure, and what it turned up
+
+The scoreboard above walks each ability's **linear** node list. That undercounts:
+a chain reaches more chains through `ConditionalBranch` (`if`/`then`/`else`),
+`LogicOrChain`, `LogicAndChain` and `Call`, and every `ImpactApplyEffect` pulls in
+the applied effect's `apply`/`remove`/`update`/`duration` chains. Following all of
+those edges, the 143 stock-kit ability seats reach **1304 chains**, and the gap
+count is materially different:
+
+| state | seats |
+|---|---|
+| reachable closure fully implemented | 41 |
+| closure holds at least one gap | 102 |
+
+The **Teleport Beacon** is the clearest case the linear walk missed: its recall
+lives in the `else` branch of a `ConditionalBranch`, and both nodes in it were
+broken — `TargetFromStatusEffect` ignored its only parameter, and `Teleport` was
+a `return true` placeholder. Neither appeared in any earlier table.
+
+### Closed this round
+
+- **Activation replication** — `AbilityActivated` was sent only to the acting
+  player's own channel. Every `apttf::` row of a chain (`tfPlayAnimation`,
+  `tfParticleEffectAsset`, `tfBeamEffect`, `tfCameraShakeEffect`,
+  `tfAbilityAnimation`) is `environment=client`, so the server no-ops it and the
+  client runs it — *for a client that heard the activation*. A client that never
+  heard it played no cast animation and drew no effect, so abilities were
+  invisible to everyone but their caster, and an NPC's ability (which activates
+  through `AbilitySystem` with no combat-controller echo at all) was invisible to
+  everyone. It is now announced from `ExecuteAbilityActivation`, the single
+  funnel every root activation passes through, on the same `SendToScoped` path
+  `TookHit` and `WeaponProjectileFired` use. The actor's own client is skipped:
+  it already gets the ReliableGss acknowledgement.
+- **`TargetFromStatusEffect`** — 72 rows, every one with a nonzero `StatusfxId`,
+  `AlsoInitiator` 0 in 67 of them. It pushed the initiator when that flag was set
+  and returned, so the 67 rows asking for the effect carriers produced an empty
+  target list and everything downstream ran against nothing. It now scans the
+  shard for the carriers, which is what the chain shapes ask for (they clear or
+  never populate the list first).
+- **`Teleport`** — id-only def, 42 rows. Moves the target list to
+  `Context.InitPosition`, the initiation position the other movement commands
+  read; every chain shape settles the list first and then teleports it. Follows
+  `TeleportServerCommand`: position write, fall-damage reset, then a
+  `ForcedMovement` type 1 so the client does not interpolate across the map.
+  *Documented limit:* a recall to a position recorded by an *earlier* activation
+  (the beacon's "back to where I threw it") needs the destination effect's stored
+  context, and an id-only def has no column to name it.
+- **`BattleFrameDuration`** — routed, but to a bare `return true`, so a gate
+  asking "still in the qualifying frame" always said yes. **73 nodes in the
+  stock kits** — the largest single silent no-op found. `Classtype` is
+  `dbitems::Battleframe.Archtype` (value sets 0/5/6/11/13 vs 0/2/5/6/7/8/9/11/13);
+  `Notchanged` compares the new `CharacterEntity.LastLoadoutChangeTime` with the
+  effect's own start time.
+
+### Still open, by size
+
+Remaining placeholders in the transitive closure, by node count:
+`ActivateAbilityTrigger` 56, `RegisterAbilityTrigger` 45, `SlotAmmo` 13,
+`Bullrush` 8, `DetonateProjectiles` 8, `RegisterTimedTrigger` 7,
+`ItemAttributeModifier` 6, `RegisterClientProximity` 5, `SetWeaponDamage` 5,
+`TinyObjectCreate` 4, then `TargetByNPC`, `ModifyHostility`,
+`TargetByDamageResponse`, `RequireAbilityPhysics`, `AddPhysics` (3 each) and a
+tail of 1–2. One routed command is still a no-op: `RequirementServer` (10 nodes).
+
+Note the shipped `verify_ability_chains.py --check` allowlist is keyed to the
+*linear* walk, so it does not see the branch-reachable rows above; it still passes
+unchanged (31 documented placeholder pairs). Extending it to the closure would
+add several new pairs and needs its allowlist rewritten in the same change.
+
+## Fifth audit round — implementing what the data can actually specify
+
+Round four's scoreboard counts gaps; this round closes them where the definition
+carries enough information to close them honestly. The dividing line used
+throughout is **can the row say what it means?** A def with real columns can be
+implemented against its own data; a def that is nothing but an id cannot, and
+guessing at it makes abilities behave *wrongly*, which is worse than a documented
+no-op.
+
+`apt::CommandType` has 394 rows. **186** were routed to a command class in
+`Factory` at the end of round five, and **194** after round six; 136 more appear
+there only as commented-out cases, and the rest have no case at all. Of the unrouted, most are not ability machinery anyway
+(arc/mission control, matchmaking, the loot store, chat bubbles).
+
+### Implemented
+
+| command | rows | what it does now |
+|---|---|---|
+| `Bullrush` | 31 | Rhino/Dreadnaught *Charge*. Maps onto the protocol's own `ForcedMovementType.Bullrush` (6) block: `Speed`/`Duration` become its `Speed` and `StartTime`/`EndTime`, `Velocity` is the horizontal facing scaled by speed. |
+| `TargetByDamageResponse` | 243 | Target filter sibling of `RequireDamageResponse`; reads the target's own `DamageResponseId`, falling back to the def's column. |
+| `DropCarryable` | id only | Tail of the throw-the-object chains; same transition as `DropAllCarryable` today. |
+| `RegisterClientProximity` | 239 | **The proximity trigger.** `radius`/`max_targets`/`retry_interval`/`chain`/`ability_id` are all loadable, so this is implemented rather than documented away. |
+| `DetonateProjectiles` | 59 | Blows the caster's in-flight rounds early through the simulation's own expiry path. |
+| `SetProjectileTarget` | 52 | Redirects already-homing rounds onto the chain's target. |
+| `SlotAmmo` | 115 | Weapon ammo substitution — closes the `// TODO: Handle ammo overrides` in `WeaponSim`. |
+| `NamedVariableAssign` | 291 | The missing half of a matched pair (see below). |
+
+### Two of these were half-built features, not missing commands
+
+**`NamedVariableAssign` / `LoadRegisterFromNamedVar`.** The reader (type 240) was
+already implemented but could only ever take its `undecl_value` fallback, and said
+so in its own doc: nothing ever declared a variable. The two tables share one
+vocabulary — `WingFX`, `damage`, `FuseLength`, `teslacount`, `heat` — which is the
+evidence they address the same store, and both key on `name_id` (the string
+`member_name` is empty in 119 of 291 assign rows and 156 of 265 read rows). The
+store now exists, per entity, on the ability system. The glider pad keeps working
+exactly as before: chain 1001671 row 1001663 reads `WingFX` with fallback 1.0 and
+no chain in the pad's activation assigns it.
+
+**`SlotAmmo` / `WeaponSim`.** The weapon simulation carried the matching hole as
+an explicit `// TODO: Handle ammo overrides`. The substitution is held on the
+character rather than in the weapon-details cache, because that cache is rebuilt
+on every loadout change and an override stored in it would vanish mid-ability.
+
+### Adaptations, stated at the code site
+
+- `RegisterClientProximity` is named for the **client** detecting proximity, and
+  the AeroMessages tree carries no client→server "something entered my radius"
+  message. The server answers the same question by scanning the shard, which is
+  why the row's retry interval is honoured instead of firing every tick.
+- `Bullrush`'s `ImpactEffect` is nonzero in exactly 1 of 31 rows and needs a swept
+  collision test the server has no geometry for. Not applied; documented.
+- `TargetByDamageResponse`'s `UseWeaponDamageType` is 0 in all 243 rows, so it is
+  left alone rather than guessed. Same for `SetProjectileTarget`'s
+  `TargetingThis` (0 in 52) and `SlotAmmo`'s `CreditToAbility` (no representation
+  on the projectile path — guessing would attribute kills wrongly).
+- `NamedVariableAssign`'s `VarSrctype` has no enum anywhere in the codebase (1 in
+  279 of 291 rows, 0 in 12). Both sides key on the executing entity, which is what
+  makes the assign/read pair round-trip; modelling the column would only matter
+  for sharing a variable *across* entities.
+
+### What round five called blocked, and what round six did about it
+
+Three entries in the list above were wrong. They were not "nothing to read"; they
+were "nothing read yet". See the sixth round below.
+
+### Verification
+
+No .NET SDK exists in the sandbox this was developed in (no `dotnet`, `mono` or
+`csc` on the filesystem), so the build and the 1421-test suite run in CI only.
+Three pushes failed the build on missing `using` directives before that was
+addressed with a pre-flight resolver that indexes all 4015 types declared across
+`UdpHosts/` and the `Lib/` submodules and checks every type name a changed file
+mentions is reachable from its namespace and imports; it is self-tested by
+reintroducing the exact error CI reported. A separate check confirms all 186
+command classes `Factory` constructs are reachable from its imports.
+
+## Sixth audit round — the three "blockers" were not
+
+Round five left three things as genuinely blocked. All three were implementable;
+in each case what was missing was a *reading* of the data, not the data.
+
+### The ability trigger subsystem (108 stock nodes — the largest gap in the file)
+
+`RegisterAbilityTrigger` (492 rows), `ActivateAbilityTrigger` (169),
+`RegisterTimedTrigger` (250), and the two tagged variants. Every def is id-only —
+there is no trigger table in the clientdb at all, and PIN's own `customdata`
+records carry nothing but an id — so a row can say only *that* a trigger exists.
+Two facts from the chain shapes settle what one does:
+
+- `RegisterAbilityTrigger` is **terminal** in 343 of its 492 rows, and 58 rows
+  follow another `RegisterAbilityTrigger`. A registration ends a chain; it does
+  not continue one, and one chain can lay several.
+- `ActivateAbilityTrigger` follows `TimeCooldown` in 42 of its 169 rows. A
+  cooldown only makes sense guarding an **ability activation**.
+
+So a trigger's payload is the ability activation that installed it: firing the
+trigger runs that ability. `RegisterTimedTrigger` also fires by itself when the
+effect that laid it ends — a fuse — and 108 of its 250 rows sit directly inside an
+`ImpactApplyEffect` chain, i.e. inside an applied effect where there is a duration
+to burn. Triggers live as long as the carrying effect, on the same
+`OnApply`/`OnRemove` plumbing `RegisterMovementEffect` and
+`RegisterClientProximity` use. Firing runs an activation, and that activation can
+install and fire triggers, so there is a depth bound of four: the data carries no
+limit, and this turns a loop into a dropped activation instead of a stack overflow
+on the shard thread.
+
+This is what the `Factory` comments named as waiting on evidence: the frame-passive
+registers (Ambush, Conduit, Rally, E-Tank, Incinerator) and the charged/accel
+actives (Overcharge, Shockwave, Absorption Bomb, Afterburner, Heavy Turret, melee
+auxiliaries).
+
+The two tagged variants record the command's own id as their tag, since the
+id-only defs cannot supply a real one, and fire with the entity's other triggers
+rather than only for a particular tag. Inventing a tag value would make them fire
+for the wrong hits, so that part is narrowed and documented rather than guessed.
+
+### `SetWeaponDamage` (79 rows)
+
+Round five said the `Lerpfallheight`/`Lerpenergy` lerp was not derivable. Reading
+the row's own numbers settles it: `lerpmaxvalue` is nonzero in all 79 rows and runs
+to 250 — metres of drop, not a millisecond count — and `dmgminvalue`/`dmgmaxvalue`
+carry negative and fractional values, so they are the ends of a damage range the
+lerp interpolates. `set` (52) and `multiply` (28) pick the mode, `damage_regop` the
+combination, `clamplerp` (32) clamps the factor.
+
+`FallDamageSystem` gained real fall-height tracking to feed the 22
+`lerpfallheight` rows: it records the Z of the first airborne sample and the
+greatest drop below it. Air time, which the tracker already had, cannot stand in —
+the rows scale to 250 and a millisecond count would saturate the lerp at 1 on
+every fall, which is precisely the wrong-damage outcome that made round five leave
+this command out.
+
+### `TargetSquadmates` (24) and `RequireSquadLeader` (4)
+
+Round five said there was no squad system. Correct — and that was a missing
+feature, not a missing fact. `SquadService` now supplies the roster: squads of up
+to five with a leader, invited/promoted/left/disbanded, hanging off `IShard` as a
+default interface member returning null (the arrangement `WorldPopulation` already
+uses) so the minimal test shards keep working.
+
+`TargetSquadmates` replaces the target list with the caster's other squad members;
+`fail_none` (1 in 11 of the 24 rows) fails the chain when there are none.
+`filter` is 1 in only 2 rows and its predicate is not decodable from the columns,
+so it is read as the narrowing it plainly is — keep only squadmates that are alive
+— and that judgement is recorded in the command's doc as the one place in it where
+one was needed. `RequireSquadLeader` reads the initiator, which is what a gate on
+the caster means.
+
+Squad chat is routed to the roster, replacing the old "This channel is not
+available", and a `squad` admin command forms and manages squads through the
+command's target — the convention the other admin commands use. The protocol's own
+squad path stays undecoded (`ChallengeInvitationSquadInfo` is `Unk1`..`Unk4`), so
+that command is how a squad comes into being today; when the invitation protocol is
+decoded, membership should come from the client instead.
+
+### What is still genuinely blocked
+
+- The `ModifyDamageBy*` family, `ItemAttributeModifier`,
+  `SetDefaultDamageBonus`, `AddAppendageHealthPool`, `ModifyHostility` — id-only
+  defs with no column that says what the modification is.
+- Line of sight (no world raycast), headshot (no hit locations),
+  `RequireBulletHit`, SIN acquisition. (`RequireItemDurability` was listed here
+  too; round seven implemented it — the columns were there, the item's durability
+  field was already on `Item`, only the slot lookup was missing.)
+- Arc/mission control, matchmaking, the loot store, chat bubbles — not ability
+  machinery.
+
+### Verification
+
+Same arrangement as round five: no .NET SDK in the sandbox, so the build and the
+**1430**-test suite run in CI only — all 6 jobs green (master: 1411; the delta is 5
+activation-announcement tests, 5 named-variable round-trip tests and 9 squad
+tests). The pre-flight resolver was extended after it missed two of its own: it
+now maps allowlisted BCL types to their namespaces and reports one whose namespace
+is not imported, which is how `Shard.cs` using `SquadService` without importing
+`GameServer.Systems.Squad` was caught before the build saw it.
+
+## Seventh audit round — the closure walk, and what the data does not contain
+
+Round six's census was still built on `next` alone. Round seven replaced it with a
+real transitive closure: the walk now also follows `ConditionalBranch`'s
+`if`/`then`/`else`, `or_chain`, `and_chain`, `Call`'s `chain`, and every
+`ImpactApplyEffect`'s `apply_chain`, `remove_chain`, `update_chain` and
+`duration_chain`. The repo's own `Tools/SdbDump/verify_ability_chains.py` follows
+`next` only, which is why it reports 3 placeholder nodes where the closure finds
+95 modules with a gap. The closure is the number to trust.
+
+On that census the stock kit is 124 modules with a chain, of which 28 were fully
+routed. Of the 96 gapped, `ActiveInitiation` accounts for 26 frames and is a
+documented by-design no-op (the combat controller sends the `AbilityActivated` ack
+itself; it is in `verify_ability_chains.py`'s `BY_DESIGN_NOOP`). Round seven took
+four of the rest.
+
+### Implemented
+
+**`TargetByNPC`** (385 rows) — the def is id-only, but the chain shape is not
+ambiguous: `TargetClear → TargetPBAE → TargetByNPC → TargetByCharacterState →
+HasTargetsDuration → ImpactApplyEffect` in 385 rows. It runs *after* a selector,
+not as one, so it narrows rather than selects — take the area, keep only the NPCs —
+with `TargetByCharacterState` sitting beside it doing exactly that kind of
+narrowing. This codebase has no separate NPC entity type; monsters are
+`CharacterEntity` instances with no controlling player, which is the test
+`ForcePushCommand` already uses to skip them.
+
+**`AddPhysics`** (63 rows) — puts a destructible body on a character, the
+frame-borne barrier family. Its position gives the usage: `AbilityToggled →
+AddPhysics → ParticleEffectAsset → AudioFeedback → SetAnimCtrlParam`, so a toggled
+ability raises it alongside its visuals and it stands for as long as the carrying
+effect does. `posetype` names the same `PoseType` record the character's own
+collision component carries. Installed on `OnApply`, taken off on `OnRemove`, and
+only if it is still the body this command installed — a later `AddPhysics` on the
+same character must not be undone by an earlier effect ending.
+
+**`RequireAbilityPhysics`** (51 rows) — its gate. The data shows it used both ways
+round (`RequireCState → BattleFrameDuration → RequireAbilityPhysics`, and
+`RequireAbilityPhysics → RequireCState → TimeDuration` as the first node), so it
+simply reports whether a body is installed.
+
+**`RequireItemDurability`** (9 rows) — the gate that stops an ability being used
+through worn-out gear, and it is the first thing checked, before the ability
+commits its cooldown. Its three comparison columns are **OR**ed, not ANDed, and the
+table is what settles it: `greater_than` is set in all 9 rows while `equal_to` is
+set in 5 of them, all with `durability_amount` 400. Read as a conjunction those 5
+would ask for a durability both equal to 400 and greater than 400 — impossible, so
+the ability could never be used. Read as a disjunction they ask for "at least 400",
+and the other 4 rows (`greater_than` with amount 0) ask for "any durability left".
+Only one reading makes the table consistent. An empty slot fails: there is no item
+whose durability could satisfy the row.
+
+`DamageSystem.ApplyDamage` now absorbs into an installed body before the character
+takes the hit. A body flagged `block_enemies_only` lets friendly fire straight
+through, which is the point of the flag; friendliness is read the way
+`TargetHostilesCommand`'s own fallback reads it (same faction, or self-inflicted)
+and that choice is recorded at the call site. When the pool is spent only the body
+goes away — the effect keeps running, which is what `RequireAbilityPhysics` then
+reports.
+
+### What the remaining eight are actually blocked on
+
+The useful finding of this round is not a command, it is where the other eight sit.
+For every one of them there is **no client table in the SDB at all**. `grep` of the
+database finds no `TemporaryEquipment`, `RewardAssist`, `AppendageHealth`,
+`DeployableUpgrade` or `TinyObject*` command table — only
+`aptfs::RequireSinAcquiredCommandDef` and `dbcharacter::TinyObject` survive, and
+neither is the command row. What the repo has instead are placeholder JSON files
+under `StaticDB/CustomData/Todo/` that are bare id lists:
+`aptgss_ItemAttributeModifierCommandDef.json` is 18 entries, each `{"id": ..., "comment": ""}`,
+with no columns behind them.
+
+So `ItemAttributeModifier` (4 frames), `TinyObjectCreate` (3), `TemporaryEquipment`,
+`TargetMyTinyObjects`, `RewardAssist`, `AddAppendageHealthPool` and
+`DeployableUpgrade` are not blocked on judgement. Their ids are real and their
+chains reference them, so the command exists in the client data — the parameter
+columns were simply never extracted into this repository. Naming an attribute id or
+a health-pool amount here would be invention that *looks* like implementation, and
+there is nothing to check it against.
+
+`RequireSinAcquired` (1 frame, Nighthawk) is the one with a real table
+(`negate`, `allow_prediction`) and is still unimplemented for a different reason:
+there is nothing on the server for it to read. SIN acquisition means "this player's
+SIN has locked onto that entity", and the server keeps no such record — there is no
+interest or area-of-interest system, no per-character stealth state, and no
+detection-range stat to check a radius against. Building the acquisition registry
+would mean writing a subsystem whose behaviour could not be derived from any data
+in the repository, and its sibling `TargetFilterBySinAcquired` shares exactly the
+same gap, as the commented-out Factory cases already say.
+
+### A pre-flight that was reporting clean without looking
+
+The static resolver has been the only local gate for four rounds, and it had a hole
+in the place that mattered most: its default file list came from
+`master...HEAD` plus untracked files, so anything **modified but not yet
+committed** — which is precisely the state it is run in, before committing — was
+skipped. `DamageSystem.cs` reached a clean run using `Math.Min` with no
+`using System;`. The list now includes unstaged and staged changes as well, and the
+fix was self-tested by reintroducing that exact error and confirming the default
+run catches it.
+
+### Verification
+
+Still no .NET SDK in the sandbox, so the build and the test suite run in CI only.
+`cb09aad` (the physics and `TargetByNPC` work) was green on all 6 jobs with 1430
+passed / 0 failed (master: 1411).
+
+The commit after it, `196fe8b`, which carried `RequireItemDurability`, **failed all
+three .NET legs** with `CS0037`: `Cannot convert null to 'Item' because it is a
+non-nullable value type`. `Item` is `public struct Item`
+(`Lib/AeroMessages/AeroMessages/GSS/Character/Event/InventoryUpdate.cs:61`), so a
+method typed `Item` cannot return null, and typing the caller's local `Item?` made
+it a `Nullable<Item>` whose fields are not reachable through the question mark. Both
+sites now use a `TryGet`/`out` pattern, the shape the rest of `CharacterInventory`
+already uses. Fixed in `b162967`.
+
+That failure was invisible to the pre-flight resolver, which knows whether a name is
+declared but not whether that name is a value type. It now indexes every `struct`
+declaration across `UdpHosts/` and `Lib/` — `Item` itself lives in the AeroMessages
+submodule while the method returning it lives in `UdpHosts/` — and reports
+`return null;` under a method whose return type is a bare struct. Self-tested by
+reintroducing the same method and confirming the default run reports it.
+
+The StyleCop warnings in the green runs are all pre-existing in `Lib/Shared.Common`;
+none come from this round's files. The resolver reports 48 changed files, 0
+unresolved names, 0 duplicate `(namespace, class)` pairs, and 200 command classes
+constructed by the Factory with 0 unreachable.
+
 ## Per-frame detail
 
 #### Accord Assaultframe

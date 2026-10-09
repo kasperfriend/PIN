@@ -9,6 +9,7 @@ using GameServer.Enums;
 using GameServer.Extensions;
 using GameServer.GRPC;
 using GameServer.StaticDB;
+using GameServer.Systems.Combat;
 using Serilog;
 
 namespace GameServer.Systems.Aptitude;
@@ -52,6 +53,41 @@ public class AbilitySystem
     /// effect is applied, and the moment it leaves that state (or the carrying effect ends) it is removed.
     /// </summary>
     private readonly Dictionary<ulong, List<MovementEffectRegistration>> _movementEffectRegistrations = [];
+
+    /// <summary>
+    /// Proximity triggers registered by <c>RegisterClientProximityCommand</c>, per owning entity. Polled on
+    /// the ability system's tick: the command's own name says the <em>client</em> detects the proximity, and
+    /// the AeroMessages tree carries no client-&gt;server "something entered my radius" message, so the
+    /// server answers the same question itself by scanning the shard on the row's retry interval.
+    /// </summary>
+    private readonly Dictionary<ulong, List<ClientProximityRegistration>> _proximityRegistrations = [];
+
+    /// <summary>
+    /// Named scripting variables written by <c>NamedVariableAssignCommand</c> and read back by
+    /// <c>LoadRegisterFromNamedVarCommand</c>, keyed by owning entity then by variable name. The two
+    /// tables share one vocabulary ("WingFX", "damage", "FuseLength", "teslacount", "heat"), which is
+    /// what makes them a matched pair; before this store existed every read took the reader row's
+    /// <c>undecl_value</c> fallback, so a chain that set a variable and branched on it always took the
+    /// unset branch.
+    /// </summary>
+    private readonly Dictionary<ulong, Dictionary<string, float>> _namedVariables = [];
+
+    /// <summary>
+    /// Ability triggers installed by the <c>Register*TriggerCommand</c> family, per owning entity,
+    /// fired by <c>ActivateAbilityTriggerCommand</c>. See <see cref="AbilityTriggerRegistration" /> for
+    /// why a trigger's payload is the ability that installed it.
+    /// </summary>
+    private readonly Dictionary<ulong, List<AbilityTriggerRegistration>> _abilityTriggers = [];
+
+    /// <summary>
+    /// Firing a trigger runs an ability activation, and that ability can itself install and fire
+    /// triggers. The chain data has no depth limit in it, so the bound is here: four nested activations
+    /// is far past anything a stock chain reaches, and it turns a data loop into a dropped activation
+    /// instead of a stack overflow on the shard thread.
+    /// </summary>
+    private const int MaxTriggerActivationDepth = 4;
+
+    private int _triggerActivationDepth;
 
     /// <summary>
     ///     The displacement a database command (<c>aptfs::MovementSlideCommandDef</c>) asked each character to
@@ -337,6 +373,7 @@ public class AbilitySystem
 
         ReevaluateMovementEffects(entity, currentTime);
         AdvanceMovementSlide(entity, currentTime);
+        EvaluateProximityRegistrations(entity, currentTime);
     }
 
     /// <summary>
@@ -445,6 +482,322 @@ public class AbilitySystem
             if (registrations.Count == 0)
             {
                 _movementEffectRegistrations.Remove(registration.CharacterEntityId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Registers a proximity trigger for an entity. Returns the registration, which
+    /// <c>RegisterClientProximityCommand</c> hands back to <see cref="UnregisterClientProximity" /> when the
+    /// carrying effect ends.
+    /// </summary>
+    public ClientProximityRegistration RegisterClientProximity(IAptitudeTarget owner, uint chain, uint abilityId, uint maxTargets, uint retryInterval, float radius)
+    {
+        if (owner == null)
+        {
+            return null;
+        }
+
+        var registration = new ClientProximityRegistration
+        {
+            OwnerEntityId = owner.EntityId,
+            Chain = chain,
+            AbilityId = abilityId,
+            MaxTargets = maxTargets,
+            RetryInterval = retryInterval,
+            Radius = radius,
+        };
+
+        if (!_proximityRegistrations.TryGetValue(owner.EntityId, out var registrations))
+        {
+            registrations = [];
+            _proximityRegistrations[owner.EntityId] = registrations;
+        }
+
+        registrations.Add(registration);
+
+        return registration;
+    }
+
+    /// <summary>Removes a proximity trigger.</summary>
+    public void UnregisterClientProximity(ClientProximityRegistration registration)
+    {
+        if (registration == null)
+        {
+            return;
+        }
+
+        if (_proximityRegistrations.TryGetValue(registration.OwnerEntityId, out var registrations))
+        {
+            registrations.Remove(registration);
+
+            if (registrations.Count == 0)
+            {
+                _proximityRegistrations.Remove(registration.OwnerEntityId);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     The store key for a named variable. Both the assign and the read table carry a numeric
+    ///     <c>name_id</c> and an optional string <c>member_name</c>, and the string is empty in 119 of
+    ///     the 291 assign rows and 156 of the 265 read rows, so the id is the only key both sides
+    ///     always have. The name is folded in when present purely so the log lines are readable.
+    /// </summary>
+    public static string NamedVariableKey(ushort nameId, string memberName)
+    {
+        return string.IsNullOrEmpty(memberName) ? nameId.ToString() : nameId + ":" + memberName;
+    }
+
+    /// <summary>Writes a named scripting variable on an entity.</summary>
+    public void SetNamedVariable(IAptitudeTarget owner, string key, float value)
+    {
+        if (owner == null || string.IsNullOrEmpty(key))
+        {
+            return;
+        }
+
+        if (!_namedVariables.TryGetValue(owner.EntityId, out var vars))
+        {
+            vars = [];
+            _namedVariables[owner.EntityId] = vars;
+        }
+
+        vars[key] = value;
+    }
+
+    /// <summary>Reads a named scripting variable, returning false when it has never been assigned.</summary>
+    public bool TryGetNamedVariable(IAptitudeTarget owner, string key, out float value)
+    {
+        value = 0f;
+
+        if (owner == null || string.IsNullOrEmpty(key))
+        {
+            return false;
+        }
+
+        return _namedVariables.TryGetValue(owner.EntityId, out var vars) && vars.TryGetValue(key, out value);
+    }
+
+    /// <summary>
+    ///     Installs an ability trigger on an entity. Returns the registration, which the registering
+    ///     command hands back to <see cref="UnregisterAbilityTrigger" /> when the carrying effect ends.
+    /// </summary>
+    public AbilityTriggerRegistration RegisterAbilityTrigger(IAptitudeTarget owner, uint abilityId, uint abilityModuleId, uint chainId, bool timed, uint tag)
+    {
+        if (owner == null)
+        {
+            return null;
+        }
+
+        var registration = new AbilityTriggerRegistration
+        {
+            OwnerEntityId = owner.EntityId,
+            AbilityId = abilityId,
+            AbilityModuleId = abilityModuleId,
+            ChainId = chainId,
+            Timed = timed,
+            Tag = tag,
+        };
+
+        if (!_abilityTriggers.TryGetValue(owner.EntityId, out var triggers))
+        {
+            triggers = [];
+            _abilityTriggers[owner.EntityId] = triggers;
+        }
+
+        triggers.Add(registration);
+
+        _logger.Debug("[Trigger] registered {Kind} trigger on {Entity} (ability {Ability}, chain {Chain}, tag {Tag})",
+            timed ? "timed" : "ability", owner.EntityId, abilityId, chainId, tag);
+
+        return registration;
+    }
+
+    /// <summary>
+    ///     Removes a trigger. When the carrying effect is going away, its timed triggers fire first: a
+    ///     timed trigger is a fuse, and the end of the effect that laid it is when it burns out.
+    /// </summary>
+    public void UnregisterAbilityTrigger(AbilityTriggerRegistration registration, Context context = null)
+    {
+        if (registration == null)
+        {
+            return;
+        }
+
+        if (registration.Timed && registration.AbilityId != 0 && context != null
+            && _shard.Entities.TryGetValue(registration.OwnerEntityId, out var ownerEntity)
+            && ownerEntity is IAptitudeTarget owner)
+        {
+            FireTrigger(registration, owner, context);
+        }
+
+        if (_abilityTriggers.TryGetValue(registration.OwnerEntityId, out var triggers))
+        {
+            triggers.Remove(registration);
+
+            if (triggers.Count == 0)
+            {
+                _abilityTriggers.Remove(registration.OwnerEntityId);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Fires every trigger installed on an entity — what <c>ActivateAbilityTriggerCommand</c> does.
+    ///     Each one starts the ability activation that installed it, aimed at the entity carrying the
+    ///     trigger. Returns how many fired.
+    /// </summary>
+    public int ActivateAbilityTriggers(IAptitudeTarget owner, Context context)
+    {
+        if (owner == null || context == null)
+        {
+            return 0;
+        }
+
+        if (!_abilityTriggers.TryGetValue(owner.EntityId, out var triggers) || triggers.Count == 0)
+        {
+            return 0;
+        }
+
+        int fired = 0;
+
+        // Snapshot: firing a trigger runs an activation that can register or unregister triggers on
+        // this same entity, mutating the list being iterated.
+        foreach (var registration in new List<AbilityTriggerRegistration>(triggers))
+        {
+            if (FireTrigger(registration, owner, context))
+            {
+                fired++;
+            }
+        }
+
+        return fired;
+    }
+
+    private bool FireTrigger(AbilityTriggerRegistration registration, IAptitudeTarget owner, Context context)
+    {
+        if (registration.AbilityId == 0)
+        {
+            return false;
+        }
+
+        if (_triggerActivationDepth >= MaxTriggerActivationDepth)
+        {
+            _logger.Warning("[Trigger] dropping activation of ability {Ability} on {Entity}: {Depth} triggers deep",
+                registration.AbilityId, owner.EntityId, _triggerActivationDepth);
+            return false;
+        }
+
+        if (!_shard.Entities.ContainsKey(owner.EntityId))
+        {
+            return false;
+        }
+
+        _triggerActivationDepth++;
+        try
+        {
+            // The activation that installed the trigger is the initiator where the data has one; an
+            // effect that was applied to a bystander installs its trigger on the bystander but keeps
+            // its caster as the initiator, which is what the ability's own gates expect to see.
+            var initiator = context.ActivationInitiator ?? owner;
+
+            _logger.Debug("[Trigger] firing trigger on {Entity}: activating ability {Ability} (module {Module})",
+                owner.EntityId, registration.AbilityId, registration.AbilityModuleId);
+
+            HandleActivateAbility(
+                _shard,
+                initiator,
+                registration.AbilityId,
+                _shard.CurrentTime,
+                new AptitudeTargets(owner),
+                null,
+                registration.AbilityModuleId);
+
+            return true;
+        }
+        finally
+        {
+            _triggerActivationDepth--;
+        }
+    }
+
+    /// <summary>
+    /// Runs the proximity triggers registered on an entity. Each fires on its own retry interval (500 ms in
+    /// 159 of the 239 rows, 1000 ms in 49), picks up to <c>MaxTargets</c> entities inside the radius, and runs
+    /// the row's <c>Chain</c> against each of them - or, when the row names an <c>AbilityId</c> instead (79
+    /// rows carry no chain at all), activates that ability on them.
+    /// <para>
+    /// The radius is resolved once, at registration, from the row's regop: the register is a property of the
+    /// activation that carried the command, and re-reading it here would find whatever the current tick's
+    /// chain happens to hold.
+    /// </para>
+    /// <para>
+    /// The row carries no hostility column, so the scan takes every entity in range except the registrant
+    /// itself and lets the fired chain do its own filtering - which is what those chains do: they open with
+    /// <c>TargetHostiles</c>/<c>TargetFriendlies</c> or a <c>Require*</c> gate.
+    /// </para>
+    /// </summary>
+    private void EvaluateProximityRegistrations(IAptitudeTarget entity, ulong currentTime)
+    {
+        if (entity == null || !_proximityRegistrations.TryGetValue(entity.EntityId, out var registrations))
+        {
+            return;
+        }
+
+        if (!_shard.Entities.ContainsKey(entity.EntityId))
+        {
+            return;
+        }
+
+        uint time = unchecked((uint)currentTime);
+
+        // Snapshot: a fired chain can remove the carrying effect, which unregisters from this very list.
+        foreach (var registration in new List<ClientProximityRegistration>(registrations))
+        {
+            if (registration.RetryInterval > 0 && currentTime < registration.LastRunTime + registration.RetryInterval)
+            {
+                continue;
+            }
+
+            registration.LastRunTime = currentTime;
+
+            uint maxTargets = registration.MaxTargets == 0 ? 1 : registration.MaxTargets;
+            int found = 0;
+
+            foreach (var pair in _shard.Entities)
+            {
+                if (found >= maxTargets)
+                {
+                    break;
+                }
+
+                if (pair.Key == entity.EntityId || pair.Value is not IAptitudeTarget candidate)
+                {
+                    continue;
+                }
+
+                if (Vector3.Distance(entity.Position, candidate.Position) > registration.Radius)
+                {
+                    continue;
+                }
+
+                found++;
+
+                if (registration.Chain != 0)
+                {
+                    var context = new Context(_shard, entity)
+                    {
+                        InitTime = time,
+                        Targets = new AptitudeTargets(candidate),
+                    };
+
+                    Factory.LoadChain(registration.Chain).Execute(context);
+                }
+                else if (registration.AbilityId != 0)
+                {
+                    HandleActivateAbility(_shard, entity, registration.AbilityId, time, new AptitudeTargets(candidate));
+                }
             }
         }
     }
@@ -986,6 +1339,14 @@ public class AbilitySystem
             else
             {
                 PersistUnlocks(context);
+
+                // Only a successful root activation is announced, and only the root: a `Call` node's
+                // sub-ability is part of the same activation the caster's client already predicted,
+                // so echoing it separately would play a second cast for the watchers. The client
+                // runs the apttf:: (animation/particle/beam/camera) rows of the chain itself, but
+                // only once it hears the activation - see AbilityActivationAnnouncement.
+                AbilityActivationAnnouncement.SendToWatchers(
+                    context.Shard, context.ActivationInitiator, abilityId, context.InitTime);
             }
         }
 

@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using GameServer.Entities;
 using GameServer.Entities.Character;
@@ -66,6 +67,42 @@ public class DamageSystem
         int appliedAmount;
         if (target is CharacterEntity character)
         {
+            // A body installed by AddPhysicsCommand absorbs incoming damage before it reaches the
+            // character. A body flagged block_enemies_only lets friendly fire straight through, which
+            // is the whole point of the flag; friendliness is read the same way TargetHostilesCommand's
+            // own fallback does it - same faction, or the character hitting itself.
+            if (character.AbilityPhysics is { } body)
+            {
+                bool friendly = source != null && (source.EntityId == character.EntityId
+                    || (source is BaseEntity sourceBase
+                        && sourceBase.HostilityInfo.FactionId == character.HostilityInfo.FactionId));
+
+                if (!body.BlockEnemiesOnly || !friendly)
+                {
+                    float pool = body.CurrentHitpoints;
+                    float absorbed = Math.Min(pool, amount);
+                    body.CurrentHitpoints = pool - absorbed;
+
+                    Logger.Debug(
+                        "Ability physics on {Target} absorbed {Absorbed} of {Amount} (pool {Left}/{Max})",
+                        character.EntityId, absorbed, amount, body.CurrentHitpoints, body.Hitpoints);
+
+                    if (body.CurrentHitpoints <= 0f)
+                    {
+                        // Spent. The effect that installed it keeps running; only the body goes away,
+                        // which is what RequireAbilityPhysics then reports.
+                        character.AbilityPhysics = null;
+                        Logger.Information("Ability physics on {Target} was destroyed", character.EntityId);
+                    }
+
+                    amount -= (int)absorbed;
+                    if (amount <= 0)
+                    {
+                        return (int)absorbed;
+                    }
+                }
+            }
+
             appliedAmount = ApplyDamageToCharacter(character, amount, damageType);
         }
         else if (target is DeployableEntity deployable)

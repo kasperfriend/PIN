@@ -61,6 +61,10 @@ public class ChatService
         {
             _shard.Admin.ExecuteCommand(query.Message, ((CharacterEntity)entity).Player);
         }
+        else if (queryChannel == ChatChannel.Squad)
+        {
+            SendToSquad(query.Message, entity);
+        }
         else
         {
             var player = ((CharacterEntity)entity).Player;
@@ -72,6 +76,33 @@ public class ChatService
     {
         var response = PrepareSingleMessage(message, channel, null);
         player.NetChannels[ChannelType.UnreliableGss].SendMessage(response, _shard.InstanceId);
+    }
+
+    /// <summary>
+    ///     Sends to the sender's squad. Squad chat used to answer "This channel is not available";
+    ///     now that the shard keeps a roster there is someone to send it to. A character in no squad
+    ///     is told so rather than having its message dropped silently.
+    /// </summary>
+    public void SendToSquad(string message, IEntity sender)
+    {
+        var squadService = _shard.Squad;
+
+        if (sender is not CharacterEntity character || squadService == null
+            || squadService.GetSquad(character.EntityId) == null)
+        {
+            (sender as CharacterEntity)?.Player?.SendDebugChat("You are not in a squad");
+            return;
+        }
+
+        var response = PrepareSingleMessage(message, ChatChannel.Squad, sender);
+
+        foreach (var mate in squadService.GetSquadmates(character.EntityId))
+        {
+            mate.Player?.NetChannels[ChannelType.UnreliableGss].SendMessage(response, _shard.InstanceId);
+        }
+
+        // The sender hears its own message too, so the transcript matches what everyone else sees.
+        character.Player?.NetChannels[ChannelType.UnreliableGss].SendMessage(response, _shard.InstanceId);
     }
 
     public void SendToAll(string message, ChatChannel channel, IEntity sender)

@@ -26,6 +26,7 @@ using GameServer.Systems.NpcDeath;
 using GameServer.Systems.PlayerRespawn;
 using GameServer.Systems.ProjectileSim;
 using GameServer.Systems.Spawning.Population;
+using GameServer.Systems.Squad;
 using GameServer.Systems.SystemEvents;
 using GameServer.Systems.WeaponSim;
 using Serilog;
@@ -115,6 +116,9 @@ public sealed class FakeShard : IShard
     public EncounterManager EncounterMan { get; } = null;
 
     public AbilitySystem Abilities { get; set; } = null;
+
+    /// <summary>Null unless a test installs one, matching how <see cref="Abilities"/> is handled.</summary>
+    public SquadService Squad { get; set; } = null;
 
     public ProjectileSim ProjectileSim { get; } = null;
 

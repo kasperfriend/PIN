@@ -136,6 +136,39 @@ public class CharacterInventory
         _items.TryGetValue(guid, out var item) && (item.DynamicFlags & (byte)ItemDynamicFlags.IsEquipped) != 0;
 
     /// <summary>Whether any carried item of the given type is currently equipped in the loadout.</summary>
+    /// <summary>
+    ///     The equipped item instance in a loadout slot, or null when the slot holds nothing. The
+    ///     loadout maps a slot to an item <em>sdb id</em>, so the instance carrying the durability has
+    ///     to be found among the carried items — items are not stackable, so at most one equipped
+    ///     entry can match.
+    /// </summary>
+    /// <remarks>
+    ///     A <c>TryGet</c> rather than a nullable return because <see cref="Item" /> is a struct:
+    ///     <c>Item?</c> is a <c>Nullable&lt;Item&gt;</c>, which neither returns null nor exposes the
+    ///     fields through the question mark.
+    /// </remarks>
+    public bool TryGetEquippedItemInSlot(LoadoutSlotType slot, out Item item)
+    {
+        item = default;
+
+        uint sdbId = _character.CurrentLoadout?.SlottedItems.GetValueOrDefault(slot) ?? 0;
+        if (sdbId == 0)
+        {
+            return false;
+        }
+
+        foreach (var carried in _items.Values)
+        {
+            if (carried.SdbId == sdbId && (carried.DynamicFlags & (byte)ItemDynamicFlags.IsEquipped) != 0)
+            {
+                item = carried;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public bool HasItemEquipped(uint sdbId) =>
         _items.Values.Any(item => item.SdbId == sdbId && (item.DynamicFlags & (byte)ItemDynamicFlags.IsEquipped) != 0);
 

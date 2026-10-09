@@ -19,6 +19,7 @@ using GameServer.Systems.Aptitude.Commands.Movement;
 using GameServer.Systems.Aptitude.Commands.NPC;
 using GameServer.Systems.Aptitude.Commands.Object;
 using GameServer.Systems.Aptitude.Commands.Other;
+using GameServer.Systems.Aptitude.Commands.Projectile;
 using GameServer.Systems.Aptitude.Commands.Register;
 using GameServer.Systems.Aptitude.Commands.Requirement;
 using GameServer.Systems.Aptitude.Commands.Self;
@@ -26,6 +27,7 @@ using GameServer.Systems.Aptitude.Commands.SetFlags;
 using GameServer.Systems.Aptitude.Commands.Target;
 using GameServer.Systems.Aptitude.Commands.Unlock;
 using GameServer.Systems.Aptitude.Commands.Update;
+using GameServer.Systems.Aptitude.Commands.Weapon;
 using Serilog;
 
 namespace GameServer.Systems.Aptitude;
@@ -250,8 +252,8 @@ public class Factory
                 return new RequireEnergyCommand(SDBInterface.GetRequireEnergyCommandDef(commandId));
             case CommandType.HealDamage:
                 return new HealDamageCommand(SDBInterface.GetHealDamageCommandDef(commandId));
-            // case CommandType.Bullrush:
-            //     return new BullrushCommand(SDBInterface.GetBullrushCommandDef(commandId));
+            case CommandType.Bullrush:
+                return new BullrushCommand(SDBInterface.GetBullrushCommandDef(commandId));
             case CommandType.EnergyToDamage:
                 return new EnergyToDamageCommand(SDBInterface.GetEnergyToDamageCommandDef(commandId));
             // case CommandType.RequireGrapple:
@@ -354,10 +356,10 @@ public class Factory
             //     return new NPCBehaviorChangeCommand(CustomDBInterface.GetNPCBehaviorChangeCommandDef(commandId));
             case CommandType.RequireAimMode:
                 return new RequireAimModeCommand(SDBInterface.GetRequireAimModeCommandDef(commandId));
-            // case CommandType.SlotAmmo:
-            //     return new SlotAmmoCommand(SDBInterface.GetSlotAmmoCommandDef(commandId));
-            // case CommandType.AddPhysics:
-            //     return new AddPhysicsCommand(SDBInterface.GetAddPhysicsCommandDef(commandId));
+            case CommandType.SlotAmmo:
+                return new SlotAmmoCommand(SDBInterface.GetSlotAmmoCommandDef(commandId));
+            case CommandType.AddPhysics:
+                return new AddPhysicsCommand(SDBInterface.GetAddPhysicsCommandDef(commandId));
             case CommandType.RequireReload:
                 return new RequireReloadCommand(SDBInterface.GetRequireReloadCommandDef(commandId));
             case CommandType.TargetByExists:
@@ -392,14 +394,14 @@ public class Factory
                 return new RequirePermissionCommand(SDBInterface.GetRequirePermissionCommandDef(commandId));
             // case CommandType.TargetPassengers:
             //     return new TargetPassengersCommand(SDBInterface.GetTargetPassengersCommandDef(commandId));
-            // case CommandType.TargetSquadmates:
-            //     return new TargetSquadmatesCommand(SDBInterface.GetTargetSquadmatesCommandDef(commandId));
+            case CommandType.TargetSquadmates:
+                return new TargetSquadmatesCommand(SDBInterface.GetTargetSquadmatesCommandDef(commandId));
             // case CommandType.SlotAbility:
             //     return new SlotAbilityCommand(CustomDBInterface.GetSlotAbilityCommandDef(commandId));
             case CommandType.TargetTrim:
                 return new TargetTrimCommand(SDBInterface.GetTargetTrimCommandDef(commandId));
-            // case CommandType.SetWeaponDamage:
-            //     return new SetWeaponDamageCommand(SDBInterface.GetSetWeaponDamageCommandDef(commandId));
+            case CommandType.SetWeaponDamage:
+                return new SetWeaponDamageCommand(SDBInterface.GetSetWeaponDamageCommandDef(commandId));
             case CommandType.ConsumeEnergyOverTime:
                 return new ConsumeEnergyOverTimeCommand(SDBInterface.GetConsumeEnergyOverTimeCommandDef(commandId));
             // case CommandType.RequestAbilitySelection:
@@ -414,8 +416,8 @@ public class Factory
             //     return new LoadRegisterFromBonusCommand(SDBInterface.GetLoadRegisterFromBonusCommandDef(commandId));
             // case CommandType.BonusGreaterThan:
             //     SDB has zero instances of this command
-            // case CommandType.TargetByNPC:
-            //     return new TargetByNPCCommand(CustomDBInterface.GetTargetByNPCCommandDef(commandId));
+            case CommandType.TargetByNPC:
+                return new TargetByNPCCommand(CustomDBInterface.GetTargetByNPCCommandDef(commandId));
             case CommandType.ImpactToggleEffect:
                 return new ImpactToggleEffectCommand(SDBInterface.GetImpactToggleEffectCommandDef(commandId));
             case CommandType.DeployableCalldown:
@@ -442,8 +444,8 @@ public class Factory
                 return new RequireBackstabCommand(SDBInterface.GetRequireBackstabCommandDef(commandId));
             case CommandType.CalldownVehicle:
                 return new CalldownVehicleCommand(CustomDBInterface.GetCalldownVehicleCommandDef(commandId));
-            // case CommandType.SetProjectileTarget:
-            //     return new SetProjectileTargetCommand(SDBInterface.GetSetProjectileTargetCommandDef(commandId));
+            case CommandType.SetProjectileTarget:
+                return new SetProjectileTargetCommand(SDBInterface.GetSetProjectileTargetCommandDef(commandId));
             case CommandType.SetScopeBubble:
                 // The definition table only carries ids, so give unknown rows a definition of their own instead
                 // of handing a null to a command that has to report its id in its logs.
@@ -500,16 +502,16 @@ public class Factory
                 return new RequireArmyCommand(SDBInterface.GetRequireArmyCommandDef(commandId));
             // case CommandType.SetHostility:
             //     return new SetHostilityCommand(CustomDBInterface.GetSetHostilityCommandDef(commandId));
-            // case CommandType.Teleport:
-            //     return new TeleportCommand(CustomDBInterface.GetTeleportCommandDef(commandId));
-            // case CommandType.TargetFromStatusEffect:
-            //     return new TargetFromStatusEffectCommand(SDBInterface.GetTargetFromStatusEffectCommandDef(commandId));
+            case CommandType.Teleport:
+                return new TeleportCommand(CustomDBInterface.GetTeleportCommandDef(commandId) ?? new TeleportCommandDef { Id = commandId });
+            case CommandType.TargetFromStatusEffect:
+                return new TargetFromStatusEffectCommand(SDBInterface.GetTargetFromStatusEffectCommandDef(commandId));
             // case CommandType.TemporaryEquipment:
             //     return new TemporaryEquipmentCommand(CustomDBInterface.GetTemporaryEquipmentCommandDef(commandId));
             case CommandType.RequireDamageResponse:
                 return new RequireDamageResponseCommand(SDBInterface.GetRequireDamageResponseCommandDef(commandId));
-            // case CommandType.TargetByDamageResponse:
-            //     return new TargetByDamageResponseCommand(SDBInterface.GetTargetByDamageResponseCommandDef(commandId));
+            case CommandType.TargetByDamageResponse:
+                return new TargetByDamageResponseCommand(SDBInterface.GetTargetByDamageResponseCommandDef(commandId));
             case CommandType.OrientationLock:
                 return new OrientationLockCommand(SDBInterface.GetOrientationLockCommandDef(commandId));
             case CommandType.LoadRegisterFromModulePower:
@@ -536,9 +538,8 @@ public class Factory
             //     Zero instances in BaseCommandDef
             // case CommandType.SetPoweredState:
             //     return new SetPoweredStateCommand(CustomDBInterface.GetSetPoweredStateCommandDef(commandId));
-            // case CommandType.NamedVariableAssign:
-            //     has environment `server` but is in SDB
-            //     return new NamedVariableAssignCommand(SDBInterface.GetNamedVariableAssignCommandDef(commandId));
+            case CommandType.NamedVariableAssign:
+                return new NamedVariableAssignCommand(SDBInterface.GetNamedVariableAssignCommandDef(commandId));
             case CommandType.LoadRegisterFromNamedVar:
                 return new LoadRegisterFromNamedVarCommand(SDBInterface.GetLoadRegisterFromNamedVarCommandDef(commandId));
             // case CommandType.FireUiEvent:
@@ -573,8 +574,8 @@ public class Factory
                 return new LoadRegisterFromItemStatCommand(SDBInterface.GetLoadRegisterFromItemStatCommandDef(commandId));
             // case CommandType.HostilityHack:
             //     return new HostilityHackCommand(CustomDBInterface.GetHostilityHackCommandDef(commandId));
-            // case CommandType.DetonateProjectiles:
-            //     return new DetonateProjectilesCommand(SDBInterface.GetDetonateProjectilesCommandDef(commandId));
+            case CommandType.DetonateProjectiles:
+                return new DetonateProjectilesCommand(SDBInterface.GetDetonateProjectilesCommandDef(commandId));
             // Zero instances in BaseCommandDef, and the server has no projectile hit bookkeeping to feed it.
             // case CommandType.RequireBulletHit:
             //     return new RequireBulletHitCommand(SDBInterface.GetRequireBulletHitCommandDef(commandId));
@@ -586,11 +587,12 @@ public class Factory
                 return new ApplyPermanentEffectCommand(CustomDBInterface.GetApplyPermanentEffectCommandDef(commandId) ?? new ApplyPermanentEffectCommandDef { Id = commandId });
             // case CommandType.ModifyHostility:
             //     return new ModifyHostilityCommand(CustomDBInterface.GetModifyHostilityCommandDef(commandId));
-            // Id-only def, and AeroMessages has no client<->server ability-trigger message, so what a
-            // "trigger" is at runtime isn't derivable; the frame-passive registers (Ambush, Conduit,
-            // Rally, E-Tank, Incinerator, ...) wait on that evidence. Docs/BATTLEFRAME_ABILITIES.md.
-            // case CommandType.RegisterAbilityTrigger:
-            //     return new RegisterAbilityTriggerCommand(CustomDBInterface.GetRegisterAbilityTriggerCommandDef(commandId));
+            // Id-only def: the row says only that a trigger exists, never what it does. What it does is
+            // taken from the activation that installs it, and the trigger lives as long as the effect
+            // that carries it - see AbilityTriggerRegistration for the chain evidence. This is the
+            // frame-passive register (Ambush, Conduit, Rally, E-Tank, Incinerator, ...).
+            case CommandType.RegisterAbilityTrigger:
+                return new RegisterAbilityTriggerCommand(CustomDBInterface.GetRegisterAbilityTriggerCommandDef(commandId));
             // case CommandType.SetWeaponDamageType:
             //     return new SetWeaponDamageTypeCommand(SDBInterface.GetSetWeaponDamageTypeCommandDef(commandId));
             // The def carries no time window and its target reading (dead / respawned / one-spawn
@@ -598,28 +600,27 @@ public class Factory
             // case CommandType.RequireNotRespawned:
             //     return new RequireNotRespawnedCommand(SDBInterface.GetRequireNotRespawnedCommandDef(commandId));
             // Id-only def (customdata Todo record ships no parameters), so there is nothing to evaluate.
-            // case CommandType.RequireAbilityPhysics:
-            //     return new RequireAbilityPhysicsCommand(CustomDBInterface.GetRequireAbilityPhysicsCommandDef(commandId));
+            case CommandType.RequireAbilityPhysics:
+                return new RequireAbilityPhysicsCommand(CustomDBInterface.GetRequireAbilityPhysicsCommandDef(commandId));
             // case CommandType.AbilityFinished:
             //     return new AbilityFinishedCommand(CustomDBInterface.GetAbilityFinishedCommandDef(commandId));
             case CommandType.TargetFilterMovestate:
                 return new TargetFilterMovestateCommand(SDBInterface.GetTargetFilterMovestateCommandDef(commandId));
-            // case CommandType.RequireAbilityPhysics:
-            //     return new RequireAbilityPhysicsCommand(CustomDBInterface.GetRequireAbilityPhysicsCommandDef(commandId));
+
             // case CommandType.ClearHostility:
             //     return new ClearHostilityCommand(CustomDBInterface.GetClearHostilityCommandDef(commandId));
             // case CommandType.UpdateSpawnTable:
             //     return new UpdateSpawnTableCommand(CustomDBInterface.GetUpdateSpawnTableCommandDef(commandId));
             case CommandType.TargetByHostility:
                 return new TargetByHostilityCommand(SDBInterface.GetTargetByHostilityCommandDef(commandId));
-            // case CommandType.RegisterClientProximity:
-            //     return new RegisterClientProximityCommand(SDBInterface.GetRegisterClientProximityCommandDef(commandId));
+            case CommandType.RegisterClientProximity:
+                return new RegisterClientProximityCommand(SDBInterface.GetRegisterClientProximityCommandDef(commandId));
             case CommandType.ApplySinCard:
                 return new ApplySinCardCommand(CustomDBInterface.GetApplySinCardCommandDef(commandId));
             case CommandType.UnlockOrnaments:
                 return new UnlockOrnamentsCommand(CustomDBInterface.GetUnlockOrnamentsCommandDef(commandId) ?? new UnlockOrnamentsCommandDef { Id = commandId });
-            // case CommandType.DropCarryable:
-            //     return new DropCarryableCommand(CustomDBInterface.GetDropCarryableCommandDef(commandId));
+            case CommandType.DropCarryable:
+                return new DropCarryableCommand(CustomDBInterface.GetDropCarryableCommandDef(commandId) ?? new DropCarryableCommandDef { Id = commandId });
             // Per-character SIN-view acquisition isn't modeled on this server (TargetFilterBySinAcquired shares the gap), so nothing can answer the gate.
             // case CommandType.RequireSinAcquired:
             //     return new RequireSinAcquiredCommand(SDBInterface.GetRequireSinAcquiredCommandDef(commandId));
@@ -631,8 +632,8 @@ public class Factory
                 return new TargetByEffectTagCommand(SDBInterface.GetTargetByEffectTagCommandDef(commandId));
             case CommandType.RemoveEffectByTag:
                 return new RemoveEffectByTagCommand(CustomDBInterface.GetRemoveEffectByTagCommandDef(commandId));
-            // case CommandType.RegisterEffectTagTrigger:
-            //     return new RegisterEffectTagTriggerCommand(CustomDBInterface.GetRegisterEffectTagTriggerCommandDef(commandId));
+            case CommandType.RegisterEffectTagTrigger:
+                return new RegisterEffectTagTriggerCommand(CustomDBInterface.GetRegisterEffectTagTriggerCommandDef(commandId));
             case CommandType.ReplenishableDuration:
             {
                 // The def table for this type carries no decoded fields, so an id that is not listed is still
@@ -653,15 +654,14 @@ public class Factory
             // (SuperChargePerDamageDealt/Taken), so gating on the gauge is safe now.
             case CommandType.RequireSuperCharge:
                 return new RequireSuperChargeCommand(SDBInterface.GetRequireSuperChargeCommandDef(commandId));
-            // Same trigger-subsystem gap as RegisterAbilityTrigger above; the charged/accel actives
-            // (Overcharge, Shockwave, Absorption Bomb, Afterburner, Heavy Turret, melee auxiliaries,
-            // ...) route through this node. Docs/BATTLEFRAME_ABILITIES.md.
-            // case CommandType.ActivateAbilityTrigger:
-            //     return new ActivateAbilityTriggerCommand(CustomDBInterface.GetActivateAbilityTriggerCommandDef(commandId));
+            // The charged/accel actives (Overcharge, Shockwave, Absorption Bomb, Afterburner, Heavy
+            // Turret, melee auxiliaries, ...) route through this node.
+            case CommandType.ActivateAbilityTrigger:
+                return new ActivateAbilityTriggerCommand(CustomDBInterface.GetActivateAbilityTriggerCommandDef(commandId));
             case CommandType.TargetByHealth:
                 return new TargetByHealthCommand(SDBInterface.GetTargetByHealthCommandDef(commandId));
-            // case CommandType.RegisterHitTagTypeTrigger:
-            //     return new RegisterHitTagTypeTriggerCommand(CustomDBInterface.GetRegisterHitTagTypeTriggerCommandDef(commandId));
+            case CommandType.RegisterHitTagTypeTrigger:
+                return new RegisterHitTagTypeTriggerCommand(CustomDBInterface.GetRegisterHitTagTypeTriggerCommandDef(commandId));
             case CommandType.LogicOrChain:
                 return new LogicOrChainCommand(SDBInterface.GetLogicOrChainCommandDef(commandId));
             case CommandType.LogicAndChain:
@@ -757,9 +757,8 @@ public class Factory
                 return new AddAccountGroupCommand(CustomDBInterface.GetAddAccountGroupCommandDef(commandId) ?? new AddAccountGroupCommandDef { Id = commandId });
             case CommandType.RequireInitiatorExists:
                 return new RequireInitiatorExistsCommand(CustomDBInterface.GetRequireInitiatorExistsCommandDef(commandId));
-            // Same trigger-subsystem gap as the ability triggers above.
-            // case CommandType.RegisterTimedTrigger:
-            //     return new RegisterTimedTriggerCommand(CustomDBInterface.GetRegisterTimedTriggerCommandDef(commandId));
+            case CommandType.RegisterTimedTrigger:
+                return new RegisterTimedTriggerCommand(CustomDBInterface.GetRegisterTimedTriggerCommandDef(commandId));
             // case CommandType.Taunt:
             //     return new TauntCommand(CustomDBInterface.GetTauntCommandDef(commandId));
             // case CommandType.StartArc:
@@ -770,8 +769,8 @@ public class Factory
             // case CommandType.AddAppendageHealthPool:
             //     return new AddAppendageHealthPoolCommand(CustomDBInterface.GetAddAppendageHealthPoolCommandDef(commandId));
             // No squad system exists server-side, so there is no leader lookup to answer the gate with.
-            // case CommandType.RequireSquadLeader:
-            //     return new RequireSquadLeaderCommand(SDBInterface.GetRequireSquadLeaderCommandDef(commandId));
+            case CommandType.RequireSquadLeader:
+                return new RequireSquadLeaderCommand(SDBInterface.GetRequireSquadLeaderCommandDef(commandId));
             case CommandType.RequireHasCertificate:
                 return new RequireHasCertificateCommand(SDBInterface.GetRequireHasCertificateCommandDef(commandId));
             // Id-only def: the carryable inventory is the three replicated slots on the
@@ -838,8 +837,8 @@ public class Factory
             case CommandType.RemoveClientStatusEffect:
                 return new RemoveClientStatusEffectCommand(SDBInterface.GetRemoveClientStatusEffectCommandDef(commandId));
             // Only a static char-level CurrentDurabilityPctProp (= 100) exists; per-slot item wear isn't modeled, so the answer would be fabricated.
-            // case CommandType.RequireItemDurability:
-            //     return new RequireItemDurabilityCommand(SDBInterface.GetRequireItemDurabilityCommandDef(commandId));
+            case CommandType.RequireItemDurability:
+                return new RequireItemDurabilityCommand(SDBInterface.GetRequireItemDurabilityCommandDef(commandId));
             case CommandType.RequireEliteLevel:
                 return new RequireEliteLevelCommand(SDBInterface.GetRequireEliteLevelCommandDef(commandId));
             case CommandType.RequireCAISState:

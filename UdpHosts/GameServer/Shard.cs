@@ -24,6 +24,7 @@ using GameServer.Systems.NpcDeath;
 using GameServer.Systems.PlayerRespawn;
 using GameServer.Systems.ProjectileSim;
 using GameServer.Systems.Spawning.Population;
+using GameServer.Systems.Squad;
 using GameServer.Systems.SystemEvents;
 using GameServer.Systems.WeaponSim;
 using Shared.Common;
@@ -99,6 +100,7 @@ public class Shard : IShard
         ProjectileSim = new ProjectileSim(this, debugCallbacks);
         Chat = new ChatService(this, EventBus);
         Admin = new AdminService(this);
+        Squad = new SquadService(this);
         var npcDeathRules = new StandardNpcDeathRules();
         Cheats = new CheatService(this);
         Damage = new DamageSystem(EventBus, this, npcDeathRules);
@@ -168,6 +170,7 @@ public class Shard : IShard
     public PlayerRespawnService PlayerRespawn { get; }
     public NpcDeathService NpcDeath { get; }
     public WorldPopulationService WorldPopulation { get; }
+    public SquadService Squad { get; }
     public ulong InstanceId { get; }
     public uint ZoneId { get; private set; }
     public ulong CurrentTimeLong { get; private set; }

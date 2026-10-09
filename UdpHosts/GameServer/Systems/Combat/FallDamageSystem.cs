@@ -110,11 +110,21 @@ public class FallDamageSystem
 
         if (airborne)
         {
+            // First airborne sample of this fall: the height the drop is measured from. Tracked
+            // because aptfs::SetWeaponDamageCommandDef has a lerpfallheight driver (22 of its 79 rows)
+            // whose scale columns run to 250, i.e. metres of drop, and air time cannot stand in for it.
+            if (!tracker.Airborne)
+            {
+                tracker.AirborneStartZ = poseData.PosRotState.Pos.Z;
+                tracker.MaxFallHeight = 0f;
+            }
+
             tracker.Active = true;
             tracker.Airborne = true;
             tracker.LastAirborneAtMs = _shard.CurrentTimeLong;
             tracker.MaxFallSpeed = float.Max(tracker.MaxFallSpeed, -poseData.Velocity.Z);
             tracker.AirTimeMs = float.Max(tracker.AirTimeMs, MathF.Abs(poseData.GroundTimePositiveAirTimeNegative));
+            tracker.MaxFallHeight = float.Max(tracker.MaxFallHeight, tracker.AirborneStartZ - poseData.PosRotState.Pos.Z);
 
             if (IsThrusterMovestate(movestate))
             {
@@ -136,6 +146,8 @@ public class FallDamageSystem
             tracker.Airborne = false;
             tracker.MaxFallSpeed = 0f;
             tracker.AirTimeMs = 0f;
+            tracker.MaxFallHeight = 0f;
+            tracker.AirborneStartZ = 0f;
             tracker.UsedThrusterOrGlider = false;
             tracker.KnockdownFall = false;
 
@@ -173,6 +185,24 @@ public class FallDamageSystem
     ///     tracking until the character has settled on the ground again. Call on
     ///     spawn, respawn, teleport and other server directed moves.
     /// </summary>
+    /// <summary>
+    ///     How far the character has dropped during the fall it is currently in, in metres, measured
+    ///     from the first airborne sample. 0 while grounded. <c>aptfs::SetWeaponDamageCommandDef</c>
+    ///     reads this for its <c>lerpfallheight</c> rows; those rows scale the lerp up to 250, so the
+    ///     value has to be a real height rather than the tracker's air time.
+    /// </summary>
+    public float GetFallHeight(CharacterEntity character)
+    {
+        if (character == null)
+        {
+            return 0f;
+        }
+
+        return _trackers.TryGetValue(character.EntityId, out var tracker) && tracker.Airborne
+            ? tracker.MaxFallHeight
+            : 0f;
+    }
+
     public void ResetFor(CharacterEntity character)
     {
         if (character == null)
@@ -298,6 +328,10 @@ public class FallDamageSystem
         public bool KnockdownFall;
         public float MaxFallSpeed;
         public float AirTimeMs;
+
+        /// <summary>Z at the first airborne sample of this fall, and the greatest drop below it so far.</summary>
+        public float AirborneStartZ;
+        public float MaxFallHeight;
         public ulong LastAirborneAtMs;
         public bool Suspended;
         public ulong SuspendedUntilMs;
