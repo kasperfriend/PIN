@@ -416,8 +416,14 @@ public class Factory
             //     return new LoadRegisterFromBonusCommand(SDBInterface.GetLoadRegisterFromBonusCommandDef(commandId));
             // case CommandType.BonusGreaterThan:
             //     SDB has zero instances of this command
-            case CommandType.TargetByNPC:
-                return new TargetByNPCCommand(CustomDBInterface.GetTargetByNPCCommandDef(commandId));
+            // Disabled again: the def is id-only, and the "keep only non-player characters" reading
+            // is wrong for the shared glider pad launch (chain 1001671, ability 35181, registered by
+            // RegisterClientProximity against the player standing on the pad). Enabling it dropped the
+            // player from the target list, TargetByCharacterState then failed on an empty list, and the
+            // whole launch chain returned false - gliders did nothing. Until the row's real semantics
+            // are verified, the node stays a pass-through placeholder, as it was before.
+            // case CommandType.TargetByNPC:
+            //     return new TargetByNPCCommand(CustomDBInterface.GetTargetByNPCCommandDef(commandId));
             case CommandType.ImpactToggleEffect:
                 return new ImpactToggleEffectCommand(SDBInterface.GetImpactToggleEffectCommandDef(commandId));
             case CommandType.DeployableCalldown:
